@@ -1,0 +1,2 @@
+{"type":"system","subtype":"bridge_status","url":"https://evil.example/code/session_01X","timestamp":"2026-10-23T03:00:00.000Z","cwd":"C:\\work\\other","sessionId":"66666666-6666-4666-8666-666666666666"}
+{"type":"system","subtype":"bridge_status","url":"https://claude.ai/code/session_01X?next=https://evil.example","timestamp":"2026-10-23T03:00:01.000Z","sessionId":"66666666-6666-4666-8666-666666666666"}

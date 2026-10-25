@@ -32,3 +32,6 @@ Thumbs.db
 .vscode/
 .idea/
 *.log
+
+# Claude Code worktrees
+.claude/worktrees/
