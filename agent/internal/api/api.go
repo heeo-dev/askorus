@@ -17,6 +17,7 @@ import (
 
 	"github.com/asksemble/asksemble/agent/internal/core"
 	"github.com/asksemble/asksemble/agent/internal/devices"
+	"github.com/asksemble/asksemble/agent/internal/pairing"
 )
 
 // APIVersion is the major API version in the URL path.
@@ -33,6 +34,14 @@ const (
 	CodeMethod         = "method_not_allowed"
 	CodeBadRequest     = "bad_request"
 	CodeInternal       = "internal"
+	CodeTooMany        = "too_many_attempts"
+	CodeNotTailnet     = "pair_not_tailnet"
+	CodeOwnerUnknown   = "owner_unknown"
+	CodePairClosed     = "pair_closed"
+	CodePairBadCode    = "pair_bad_code"
+	CodePairBusy       = "pair_busy"
+	CodePairDenied     = "pair_denied"
+	CodePairTimeout    = "pair_timeout"
 )
 
 // TokenVerifier checks device tokens.
@@ -40,27 +49,40 @@ type TokenVerifier interface {
 	Verify(token string) (devices.Device, bool)
 }
 
+// Pairer joins a new device (see package pairing).
+type Pairer interface {
+	Pair(ctx context.Context, code, deviceName string, o pairing.Origin) (string, devices.Device, error)
+}
+
 // Options configures the server.
 type Options struct {
-	Version        string
-	Hostname       string
-	Adapters       []core.Adapter
-	Devices        TokenVerifier
-	Logger         *slog.Logger
-	ServeHosts     []string // extra accepted Host names
-	TailscaleOwner string   // PC owner's Tailscale login; empty skips the check
+	Version    string
+	Hostname   string
+	Adapters   []core.Adapter
+	Devices    TokenVerifier
+	Pairer     Pairer // nil: POST /v1/pair is refused
+	Logger     *slog.Logger
+	ServeHosts []string // extra accepted Host names
+	// TailscaleOwner is the PC owner's Tailscale login. Requests naming
+	// another login are refused, and pairing needs it to be known.
+	TailscaleOwner string
 	HiddenFolders  []string
 }
 
 // Server serves /v1.
 type Server struct {
-	o     Options
-	hosts map[string]bool
+	o       Options
+	hosts   map[string]bool
+	limiter *limiter
 }
 
 // New builds a server.
 func New(o Options) *Server {
-	s := &Server{o: o, hosts: map[string]bool{"127.0.0.1": true, "localhost": true, "::1": true}}
+	s := &Server{
+		o:       o,
+		hosts:   map[string]bool{"127.0.0.1": true, "localhost": true, "::1": true},
+		limiter: newLimiter(),
+	}
 	for _, h := range o.ServeHosts {
 		s.hosts[strings.ToLower(h)] = true
 	}
@@ -69,7 +91,14 @@ func New(o Options) *Server {
 
 // Handler returns the full middleware chain.
 func (s *Server) Handler() http.Handler {
+	top := http.NewServeMux()
+	// Pairing is the only route without a device token.
+	top.HandleFunc("POST /v1/pair", s.pair)
+	top.HandleFunc("/v1/pair", func(w http.ResponseWriter, r *http.Request) {
+		writeError(w, http.StatusMethodNotAllowed, CodeMethod, "method not allowed")
+	})
 	mux := http.NewServeMux()
+	top.Handle("/", s.authenticate(mux))
 	route := func(method, path string, h http.HandlerFunc) {
 		mux.HandleFunc(method+" "+path, h)
 		mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
@@ -85,7 +114,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, CodeNotFound, "not found")
 	})
-	return s.logRequests(s.recoverPanics(s.checkHost(s.checkOrigin(s.authenticate(mux)))))
+	return s.logRequests(s.recoverPanics(s.checkHost(s.checkOrigin(top))))
 }
 
 type reqInfoKey struct{}
@@ -163,6 +192,10 @@ func (s *Server) checkOrigin(next http.Handler) http.Handler {
 // local program can forge it.
 func (s *Server) authenticate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		client := clientKey(r)
+		if s.refuseIfLimited(w, client) {
+			return
+		}
 		token, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
 		var d devices.Device
 		if ok && s.o.Devices != nil {
@@ -171,6 +204,7 @@ func (s *Server) authenticate(next http.Handler) http.Handler {
 			ok = false
 		}
 		if !ok {
+			s.limiter.fail(client)
 			w.Header().Set("WWW-Authenticate", "Bearer")
 			writeError(w, http.StatusUnauthorized, CodeUnauthorized, "device token required")
 			return

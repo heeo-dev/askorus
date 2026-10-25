@@ -1,6 +1,7 @@
 // Package devices keeps the paired phones. Only a SHA-256 hash of each
-// device token is stored (N4, N8). Pairing (QR, pair codes) is added on top
-// of this store in step A2.
+// device token is stored (N4, N8). The file is shared by the running server
+// and the CLI, so every call rereads it when it changed on disk: a device
+// revoked from another window stops working at once.
 package devices
 
 import (
@@ -39,8 +40,11 @@ type Device struct {
 // Store is the device file, safe for concurrent use.
 type Store struct {
 	path string
-	mu   sync.RWMutex
-	list []Device
+
+	mu    sync.Mutex
+	list  []Device
+	size  int64
+	mtime time.Time
 }
 
 var ErrNotFound = errors.New("device not found")
@@ -48,21 +52,41 @@ var ErrNotFound = errors.New("device not found")
 // Open loads dir/devices.json, or starts empty.
 func Open(dir string) (*Store, error) {
 	s := &Store{path: filepath.Join(dir, FileName)}
-	b, err := os.ReadFile(s.path)
-	if errors.Is(err, os.ErrNotExist) {
-		return s, nil
-	}
-	if err != nil {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.refresh(); err != nil {
 		return nil, err
-	}
-	if err := json.Unmarshal(b, &s.list); err != nil {
-		return nil, fmt.Errorf("%s: %w", FileName, err)
 	}
 	return s, nil
 }
 
-// Add registers a device and returns its token. The token is shown once and
-// never stored.
+// refresh rereads the file when its size or time changed. Callers hold mu.
+func (s *Store) refresh() error {
+	info, err := os.Stat(s.path)
+	if errors.Is(err, os.ErrNotExist) {
+		s.list, s.size, s.mtime = nil, 0, time.Time{}
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if info.Size() == s.size && info.ModTime().Equal(s.mtime) {
+		return nil
+	}
+	b, err := os.ReadFile(s.path)
+	if err != nil {
+		return err
+	}
+	var list []Device
+	if err := json.Unmarshal(b, &list); err != nil {
+		return fmt.Errorf("%s: %w", FileName, err)
+	}
+	s.list, s.size, s.mtime = list, info.Size(), info.ModTime()
+	return nil
+}
+
+// Add registers a device and returns its token. The token is handed to the
+// phone once and never stored.
 func (s *Store) Add(name string) (token string, d Device, err error) {
 	name = strings.TrimSpace(name)
 	if name == "" || utf8.RuneCountInString(name) > 64 {
@@ -81,22 +105,27 @@ func (s *Store) Add(name string) (token string, d Device, err error) {
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	next := append(append([]Device(nil), s.list...), d)
-	if err := s.save(next); err != nil {
+	if err := s.refresh(); err != nil {
 		return "", Device{}, err
 	}
-	s.list = next
+	if err := s.save(append(append([]Device(nil), s.list...), d)); err != nil {
+		return "", Device{}, err
+	}
 	return token, d, nil
 }
 
-// Verify returns the device that owns token.
+// Verify returns the device that owns token. If the file cannot be read,
+// nothing is accepted.
 func (s *Store) Verify(token string) (Device, bool) {
 	if !strings.HasPrefix(token, TokenPrefix) || len(token) > 128 {
 		return Device{}, false
 	}
 	h := []byte(hash(token))
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.refresh() != nil {
+		return Device{}, false
+	}
 	var found Device
 	ok := false
 	for _, d := range s.list {
@@ -108,16 +137,22 @@ func (s *Store) Verify(token string) (Device, bool) {
 }
 
 // List returns the paired devices.
-func (s *Store) List() []Device {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return append([]Device(nil), s.list...)
+func (s *Store) List() ([]Device, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.refresh(); err != nil {
+		return nil, err
+	}
+	return append([]Device(nil), s.list...), nil
 }
 
 // Revoke removes the device with that id or exact name.
 func (s *Store) Revoke(idOrName string) (Device, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if err := s.refresh(); err != nil {
+		return Device{}, err
+	}
 	idx := -1
 	for i, d := range s.list {
 		if d.ID == idOrName || d.Name == idOrName {
@@ -135,10 +170,10 @@ func (s *Store) Revoke(idOrName string) (Device, error) {
 	if err := s.save(next); err != nil {
 		return Device{}, err
 	}
-	s.list = next
 	return gone, nil
 }
 
+// save writes list and makes it the loaded state. Callers hold mu.
 func (s *Store) save(list []Device) error {
 	if list == nil {
 		list = []Device{}
@@ -147,7 +182,14 @@ func (s *Store) save(list []Device) error {
 	if err != nil {
 		return err
 	}
-	return config.WriteFileAtomic(s.path, append(b, '\n'))
+	if err := config.WriteFileAtomic(s.path, append(b, '\n')); err != nil {
+		return err
+	}
+	s.list = list
+	if info, err := os.Stat(s.path); err == nil {
+		s.size, s.mtime = info.Size(), info.ModTime()
+	}
+	return nil
 }
 
 func hash(token string) string {

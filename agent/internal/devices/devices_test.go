@@ -58,6 +58,37 @@ func TestAddRejectsBadName(t *testing.T) {
 	}
 }
 
+// The server and the CLI each open the store. A revoke in one must be seen
+// by the other without a restart.
+func TestSeesChangesFromOtherProcess(t *testing.T) {
+	dir := t.TempDir()
+	server, _ := Open(dir)
+	cli, _ := Open(dir)
+	tok, d, err := server.Add("phone")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if list, _ := cli.List(); len(list) != 1 {
+		t.Fatalf("cli sees %d devices", len(list))
+	}
+	if _, err := cli.Revoke(d.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := server.Verify(tok); ok {
+		t.Error("server still accepts a token revoked by the CLI")
+	}
+}
+
+func TestBrokenFileAcceptsNothing(t *testing.T) {
+	dir := t.TempDir()
+	s, _ := Open(dir)
+	tok, _, _ := s.Add("phone")
+	os.WriteFile(filepath.Join(dir, FileName), []byte("{broken"), 0o600)
+	if _, ok := s.Verify(tok); ok {
+		t.Error("token accepted while the device file is unreadable")
+	}
+}
+
 func TestRevokeAmbiguousName(t *testing.T) {
 	s, _ := Open(t.TempDir())
 	s.Add("phone")

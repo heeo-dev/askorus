@@ -1,17 +1,19 @@
 # Phase 1 구현 계획
 
-2026-10-26 작성. 기준은 Claude Docs의 'Phase 1 설계'(rev 46)와 '제품 방향과 Phase 설계'다. 설계와 다르게 해야 할 일은 아래 '물어볼 것'에 적고, 정해지면 원본 설계 문서를 고친다.
+2026-10-26 작성. 기준은 Claude Docs의 'Phase 1 설계'(rev 46, 7절의 결정을 반영한 것은 rev 49)와 '제품 방향과 Phase 설계'다. 설계와 다르게 해야 할 일은 아래 '물어볼 것'에 적고, 정해지면 원본 설계 문서를 고친다.
 
 ## 1. 저장소 구조
 
 ```
 Asksemble/
 ├─ agent/                     PC 에이전트 (Go 모듈, 단일 실행 파일)
-│  ├─ cmd/asksemble-agent/    main: serve · sessions · info · version (뒤에 pair · devices · revoke · uninstall)
+│  ├─ cmd/asksemble-agent/    main: serve · pair · sessions · info · devices · version (뒤에 check · uninstall)
 │  ├─ internal/core/          Claude를 모르는 공통 타입: Session, State, Capability, Adapter 인터페이스
 │  ├─ internal/config/        설정 파일(허용 폴더, 포트, 기본 모델·노력 수준, 폴더별 열어 두기)
 │  ├─ internal/logx/          로그. 토큰·대화 내용 키는 지워서 남긴다
-│  ├─ internal/devices/       기기 토큰 해시 저장소 (짝 맺기 단계에서 QR·pair를 더함)
+│  ├─ internal/devices/       기기 토큰 해시 저장소 (파일이 바뀌면 다시 읽어 서버와 CLI가 같이 씀)
+│  ├─ internal/pairing/       짝 맺기 창·코드·PC 허용 (pair 명령과 서버가 파일로 주고받음)
+│  ├─ internal/tailnet/       tailscale CLI 읽기 전용: 주인 계정, MagicDNS 이름, serve·funnel 상태
 │  ├─ internal/api/           HTTP 서버: 127.0.0.1 바인딩, Host 검사, 토큰 확인, /v1 라우트
 │  └─ internal/adapter/claude/  Claude 어댑터: claude 실행기, agents --json 파서, 대화 기록 수집기 (Claude 코드는 여기만)
 ├─ app/                       폰 앱 (React Native + Expo, TypeScript)
@@ -27,8 +29,8 @@ Asksemble/
 
 | 단계 | 할 일 | 관문 |
 | --- | --- | --- |
-| A1 | Go 모듈, 설정, 로그, HTTP 서버(`/v1/info`, `/v1/stream`=404), 세션 수집기(읽기만), `GET /v1/sessions` | 단위 테스트 통과. 실제 PC에서 `asksemble-agent sessions`가 1초 안에 목록을 낸다 **(이번에 함)** |
-| A2 | 기기 토큰과 짝 맺기: `agent pair`(5분 창, QR, 128비트 코드), `POST /v1/pair`, PC 화면 허용 확인, `devices`·`revoke`, 실패 횟수 제한, `Tailscale-User-Login` 검사 | 폰 브라우저나 curl로 짝 맺고 토큰으로 `/v1/info` 접근 |
+| A1 | Go 모듈, 설정, 로그, HTTP 서버(`/v1/info`, `/v1/stream`=404), 세션 수집기(읽기만), `GET /v1/sessions` | 단위 테스트 통과. 실제 PC에서 `asksemble-agent sessions`가 1초 안에 목록을 낸다 **(완료)** |
+| A2 | 기기 토큰과 짝 맺기: `asksemble-agent pair`(5분 창, QR, 128비트 코드), `POST /v1/pair`, PC 화면 허용 확인, `devices`·`revoke`, 실패 횟수 제한, `Tailscale-User-Login` 검사 | 폰 브라우저나 curl로 짝 맺고 토큰으로 `/v1/info` 접근 **(PC 안 시험까지 완료. 폰에서 하는 시험은 serve 설정 뒤)** |
 | A3 | 실행기: 열기(실행 규칙 5가지), 새 세션, 멈추기, 지우기. 원격 링크 20초 대기, `Workspace not trusted` 잡기, 관리자 서비스 감지 | 가짜 claude 테스트 통과, 실제 PC에서 F3–F6 수동 시험 |
 | A4 | 서버 관리자(F10): 폴더별 `claude remote-control`, Ctrl+C 종료, 재시작 시 다시 띄우기, `bridge-pointer.json`으로 '서버' 배지 | 실제 PC에서 Claude 앱으로 그 폴더에 새 세션 생성 |
 | A5 | 설치 점검(`check`), serve 포트 고르기 안내, 자동 시작(일반 권한), `uninstall` | **에이전트 관문:** 명령줄 요청만으로 F1–F6, F10 동작 + 확장 원칙 11개 |
@@ -41,7 +43,7 @@ Asksemble/
 
 | ID | 내용 | 지키는 곳 |
 | --- | --- | --- |
-| F1 | 세션 목록(제목·폴더·시각·상태) | `adapter/claude/transcripts.go`(기록 파일), `agents.go`(실행 상태), `collector.go`(합치기·상태 판정), `api` `GET /v1/sessions` |
+| F1 | 세션 목록(제목·폴더·시각·상태) | `adapter/claude/transcripts.go`(기록 파일), `agents.go`(실행 상태), `adapter.go`(합치기·상태 판정·캐시), `api` `GET /v1/sessions` |
 | F2 | 검색·필터 | `core.Filter`(q·folder·state), 앱 목록 화면 |
 | F3 | 원격으로 열기 | `adapter/claude/runner.go` 실행 규칙(A3), `api` `POST /v1/sessions/{id}/open`, 앱 `Linking.openURL` |
 | F4 | 새 세션 | `runner.go` 새 세션 인자(A3), `config.Folders` 허용 목록, 앱 새 세션 화면 |
@@ -52,7 +54,7 @@ Asksemble/
 | N1 | 중계 서버 없음 | 에이전트는 외부로 나가는 요청이 없다. 앱은 연결 목록의 주소로만 접속 |
 | N2 | 정해진 동작만 | `runner.go`: 명령 종류(enum)별로 인자를 만들고 금지 플래그 검사. 셸 없이 `exec.Command(exe, args...)`. `.cmd`/`.bat`은 실행 거부 |
 | N3 | 일반 권한 | 시작할 때 관리자 권한이면 경고(A5), 관리자 서비스 감지(A3) |
-| N4 | 짝 맺은 기기만 | `devices` 해시 저장소 + `api` 토큰 미들웨어(A1에서 틀, A2에서 완성) |
+| N4 | 짝 맺은 기기만 | `devices` 해시 저장소, `api` 토큰 미들웨어와 실패 횟수 제한(`api/pair.go`), `pairing`(QR 코드·PC 허용), `devices revoke` |
 | N5 | 빠름 | 수집기 캐시: 파일별 크기·수정 시각, 덧붙은 부분만 읽기 |
 | N6 | 플랫폼 | Go 크로스 빌드, 경로는 `os.UserHomeDir`·`os.UserConfigDir` |
 | N7 | 설치 쉬움 | 단일 실행 파일, QR 짝 맺기 |
@@ -100,15 +102,44 @@ Asksemble/
 - 속도: `claude agents --json --all` 하나가 1.3~1.5초 걸린다. 그래서 기록 읽기와 동시에 돌리고, 결과는 2초 동안 그대로 쓰고 1분까지는 먼저 돌려준 뒤 뒤에서 새로 받는다. `serve` 시작 때 캐시를 채운다. 첫 실행(캐시 없음)은 약 2초, 그 뒤 `GET /v1/sessions`는 20ms 안팎(20번 잰 값 19–72ms). N5(1초) 충족은 서버가 켜져 있는 동안 기준이다.
 - 임시 설정 폴더와 임시 토큰으로 `serve`를 띄워 확인: 토큰 없으면 401, `/v1/stream` 404, 로그에 토큰·검색어 없음. 시험 뒤 서버를 끄고 토큰 파일을 지웠다.
 
-남은 것(A1 범위 밖으로 미룸): 짝 맺기 전 인증 실패 횟수 제한(A2), 관리자 권한 실행 경고(A5), `app/` Expo 뼈대.
+남은 것(A1 범위 밖으로 미룸): 관리자 권한 실행 경고(A5), `app/` Expo 뼈대.
 
-## 6. 물어볼 것
+## 6. A2 결과 (2026-10-26)
 
-1. **Go 모듈 경로**: 지금은 `github.com/asksemble/asksemble/agent`로 두었다. GitHub 조직 이름이 아직 '정할 것'이라, 정해지면 바꾼다.
-2. **실행 파일 이름**: `asksemble-agent`로 두었다(설계 문서에는 `agent pair`처럼 적혀 있다). 괜찮은지.
-3. **설정 파일 위치**: Windows는 `%AppData%\Asksemble\agent.json`(= `os.UserConfigDir()`), 기기 토큰 해시는 같은 폴더 `devices.json`. 설계에는 '사용자 폴더'라고만 적혀 있다.
-4. **`<uuid>/custom-title.json`**: 기록 폴더에 이 파일만 있는 세션이 있다(데스크톱 앱이 쓴 것으로 보임). 설계의 제목 순서에는 없어서, 기록 안의 `custom-title`이 없을 때 쓰는 보조로 넣었다. 설계 문서에 더할지.
-5. **'멈춤' 판정**: 지금 PC에는 멈춘 bg 세션이 없어 `agents --json --all`에서 멈춘 항목의 `status`·`state` 값을 확인하지 못했다. 지금은 `kind: background`이면서 pid가 없거나 `status`·`state`가 stopped·exited 같은 값이면 멈춤으로 본다. 사용자 확인 뒤 시험 세션 하나를 멈춰 값을 확인하고 싶다.
-6. **기록의 `entrypoint: claude-desktop`**: 데스크톱 앱에서 연 세션도 같은 폴더에 기록된다. 이것도 목록에 보여 주고 `--resume`으로 열어도 되는지(데스크톱 앱이 같은 세션을 열고 있으면 기록이 꼬일 수 있음). 지금은 목록에는 넣고 배지(`desktop`)를 단다.
-7. **목록 상태가 최대 1분 늦을 수 있음**: 속도 때문에 `agents` 결과를 1분까지 먼저 쓰고 뒤에서 새로 받는다. 앱에서 당겨서 새로 고침하면 두 번째에 최신이 된다. 에이전트가 직접 바꾼 상태(A3의 열기·멈추기)는 바로 캐시를 지운다. 이 정도면 되는지, 아니면 새로 고침 때는 항상 기다려 최신을 받을지(약 1.5초).
-8. **설계 문서 반영**: 4번(제목 보조 파일), 7번(목록 캐시), 상태 `unknown` 추가는 정해지면 원본 'Phase 1 설계'에 적는다.
+만든 것:
+
+- `asksemble-agent pair`: 서버가 켜져 있는지 보고, `tailscale serve status`에서 에이전트 포트를 가리키는 HTTPS 주소를 찾아 5분짜리 짝 맺기 창을 연다. 터미널에 QR(어두운 배경 기준, `-light-terminal`로 바꿈)과 손으로 넣을 코드, 같은 QR의 PNG 경로를 보여 준다. serve가 아직 없으면 설정 명령을 안내만 하고 직접 바꾸지 않는다. `-host`·`-port`로 직접 줄 수도 있다.
+- QR 내용: `asksemble://pair?v=1&host=<MagicDNS 이름>&port=<serve HTTPS 포트>&code=<코드>`. 코드는 128비트 난수를 base32로 쓴 26자(A–Z, 2–7). 앱의 딥 링크로도 쓴다.
+- `POST /v1/pair {code, deviceName}`(토큰 없이 받는 유일한 경로): `Tailscale-User-Login` 헤더가 있고 `X-Forwarded-For` 마지막 값이 Tailscale 주소(100.64.0.0/10, fd7a:115c:a1e0::/48)여야 하고, 로그인이 PC 주인 계정과 같아야 한다. 맞으면 PC의 `pair` 창에 "허용할까요? [y/N]"를 띄우고 최대 2분 기다린다. 허용하면 256비트 토큰을 발급해 한 번만 돌려준다.
+- 한 번만 쓰는 코드: 맞는 코드가 처음 들어오면 허용·거절·시간 초과와 상관없이 창이 닫힌다. 틀린 코드 5번이면 창이 닫힌다. 다른 기기가 짝 맺는 중이면 409.
+- PC 주인 계정: 설정의 `tailscaleOwner`가 없으면 `serve` 시작 때 `tailscale status --json`에서 읽는다. 모르면 짝 맺기는 503 `owner_unknown`. MagicDNS 이름은 Host 허용 목록에 자동으로 더한다.
+- Funnel: `serve` 시작 때 에이전트 포트에 Funnel이 켜져 있으면 시작을 거부한다(설계 '보안').
+- 실패 횟수 제한: 주소마다 10분에 10번 틀리면 10분 동안 429. 모든 주소를 합쳐 10분에 100번이면 전부 10분 동안 429(주소를 바꿔 가며 시도하는 로컬 프로그램 대비). 토큰과 짝 맺기 코드 모두 센다.
+- 기기 저장소는 파일이 바뀌면 다시 읽는다. 서버가 켜진 채 다른 창에서 `devices revoke`를 하면 그 토큰은 바로 401이 된다. 파일을 못 읽으면 어떤 토큰도 받지 않는다.
+- `devices add`(A1의 임시 도구)는 없앴다. 기기는 `pair`로만 더한다.
+
+시험 결과:
+
+- `go vet ./...`, `go test ./...` 모두 통과(9개 패키지). 짝 맺기 허용·거절·시간 초과·틀린 코드 잠금·만료·동시 요청·이름 검사, 헤더·주소·계정 검사, 실패 횟수 제한, 다른 프로세스의 revoke 반영을 테스트한다.
+- 실제 PC(임시 설정 폴더, serve 설정은 그대로): `serve` 시작 때 Tailscale 상태를 읽었고 "serve가 아직 에이전트를 가리키지 않음"을 알렸다. `pair`로 QR을 띄우고 serve가 붙이는 헤더를 흉내 낸 로컬 요청으로 짝 맺기를 끝까지 했다. 다른 계정 403, 틀린 코드 403, LAN 주소 403, 맞는 코드 + PC에서 y → 200과 토큰, 그 토큰으로 `/v1/sessions` 200, 같은 코드 다시 쓰기 404, 서버가 켜진 채 `devices revoke` → 바로 401. `devices.json`과 로그에 토큰이 없고, 끝나면 짝 맺기 파일이 남지 않았다. 시험 뒤 서버를 끄고 임시 폴더를 지웠다.
+- 처음 시험에서 PowerShell 파이프로 넣은 "y"가 거절로 읽혔다. 답 앞의 BOM을 지우고, y가 아닌 답은 무엇을 받았는지 보여 주게 고친 뒤 다시 시험해 통과했다.
+
+남은 것: 실제 폰에서 Tailscale을 거쳐 하는 시험(serve 설정 필요), PC 트레이 메뉴의 허용 창(A5), 시작 뒤 Funnel이 켜지는 경우의 주기 점검(A5).
+
+## 7. 정한 것 (2026-10-26, 사용자가 '제안대로'로 정함)
+
+1. Go 모듈 경로는 `github.com/asksemble/asksemble/agent`. GitHub 조직 이름이 바뀌면 같이 바꾼다.
+2. 실행 파일 이름은 `asksemble-agent`. 설계 문서의 `agent pair`·`agent devices`·`agent revoke`는 `asksemble-agent pair`·`asksemble-agent devices`·`asksemble-agent devices revoke`다.
+3. 설정 위치는 `os.UserConfigDir()/Asksemble`(Windows `%AppData%\Asksemble`). `agent.json`(설정), `devices.json`(토큰 해시), `logs\agent.log`. `ASKSEMBLE_AGENT_DIR`로 바꿀 수 있다.
+4. 제목 순서는 `custom-title` → `<uuid>/custom-title.json` → `agent-name` → `ai-title`.
+5. 데스크톱 앱 세션(`entrypoint: claude-desktop`)도 목록에 넣고 `desktop` 배지를 단다.
+6. 목록의 `agents` 결과는 2초 동안 그대로, 1분까지는 먼저 돌려주고 뒤에서 새로 받는다. 에이전트가 상태를 바꾸면 바로 지운다.
+7. `agents`를 못 읽으면 상태는 `unknown`이고, 이어 보기 명령을 주지 않는다.
+8. 위 2–7과 A2의 짝 맺기 세부는 원본 'Phase 1 설계'에도 적었다.
+
+## 8. 물어볼 것
+
+1. **Tailscale serve 설정**: 폰에서 시험하려면 `tailscale serve --bg --https=<포트> http://127.0.0.1:8790`이 필요하다. 이 PC는 443·8443·8767을 쓰고 있어서 `8790`을 제안한다. 다른 serve 설정은 건드리지 않는다. 해도 되는지.
+2. **'멈춤' 판정 확인**: 멈춘 bg 세션이 `agents --json --all`에 어떻게 나오는지 아직 못 봤다. 시험 폴더에 bg 세션을 하나 띄웠다가 `claude stop`으로 멈춰 값을 보고 지우고 싶다. 해도 되는지(세션을 띄우고 멈추는 일이라 따로 묻는다).
+3. **폰에서 짝 맺기 시험 방법**: 앱(B1)이 생기기 전에는 폰 브라우저로 POST를 보내기 어렵다. A3를 먼저 하고 B1에서 실제 폰으로 시험할지, 아니면 그 전에 시험용 간단한 웹 페이지를 에이전트에 잠깐 붙일지.
+4. **PC 쪽 문구**: `pair`·`serve`의 터미널 문구는 지금 영어만 있다. 앱 화면(N9)과 달리 PC 명령줄 문구도 한국어를 같이 낼지.
