@@ -22,14 +22,24 @@ const errorNames = {
 
 const REQ = "asksemble-test-request";
 
+// localStorage, not sessionStorage: opening a session hands off to the
+// Claude app, and coming back can land in a new tab that would otherwise
+// have lost the token. "토큰 지우기" removes it.
 function load(k) {
-  try { return sessionStorage.getItem(k) || ""; } catch { return ""; }
+  try { return localStorage.getItem(k) || ""; } catch { return ""; }
 }
 function store(k, v) {
-  try { v ? sessionStorage.setItem(k, v) : sessionStorage.removeItem(k); } catch {}
+  try { v ? localStorage.setItem(k, v) : localStorage.removeItem(k); } catch {}
 }
 const token = () => load(KEY);
 const setToken = (t) => store(KEY, t);
+const DEV = "asksemble-test-device";
+
+function showWho() {
+  if (load(DEV)) {
+    say($("who"), "짝 맺음: " + load(DEV) + ". 토큰은 이 브라우저에 저장됩니다. 다 쓰면 '토큰 지우기'를 누르세요.");
+  }
+}
 
 function say(el, text, isError) {
   el.textContent = text;
@@ -45,6 +55,12 @@ async function call(method, path, body) {
   try { data = await res.json(); } catch {}
   if (!res.ok) {
     const code = data && data.error && data.error.code;
+    if (code === "unauthorized" && token()) {
+      // revoked on the PC: forget the token and show pairing again
+      setToken("");
+      store(DEV, "");
+      showUse();
+    }
     throw new Error(errorNames[code] || ("오류 " + res.status + (code ? " (" + code + ")" : "")));
   }
   return data;
@@ -76,7 +92,8 @@ async function waitForPC(requestId) {
       if (r.status === "approved") {
         store(REQ, "");
         setToken(r.token);
-        say($("who"), "짝 맺음: " + r.deviceName + " (id " + r.deviceId + "). 토큰은 이 탭에만 저장됩니다.");
+        store(DEV, r.deviceName + " (id " + r.deviceId + ")");
+        showWho();
         say($("pairMsg"), "");
         showUse();
         return;
@@ -140,6 +157,8 @@ $("listBtn").addEventListener("click", async () => {
       if (s.remoteUrl && s.remoteUrl.startsWith("https://claude.ai/code/session_")) {
         const a = document.createElement("a");
         a.href = s.remoteUrl;
+        a.target = "_blank"; // keep this page in its own tab
+        a.rel = "noopener noreferrer";
         a.textContent = "Claude 앱에서 열기";
         li.append(a);
       }
@@ -160,12 +179,14 @@ $("listBtn").addEventListener("click", async () => {
 
 $("forgetBtn").addEventListener("click", () => {
   setToken("");
+  store(DEV, "");
   $("list").replaceChildren();
   $("info").hidden = true;
   showUse();
 });
 
 showUse();
+showWho();
 if (!token() && load(REQ)) {
   waitForPC(load(REQ));
 }
