@@ -17,6 +17,7 @@ export default function RootLayout() {
         }}
       >
         <Stack.Screen name="index" options={{ title: t('home.title') }} />
+        <Stack.Screen name="pair" options={{ title: t('pair.title') }} />
       </Stack>
     </>
   );

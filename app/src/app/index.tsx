@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
 import { AgentClient, baseUrl } from '@/api/client';
@@ -15,7 +16,6 @@ export default function Home() {
   const s = styles(th);
   const [conns, setConns] = useState<Connection[] | null>(null);
   const [reach, setReach] = useState<Record<string, Reach>>({});
-  const [note, setNote] = useState('');
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
@@ -38,9 +38,12 @@ export default function Home() {
     );
   }, []);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  // Coming back from pairing shows the new PC.
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load]),
+  );
 
   const refresh = async () => {
     setRefreshing(true);
@@ -52,7 +55,7 @@ export default function Home() {
   };
 
   const pairButton = (
-    <Pressable style={s.button} onPress={() => setNote(t('home.pairComing'))} accessibilityRole="button">
+    <Pressable style={s.button} onPress={() => router.push('/pair')} accessibilityRole="button">
       <Text style={s.buttonText}>{t('home.pair')}</Text>
     </Pressable>
   );
@@ -91,7 +94,6 @@ export default function Home() {
         ListFooterComponent={
           <View style={s.footer}>
             {pairButton}
-            {note ? <Text style={s.muted}>{note}</Text> : null}
             <Text style={s.small}>{t('app.notOfficial')}</Text>
           </View>
         }
