@@ -40,6 +40,16 @@
     <p id="useMsg" class="msg"></p>
     <pre id="info" hidden></pre>
     <ul id="list"></ul>
+
+    <h2>3. 새 세션</h2>
+    <div class="row">
+      <select id="folder"><option value="">폴더를 불러오세요</option></select>
+      <button id="folderBtn" class="secondary">폴더 불러오기</button>
+    </div>
+    <label>이름 <input id="newName" maxlength="64" placeholder="비우면 폴더 이름과 시각"></label>
+    <button id="newBtn">새 세션 시작</button>
+    <p id="newMsg" class="msg"></p>
+    <div id="newLink"></div>
   </section>
 </main>
 <script src="app.js"></script>

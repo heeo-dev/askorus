@@ -87,6 +87,19 @@ func TestValidate(t *testing.T) {
 	}
 }
 
+func TestValidModel(t *testing.T) {
+	for _, m := range []string{"opus", "sonnet", "claude-opus-5-5", "opus[1m]", "haiku-5.5"} {
+		if !ValidModel(m) {
+			t.Errorf("%q rejected", m)
+		}
+	}
+	for _, m := range []string{"", "-x", "--dangerously-skip-permissions", "a b", "opus;rm", strings.Repeat("a", 65)} {
+		if ValidModel(m) {
+			t.Errorf("%q accepted", m)
+		}
+	}
+}
+
 func TestLoadRejectsBadFile(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, FileName), []byte(`{"port": 22}`), 0o600)

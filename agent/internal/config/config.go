@@ -159,7 +159,7 @@ func (c *Config) normalize() {
 
 var (
 	idRe     = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,31}$`)
-	modelRe  = regexp.MustCompile(`^[A-Za-z0-9._\[\]-]{1,64}$`)
+	modelRe  = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._\[\]-]{0,63}$`) // never starts with "-"
 	hostRe   = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$`)
 	efforts  = map[string]bool{"low": true, "medium": true, "high": true, "xhigh": true, "max": true}
 	nonSlugs = regexp.MustCompile(`[^a-z0-9]+`)

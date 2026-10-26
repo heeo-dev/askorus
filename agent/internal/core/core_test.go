@@ -55,6 +55,7 @@ func TestFilter(t *testing.T) {
 		{"query title", Filter{Query: "alp"}, []string{"claude:a"}},
 		{"query search text", Filter{Query: "LOGIN"}, []string{"claude:b"}},
 		{"hidden", Filter{Hidden: []string{filepath.Join(root, "secret")}}, []string{"claude:b", "claude:d", "claude:a"}},
+		{"hidden ids", Filter{HiddenIDs: map[string]bool{"claude:b": true}}, []string{"claude:c", "claude:d", "claude:a"}},
 		{"agent", Filter{Agent: "codex"}, nil},
 	}
 	for _, c := range cases {

@@ -18,14 +18,15 @@ import (
 // Transcript is what the session list needs from one ~/.claude/projects
 // file. It holds metadata only, plus the first words of the last prompt.
 type Transcript struct {
-	SessionID  string
-	Title      string
-	Cwd        string
-	LastActive time.Time
-	Model      string
-	RemoteURL  string
-	LastPrompt string
-	Entrypoint string
+	SessionID   string
+	Title       string
+	Cwd         string
+	LastActive  time.Time
+	Model       string
+	RemoteURL   string
+	RemoteURLAt time.Time // when the last remote link line was written
+	LastPrompt  string
+	Entrypoint  string
 }
 
 // searchPromptRunes is how much of the last prompt is kept for searching.
@@ -46,7 +47,7 @@ type fileState struct {
 	customTitle, agentName, aiTitle string
 	cwd, model, remoteURL           string
 	lastPrompt, entrypoint          string
-	lastTS                          time.Time
+	lastTS, remoteURLAt             time.Time
 	sideTitle                       string // <uuid>/custom-title.json
 	sideMtime                       time.Time
 }
@@ -218,11 +219,15 @@ func (st *fileState) apply(line []byte) {
 		}
 		st.cwd = keep(st.cwd, h.Cwd)
 		st.entrypoint = keep(st.entrypoint, h.Entrypoint)
-		if ts, err := time.Parse(time.RFC3339Nano, h.Timestamp); err == nil && ts.After(st.lastTS) {
+		ts, tsErr := time.Parse(time.RFC3339Nano, h.Timestamp)
+		if tsErr == nil && ts.After(st.lastTS) {
 			st.lastTS = ts
 		}
 		if h.Type == "system" && h.Subtype == "bridge_status" && isRemoteURL(h.URL) {
 			st.remoteURL = h.URL
+			if tsErr == nil {
+				st.remoteURLAt = ts
+			}
 		}
 		if h.Type == "assistant" {
 			var m assistantModel
@@ -256,14 +261,15 @@ func (t *Transcripts) loadSideTitle(st *fileState, path string) {
 
 func (st *fileState) transcript(id string) Transcript {
 	return Transcript{
-		SessionID:  id,
-		Title:      firstNonEmpty(st.customTitle, st.sideTitle, st.agentName, st.aiTitle),
-		Cwd:        st.cwd,
-		LastActive: firstTime(st.lastTS, st.mtime),
-		Model:      st.model,
-		RemoteURL:  st.remoteURL,
-		LastPrompt: st.lastPrompt,
-		Entrypoint: st.entrypoint,
+		SessionID:   id,
+		Title:       firstNonEmpty(st.customTitle, st.sideTitle, st.agentName, st.aiTitle),
+		Cwd:         st.cwd,
+		LastActive:  firstTime(st.lastTS, st.mtime),
+		Model:       st.model,
+		RemoteURL:   st.remoteURL,
+		RemoteURLAt: st.remoteURLAt,
+		LastPrompt:  st.lastPrompt,
+		Entrypoint:  st.entrypoint,
 	}
 }
 

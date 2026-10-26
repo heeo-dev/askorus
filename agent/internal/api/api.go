@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/asksemble/asksemble/agent/internal/config"
 	"github.com/asksemble/asksemble/agent/internal/core"
 	"github.com/asksemble/asksemble/agent/internal/devices"
 	"github.com/asksemble/asksemble/agent/internal/pairing"
@@ -72,6 +73,11 @@ type Options struct {
 	// TestPage serves the phone-browser test page at /test/ and accepts
 	// same-origin browser requests from it.
 	TestPage bool
+	// Hidden sessions are left out of the list; DELETE adds to it.
+	Hidden HiddenStore
+	// Folders returns the folders new sessions may start in. It is called
+	// per request so edits to the settings file apply without a restart.
+	Folders func() []config.Folder
 }
 
 // Server serves /v1.
@@ -98,13 +104,10 @@ func New(o Options) *Server {
 func (s *Server) Handler() http.Handler {
 	top := http.NewServeMux()
 	// Pairing is the only route without a device token.
-	notAllowed := func(w http.ResponseWriter, r *http.Request) {
-		writeError(w, http.StatusMethodNotAllowed, CodeMethod, "method not allowed")
-	}
 	top.HandleFunc("POST /v1/pair", s.pair)
-	top.HandleFunc("/v1/pair", notAllowed)
+	top.HandleFunc("/v1/pair", methodNotAllowed)
 	top.HandleFunc("POST /v1/pair/status", s.pairStatus)
-	top.HandleFunc("/v1/pair/status", notAllowed)
+	top.HandleFunc("/v1/pair/status", methodNotAllowed)
 	if s.o.TestPage {
 		top.Handle("GET /test/", s.testPage())
 		top.Handle("GET /test", http.RedirectHandler("/test/", http.StatusFound))
@@ -113,12 +116,18 @@ func (s *Server) Handler() http.Handler {
 	top.Handle("/", s.authenticate(mux))
 	route := func(method, path string, h http.HandlerFunc) {
 		mux.HandleFunc(method+" "+path, h)
-		mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
-			writeError(w, http.StatusMethodNotAllowed, CodeMethod, "method not allowed")
-		})
+		mux.HandleFunc(path, methodNotAllowed)
 	}
 	route("GET", "/v1/info", s.info)
-	route("GET", "/v1/sessions", s.sessions)
+	mux.HandleFunc("GET /v1/sessions", s.sessions)
+	mux.HandleFunc("POST /v1/sessions", s.startSession)
+	mux.HandleFunc("/v1/sessions", methodNotAllowed)
+	mux.HandleFunc("POST /v1/sessions/{id}/open", s.openSession)
+	mux.HandleFunc("POST /v1/sessions/{id}/stop", s.stopSession)
+	mux.HandleFunc("DELETE /v1/sessions/{id}", s.removeSession)
+	route("GET", "/v1/folders", s.folders)
+	mux.HandleFunc("/v1/sessions/{id}/{action}", methodNotAllowed)
+	mux.HandleFunc("/v1/sessions/{id}", methodNotAllowed)
 	// Reserved for the realtime channel (principle 5).
 	mux.HandleFunc("/v1/stream", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, CodeNotImplemented, "not implemented yet")
@@ -317,6 +326,9 @@ func (s *Server) sessions(w http.ResponseWriter, r *http.Request) {
 		all = append(all, res.Sessions...)
 		resp.Warnings = append(resp.Warnings, res.Warnings...)
 	}
+	if s.o.Hidden != nil {
+		f.HiddenIDs = s.o.Hidden.Set()
+	}
 	resp.Sessions = append(resp.Sessions, f.Apply(all)...)
 	writeJSON(w, http.StatusOK, resp)
 }
@@ -326,6 +338,10 @@ type errorBody struct {
 		Code    string `json:"code"`
 		Message string `json:"message"`
 	} `json:"error"`
+}
+
+func methodNotAllowed(w http.ResponseWriter, r *http.Request) {
+	writeError(w, http.StatusMethodNotAllowed, CodeMethod, "method not allowed")
 }
 
 func writeError(w http.ResponseWriter, status int, code, msg string) {

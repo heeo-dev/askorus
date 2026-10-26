@@ -127,6 +127,8 @@ type Filter struct {
 	States []State // empty means all
 	Agent  string  // empty means all
 	Hidden []string
+	// HiddenIDs are sessions the person removed from the list (F5).
+	HiddenIDs map[string]bool
 }
 
 // Apply returns the matching sessions, most recent first.
@@ -143,7 +145,7 @@ func (f Filter) Apply(in []Session) []Session {
 		if f.Folder != "" && !InFolder(s.Folder, f.Folder) {
 			continue
 		}
-		if hidden(s.Folder, f.Hidden) {
+		if hidden(s.Folder, f.Hidden) || f.HiddenIDs[s.ID] {
 			continue
 		}
 		if q != "" && !strings.Contains(strings.ToLower(s.Title+"\n"+s.Name+"\n"+s.SearchText), q) {

@@ -42,6 +42,10 @@ const (
 type Options struct {
 	ClaudeDir  string // ~/.claude, or $CLAUDE_CONFIG_DIR
 	ClaudePath string // empty: look up claude on PATH
+	// DefaultModel and DefaultEffort are passed when a request names none.
+	// Empty leaves Claude Code's own defaults.
+	DefaultModel  string
+	DefaultEffort string
 }
 
 // Adapter implements core.Adapter for Claude Code.
@@ -61,6 +65,14 @@ type Adapter struct {
 	agentsAt   time.Time // zero: nothing usable cached
 	agentsGen  int       // bumped by Invalidate; a fetch started before it is dropped
 	refreshing bool
+
+	defaultModel, defaultEffort string
+
+	opMu sync.Mutex
+	busy map[string]bool // sessions with an action in progress
+
+	linkWait time.Duration // linkTimeout by default; tests shorten it
+	poll     time.Duration
 }
 
 // DefaultClaudeDir is $CLAUDE_CONFIG_DIR or ~/.claude.
@@ -80,18 +92,24 @@ func DefaultClaudeDir() (string, error) {
 func New(opts Options) *Adapter {
 	r, err := NewRunner(opts.ClaudePath)
 	return &Adapter{
-		runner:      r,
-		runnerErr:   err,
-		transcripts: NewTranscripts(filepath.Join(opts.ClaudeDir, "projects")),
+		runner:        r,
+		runnerErr:     err,
+		transcripts:   NewTranscripts(filepath.Join(opts.ClaudeDir, "projects")),
+		defaultModel:  opts.DefaultModel,
+		defaultEffort: opts.DefaultEffort,
 	}
 }
 
 // Agent returns "claude".
 func (a *Adapter) Agent() string { return Name }
 
-// capabilities grows as steps A3 and A4 land.
+// capabilities grows as step A4 (serve) lands.
 func (a *Adapter) capabilities() []core.Capability {
-	return []core.Capability{core.CapList}
+	caps := []core.Capability{core.CapList}
+	if a.runner != nil {
+		caps = append(caps, core.CapStart, core.CapResume, core.CapStop, core.CapRemove, core.CapOpenOfficial)
+	}
+	return caps
 }
 
 // Info reports the Claude Code version and what works.

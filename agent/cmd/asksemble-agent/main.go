@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"text/tabwriter"
 	"time"
 	"unicode/utf8"
@@ -27,6 +28,7 @@ import (
 	"github.com/asksemble/asksemble/agent/internal/config"
 	"github.com/asksemble/asksemble/agent/internal/core"
 	"github.com/asksemble/asksemble/agent/internal/devices"
+	"github.com/asksemble/asksemble/agent/internal/hidden"
 	"github.com/asksemble/asksemble/agent/internal/logx"
 	"github.com/asksemble/asksemble/agent/internal/pairing"
 	"github.com/asksemble/asksemble/agent/internal/tailnet"
@@ -59,6 +61,24 @@ Usage / 사용법:
   asksemble-agent devices revoke ID|NAME
       disconnect a device
       기기 연결을 끊습니다
+  asksemble-agent folders [list] | folders add [-id ID] PATH | folders remove ID
+      folders new sessions may start in
+      새 세션을 열 수 있는 폴더
+  asksemble-agent open SESSION_ID
+      wake a session and print its remote link
+      세션을 켜고 원격 링크를 보여 줍니다
+  asksemble-agent new -folder ID [-name N] [-model M] [-effort E]
+      start a new remote session
+      새 원격 세션을 시작합니다
+  asksemble-agent stop SESSION_ID
+      stop a background session
+      백그라운드 세션을 멈춥니다
+  asksemble-agent rm SESSION_ID
+      remove a session from the list (the transcript stays)
+      세션을 목록에서 지웁니다 (대화 기록은 남습니다)
+  asksemble-agent hidden [list | unhide SESSION_ID]
+      sessions removed from the list
+      목록에서 지운 세션
   asksemble-agent version
 
 Settings live in %s (override with ASKSEMBLE_AGENT_DIR).
@@ -95,6 +115,18 @@ func run(args []string, in io.Reader, out io.Writer) error {
 		return info(dir, out)
 	case "devices":
 		return devicesCmd(dir, args[1:], out)
+	case "folders":
+		return foldersCmd(dir, args[1:], out)
+	case "open":
+		return openCmd(dir, args[1:], out)
+	case "new":
+		return newCmd(dir, args[1:], out)
+	case "stop":
+		return stopCmd(dir, args[1:], out)
+	case "rm":
+		return rmCmd(dir, args[1:], out)
+	case "hidden":
+		return hiddenCmd(dir, args[1:], out)
 	}
 	return fail("unknown command %q (try: asksemble-agent help)", "모르는 명령 %q입니다 (asksemble-agent help로 확인하세요)", args[0])
 }
@@ -104,7 +136,34 @@ func newAdapter(cfg config.Config) (*claude.Adapter, error) {
 	if err != nil {
 		return nil, err
 	}
-	return claude.New(claude.Options{ClaudeDir: claudeDir, ClaudePath: cfg.ClaudePath}), nil
+	return claude.New(claude.Options{
+		ClaudeDir: claudeDir, ClaudePath: cfg.ClaudePath,
+		DefaultModel: cfg.DefaultModel, DefaultEffort: cfg.DefaultEffort,
+	}), nil
+}
+
+// foldersFrom rereads the allowed folders from the settings file, so
+// `folders add` applies to a running server. A broken file keeps the last
+// good list.
+func foldersFrom(dir string, initial []config.Folder) func() []config.Folder {
+	var mu sync.Mutex
+	last := initial
+	return func() []config.Folder {
+		mu.Lock()
+		defer mu.Unlock()
+		if cfg, err := config.Load(dir); err == nil {
+			last = cfg.Folders
+		}
+		return last
+	}
+}
+
+func loadAdapter(dir string) (*claude.Adapter, error) {
+	cfg, err := config.Load(dir)
+	if err != nil {
+		return nil, err
+	}
+	return newAdapter(cfg)
 }
 
 // tailnetInfo is what serve and pair learn from the tailscale CLI.
@@ -191,6 +250,10 @@ func serve(dir string, args []string) error {
 	if err != nil {
 		return err
 	}
+	hid, err := hidden.Open(dir)
+	if err != nil {
+		return err
+	}
 	adapter, err := newAdapter(cfg)
 	if err != nil {
 		return err
@@ -207,6 +270,8 @@ func serve(dir string, args []string) error {
 		TailscaleOwner: owner,
 		HiddenFolders:  cfg.HiddenFolders,
 		TestPage:       *testPage,
+		Hidden:         hid,
+		Folders:        foldersFrom(dir, cfg.Folders),
 	}).Handler())
 	ln, err := api.Listen(cfg.Port)
 	if err != nil {
@@ -470,6 +535,9 @@ func sessions(dir string, args []string, out io.Writer) error {
 		return err
 	}
 	f := core.Filter{Query: *q, Folder: *folder, Hidden: cfg.HiddenFolders}
+	if hid, err := hidden.Open(dir); err == nil {
+		f.HiddenIDs = hid.Set()
+	}
 	if *state != "" {
 		for _, s := range strings.Split(*state, ",") {
 			st := core.State(strings.TrimSpace(s))

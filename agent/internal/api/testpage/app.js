@@ -18,6 +18,14 @@ const errorNames = {
   owner_unknown: "PC가 주인 Tailscale 계정을 모릅니다.",
   too_many_attempts: "실패가 너무 많습니다. 10분 뒤에 다시 하세요.",
   unauthorized: "토큰이 없거나 끊겼습니다. 다시 짝 맺으세요.",
+  session_not_found: "세션을 찾지 못했습니다.",
+  session_busy: "이 세션에 다른 동작이 진행 중입니다.",
+  session_not_background: "백그라운드 세션만 멈출 수 있습니다.",
+  session_state_unknown: "PC에서 세션 상태를 읽지 못했습니다.",
+  workspace_not_trusted: "PC에서 아직 신뢰하지 않은 폴더입니다. 그 폴더에서 claude를 한 번 실행해 신뢰를 허용하세요.",
+  remote_link_timeout: "세션은 떴지만 원격 링크가 생기지 않았습니다.",
+  launch_failed: "PC에서 claude 실행이 실패했습니다.",
+  folder_not_found: "허용된 폴더가 아닙니다.",
 };
 
 const REQ = "asksemble-test-request";
@@ -147,6 +155,111 @@ function when(iso) {
   return isNaN(d) ? "" : d.toLocaleString("ko-KR", { dateStyle: "short", timeStyle: "short" });
 }
 
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text) e.textContent = text;
+  return e;
+}
+
+// remoteLink is the tap target that hands the session to the Claude app.
+// Opening it right after an awaited call would lose the user gesture, so
+// the person taps it.
+function remoteLink(url) {
+  const a = el("a", "", "Claude 앱에서 열기");
+  a.href = claudeLink(url);
+  if (!a.href.startsWith("intent:")) {
+    a.target = "_blank"; // keep this page in its own tab
+  }
+  a.rel = "noopener noreferrer";
+  return a;
+}
+
+function renderSession(s) {
+  const li = el("li");
+  li.append(el("div", "title", s.title || s.lastPrompt || "(제목 없음)"));
+  li.append(el("div", "meta", [stateNames[s.state] || s.state, s.activity, when(s.lastActive), s.folder].filter(Boolean).join(" · ")));
+  const msg = el("div", "msg");
+  const links = el("div", "row");
+  const buttons = el("div", "row");
+  const act = (label, cls, fn) => {
+    const b = el("button", cls, label);
+    b.addEventListener("click", async () => {
+      for (const x of buttons.children) x.disabled = true;
+      try { await fn(); } catch (e) { say(msg, e.message, true); }
+      for (const x of buttons.children) x.disabled = false;
+    });
+    buttons.append(b);
+  };
+  const path = "sessions/" + encodeURIComponent(s.id);
+  act("열기", "", async () => {
+    say(msg, "켜는 중… (보통 10~20초)");
+    const started = performance.now();
+    const r = await call("POST", path + "/open");
+    const secs = ((performance.now() - started) / 1000).toFixed(1);
+    if (r.hint === "use_rc_in_terminal") {
+      say(msg, "PC 터미널에서 열려 있는 세션입니다. 그 터미널에 /rc를 입력하세요.");
+      return;
+    }
+    const what = { none: "이미 열려 있음", resumed: "깨움", started: "시작함" }[r.action] || r.action;
+    say(msg, what + " · " + secs + "초");
+    links.replaceChildren(remoteLink(r.remoteUrl));
+  });
+  if (s.state === "running") {
+    act("멈추기", "secondary", async () => {
+      say(msg, "멈추는 중…");
+      const r = await call("POST", path + "/stop");
+      say(msg, "멈춤: " + (stateNames[r.session.state] || r.session.state));
+    });
+  }
+  act("지우기", "secondary", async () => {
+    if (!confirm("목록에서 지울까요? 대화 기록은 PC에 남습니다.")) return;
+    if (!confirm("정말 지울까요? (실행 중이면 멈춘 뒤 지웁니다)")) return;
+    say(msg, "지우는 중…");
+    await call("DELETE", path);
+    li.remove();
+  });
+  if (s.remoteUrl && s.remoteUrl.startsWith("https://claude.ai/code/session_") && s.state === "running") {
+    links.append(remoteLink(s.remoteUrl));
+  }
+  li.append(buttons, links, msg);
+  if (s.attachCommand) li.append(el("div", "meta", "PC: " + s.attachCommand));
+  return li;
+}
+
+$("folderBtn").addEventListener("click", async () => {
+  say($("newMsg"), "");
+  try {
+    const r = await call("GET", "folders");
+    const sel = $("folder");
+    sel.replaceChildren();
+    for (const f of r.folders) {
+      const o = el("option", "", f.name + " (" + f.path + ")");
+      o.value = f.id;
+      sel.append(o);
+    }
+    if (!r.folders.length) say($("newMsg"), "허용된 폴더가 없습니다. PC에서 asksemble-agent folders add 경로 로 더하세요.", true);
+  } catch (e) {
+    say($("newMsg"), e.message, true);
+  }
+});
+
+$("newBtn").addEventListener("click", async () => {
+  const btn = $("newBtn");
+  btn.disabled = true;
+  say($("newMsg"), "새 세션을 켜는 중… (보통 10~20초)");
+  $("newLink").replaceChildren();
+  try {
+    const r = await call("POST", "sessions", { folder: $("folder").value, name: $("newName").value });
+    say($("newMsg"), "시작함: " + (r.session.title || r.session.name));
+    $("newLink").append(remoteLink(r.remoteUrl));
+  } catch (e) {
+    say($("newMsg"), e.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 $("listBtn").addEventListener("click", async () => {
   const q = new URLSearchParams();
   if ($("state").value) q.set("state", $("state").value);
@@ -158,31 +271,7 @@ $("listBtn").addEventListener("click", async () => {
     const list = $("list");
     list.replaceChildren();
     for (const s of r.sessions) {
-      const li = document.createElement("li");
-      const title = document.createElement("div");
-      title.className = "title";
-      title.textContent = s.title || s.lastPrompt || "(제목 없음)";
-      const meta = document.createElement("div");
-      meta.className = "meta";
-      meta.textContent = [stateNames[s.state] || s.state, s.activity, when(s.lastActive), s.folder].filter(Boolean).join(" · ");
-      li.append(title, meta);
-      if (s.remoteUrl && s.remoteUrl.startsWith("https://claude.ai/code/session_")) {
-        const a = document.createElement("a");
-        a.href = claudeLink(s.remoteUrl);
-        if (!a.href.startsWith("intent:")) {
-          a.target = "_blank"; // keep this page in its own tab
-        }
-        a.rel = "noopener noreferrer";
-        a.textContent = "Claude 앱에서 열기";
-        li.append(a);
-      }
-      if (s.attachCommand) {
-        const cmd = document.createElement("div");
-        cmd.className = "meta";
-        cmd.textContent = "PC: " + s.attachCommand;
-        li.append(cmd);
-      }
-      list.append(li);
+      list.append(renderSession(s));
     }
     const ms = Math.round(performance.now() - started);
     say($("useMsg"), r.sessions.length + "개, " + ms + "ms" + (r.warnings.length ? " · 경고: " + r.warnings.join(", ") : ""));

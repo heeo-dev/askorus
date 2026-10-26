@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
@@ -66,9 +67,17 @@ func (r *Runner) Path() string { return r.exe }
 // Subcommands and flags the agent may pass. Everything else is refused, so
 // a permission-relaxing flag can only get in by being added here.
 var (
-	allowedSubcommands = map[string]bool{"agents": true}
-	allowedFlags       = map[string]bool{"--version": true, "--json": true, "--all": true}
-	flagsWithValue     = map[string]bool{}
+	allowedSubcommands = map[string]bool{"agents": true, "stop": true, "rm": true, "logs": true}
+	// Subcommands that take exactly one session id or name.
+	subcommandsWithTarget = map[string]bool{"stop": true, "rm": true, "logs": true}
+	allowedFlags          = map[string]bool{
+		"--version": true, "--json": true, "--all": true,
+		"--bg": true, "--resume": true, "--remote-control": true,
+		"-n": true, "--model": true, "--effort": true,
+	}
+	flagsWithValue = map[string]bool{"--resume": true, "-n": true, "--model": true, "--effort": true}
+	// --remote-control takes the session name when given one.
+	flagsWithOptionalValue = map[string]bool{"--remote-control": true}
 )
 
 // deniedFlags are refused even if someone adds them to allowedFlags.
@@ -79,8 +88,8 @@ var deniedFlags = []string{
 }
 
 func checkArgs(args []string) error {
-	for i := 0; i < len(args); i++ {
-		a := args[i]
+	sub, targets := "", 0
+	for _, a := range args {
 		if strings.ContainsAny(a, "\x00\r\n") {
 			return fmt.Errorf("%w: control character", ErrArgRejected)
 		}
@@ -90,31 +99,52 @@ func checkArgs(args []string) error {
 				return fmt.Errorf("%w: %s", ErrArgRejected, a)
 			}
 		}
+	}
+	for i := 0; i < len(args); i++ {
+		a := args[i]
 		switch {
 		case strings.HasPrefix(a, "-"):
 			if !allowedFlags[a] {
 				return fmt.Errorf("%w: %s", ErrArgRejected, a)
 			}
-			if flagsWithValue[a] {
+			// A value never starts with "-", so it cannot smuggle in a flag.
+			hasValue := i+1 < len(args) && !strings.HasPrefix(args[i+1], "-")
+			switch {
+			case flagsWithValue[a] && !hasValue:
+				return fmt.Errorf("%w: %s needs a value", ErrArgRejected, a)
+			case flagsWithValue[a], flagsWithOptionalValue[a] && hasValue:
 				i++
-				if i >= len(args) || strings.HasPrefix(args[i], "-") {
-					return fmt.Errorf("%w: %s needs a value", ErrArgRejected, a)
-				}
 			}
 		case i == 0 && allowedSubcommands[a]:
+			sub = a
+		case subcommandsWithTarget[sub] && targets == 0:
+			targets++
 		default:
 			return fmt.Errorf("%w: %q", ErrArgRejected, a)
 		}
+	}
+	if subcommandsWithTarget[sub] && targets != 1 {
+		return fmt.Errorf("%w: %s needs one session", ErrArgRejected, sub)
 	}
 	return nil
 }
 
 // Run executes claude with args in dir (empty: current directory).
 func (r *Runner) Run(ctx context.Context, dir string, args ...string) (Result, error) {
+	return r.RunFor(ctx, r.timeout, dir, args...)
+}
+
+// RunFor is Run with its own time limit.
+func (r *Runner) RunFor(ctx context.Context, timeout time.Duration, dir string, args ...string) (Result, error) {
 	if err := checkArgs(args); err != nil {
 		return Result{}, err
 	}
-	ctx, cancel := context.WithTimeout(ctx, r.timeout)
+	if dir != "" {
+		if info, err := os.Stat(dir); err != nil || !info.IsDir() || !filepath.IsAbs(dir) {
+			return Result{}, fmt.Errorf("working folder %q is not an absolute existing folder", dir)
+		}
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, r.exe, args...)
 	cmd.Dir = dir
@@ -128,7 +158,7 @@ func (r *Runner) Run(ctx context.Context, dir string, args ...string) (Result, e
 	var exitErr *exec.ExitError
 	switch {
 	case ctx.Err() == context.DeadlineExceeded:
-		return res, fmt.Errorf("claude %s: timed out after %s", strings.Join(args, " "), r.timeout)
+		return res, fmt.Errorf("claude %s: timed out after %s", strings.Join(args, " "), timeout)
 	case errors.As(err, &exitErr):
 		res.ExitCode = exitErr.ExitCode()
 		return res, fmt.Errorf("claude %s: exit code %d", strings.Join(args, " "), res.ExitCode)

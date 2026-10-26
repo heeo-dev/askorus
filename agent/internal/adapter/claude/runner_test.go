@@ -64,10 +64,17 @@ func TestRunnerRejectsArguments(t *testing.T) {
 		{"--add-dir", "C:\\"},
 		{"agents", "--json", "--all", "--dangerously-skip-permissions"},
 		{"-p", "hi"},
-		{"stop", "x"},
-		{"rm", "x"},
+		{"stop"},
+		{"stop", "a", "b"},
+		{"rm", "--all"},
 		{"daemon", "stop", "--any"},
 		{"agents", "extra"},
+		{"--bg", "--resume"},
+		{"--bg", "--resume", "-x"},
+		{"--bg", "-n", "--dangerously-skip-permissions"},
+		{"--bg", "--remote-control", "name", "extra"},
+		{"--bg", "--resume", "id", "--allow-dangerously-skip-permissions"},
+		{"attach", "x"},
 		{"--version\n--dangerously-skip-permissions"},
 		{"--json\x00"},
 	}
@@ -78,6 +85,23 @@ func TestRunnerRejectsArguments(t *testing.T) {
 	}
 	if got := recordedArgs(t, argsFile); len(got) != 0 {
 		t.Errorf("claude was started for rejected args: %v", got)
+	}
+}
+
+// The exact argument lists the launch rules build are accepted.
+func TestLaunchArgumentsAccepted(t *testing.T) {
+	good := [][]string{
+		{"--bg", "--resume", "0b6f2a8e-1111-4222-8333-444455556666"},
+		{"--bg", "--resume", "0b6f2a8e-1111-4222-8333-444455556666", "--remote-control", "-n", "My title", "--model", "opus", "--effort", "high"},
+		{"--bg", "--remote-control", "my job", "-n", "my job"},
+		{"stop", "634f64ab"},
+		{"rm", "634f64ab"},
+		{"logs", "634f64ab"},
+	}
+	for _, args := range good {
+		if err := checkArgs(args); err != nil {
+			t.Errorf("checkArgs(%q) = %v", args, err)
+		}
 	}
 }
 
