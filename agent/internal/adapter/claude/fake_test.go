@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -68,6 +69,8 @@ func fakeClaude(args []string) int {
 		fmt.Print(out)
 	case len(args) > 0 && args[0] == "--bg":
 		return fakeBackground(args)
+	case len(args) > 0 && args[0] == "remote-control":
+		return fakeRemoteControl(args)
 	case len(args) == 2 && (args[0] == "stop" || args[0] == "rm"):
 		return fakeStopRemove(args[0], args[1])
 	default:
@@ -122,6 +125,57 @@ func fakeBackground(args []string) int {
 	}
 	fmt.Printf("backgrounded · %s · %s (idle — send a prompt to start)\n", e.ID, e.Name)
 	return 0
+}
+
+// fakeRemoteControl acts like `claude remote-control` in a terminal: it
+// draws a Connected screen and ends cleanly on Ctrl+C.
+//
+//	ASKSEMBLE_FAKE_SERVE_EXIT "1": end by itself after a moment (a crash)
+func fakeRemoteControl(args []string) int {
+	cwd, _ := os.Getwd()
+	if os.Getenv("ASKSEMBLE_FAKE_UNTRUSTED") == "1" {
+		fmt.Printf("Workspace not trusted. Run claude in %s once and accept the trust prompt, then retry.\r\n", cwd)
+		return 1
+	}
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt)
+	fakeRawInput()
+	keys := make(chan struct{}, 1)
+	go func() {
+		b := make([]byte, 16)
+		for {
+			n, err := os.Stdin.Read(b)
+			for _, c := range b[:n] {
+				if c == 0x03 {
+					keys <- struct{}{}
+					return
+				}
+			}
+			if err != nil {
+				return
+			}
+		}
+	}()
+	capacity := fakeFlag(args, "--capacity")
+	fmt.Print("\x1b[?25l·|· Connecting · fake · main\r\n")
+	time.Sleep(100 * time.Millisecond)
+	fmt.Printf("\x1b[1A\x1b[J·✔︎· Connected · fake · main\r\n    Capacity: 0/%s · New sessions will be created in the current directory\r\n", capacity)
+	fmt.Print("Continue coding in the Claude mobile app or https://claude.ai/code?environment=env_FAKE123\r\n")
+	fmt.Print("Or ask Claude to work in this folder from your projects on claude.ai\r\n")
+	fmt.Print("space to show QR code · w to toggle spawn mode\r\n")
+	if os.Getenv("ASKSEMBLE_FAKE_SERVE_EXIT") == "1" {
+		time.Sleep(200 * time.Millisecond)
+		return 3
+	}
+	select {
+	case <-keys:
+		fmt.Print("Environment preserved. Restart `claude remote-control` to reconnect existing sessions.\r\n")
+		return 0
+	case <-stop:
+		return 5 // the real server ignores the signal; reaching this is a bug
+	case <-time.After(60 * time.Second):
+		return 4
+	}
 }
 
 func fakeStopRemove(verb, target string) int {

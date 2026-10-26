@@ -73,6 +73,8 @@ type Adapter struct {
 
 	linkWait time.Duration // linkTimeout by default; tests shorten it
 	poll     time.Duration
+
+	srv *servers // folder servers (F10)
 }
 
 // DefaultClaudeDir is $CLAUDE_CONFIG_DIR or ~/.claude.
@@ -91,23 +93,54 @@ func DefaultClaudeDir() (string, error) {
 // list still works from transcripts and /v1/info reports the problem.
 func New(opts Options) *Adapter {
 	r, err := NewRunner(opts.ClaudePath)
-	return &Adapter{
+	projects := filepath.Join(opts.ClaudeDir, "projects")
+	a := &Adapter{
 		runner:        r,
 		runnerErr:     err,
-		transcripts:   NewTranscripts(filepath.Join(opts.ClaudeDir, "projects")),
+		transcripts:   NewTranscripts(projects),
 		defaultModel:  opts.DefaultModel,
 		defaultEffort: opts.DefaultEffort,
 	}
+	a.srv = &servers{
+		exe: func() (string, error) {
+			if a.runner == nil {
+				return "", ErrNotFound
+			}
+			return a.runner.Path(), nil
+		},
+		start:   startPTY,
+		pointer: livePointer(projects),
+	}
+	return a
 }
+
+// Folder servers (core.Server). See server.go.
+
+func (a *Adapter) StartServer(folder string, opts core.ServeOptions) error {
+	if a.runner == nil {
+		return core.Fail(core.ErrCodeAgentUnavailable, "claude was not found")
+	}
+	if !ptySupported() {
+		return core.Fail(core.ErrCodeLaunchFailed, "folder servers are only supported on Windows for now")
+	}
+	return a.srv.StartServer(folder, opts)
+}
+func (a *Adapter) StopServer(folder string) error              { return a.srv.StopServer(folder) }
+func (a *Adapter) ServerStatus(folder string) core.ServeStatus { return a.srv.ServerStatus(folder) }
+func (a *Adapter) ServerFolders() []string                     { return a.srv.ServerFolders() }
+func (a *Adapter) StopAllServers()                             { a.srv.StopAllServers() }
 
 // Agent returns "claude".
 func (a *Adapter) Agent() string { return Name }
 
-// capabilities grows as step A4 (serve) lands.
+// capabilities lists what works here; serve needs a pseudo console.
 func (a *Adapter) capabilities() []core.Capability {
 	caps := []core.Capability{core.CapList}
 	if a.runner != nil {
 		caps = append(caps, core.CapStart, core.CapResume, core.CapStop, core.CapRemove, core.CapOpenOfficial)
+		if ptySupported() {
+			caps = append(caps, core.CapServe)
+		}
 	}
 	return caps
 }

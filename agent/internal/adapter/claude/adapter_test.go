@@ -94,6 +94,9 @@ func TestInfo(t *testing.T) {
 	t.Setenv("DISABLE_GROWTHBOOK", "")
 	info := a.Info(context.Background())
 	wantCaps := []core.Capability{core.CapList, core.CapStart, core.CapResume, core.CapStop, core.CapRemove, core.CapOpenOfficial}
+	if ptySupported() {
+		wantCaps = append(wantCaps, core.CapServe)
+	}
 	if !info.Available || info.Version != "2.1.310" || !slices.Equal(info.Capabilities, wantCaps) || len(info.Notices) != 0 {
 		t.Errorf("info = %+v", info)
 	}

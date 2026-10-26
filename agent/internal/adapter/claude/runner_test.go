@@ -75,6 +75,10 @@ func TestRunnerRejectsArguments(t *testing.T) {
 		{"--bg", "--remote-control", "name", "extra"},
 		{"--bg", "--resume", "id", "--allow-dangerously-skip-permissions"},
 		{"attach", "x"},
+		{"remote-control", "--name"},
+		{"remote-control", "--spawn", "-x"},
+		{"remote-control", "extra"},
+		{"remote-control", "--name", "a", "--permission-mode", "bypassPermissions"},
 		{"--version\n--dangerously-skip-permissions"},
 		{"--json\x00"},
 	}
@@ -97,6 +101,7 @@ func TestLaunchArgumentsAccepted(t *testing.T) {
 		{"stop", "634f64ab"},
 		{"rm", "634f64ab"},
 		{"logs", "634f64ab"},
+		{"remote-control", "--name", "my app", "--spawn", "same-dir", "--capacity", "4"},
 	}
 	for _, args := range good {
 		if err := checkArgs(args); err != nil {

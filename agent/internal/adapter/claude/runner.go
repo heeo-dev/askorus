@@ -67,15 +67,19 @@ func (r *Runner) Path() string { return r.exe }
 // Subcommands and flags the agent may pass. Everything else is refused, so
 // a permission-relaxing flag can only get in by being added here.
 var (
-	allowedSubcommands = map[string]bool{"agents": true, "stop": true, "rm": true, "logs": true}
+	allowedSubcommands = map[string]bool{"agents": true, "stop": true, "rm": true, "logs": true, "remote-control": true}
 	// Subcommands that take exactly one session id or name.
 	subcommandsWithTarget = map[string]bool{"stop": true, "rm": true, "logs": true}
 	allowedFlags          = map[string]bool{
 		"--version": true, "--json": true, "--all": true,
 		"--bg": true, "--resume": true, "--remote-control": true,
 		"-n": true, "--model": true, "--effort": true,
+		"--name": true, "--spawn": true, "--capacity": true, // remote-control (F10)
 	}
-	flagsWithValue = map[string]bool{"--resume": true, "-n": true, "--model": true, "--effort": true}
+	flagsWithValue = map[string]bool{
+		"--resume": true, "-n": true, "--model": true, "--effort": true,
+		"--name": true, "--spawn": true, "--capacity": true,
+	}
 	// --remote-control takes the session name when given one.
 	flagsWithOptionalValue = map[string]bool{"--remote-control": true}
 )
