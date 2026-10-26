@@ -130,6 +130,18 @@ $("infoBtn").addEventListener("click", async () => {
   }
 });
 
+// claudeLink opens a session in the Claude app. Some Android browsers
+// (Samsung Internet) keep https app links in a tab, so on Android the link
+// names the app package and falls back to the web page without the app.
+const CLAUDE_ANDROID = "com.anthropic.claude";
+function claudeLink(url) {
+  if (!/Android/i.test(navigator.userAgent)) return url;
+  const u = new URL(url);
+  return "intent://" + u.host + u.pathname + u.search +
+    "#Intent;scheme=https;package=" + CLAUDE_ANDROID +
+    ";S.browser_fallback_url=" + encodeURIComponent(url) + ";end";
+}
+
 function when(iso) {
   const d = new Date(iso);
   return isNaN(d) ? "" : d.toLocaleString("ko-KR", { dateStyle: "short", timeStyle: "short" });
@@ -156,8 +168,10 @@ $("listBtn").addEventListener("click", async () => {
       li.append(title, meta);
       if (s.remoteUrl && s.remoteUrl.startsWith("https://claude.ai/code/session_")) {
         const a = document.createElement("a");
-        a.href = s.remoteUrl;
-        a.target = "_blank"; // keep this page in its own tab
+        a.href = claudeLink(s.remoteUrl);
+        if (!a.href.startsWith("intent:")) {
+          a.target = "_blank"; // keep this page in its own tab
+        }
         a.rel = "noopener noreferrer";
         a.textContent = "Claude 앱에서 열기";
         li.append(a);
