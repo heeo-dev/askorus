@@ -23,6 +23,7 @@ import { cleanDeviceName, pairWithPC } from '@/connections/pair';
 import { type PairLink, parsePairLink } from '@/connections/pairLink';
 import { ConnectionStore } from '@/connections/store';
 import { errorText, t } from '@/i18n';
+import { Button } from '@/ui/Button';
 import { type Theme, useTheme } from '@/ui/theme';
 
 const store = new ConnectionStore();
@@ -107,7 +108,7 @@ export default function Pair() {
             <Text style={s.text}>{t('pair.pcBody')}</Text>
             <Text style={s.code}>asksemble-agent pair</Text>
           </View>
-          <Button th={th} label={t('pair.scan')} onPress={() => setStep({ kind: 'scan' })} />
+          <Button label={t('pair.scan')} onPress={() => setStep({ kind: 'scan' })} />
           <Text style={s.muted}>{t('pair.pasteHint')}</Text>
           <TextInput
             style={s.input}
@@ -123,10 +124,11 @@ export default function Pair() {
           />
           {pasted ? (
             <Button
-              th={th}
               secondary
               label={t('pair.usePasted')}
-              onPress={() => accept(pasted) || setPasteError(t('pair.badLink'))}
+              onPress={() => {
+                if (!accept(pasted)) setPasteError(t('pair.badLink'));
+              }}
             />
           ) : null}
           {pasteError ? <Text style={s.error}>{pasteError}</Text> : null}
@@ -150,8 +152,8 @@ export default function Pair() {
             maxLength={64}
             placeholderTextColor={th.muted}
           />
-          <Button th={th} label={t('pair.send')} onPress={() => send(step.link)} disabled={!deviceName.trim()} />
-          <Button th={th} secondary label={t('pair.otherQR')} onPress={() => setStep({ kind: 'start' })} />
+          <Button label={t('pair.send')} onPress={() => send(step.link)} disabled={!deviceName.trim()} />
+          <Button secondary label={t('pair.otherQR')} onPress={() => setStep({ kind: 'start' })} />
         </>
       )}
 
@@ -160,7 +162,7 @@ export default function Pair() {
           <ActivityIndicator size="large" color={th.accent} />
           <Text style={s.title}>{t('pair.waitingTitle')}</Text>
           <Text style={s.text}>{t('pair.waitingBody')}</Text>
-          <Button th={th} secondary label={t('pair.cancel')} onPress={() => abort.current?.abort()} />
+          <Button secondary label={t('pair.cancel')} onPress={() => abort.current?.abort()} />
         </View>
       )}
 
@@ -168,7 +170,7 @@ export default function Pair() {
         <>
           <Text style={s.heading}>{t('pair.failedTitle')}</Text>
           <Text style={s.error}>{step.text}</Text>
-          <Button th={th} label={t('pair.retry')} onPress={() => setStep({ kind: 'start' })} />
+          <Button label={t('pair.retry')} onPress={() => setStep({ kind: 'start' })} />
         </>
       )}
     </ScrollView>
@@ -189,11 +191,11 @@ function Scanner({ onLink, onCancel }: { onLink: (text: string) => boolean; onCa
       <View style={[s.screen, s.body]}>
         <Text style={s.text}>{t('pair.cameraWhy')}</Text>
         {permission.canAskAgain ? (
-          <Button th={th} label={t('pair.cameraAllow')} onPress={requestPermission} />
+          <Button label={t('pair.cameraAllow')} onPress={requestPermission} />
         ) : (
-          <Button th={th} label={t('pair.cameraSettings')} onPress={() => Linking.openSettings()} />
+          <Button label={t('pair.cameraSettings')} onPress={() => Linking.openSettings()} />
         )}
-        <Button th={th} secondary label={t('pair.cancel')} onPress={onCancel} />
+        <Button secondary label={t('pair.cancel')} onPress={onCancel} />
       </View>
     );
   }
@@ -212,35 +214,9 @@ function Scanner({ onLink, onCancel }: { onLink: (text: string) => boolean; onCa
       />
       <View style={s.scanFooter}>
         <Text style={s.scanText}>{wrong ? t('pair.badQR') : t('pair.scanHint')}</Text>
-        <Button th={th} secondary label={t('pair.cancel')} onPress={onCancel} />
+        <Button secondary label={t('pair.cancel')} onPress={onCancel} />
       </View>
     </View>
-  );
-}
-
-function Button({
-  th,
-  label,
-  onPress,
-  secondary,
-  disabled,
-}: {
-  th: Theme;
-  label: string;
-  onPress: () => void;
-  secondary?: boolean;
-  disabled?: boolean;
-}) {
-  const s = styles(th);
-  return (
-    <Pressable
-      style={[secondary ? s.buttonSecondary : s.button, disabled && s.disabled]}
-      onPress={onPress}
-      disabled={disabled}
-      accessibilityRole="button"
-    >
-      <Text style={secondary ? s.buttonSecondaryText : s.buttonText}>{label}</Text>
-    </Pressable>
   );
 }
 
@@ -274,19 +250,6 @@ const styles = (th: Theme) =>
       paddingVertical: 10,
     },
     waiting: { alignItems: 'center', gap: 16, paddingTop: 48 },
-    button: { backgroundColor: th.accent, borderRadius: 10, paddingVertical: 14, alignItems: 'center' },
-    buttonText: { color: th.accentText, fontSize: 16, fontWeight: '600' },
-    buttonSecondary: {
-      borderColor: th.border,
-      borderWidth: 1,
-      borderRadius: 10,
-      paddingVertical: 12,
-      paddingHorizontal: 16,
-      alignItems: 'center',
-      backgroundColor: th.card,
-    },
-    buttonSecondaryText: { color: th.text, fontSize: 15, fontWeight: '600' },
-    disabled: { opacity: 0.5 },
     scanner: { flex: 1, backgroundColor: '#000' },
     scanFooter: { position: 'absolute', left: 16, right: 16, bottom: 32, gap: 12 },
     scanText: {

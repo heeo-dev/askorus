@@ -78,7 +78,11 @@ export default function Home() {
         renderItem={({ item }) => {
           const r = reach[item.id] ?? { state: 'checking' };
           return (
-            <View style={s.card}>
+            <Pressable
+              style={({ pressed }) => [s.card, pressed && s.pressed]}
+              onPress={() => router.push({ pathname: '/pc/[id]', params: { id: item.id } })}
+              accessibilityRole="button"
+            >
               <Text style={s.title}>{item.name}</Text>
               <Text style={s.muted}>{item.host}</Text>
               <Text style={r.state === 'error' ? s.error : r.state === 'ok' ? s.ok : s.muted}>
@@ -88,7 +92,7 @@ export default function Home() {
                     ? t('home.online', { version: r.version })
                     : r.text}
               </Text>
-            </View>
+            </Pressable>
           );
         }}
         ListFooterComponent={
@@ -115,6 +119,7 @@ const styles = (th: Theme) =>
       padding: 16,
       gap: 4,
     },
+    pressed: { opacity: 0.7 },
     title: { color: th.text, fontSize: 17, fontWeight: '600' },
     muted: { color: th.muted, fontSize: 14 },
     small: { color: th.muted, fontSize: 12, marginTop: 24 },
