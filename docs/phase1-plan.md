@@ -278,5 +278,5 @@ Asksemble/
 
 ## 12. 정한 것 (2026-10-27)
 
-- 이 PC에 자동 시작을 등록했다: `autostart on -test-page` → `"…\.localinsksemble-agent.exe" start -test-page`. 폰 앱(B1)이 나오기 전까지 시험 페이지를 쓰려고 `autostart on`에 `-test-page`를 더했다.
+- 이 PC에 자동 시작을 등록했다: `autostart on -test-page` → `"…\.local\bin\asksemble-agent.exe" start -test-page`. 폰 앱(B1)이 나오기 전까지 시험 페이지를 쓰려고 `autostart on`에 `-test-page`를 더했다.
 - 이 세션이 띄웠던 에이전트를 멈추고 A5 빌드를 `start -test-page`로 다시 켰다. 사설망 주소에서 시험 페이지 200, API는 토큰 없이 401. `check`는 주의 0개.
