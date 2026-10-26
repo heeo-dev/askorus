@@ -20,37 +20,66 @@ type PairRequest struct {
 	DeviceName string `json:"deviceName"`
 }
 
-// PairResponse hands the device token to the phone, once.
-type PairResponse struct {
-	Token      string `json:"token"`
-	DeviceID   string `json:"deviceId"`
-	DeviceName string `json:"deviceName"`
-	APIVersion int    `json:"apiVersion"`
+// PairStarted is the 202 answer: the PC is asking the person. The phone
+// then calls POST /v1/pair/status with the request id until it is final.
+type PairStarted struct {
+	RequestID   string `json:"requestId"`
+	Status      string `json:"status"` // "pending"
+	PollAfterMs int    `json:"pollAfterMs"`
 }
 
-// pair runs the pairing handshake. The request must come through tailscale
-// serve from the PC owner's account, then the person at the PC must allow it.
-func (s *Server) pair(w http.ResponseWriter, r *http.Request) {
+// PairStatusRequest is the body of POST /v1/pair/status. The id goes in
+// the body, not the path, so it never lands in a request log.
+type PairStatusRequest struct {
+	RequestID string `json:"requestId"`
+}
+
+// PairStatus is the answer to POST /v1/pair/status. Token and device are
+// set once, on the first answer after the PC allowed it.
+type PairStatus struct {
+	Status      string `json:"status"` // pending | approved
+	PollAfterMs int    `json:"pollAfterMs,omitempty"`
+	Token       string `json:"token,omitempty"`
+	DeviceID    string `json:"deviceId,omitempty"`
+	DeviceName  string `json:"deviceName,omitempty"`
+	APIVersion  int    `json:"apiVersion"`
+}
+
+const pollAfterMs = 1000
+
+// pairPreflight applies the checks every pairing call needs: the request
+// came through tailscale serve from a tailnet address, from the PC owner's
+// account, and the client is not locked out.
+func (s *Server) pairPreflight(w http.ResponseWriter, r *http.Request) (pairing.Origin, bool) {
 	client := clientKey(r)
 	if s.refuseIfLimited(w, client) {
-		return
+		return pairing.Origin{}, false
 	}
 	if s.o.Pairer == nil {
 		writeError(w, http.StatusNotFound, CodePairClosed, "pairing is not available")
-		return
+		return pairing.Origin{}, false
 	}
 	login := strings.TrimSpace(r.Header.Get("Tailscale-User-Login"))
 	ip := forwardedIP(r)
 	if login == "" || !tailnet.IsTailnetIP(ip) {
 		writeError(w, http.StatusForbidden, CodeNotTailnet, "pairing must come through Tailscale")
-		return
+		return pairing.Origin{}, false
 	}
 	if s.o.TailscaleOwner == "" {
 		writeError(w, http.StatusServiceUnavailable, CodeOwnerUnknown, "the PC owner's Tailscale account is not known")
-		return
+		return pairing.Origin{}, false
 	}
 	if !strings.EqualFold(login, s.o.TailscaleOwner) {
 		writeError(w, http.StatusForbidden, CodeWrongAccount, "tailscale account is not the PC owner")
+		return pairing.Origin{}, false
+	}
+	return pairing.Origin{Login: login, RemoteIP: ip}, true
+}
+
+// pair starts the handshake and returns at once.
+func (s *Server) pair(w http.ResponseWriter, r *http.Request) {
+	origin, ok := s.pairPreflight(w, r)
+	if !ok {
 		return
 	}
 	var req PairRequest
@@ -58,35 +87,66 @@ func (s *Server) pair(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, CodeBadRequest, "body must be {code, deviceName}")
 		return
 	}
-	// The phone waits while the person at the PC decides.
-	_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(pairing.DecisionTimeout + 30*time.Second))
-
-	token, d, err := s.o.Pairer.Pair(r.Context(), req.Code, req.DeviceName, pairing.Origin{Login: login, RemoteIP: ip})
+	id, err := s.o.Pairer.Start(req.Code, req.DeviceName, origin)
 	switch {
 	case err == nil:
-		if info, _ := r.Context().Value(reqInfoKey{}).(*reqInfo); info != nil {
-			info.device = d.ID
-		}
-		writeJSON(w, http.StatusOK, PairResponse{Token: token, DeviceID: d.ID, DeviceName: d.Name, APIVersion: APIVersion})
+		writeJSON(w, http.StatusAccepted, PairStarted{RequestID: id, Status: string(pairing.StatePending), PollAfterMs: pollAfterMs})
 	case errors.Is(err, pairing.ErrBadCode):
-		s.limiter.fail(client)
+		s.limiter.fail(clientKey(r))
 		writeError(w, http.StatusForbidden, CodePairBadCode, "wrong pairing code")
 	case errors.Is(err, pairing.ErrNoWindow):
 		writeError(w, http.StatusNotFound, CodePairClosed, "no pairing window is open on the PC")
 	case errors.Is(err, pairing.ErrBusy):
 		writeError(w, http.StatusConflict, CodePairBusy, "another device is pairing")
-	case errors.Is(err, pairing.ErrDenied):
-		writeError(w, http.StatusForbidden, CodePairDenied, "pairing was refused on the PC")
-	case errors.Is(err, pairing.ErrTimeout):
-		writeError(w, http.StatusRequestTimeout, CodePairTimeout, "nobody answered on the PC")
 	case errors.Is(err, pairing.ErrBadName):
 		writeError(w, http.StatusBadRequest, CodeBadRequest, err.Error())
 	default:
-		if s.o.Logger != nil {
-			s.o.Logger.Error("pairing failed", "err", err.Error())
-		}
-		writeError(w, http.StatusInternalServerError, CodeInternal, "pairing failed")
+		s.pairFailed(w, err)
 	}
+}
+
+// pairStatus reports a started handshake.
+func (s *Server) pairStatus(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.pairPreflight(w, r); !ok {
+		return
+	}
+	var req PairStatusRequest
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10)).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, CodeBadRequest, "body must be {requestId}")
+		return
+	}
+	st, token, d, err := s.o.Pairer.Status(req.RequestID)
+	if errors.Is(err, pairing.ErrUnknownRequest) {
+		s.limiter.fail(clientKey(r))
+		writeError(w, http.StatusNotFound, CodePairUnknown, "no such pairing request (finished, fetched or expired)")
+		return
+	}
+	if err != nil {
+		s.pairFailed(w, err)
+		return
+	}
+	switch st {
+	case pairing.StatePending:
+		writeJSON(w, http.StatusOK, PairStatus{Status: string(st), PollAfterMs: pollAfterMs, APIVersion: APIVersion})
+	case pairing.StateApproved:
+		if info, _ := r.Context().Value(reqInfoKey{}).(*reqInfo); info != nil {
+			info.device = d.ID
+		}
+		writeJSON(w, http.StatusOK, PairStatus{Status: string(st), Token: token, DeviceID: d.ID, DeviceName: d.Name, APIVersion: APIVersion})
+	case pairing.StateDenied:
+		writeError(w, http.StatusForbidden, CodePairDenied, "pairing was refused on the PC")
+	case pairing.StateTimeout:
+		writeError(w, http.StatusRequestTimeout, CodePairTimeout, "nobody answered on the PC")
+	default:
+		s.pairFailed(w, errors.New(string(st)))
+	}
+}
+
+func (s *Server) pairFailed(w http.ResponseWriter, err error) {
+	if s.o.Logger != nil {
+		s.o.Logger.Error("pairing failed", "err", err.Error())
+	}
+	writeError(w, http.StatusInternalServerError, CodeInternal, "pairing failed")
 }
 
 // forwardedIP is the phone address tailscale serve puts in

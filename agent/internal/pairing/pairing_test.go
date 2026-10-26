@@ -1,7 +1,6 @@
 package pairing
 
 import (
-	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -41,6 +40,24 @@ func answer(t *testing.T, dir, id string, allow bool) <-chan Request {
 	return ch
 }
 
+// waitFinal plays the phone: it asks until the request is no longer pending.
+func waitFinal(t *testing.T, p *Pairer, id string) (State, string, devices.Device) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		st, tok, d, err := p.Status(id)
+		if err != nil {
+			t.Fatalf("Status: %v", err)
+		}
+		if st != StatePending {
+			return st, tok, d
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("still pending")
+	return "", "", devices.Device{}
+}
+
 func TestPairAllowed(t *testing.T) {
 	p, dir := newPairer(t)
 	code, w, err := Open(dir, time.Now())
@@ -55,16 +72,26 @@ func TestPairAllowed(t *testing.T) {
 		t.Fatal("window file contains the raw code")
 	}
 	seen := answer(t, dir, w.ID, true)
-	tok, d, err := p.Pair(context.Background(), strings.ToLower(code), " Galaxy S23 ", Origin{Login: "owner@example.com", RemoteIP: "100.64.0.9"})
+	id, err := p.Start(strings.ToLower(code), " Galaxy S23 ", Origin{Login: "owner@example.com", RemoteIP: "100.64.0.9"})
 	if err != nil {
 		t.Fatal(err)
 	}
+	if st, _, _, _ := p.Status(id); st != StatePending && st != StateApproved {
+		t.Errorf("first status = %q", st)
+	}
+	st, tok, d := waitFinal(t, p, id)
 	r := <-seen
 	if r.DeviceName != "Galaxy S23" || r.Login != "owner@example.com" || r.RemoteIP != "100.64.0.9" {
 		t.Errorf("request shown on PC = %+v", r)
 	}
+	if st != StateApproved {
+		t.Fatalf("state = %q", st)
+	}
 	if got, ok := p.Devices.Verify(tok); !ok || got.ID != d.ID {
 		t.Error("issued token does not verify")
+	}
+	if _, _, _, err := p.Status(id); !errors.Is(err, ErrUnknownRequest) {
+		t.Errorf("token handed out twice: %v", err)
 	}
 	res, ok := ResultFor(dir, w.ID)
 	if !ok || !res.OK || res.DeviceID != d.ID {
@@ -73,7 +100,7 @@ func TestPairAllowed(t *testing.T) {
 	if WindowOpen(dir, w.ID) {
 		t.Error("window still open after use")
 	}
-	if _, _, err := p.Pair(context.Background(), code, "again", Origin{}); !errors.Is(err, ErrNoWindow) {
+	if _, err := p.Start(code, "again", Origin{}); !errors.Is(err, ErrNoWindow) {
 		t.Errorf("code reused: %v", err)
 	}
 }
@@ -82,8 +109,12 @@ func TestPairDenied(t *testing.T) {
 	p, dir := newPairer(t)
 	code, w, _ := Open(dir, time.Now())
 	answer(t, dir, w.ID, false)
-	if _, _, err := p.Pair(context.Background(), code, "phone", Origin{}); !errors.Is(err, ErrDenied) {
-		t.Fatalf("err = %v", err)
+	id, err := p.Start(code, "phone", Origin{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st, tok, _ := waitFinal(t, p, id); st != StateDenied || tok != "" {
+		t.Fatalf("state = %q", st)
 	}
 	if res, _ := ResultFor(dir, w.ID); res.OK || res.Reason != "denied" {
 		t.Errorf("result = %+v", res)
@@ -91,7 +122,7 @@ func TestPairDenied(t *testing.T) {
 	if list, _ := p.Devices.List(); len(list) != 0 {
 		t.Error("device added after refusal")
 	}
-	if _, _, err := p.Pair(context.Background(), code, "phone", Origin{}); !errors.Is(err, ErrNoWindow) {
+	if _, err := p.Start(code, "phone", Origin{}); !errors.Is(err, ErrNoWindow) {
 		t.Errorf("refused code reusable: %v", err)
 	}
 }
@@ -100,11 +131,43 @@ func TestPairTimeout(t *testing.T) {
 	p, dir := newPairer(t)
 	p.Timeout = 50 * time.Millisecond
 	code, w, _ := Open(dir, time.Now())
-	if _, _, err := p.Pair(context.Background(), code, "phone", Origin{}); !errors.Is(err, ErrTimeout) {
-		t.Fatalf("err = %v", err)
+	id, _ := p.Start(code, "phone", Origin{})
+	if st, _, _ := waitFinal(t, p, id); st != StateTimeout {
+		t.Fatalf("state = %q", st)
 	}
 	if WindowOpen(dir, w.ID) {
 		t.Error("window still open after timeout")
+	}
+}
+
+// A token the phone never fetched does not leave a device behind.
+func TestUncollectedTokenIsRevoked(t *testing.T) {
+	p, dir := newPairer(t)
+	p.CollectTTL = 50 * time.Millisecond
+	code, w, _ := Open(dir, time.Now())
+	answer(t, dir, w.ID, true)
+	id, _ := p.Start(code, "phone", Origin{})
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		if res, ok := ResultFor(dir, w.ID); ok && res.OK {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if list, _ := p.Devices.List(); len(list) != 1 {
+		t.Fatalf("device not added: %d", len(list))
+	}
+	for time.Now().Before(deadline) {
+		if list, _ := p.Devices.List(); len(list) == 0 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if list, _ := p.Devices.List(); len(list) != 0 {
+		t.Error("uncollected device still there")
+	}
+	if _, _, _, err := p.Status(id); !errors.Is(err, ErrUnknownRequest) {
+		t.Errorf("dropped request still answers: %v", err)
 	}
 }
 
@@ -112,14 +175,14 @@ func TestBadCodesCloseWindow(t *testing.T) {
 	p, dir := newPairer(t)
 	code, w, _ := Open(dir, time.Now())
 	for i := 0; i < MaxBadCodes; i++ {
-		if _, _, err := p.Pair(context.Background(), "AAAA", "phone", Origin{}); !errors.Is(err, ErrBadCode) {
+		if _, err := p.Start("AAAA", "phone", Origin{}); !errors.Is(err, ErrBadCode) {
 			t.Fatalf("try %d: %v", i, err)
 		}
 	}
 	if WindowOpen(dir, w.ID) {
 		t.Fatal("window open after too many wrong codes")
 	}
-	if _, _, err := p.Pair(context.Background(), code, "phone", Origin{}); !errors.Is(err, ErrNoWindow) {
+	if _, err := p.Start(code, "phone", Origin{}); !errors.Is(err, ErrNoWindow) {
 		t.Errorf("right code after lockout: %v", err)
 	}
 }
@@ -129,20 +192,25 @@ func TestExpired(t *testing.T) {
 	start := time.Now()
 	code, _, _ := Open(dir, start)
 	p.Now = func() time.Time { return start.Add(WindowTTL) }
-	if _, _, err := p.Pair(context.Background(), code, "phone", Origin{}); !errors.Is(err, ErrNoWindow) {
+	if _, err := p.Start(code, "phone", Origin{}); !errors.Is(err, ErrNoWindow) {
 		t.Errorf("expired code: %v", err)
 	}
 }
 
-func TestNoWindowAndBadName(t *testing.T) {
+func TestNoWindowBadNameUnknownID(t *testing.T) {
 	p, dir := newPairer(t)
-	if _, _, err := p.Pair(context.Background(), "X", "phone", Origin{}); !errors.Is(err, ErrNoWindow) {
+	if _, err := p.Start("X", "phone", Origin{}); !errors.Is(err, ErrNoWindow) {
 		t.Errorf("no window: %v", err)
 	}
 	code, _, _ := Open(dir, time.Now())
 	for _, name := range []string{"", "   ", strings.Repeat("a", 65), "bad\nname", "bell\x07"} {
-		if _, _, err := p.Pair(context.Background(), code, name, Origin{}); !errors.Is(err, ErrBadName) {
+		if _, err := p.Start(code, name, Origin{}); !errors.Is(err, ErrBadName) {
 			t.Errorf("name %q: %v", name, err)
+		}
+	}
+	for _, id := range []string{"", "nope", strings.Repeat("0", 32)} {
+		if _, _, _, err := p.Status(id); !errors.Is(err, ErrUnknownRequest) {
+			t.Errorf("Status(%q) = %v", id, err)
 		}
 	}
 }
@@ -150,26 +218,15 @@ func TestNoWindowAndBadName(t *testing.T) {
 func TestBusy(t *testing.T) {
 	p, dir := newPairer(t)
 	code, w, _ := Open(dir, time.Now())
-	done := make(chan error, 1)
-	go func() {
-		_, _, err := p.Pair(context.Background(), code, "first", Origin{})
-		done <- err
-	}()
-	deadline := time.Now().Add(2 * time.Second)
-	for {
-		if _, ok := PendingRequest(dir, w.ID); ok {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("first request never arrived")
-		}
-		time.Sleep(5 * time.Millisecond)
+	id, err := p.Start(code, "first", Origin{})
+	if err != nil {
+		t.Fatal(err)
 	}
-	if _, _, err := p.Pair(context.Background(), code, "second", Origin{}); !errors.Is(err, ErrBusy) {
+	if _, err := p.Start(code, "second", Origin{}); !errors.Is(err, ErrBusy) {
 		t.Errorf("second request: %v", err)
 	}
 	Decide(dir, w.ID, true)
-	if err := <-done; err != nil {
-		t.Errorf("first request: %v", err)
+	if st, _, _ := waitFinal(t, p, id); st != StateApproved {
+		t.Errorf("first request: %q", st)
 	}
 }

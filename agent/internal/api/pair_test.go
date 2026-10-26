@@ -73,12 +73,16 @@ func TestPairFlow(t *testing.T) {
 		}
 	}()
 	w := e.serve(viaServe("POST", "/v1/pair", `{"code":"`+code+`","deviceName":"Galaxy"}`, nil))
-	if w.Code != 200 {
+	if w.Code != 202 {
 		t.Fatalf("pair = %d %s", w.Code, w.Body)
 	}
-	var resp PairResponse
-	json.Unmarshal(w.Body.Bytes(), &resp)
-	if !strings.HasPrefix(resp.Token, devices.TokenPrefix) || resp.DeviceName != "Galaxy" || resp.APIVersion != 1 {
+	var started PairStarted
+	json.Unmarshal(w.Body.Bytes(), &started)
+	if len(started.RequestID) != 32 || started.Status != "pending" || started.PollAfterMs <= 0 {
+		t.Fatalf("started = %+v", started)
+	}
+	resp := pollPair(t, e, started.RequestID)
+	if resp.Status != "approved" || !strings.HasPrefix(resp.Token, devices.TokenPrefix) || resp.DeviceName != "Galaxy" || resp.APIVersion != 1 {
 		t.Errorf("response = %+v", resp)
 	}
 
@@ -87,9 +91,74 @@ func TestPairFlow(t *testing.T) {
 		t.Errorf("new token refused: %d", w.Code)
 	}
 
+	// The token is handed out once.
+	w = e.serve(viaServe("POST", "/v1/pair/status", `{"requestId":"`+started.RequestID+`"}`, nil))
+	if w.Code != 404 || errCode(t, w) != CodePairUnknown {
+		t.Errorf("second fetch = %d %s", w.Code, w.Body)
+	}
 	w = e.serve(viaServe("POST", "/v1/pair", `{"code":"`+code+`","deviceName":"Again"}`, nil))
 	if w.Code != 404 || errCode(t, w) != CodePairClosed {
 		t.Errorf("reused code = %d %s", w.Code, w.Body)
+	}
+}
+
+// pollPair asks /v1/pair/status like the phone does until it is final.
+func pollPair(t *testing.T, e pairEnv, id string) PairStatus {
+	t.Helper()
+	for i := 0; i < 300; i++ {
+		w := e.serve(viaServe("POST", "/v1/pair/status", `{"requestId":"`+id+`"}`, nil))
+		if w.Code != 200 {
+			t.Fatalf("status = %d %s", w.Code, w.Body)
+		}
+		var st PairStatus
+		json.Unmarshal(w.Body.Bytes(), &st)
+		if st.Status != "pending" {
+			return st
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("still pending")
+	return PairStatus{}
+}
+
+func TestPairDeniedViaStatus(t *testing.T) {
+	e := newPairEnv(t, "owner@example.com")
+	code, win, _ := pairing.Open(e.dir, time.Now())
+	w := e.serve(viaServe("POST", "/v1/pair", `{"code":"`+code+`","deviceName":"phone"}`, nil))
+	var started PairStarted
+	json.Unmarshal(w.Body.Bytes(), &started)
+	pairing.Decide(e.dir, win.ID, false)
+	for i := 0; i < 300; i++ {
+		w = e.serve(viaServe("POST", "/v1/pair/status", `{"requestId":"`+started.RequestID+`"}`, nil))
+		if w.Code != 200 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if w.Code != 403 || errCode(t, w) != CodePairDenied {
+		t.Errorf("denied = %d %s", w.Code, w.Body)
+	}
+}
+
+func TestPairStatusRefusals(t *testing.T) {
+	e := newPairEnv(t, "owner@example.com")
+	body := `{"requestId":"` + strings.Repeat("a", 32) + `"}`
+	cases := []struct {
+		name   string
+		r      *http.Request
+		status int
+		code   string
+	}{
+		{"unknown id", viaServe("POST", "/v1/pair/status", body, nil), 404, CodePairUnknown},
+		{"not via tailscale", viaServe("POST", "/v1/pair/status", body, map[string]string{"Tailscale-User-Login": ""}), 403, CodeNotTailnet},
+		{"other account", viaServe("POST", "/v1/pair/status", body, map[string]string{"Tailscale-User-Login": "kid@example.com"}), 403, CodeWrongAccount},
+		{"GET", viaServe("GET", "/v1/pair/status", "", nil), 405, CodeMethod},
+	}
+	for _, c := range cases {
+		w := e.serve(c.r)
+		if w.Code != c.status || errCode(t, w) != c.code {
+			t.Errorf("%s: %d %s", c.name, w.Code, w.Body)
+		}
 	}
 }
 

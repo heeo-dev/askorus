@@ -10,7 +10,8 @@
 //
 // The code is 128 random bits, valid for 5 minutes, and used at most once:
 // the first request with the right code consumes the window whether or not
-// the person allows it. Five wrong codes close the window.
+// the person allows it. Five wrong codes close the window. The phone does
+// not hold a request open while the PC decides; it asks again (Status).
 package pairing
 
 import (
@@ -52,7 +53,6 @@ var (
 	ErrNoWindow = errors.New("no pairing window is open")
 	ErrBadCode  = errors.New("wrong pairing code")
 	ErrBusy     = errors.New("another device is pairing")
-	ErrDenied   = errors.New("pairing was refused on the PC")
 	ErrTimeout  = errors.New("nobody answered on the PC")
 	ErrBadName  = errors.New("device name must be 1-64 printable characters")
 )
@@ -147,17 +147,48 @@ func WindowOpen(dir, id string) bool {
 	return readJSON(filepath.Join(dir, windowFile), &w) == nil && w.ID == id
 }
 
-// Pairer is the server side.
+// Pairer is the server side. A phone first calls Start, which returns at
+// once with a request id, then asks Status until the person at the PC has
+// answered. A phone that leaves the browser or loses the connection for a
+// while can simply ask again.
 type Pairer struct {
-	Dir     string
-	Devices *devices.Store
-	Now     func() time.Time
-	Poll    time.Duration // how often to look for the decision
-	Timeout time.Duration // DecisionTimeout by default
+	Dir        string
+	Devices    *devices.Store
+	Now        func() time.Time
+	Poll       time.Duration // how often to look for the decision
+	Timeout    time.Duration // DecisionTimeout by default
+	CollectTTL time.Duration // CollectTimeout by default
 
 	mu     sync.Mutex
-	busy   bool
-	misses map[string]int // wrong codes per window id
+	busy   bool                // a request waits for the PC
+	misses map[string]int      // wrong codes per window id
+	reqs   map[string]*pending // by request id
+}
+
+// CollectTimeout is how long an issued token waits for the phone to fetch
+// it. A device whose token was never fetched is removed again.
+const CollectTimeout = 5 * time.Minute
+
+// State is where a pairing request is.
+type State string
+
+const (
+	StatePending  State = "pending"
+	StateApproved State = "approved"
+	StateDenied   State = "denied"
+	StateTimeout  State = "timeout"
+	StateFailed   State = "failed"
+)
+
+// ErrUnknownRequest is returned for a request id that does not exist, or
+// whose outcome was already fetched or dropped.
+var ErrUnknownRequest = errors.New("unknown pairing request")
+
+type pending struct {
+	state  State
+	token  string
+	device devices.Device
+	timer  *time.Timer
 }
 
 // Origin describes where a pairing request came from, for the PC prompt.
@@ -166,48 +197,107 @@ type Origin struct {
 	RemoteIP string
 }
 
-// Pair checks the code, asks the PC and, if allowed, adds the device and
-// returns its token.
-func (p *Pairer) Pair(ctx context.Context, code, deviceName string, o Origin) (string, devices.Device, error) {
+// Start checks the code, shows the request on the PC and returns a request
+// id for Status. The id is a secret: whoever holds it gets the token.
+func (p *Pairer) Start(code, deviceName string, o Origin) (string, error) {
 	name, ok := cleanName(deviceName)
 	if !ok {
-		return "", devices.Device{}, ErrBadName
+		return "", ErrBadName
 	}
 	w, err := p.claim(code)
 	if err != nil {
-		return "", devices.Device{}, err
+		return "", err
 	}
-	defer func() {
-		p.mu.Lock()
-		p.busy = false
-		p.mu.Unlock()
-	}()
-
+	raw := make([]byte, 16)
+	if _, err := rand.Read(raw); err != nil {
+		p.release()
+		return "", err
+	}
+	id := hex.EncodeToString(raw)
 	req := Request{WindowID: w.ID, DeviceName: name, Login: o.Login, RemoteIP: o.RemoteIP, At: p.now().UTC()}
 	if err := writeJSON(filepath.Join(p.Dir, requestFile), req); err != nil {
-		return "", devices.Device{}, err
+		p.release()
+		return "", err
 	}
-	allow, err := p.waitDecision(ctx, w.ID)
-	res := Result{WindowID: w.ID}
+	p.mu.Lock()
+	if p.reqs == nil {
+		p.reqs = map[string]*pending{}
+	}
+	p.reqs[id] = &pending{state: StatePending}
+	p.mu.Unlock()
+	go p.await(id, w.ID, name)
+	return id, nil
+}
+
+// await waits for the PC, then records the outcome for Status.
+func (p *Pairer) await(id, windowID, name string) {
+	allow, err := p.waitDecision(context.Background(), windowID)
+	res := Result{WindowID: windowID}
+	e := &pending{}
 	switch {
 	case err != nil:
-		res.Reason = "timeout"
+		e.state, res.Reason = StateTimeout, "timeout"
 	case !allow:
-		res.Reason, err = "denied", ErrDenied
+		e.state, res.Reason = StateDenied, "denied"
+	default:
+		token, d, err := p.Devices.Add(name)
+		if err != nil {
+			e.state, res.Reason = StateFailed, "store"
+		} else {
+			e.state, e.token, e.device = StateApproved, token, d
+			res.OK, res.DeviceID, res.DeviceName = true, d.ID, d.Name
+		}
 	}
-	if err != nil {
-		p.finish(res)
-		return "", devices.Device{}, err
-	}
-	token, d, err := p.Devices.Add(name)
-	if err != nil {
-		res.Reason = "store"
-		p.finish(res)
-		return "", devices.Device{}, err
-	}
-	res.OK, res.DeviceID, res.DeviceName = true, d.ID, d.Name
 	p.finish(res)
-	return token, d, nil
+
+	ttl := p.CollectTTL
+	if ttl == 0 {
+		ttl = CollectTimeout
+	}
+	p.mu.Lock()
+	p.reqs[id] = e
+	p.busy = false
+	e.timer = time.AfterFunc(ttl, func() { p.drop(id) })
+	p.mu.Unlock()
+}
+
+// drop forgets an outcome nobody fetched. An approved device whose token
+// never reached the phone is removed, so no unusable device stays behind.
+func (p *Pairer) drop(id string) {
+	p.mu.Lock()
+	e, ok := p.reqs[id]
+	if ok {
+		delete(p.reqs, id)
+	}
+	p.mu.Unlock()
+	if ok && e.state == StateApproved {
+		_, _ = p.Devices.Revoke(e.device.ID)
+	}
+}
+
+// Status reports a request. A final outcome is handed out once: an
+// approved token is returned and forgotten.
+func (p *Pairer) Status(id string) (State, string, devices.Device, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	e, ok := p.reqs[id]
+	if !ok || len(id) != 32 {
+		return "", "", devices.Device{}, ErrUnknownRequest
+	}
+	if e.state == StatePending {
+		return StatePending, "", devices.Device{}, nil
+	}
+	delete(p.reqs, id)
+	if e.timer != nil {
+		e.timer.Stop()
+	}
+	return e.state, e.token, e.device, nil
+}
+
+func (p *Pairer) release() {
+	p.mu.Lock()
+	p.busy = false
+	p.mu.Unlock()
 }
 
 // claim checks the code and takes the window for this request.

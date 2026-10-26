@@ -12,6 +12,7 @@ const errorNames = {
   pair_busy: "다른 기기가 짝 맺는 중입니다.",
   pair_denied: "PC에서 거절했습니다.",
   pair_timeout: "PC에서 2분 안에 답이 없었습니다.",
+  pair_unknown: "짝 맺기 요청이 끝났거나 사라졌습니다. PC에서 pair를 다시 실행하세요.",
   pair_not_tailnet: "Tailscale을 거쳐 접속해야 합니다.",
   wrong_account: "PC 주인과 다른 Tailscale 계정입니다.",
   owner_unknown: "PC가 주인 Tailscale 계정을 모릅니다.",
@@ -19,12 +20,16 @@ const errorNames = {
   unauthorized: "토큰이 없거나 끊겼습니다. 다시 짝 맺으세요.",
 };
 
-function token() {
-  try { return sessionStorage.getItem(KEY) || ""; } catch { return ""; }
+const REQ = "asksemble-test-request";
+
+function load(k) {
+  try { return sessionStorage.getItem(k) || ""; } catch { return ""; }
 }
-function setToken(t) {
-  try { t ? sessionStorage.setItem(KEY, t) : sessionStorage.removeItem(KEY); } catch {}
+function store(k, v) {
+  try { v ? sessionStorage.setItem(k, v) : sessionStorage.removeItem(k); } catch {}
 }
+const token = () => load(KEY);
+const setToken = (t) => store(KEY, t);
 
 function say(el, text, isError) {
   el.textContent = text;
@@ -57,20 +62,43 @@ if (hash.get("code")) {
   history.replaceState(null, "", location.pathname);
 }
 
-$("pairBtn").addEventListener("click", async () => {
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// waitForPC asks the agent until the person at the PC has answered. The
+// request id survives a reload, so leaving the browser does not lose it.
+async function waitForPC(requestId) {
   const btn = $("pairBtn");
   btn.disabled = true;
-  say($("pairMsg"), "PC에서 허용을 기다리는 중… (최대 2분)");
+  say($("pairMsg"), "PC에서 허용을 기다리는 중… (최대 2분, PC 창에서 y를 누르세요)");
   try {
-    const r = await call("POST", "pair", { code: $("code").value.replace(/[-\s]/g, ""), deviceName: $("name").value });
-    setToken(r.token);
-    say($("who"), "짝 맺음: " + r.deviceName + " (id " + r.deviceId + "). 토큰은 이 탭에만 저장됩니다.");
-    say($("pairMsg"), "");
-    showUse();
+    for (;;) {
+      const r = await call("POST", "pair/status", { requestId });
+      if (r.status === "approved") {
+        store(REQ, "");
+        setToken(r.token);
+        say($("who"), "짝 맺음: " + r.deviceName + " (id " + r.deviceId + "). 토큰은 이 탭에만 저장됩니다.");
+        say($("pairMsg"), "");
+        showUse();
+        return;
+      }
+      await sleep(r.pollAfterMs || 1000);
+    }
   } catch (e) {
+    store(REQ, "");
     say($("pairMsg"), e.message, true);
   } finally {
     btn.disabled = false;
+  }
+}
+
+$("pairBtn").addEventListener("click", async () => {
+  say($("pairMsg"), "보내는 중…");
+  try {
+    const r = await call("POST", "pair", { code: $("code").value.replace(/[-\s]/g, ""), deviceName: $("name").value });
+    store(REQ, r.requestId);
+    await waitForPC(r.requestId);
+  } catch (e) {
+    say($("pairMsg"), e.message, true);
   }
 });
 
@@ -138,3 +166,6 @@ $("forgetBtn").addEventListener("click", () => {
 });
 
 showUse();
+if (!token() && load(REQ)) {
+  waitForPC(load(REQ));
+}

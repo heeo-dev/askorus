@@ -42,6 +42,7 @@ const (
 	CodePairBusy       = "pair_busy"
 	CodePairDenied     = "pair_denied"
 	CodePairTimeout    = "pair_timeout"
+	CodePairUnknown    = "pair_unknown"
 )
 
 // TokenVerifier checks device tokens.
@@ -51,7 +52,8 @@ type TokenVerifier interface {
 
 // Pairer joins a new device (see package pairing).
 type Pairer interface {
-	Pair(ctx context.Context, code, deviceName string, o pairing.Origin) (string, devices.Device, error)
+	Start(code, deviceName string, o pairing.Origin) (requestID string, err error)
+	Status(requestID string) (pairing.State, string, devices.Device, error)
 }
 
 // Options configures the server.
@@ -96,10 +98,13 @@ func New(o Options) *Server {
 func (s *Server) Handler() http.Handler {
 	top := http.NewServeMux()
 	// Pairing is the only route without a device token.
-	top.HandleFunc("POST /v1/pair", s.pair)
-	top.HandleFunc("/v1/pair", func(w http.ResponseWriter, r *http.Request) {
+	notAllowed := func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusMethodNotAllowed, CodeMethod, "method not allowed")
-	})
+	}
+	top.HandleFunc("POST /v1/pair", s.pair)
+	top.HandleFunc("/v1/pair", notAllowed)
+	top.HandleFunc("POST /v1/pair/status", s.pairStatus)
+	top.HandleFunc("/v1/pair/status", notAllowed)
 	if s.o.TestPage {
 		top.Handle("GET /test/", s.testPage())
 		top.Handle("GET /test", http.RedirectHandler("/test/", http.StatusFound))
