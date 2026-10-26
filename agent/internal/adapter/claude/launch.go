@@ -228,13 +228,34 @@ func (a *Adapter) Remove(ctx context.Context, id string) error {
 		if err := a.stopEntry(ctx, e); err != nil {
 			return err
 		}
+		// claude can drop a stopped session from its list by itself (seen
+		// with a new session that never got a prompt); then there is
+		// nothing left to rm.
+		if !a.inAgents(ctx, id) {
+			return nil
+		}
 	}
 	res, err := a.runner.Run(ctx, "", "rm", firstNonEmpty(e.ID, id))
 	a.Invalidate()
 	if err != nil {
+		if !a.inAgents(ctx, id) {
+			return nil // gone anyway
+		}
 		return core.Fail(core.ErrCodeLaunchFailed, tail(res, 300))
 	}
 	return nil
+}
+
+// inAgents reports whether claude still lists the session. When the list
+// cannot be read it answers true, so callers do not assume it is gone.
+func (a *Adapter) inAgents(ctx context.Context, id string) bool {
+	a.Invalidate()
+	entries, ok := a.agents(ctx)
+	if !ok {
+		return true
+	}
+	_, has := bestEntry(entries, id)
+	return has
 }
 
 func (a *Adapter) stopEntry(ctx context.Context, e agentEntry) error {

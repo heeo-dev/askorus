@@ -243,6 +243,20 @@ func TestRemoveRunningStopsFirst(t *testing.T) {
 	}
 }
 
+// A new session that never got a prompt leaves claude's list as soon as
+// it is stopped; removing it must still succeed (seen on a real PC).
+func TestRemoveWhenStopDropsTheSession(t *testing.T) {
+	e := newLaunchEnv(t, []agentEntry{runningEntry})
+	t.Setenv("ASKSEMBLE_FAKE_STOP_DROPS", "1")
+	if err := e.a.Remove(context.Background(), id1); err != nil {
+		t.Fatalf("Remove = %v", err)
+	}
+	got := e.launches(t)
+	if len(got) != 1 || got[0].Args[0] != "stop" {
+		t.Errorf("calls = %+v (rm should be skipped)", got)
+	}
+}
+
 func TestOneActionPerSession(t *testing.T) {
 	e := newLaunchEnv(t, nil)
 	unlock, err := e.a.lock(id6)

@@ -23,6 +23,7 @@ import (
 //	ASKSEMBLE_FAKE_PROJECTS   projects folder where --bg writes remote links
 //	ASKSEMBLE_FAKE_UNTRUSTED  "1": --bg fails like an untrusted folder
 //	ASKSEMBLE_FAKE_NOLINK     "1": --bg never writes a remote link
+//	ASKSEMBLE_FAKE_STOP_DROPS "1": stop also drops the session from the list
 //	ASKSEMBLE_FAKE_EXIT       exit code
 //	ASKSEMBLE_FAKE_SLEEP      duration to sleep first
 func TestMain(m *testing.M) {
@@ -130,7 +131,7 @@ func fakeStopRemove(verb, target string) int {
 	for _, e := range state {
 		if e.ID == target || e.SessionID == target || e.Name == target {
 			found = true
-			if verb == "rm" {
+			if verb == "rm" || os.Getenv("ASKSEMBLE_FAKE_STOP_DROPS") == "1" {
 				continue
 			}
 			e.PID, e.Status, e.State = 0, "", "stopped"
