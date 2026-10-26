@@ -1,6 +1,6 @@
 # Phase 1 구현 계획
 
-2026-10-26 작성. 기준은 Claude Docs의 'Phase 1 설계'(rev 46, 7절의 결정과 짝 맺기 다시 묻기를 반영한 것은 rev 51, A3 결정과 작업 방식은 rev 54, N5 목표는 rev 55)와 '제품 방향과 Phase 설계'다. 설계와 다르게 해야 할 일은 아래 '물어볼 것'에 적고, 정해지면 원본 설계 문서를 고친다.
+2026-10-26 작성. 기준은 Claude Docs의 'Phase 1 설계'(rev 46, 7절의 결정과 짝 맺기 다시 묻기를 반영한 것은 rev 51, A3 결정과 작업 방식은 rev 54, N5 목표는 rev 55, A4 서버 모드는 rev 56)와 '제품 방향과 Phase 설계'다. 설계와 다르게 해야 할 일은 아래 '물어볼 것'에 적고, 정해지면 원본 설계 문서를 고친다.
 
 ## 1. 저장소 구조
 
@@ -32,7 +32,7 @@ Asksemble/
 | A1 | Go 모듈, 설정, 로그, HTTP 서버(`/v1/info`, `/v1/stream`=404), 세션 수집기(읽기만), `GET /v1/sessions` | 단위 테스트 통과. 실제 PC에서 `asksemble-agent sessions`가 1초 안에 목록을 낸다 **(완료)** |
 | A2 | 기기 토큰과 짝 맺기: `asksemble-agent pair`(5분 창, QR, 128비트 코드), `POST /v1/pair`, PC 화면 허용 확인, `devices`·`revoke`, 실패 횟수 제한, `Tailscale-User-Login` 검사 | 폰 브라우저나 curl로 짝 맺고 토큰으로 `/v1/info` 접근 **(PC 안 시험까지 완료. 폰에서 하는 시험은 serve 설정 뒤)** |
 | A3 | 실행기: 열기(실행 규칙 5가지), 새 세션, 멈추기, 지우기. 원격 링크 20초 대기, `Workspace not trusted` 잡기. 열기·새 세션은 작업 id 방식 | 가짜 claude 테스트 통과, 실제 PC에서 F3–F6 수동 시험 **(완료, 8절)** |
-| A4 | 서버 관리자(F10): 폴더별 `claude remote-control`, Ctrl+C 종료, 재시작 시 다시 띄우기, `bridge-pointer.json`으로 '서버' 배지 | 실제 PC에서 Claude 앱으로 그 폴더에 새 세션 생성 |
+| A4 | 서버 관리자(F10): 폴더별 `claude remote-control`, Ctrl+C 종료, 재시작 시 다시 띄우기, 서버 세션에 '서버' 배지 | 실제 PC에서 Claude 앱으로 그 폴더에 새 세션 생성 **(PC 쪽 시험 완료, 폰에서 새 세션 만들기는 사용자 확인 대기, 10절)** |
 | A5 | 설치 점검(`check`), serve 포트 고르기 안내, 자동 시작(일반 권한), `uninstall`, 관리자 권한 서비스 감지(A3에서 옮김, 2026-10-26) | **에이전트 관문:** 명령줄 요청만으로 F1–F6, F10 동작 + 확장 원칙 11개 |
 | B1 | Expo 앱: 짝 맺기(QR), 세션 목록·검색·필터, 상세 시트, 새 세션, 폴더 화면, 설정, 오류 화면, ko/en | — |
 | B2 | Android 내부 테스트 트랙 | **본인 폰에서 1주일 실제 사용** |
@@ -202,3 +202,47 @@ Asksemble/
 ## 9. 물어볼 것
 
 지금 물어볼 것은 없다. N5는 "실행 중 세션 열기 2초 안, 깨우기·새 세션은 보통 15초 안(앱은 '켜는 중'을 보여 주며 기다림)"으로 고쳤다(2026-10-26 사용자 결정, 설계 rev 55).
+
+## 10. A4 결과 (2026-10-26)
+
+먼저 확인한 것(Windows 10, Claude Code 2.1.310, 시험 폴더 `.local\rc-test`):
+
+| 끄는 방법 | 결과 |
+| --- | --- |
+| 숨긴 새 콘솔 + Ctrl+C 신호(`GenerateConsoleCtrlEvent`) | 무시됨. 15초 뒤에도 실행 중 |
+| Ctrl+Break 신호 | 0.0초 만에 강제 종료(정리 없음) |
+| **가상 터미널(ConPTY)에 Ctrl+C 키(0x03)** | **1.5초 만에 정상 종료, 'Environment preserved'** |
+
+서버 화면은 Ctrl+C를 신호가 아니라 키로 읽는다. 그래서 서버는 가상 터미널 안에서 띄우고, 끌 때 Ctrl+C 키를 보낸다(`golang.org/x/sys/windows`를 새로 씀).
+
+만든 것:
+
+- **서버 관리자**(`adapter/claude/server.go`, `pty_windows.go`): `claude remote-control --name <폴더 이름> --spawn same-dir|worktree --capacity N`을 가상 터미널에서 띄운다. 화면에서 'Connected', 환경 id, `Capacity n/m`만 읽고 나머지는 버린다. 끄면 Ctrl+C 키, 8초 안에 안 끝나면 강제 종료. 스스로 끝나면 2초·10초·30초·1분·5분 간격으로 다시 띄운다.
+- **신뢰하지 않은 폴더**: 터미널에서는 서버가 `Trust <폴더>? [y/N]`를 묻고 기다린다(`--bg`처럼 바로 끝나지 않음). 에이전트는 절대 y로 답하지 않고 Ctrl+C로 거절하고 `untrusted`로 알린다. 1분마다 다시 확인한다(그사이 PC에서 신뢰했을 수 있음).
+- **다른 서버가 있는 폴더**: `bridge-pointer.json`의 pid가 살아 있고 우리 서버가 아니면 `external`로 두고 건드리지 않는다.
+- **설정에 맞추기**: `agent.json`의 폴더별 `server.enabled`가 원하는 상태다. `serve`가 5초마다, 그리고 설정이 바뀌면 바로 서버를 켜고 끈다. 에이전트가 끝날 때 모든 서버에 Ctrl+C를 보낸다. 에이전트가 강제로 죽으면 가상 터미널이 닫히면서 서버도 함께 끝난다(고아 없음).
+- **API**: `PUT /v1/folders/{id}/server {enabled, spawn, capacity}`, `GET /v1/folders`에 실제 상태(`status`: off·starting·running·failed·untrusted·external, 세션 수, 환경 id)와 `isGit`. `worktree`는 git 저장소만.
+- **명령줄**: `asksemble-agent folders serve ID on|off [-spawn] [-capacity]`.
+- **서버 세션 표시**: 서버가 만든 세션은 서버 프로세스의 자식이다(실제로 `claude --print --sdk-url …`가 서버 아래에서 돈다). `claude agents`에는 `interactive`로 보이지만, 목록에서는 '실행 중' + `server` 배지로 보이고, 열기를 누르면 `/rc` 안내 대신 링크(없으면 `server_session` 안내)를 준다.
+- **capability**: Windows에서 `serve`를 알린다.
+- **시험 페이지**: '4. 폴더 열어 두기'에서 켜기·끄기와 상태.
+- 로그: 서버 상태가 바뀔 때마다 한 줄(폴더·상태·다시 띄운 횟수·오류).
+
+시험 결과:
+
+- `go vet ./...`, `go test ./...` 통과(11개 패키지). 가짜 claude가 진짜 서버처럼 가상 터미널에서 화면을 그리고, Ctrl+C 키로만 끝나고, 신뢰 질문을 낸다. 시작·정상 종료·같은 옵션 무시·옵션 바뀌면 다시 띄우기·신뢰 안 됨(y를 누르지 않음, 1분 뒤 다시)·스스로 끝나면 다시 띄우기·다른 서버 존중·Ctrl+C 무시 시 강제 종료·서버 세션 표시를 본다.
+- 실제 PC(임시 설정 폴더로 띄운 두 번째 에이전트, 포트 8791):
+
+| 시험 | 결과 |
+| --- | --- |
+| `rc-test` 열어 두기 켬 | 서버가 에이전트 자식으로 뜸, `bridge-pointer.json`에 그 pid, 미리 만든 세션이 서버의 자식으로 돎 |
+| 명령줄로 끔 | 4.6초 뒤 서버와 세션 프로세스 모두 끝남(설정 확인 주기 5초 포함) |
+| 다시 켬 | 1.1초 만에 서버가 다시 뜸 |
+| 에이전트를 강제로 죽임 | 서버도 바로 끝남, 남은 프로세스 없음 |
+| 신뢰하지 않은 폴더 | 1초 안에 `untrusted`, 서버 프로세스 안 남음, 15초 동안 다시 띄우지 않음 |
+
+남은 것:
+
+- **폰에서 확인**: 시험 페이지에서 `rc-test` 열어 두기를 켜고, Claude 앱의 PC 목록에서 이 폴더를 골라 새 세션을 만드는 것(A4 관문).
+- 앱(B1)의 폴더 화면은 이 API를 그대로 쓴다.
+- macOS·Linux 서버는 D 단계(지금은 Windows만 `serve`를 알림).
