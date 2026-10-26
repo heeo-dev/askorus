@@ -34,7 +34,7 @@ Asksemble/
 | A3 | 실행기: 열기(실행 규칙 5가지), 새 세션, 멈추기, 지우기. 원격 링크 20초 대기, `Workspace not trusted` 잡기. 열기·새 세션은 작업 id 방식 | 가짜 claude 테스트 통과, 실제 PC에서 F3–F6 수동 시험 **(완료, 8절)** |
 | A4 | 서버 관리자(F10): 폴더별 `claude remote-control`, Ctrl+C 종료, 재시작 시 다시 띄우기, 서버 세션에 '서버' 배지 | 실제 PC에서 Claude 앱으로 그 폴더에 새 세션 생성 **(PC 쪽 시험 완료, 폰에서 새 세션 만들기는 사용자 확인 대기, 10절)** |
 | A5 | 설치 점검(`check`), serve 포트 고르기 안내, 자동 시작(일반 권한), `uninstall`, 관리자 권한 서비스 감지(A3에서 옮김, 2026-10-26) | **에이전트 관문:** 명령줄 요청만으로 F1–F6, F10 동작 + 확장 원칙 11개 **(만듦. 자동 시작 등록은 사용자 확인 대기, 11절)** |
-| B1 | Expo 앱: 짝 맺기(QR), 세션 목록·검색·필터, 상세 시트, 새 세션, 폴더 화면, 설정, 오류 화면, ko/en | — |
+| B1 | Expo 앱: 짝 맺기(QR), 세션 목록·검색·필터, 상세 시트, 새 세션, 폴더 화면, 설정, 오류 화면, ko/en (13절) | 실제 폰에서 시험 페이지로 되던 것이 앱으로 모두 됨 |
 | B2 | Android 내부 테스트 트랙 | **본인 폰에서 1주일 실제 사용** |
 | C | iOS(EAS 빌드, TestFlight), 데모 모드 | TestFlight 외부 테스터 심사 통과 |
 | D | macOS·Linux 에이전트(구현 전 테스트 5 포함), 서명·공증, 공개 | — |
@@ -280,3 +280,24 @@ Asksemble/
 
 - 이 PC에 자동 시작을 등록했다: `autostart on -test-page` → `"…\.local\bin\asksemble-agent.exe" start -test-page`. 폰 앱(B1)이 나오기 전까지 시험 페이지를 쓰려고 `autostart on`에 `-test-page`를 더했다.
 - 이 세션이 띄웠던 에이전트를 멈추고 A5 빌드를 `start -test-page`로 다시 켰다. 사설망 주소에서 시험 페이지 200, API는 토큰 없이 401. `check`는 주의 0개.
+
+## 13. B1 계획 (2026-10-27)
+
+`app/`에 Expo SDK 58(React Native 0.88, TypeScript, Expo Router, 화면은 `src/app/`). 개발 중에는 폰의 Expo Go가 PC의 개발 서버(Metro 8081)에 Tailscale 주소로 붙는다. PC에 Android SDK·JDK는 깔지 않고, 설치 파일은 B2에서 EAS 클라우드로 빌드한다(Expo 계정은 사용자가 만들었다).
+
+| 단계 | 할 일 |
+| --- | --- |
+| B1-1 뼈대 | Expo 프로젝트, ko/en 문구, `/v1` 클라이언트(작업·짝 맺기 다시 묻기, 끊긴 요청 다시 묻기), 연결 목록(`kind: pc`, 토큰은 보안 저장소에 따로), 단위 테스트 |
+| B1-2 짝 맺기 | Tailscale 안내, QR 스캔(`expo-camera`), `asksemble://pair`와 시험 페이지 링크 둘 다 읽기, PC 허용 기다리기 |
+| B1-3 세션 목록·상세 | 검색, 상태 필터, 배지, 당겨서 새로 고침. 상세 시트: 열기(작업 id), 멈추기, 지우기 재확인, 이어 보기 명령 복사, 터미널·서버 세션 안내 |
+| B1-4 새 세션·폴더·설정 | 폴더·이름·모델·노력 수준, 폴더 열어 두기(F10), PC 목록과 끊기, 연결 진단 |
+| B1-5 오류·마무리 | 원인별 오류 화면, 여러 PC(F7), '한 번에 묻기' 탭 자리(숨김), 공식 제품 아님 문구 |
+
+관문: 시험 페이지로 되던 것이 실제 폰의 앱에서 모두 되고, PC 두 대가 섞이지 않는다.
+
+알아 둘 것:
+
+- 열기 링크: 앱 안에서 `Linking.openURL(https://claude.ai/code/session_…)`이 Claude 앱으로 바로 가는지 실제 폰에서 먼저 본다. 안 되면 Android는 패키지(`com.anthropic.claude`)를 지정한다.
+- 에이전트 쪽: 설정의 '끊기'가 PC의 기기 정보도 지우려면 `DELETE /v1/devices/self`가 필요하다(필드·경로를 더하기만).
+
+B1-1 결과: `npx tsc --noEmit` 통과, `npx jest` 4개 묶음 40개 통과(클라이언트, QR 링크, 연결 저장, 문구), `npx expo-doctor` 20/20. Android 묶음이 오류 없이 만들어진다(1295개 모듈). 테스트 파일은 `*-test.ts`이고, Windows에서 `<rootDir>`가 든 testMatch가 파일을 못 찾아 `**/src/**/*-test.[jt]s?(x)`로 적었다. 템플릿의 `app/.claude/settings.json`(Expo 플러그인 켜기)과 MIT `LICENSE`는 지웠다.

@@ -1,0 +1,157 @@
+import { AgentClient, AgentError, NetworkError, baseUrl, normalizeCode } from './client';
+
+type Call = { url: string; method: string; headers: Record<string, string>; body?: unknown };
+
+// fakeFetch answers each request from the queue in order and records it.
+function fakeFetch(answers: Array<(c: Call) => Response | Error>) {
+  const calls: Call[] = [];
+  const fn = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const c: Call = {
+      url: String(input),
+      method: init?.method ?? 'GET',
+      headers: (init?.headers ?? {}) as Record<string, string>,
+      body: init?.body ? JSON.parse(String(init.body)) : undefined,
+    };
+    calls.push(c);
+    const next = answers.shift();
+    if (!next) throw new Error(`unexpected request ${c.method} ${c.url}`);
+    const r = next(c);
+    if (r instanceof Error) throw r;
+    return r;
+  }) as typeof fetch;
+  return { fn, calls };
+}
+
+const json = (status: number, body: unknown) => () =>
+  new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+const dropped = () => () => new TypeError('Network request failed');
+const noSleep = async () => {};
+
+const base = 'https://pc.example.ts.net:8790';
+
+test('baseUrl leaves out the default port', () => {
+  expect(baseUrl('pc.example.ts.net', 443)).toBe('https://pc.example.ts.net');
+  expect(baseUrl('pc.example.ts.net', 8790)).toBe(base);
+});
+
+test('requests carry the token and JSON body, and ignore unknown fields', async () => {
+  const f = fakeFetch([json(200, { name: 'asksemble-agent', version: '0.1.0', apiVersion: 1, newField: 7 })]);
+  const c = new AgentClient(base, { token: 'tok', fetch: f.fn });
+  const info = await c.info();
+  expect(info.version).toBe('0.1.0');
+  expect(f.calls[0].url).toBe(`${base}/v1/info`);
+  expect(f.calls[0].headers.Authorization).toBe('Bearer tok');
+  expect(f.calls[0].headers['Content-Type']).toBeUndefined();
+});
+
+test('no Origin header is sent (the agent refuses cross-origin requests)', async () => {
+  const f = fakeFetch([json(200, { sessions: [], warnings: [] })]);
+  await new AgentClient(base, { token: 'tok', fetch: f.fn }).sessions();
+  expect(Object.keys(f.calls[0].headers).map((h) => h.toLowerCase())).not.toContain('origin');
+});
+
+test('session filters become query parameters', async () => {
+  const f = fakeFetch([json(200, { sessions: [], warnings: [] })]);
+  await new AgentClient(base, { fetch: f.fn }).sessions({ q: '한글 검색', state: 'running,stopped' });
+  const u = new URL(f.calls[0].url);
+  expect(u.pathname).toBe('/v1/sessions');
+  expect(u.searchParams.get('q')).toBe('한글 검색');
+  expect(u.searchParams.get('state')).toBe('running,stopped');
+});
+
+test('agent errors keep their code', async () => {
+  const f = fakeFetch([json(401, { error: { code: 'unauthorized', message: 'device token required' } })]);
+  const err = await new AgentClient(base, { fetch: f.fn }).info().catch((e) => e);
+  expect(err).toBeInstanceOf(AgentError);
+  expect(err.code).toBe('unauthorized');
+  expect(err.status).toBe(401);
+});
+
+test('a non-JSON error page gets an http_ code', async () => {
+  const f = fakeFetch([() => new Response('<html>bad gateway</html>', { status: 502 })]);
+  const err = await new AgentClient(base, { fetch: f.fn }).info().catch((e) => e);
+  expect(err).toBeInstanceOf(AgentError);
+  expect(err.code).toBe('http_502');
+});
+
+test('a dropped request is a NetworkError', async () => {
+  const f = fakeFetch([dropped()]);
+  await expect(new AgentClient(base, { fetch: f.fn }).info()).rejects.toBeInstanceOf(NetworkError);
+});
+
+test('opening a session polls the job until done, through dropped polls', async () => {
+  const f = fakeFetch([
+    json(202, { jobId: 'j1', kind: 'open', status: 'running', pollAfterMs: 1000 }),
+    json(200, { jobId: 'j1', kind: 'open', status: 'running', pollAfterMs: 500 }),
+    dropped(),
+    json(200, {
+      jobId: 'j1',
+      kind: 'open',
+      status: 'done',
+      result: { action: 'resumed', remoteUrl: 'https://claude.ai/code/session_x', session: { id: 'claude:1' } },
+    }),
+  ]);
+  const waits: number[] = [];
+  const c = new AgentClient(base, { fetch: f.fn, sleep: async (ms) => void waits.push(ms) });
+  let pending = 0;
+  const r = await c.openSession('claude:1', { onPending: () => pending++ });
+  expect(r.action).toBe('resumed');
+  expect(r.remoteUrl).toBe('https://claude.ai/code/session_x');
+  expect(f.calls[0].method).toBe('POST');
+  expect(f.calls[0].url).toBe(`${base}/v1/sessions/claude%3A1/open`);
+  expect(f.calls.slice(1).every((c) => c.url === `${base}/v1/jobs/j1`)).toBe(true);
+  expect(waits).toEqual([1000, 500, 500]);
+  expect(pending).toBe(1);
+});
+
+test('a failed job throws its code', async () => {
+  const f = fakeFetch([
+    json(202, { jobId: 'j2', kind: 'start', status: 'running', pollAfterMs: 1000 }),
+    json(200, { jobId: 'j2', kind: 'start', status: 'failed', error: { code: 'workspace_not_trusted', message: 'x' } }),
+  ]);
+  const c = new AgentClient(base, { fetch: f.fn, sleep: noSleep });
+  const err = await c.startSession({ folder: 'rc-test', name: 'test' }).catch((e) => e);
+  expect(err).toBeInstanceOf(AgentError);
+  expect(err.code).toBe('workspace_not_trusted');
+  expect(f.calls[0].body).toEqual({ folder: 'rc-test', name: 'test' });
+});
+
+test('waiting stops when cancelled', async () => {
+  const f = fakeFetch([json(202, { jobId: 'j3', kind: 'open', status: 'running', pollAfterMs: 1000 })]);
+  const ctl = new AbortController();
+  const c = new AgentClient(base, {
+    fetch: f.fn,
+    sleep: async (_ms, signal) => {
+      ctl.abort();
+      if (signal?.aborted) throw new Error('cancelled');
+    },
+  });
+  await expect(c.openSession('claude:1', { signal: ctl.signal })).rejects.toThrow('cancelled');
+});
+
+test('pairing sends the cleaned code and waits for the PC', async () => {
+  const f = fakeFetch([
+    json(202, { requestId: 'r1', status: 'pending', pollAfterMs: 1000 }),
+    json(200, { status: 'pending', pollAfterMs: 1000, apiVersion: 1 }),
+    json(200, { status: 'approved', token: 'secret', deviceId: 'd1', deviceName: 'S23', apiVersion: 1 }),
+  ]);
+  const c = new AgentClient(base, { fetch: f.fn, sleep: noSleep });
+  const p = await c.pair('abcd-efgh ijkl-mnop', 'S23');
+  expect(p).toEqual({ token: 'secret', deviceId: 'd1', deviceName: 'S23', apiVersion: 1 });
+  expect(f.calls[0].body).toEqual({ code: 'ABCDEFGHIJKLMNOP', deviceName: 'S23' });
+  expect(f.calls[1].body).toEqual({ requestId: 'r1' });
+  expect(f.calls[1].url).toBe(`${base}/v1/pair/status`);
+});
+
+test('a pairing refusal surfaces its code', async () => {
+  const f = fakeFetch([
+    json(202, { requestId: 'r2', status: 'pending', pollAfterMs: 1000 }),
+    json(403, { error: { code: 'pair_denied', message: 'denied' } }),
+  ]);
+  const err = await new AgentClient(base, { fetch: f.fn, sleep: noSleep }).pair('X', 'S23').catch((e) => e);
+  expect(err.code).toBe('pair_denied');
+});
+
+test('normalizeCode drops dashes and spaces', () => {
+  expect(normalizeCode(' ab-cd ef ')).toBe('ABCDEF');
+});
