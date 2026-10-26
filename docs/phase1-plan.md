@@ -128,7 +128,7 @@ Asksemble/
 
 실제 폰 시험(2026-10-26, S23, serve 8790): 시험 페이지로 짝 맺기와 세션 목록이 됐다. 알게 된 것 두 가지를 B1에 넘긴다.
 
-- 삼성 인터넷은 `https://claude.ai/code/session_…` 링크를 Claude 앱으로 넘기지 않고 새 탭에서 연다(주소창 옆 앱 아이콘을 눌러야 앱으로 감). 시험 페이지는 Android에서 `intent://…#Intent;scheme=https;package=com.anthropic.claude;S.browser_fallback_url=…;end`로 앱을 지정해 연다. 앱에서도 Android는 패키지를 지정해 열고, 앱이 없으면 https로 연다.
+- 삼성 인터넷은 `https://claude.ai/code/session_…` 링크를 Claude 앱으로 넘기지 않고 새 탭에서 연다(주소창 옆 앱 아이콘을 눌러야 앱으로 감). 시험 페이지는 Android에서 `intent://…#Intent;scheme=https;package=com.anthropic.claude;S.browser_fallback_url=…;end`로 앱을 지정해 연다(삼성 인터넷에서 바로 앱으로 열리는 것을 확인). 앱에서도 Android는 패키지를 지정해 열고, 앱이 없으면 https로 연다.
 - 앱으로 넘어갔다 돌아오면 브라우저가 새 탭으로 열 수 있다. 시험 페이지는 토큰을 탭이 아니라 브라우저(localStorage)에 둔다. 앱은 보안 저장소에 두므로 상관없다.
 
 남은 것: 앱(B1)에서 실제 폰으로 다시 하는 시험, PC 트레이 메뉴의 허용 창(A5), 시작 뒤 Funnel이 켜지는 경우의 주기 점검(A5).
