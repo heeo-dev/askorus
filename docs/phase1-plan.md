@@ -276,7 +276,7 @@ Asksemble/
   - 폴더 서버를 켠 채 `shutdown`: 1.6초 만에 서버를 Ctrl+C로 정리하고 끝났다. 처음에는 포트만 닫힌 것을 보고 "멈췄다"고 일찍 말해서, 에이전트가 pid 파일을 쓰고 `shutdown`이 그 프로세스가 끝날 때까지 기다리게 고쳤다.
 - 실제 PC에서 하지 않은 것: `autostart on`(레지스트리 등록), 실제 설정으로 `uninstall`(serve 8790을 끔). 사용자 확인 뒤에 한다.
 
-## 12. 물어볼 것
+## 12. 정한 것 (2026-10-27)
 
-1. **자동 시작 등록**: 이 PC에서 `asksemble-agent autostart on`을 실행해 로그인할 때 에이전트가 켜지게 할지. 실행 파일은 `D:\ClaudeHome\Asksemble\.local\bin\asksemble-agent.exe`. 지금 켜져 있는 에이전트는 이 Claude 세션이 띄운 것이라, 이 세션이 끝나면 함께 꺼진다. 등록하면 `start`로 옮겨 켜겠다.
-2. **시험 페이지**: 자동 시작에는 시험 페이지를 넣지 않는다(`start`만). 폰 앱(B1)이 나오기 전까지 시험 페이지가 필요하면 `start -test-page`로 등록할지.
+- 이 PC에 자동 시작을 등록했다: `autostart on -test-page` → `"…\.localinsksemble-agent.exe" start -test-page`. 폰 앱(B1)이 나오기 전까지 시험 페이지를 쓰려고 `autostart on`에 `-test-page`를 더했다.
+- 이 세션이 띄웠던 에이전트를 멈추고 A5 빌드를 `start -test-page`로 다시 켰다. 사설망 주소에서 시험 페이지 200, API는 토큰 없이 401. `check`는 주의 0개.

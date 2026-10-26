@@ -146,8 +146,9 @@ func statusCmd(dir string, out io.Writer) error {
 }
 
 func autostartCmd(args []string, out io.Writer) error {
-	if len(args) != 1 || !slices.Contains([]string{"on", "off", "status"}, args[0]) {
-		return fail("usage: asksemble-agent autostart on|off|status", "사용법: asksemble-agent autostart on|off|status")
+	testPage := len(args) == 2 && args[0] == "on" && args[1] == "-test-page"
+	if !testPage && (len(args) != 1 || !slices.Contains([]string{"on", "off", "status"}, args[0])) {
+		return fail("usage: asksemble-agent autostart on [-test-page] | off | status", "사용법: asksemble-agent autostart on [-test-page] | off | status")
 	}
 	switch args[0] {
 	case "on":
@@ -162,10 +163,10 @@ func autostartCmd(args []string, out io.Writer) error {
 		if err != nil {
 			return err
 		}
-		if err := autostartSet(exe); err != nil {
+		if err := autostartSet(exe, testPage); err != nil {
 			return err
 		}
-		say(out, m("the agent starts at logon for this user, with normal rights: %s", "이 사용자로 로그인할 때 에이전트가 일반 권한으로 켜집니다: %s", autostartCommand(exe)))
+		say(out, m("the agent starts at logon for this user, with normal rights: %s", "이 사용자로 로그인할 때 에이전트가 일반 권한으로 켜집니다: %s", autostartCommand(exe, testPage)))
 	case "off":
 		if err := autostartRemove(); err != nil {
 			return err

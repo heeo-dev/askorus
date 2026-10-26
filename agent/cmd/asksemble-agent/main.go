@@ -88,7 +88,7 @@ Usage / 사용법:
   asksemble-agent start [-test-page] | shutdown | status
       run the agent in the background, stop it, or show whether it runs
       에이전트를 백그라운드로 켜고, 끄고, 상태를 봅니다
-  asksemble-agent autostart on|off|status
+  asksemble-agent autostart on [-test-page] | off | status
       start the agent at logon, with normal rights
       로그인할 때 에이전트를 일반 권한으로 켭니다
   asksemble-agent uninstall [-yes] [-all]

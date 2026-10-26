@@ -79,15 +79,21 @@ const (
 	runValueName = "Asksemble Agent"
 )
 
-func autostartCommand(exe string) string { return `"` + exe + `" start` }
+func autostartCommand(exe string, testPage bool) string {
+	c := `"` + exe + `" start`
+	if testPage {
+		c += " -test-page"
+	}
+	return c
+}
 
-func autostartSet(exe string) error {
+func autostartSet(exe string, testPage bool) error {
 	k, _, err := registry.CreateKey(registry.CURRENT_USER, runKey, registry.SET_VALUE)
 	if err != nil {
 		return err
 	}
 	defer k.Close()
-	return k.SetStringValue(runValueName, autostartCommand(exe))
+	return k.SetStringValue(runValueName, autostartCommand(exe, testPage))
 }
 
 func autostartRemove() error {
