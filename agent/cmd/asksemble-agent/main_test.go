@@ -33,6 +33,23 @@ func TestNormalizeAnswer(t *testing.T) {
 	}
 }
 
+func TestBilingualErrors(t *testing.T) {
+	var b bytes.Buffer
+	printError(&b, fail("code %s expired", "코드 %s가 만료됐습니다", "X"))
+	if got := b.String(); got != "error: code X expired\n오류: 코드 X가 만료됐습니다\n" {
+		t.Errorf("printError = %q", got)
+	}
+	b.Reset()
+	err := run([]string{"nope"}, strings.NewReader(""), &b)
+	if err == nil || !strings.Contains(err.Error(), "모르는 명령") || !strings.Contains(err.Error(), "unknown command") {
+		t.Errorf("unknown command error = %v", err)
+	}
+	b.Reset()
+	if err := run([]string{"help"}, strings.NewReader(""), &b); err != nil || !strings.Contains(b.String(), "사용법") || strings.Contains(b.String(), "%!") {
+		t.Errorf("help = %v %q", err, b.String())
+	}
+}
+
 func TestGroupCode(t *testing.T) {
 	if got := groupCode("ABCDEFGHIJKLMNOPQRSTUVWXYZ"); got != "ABCD-EFGH-IJKL-MNOP-QRST-UVWX-YZ" {
 		t.Errorf("groupCode = %q", got)
