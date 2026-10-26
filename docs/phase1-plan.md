@@ -302,3 +302,4 @@ Asksemble/
 
 B1-1 결과: `npx tsc --noEmit` 통과, `npx jest` 4개 묶음 40개 통과(클라이언트, QR 링크, 연결 저장, 문구), `npx expo-doctor` 20/20. Android 묶음이 오류 없이 만들어진다(1295개 모듈). 테스트 파일은 `*-test.ts`이고, Windows에서 `<rootDir>`가 든 testMatch가 파일을 못 찾아 `**/src/**/*-test.[jt]s?(x)`로 적었다. 템플릿의 `app/.claude/settings.json`(Expo 플러그인 켜기)과 MIT `LICENSE`는 지웠다.
 - 실제 폰(2026-10-27, S23): Expo Go에서 `exp://PC-TAILSCALE-IP:8081`(Tailscale 주소)로 열려 '내 PC' 첫 화면이 보였다. Windows 방화벽은 따로 손대지 않아도 됐다.
+- B1-2 실제 폰(2026-10-27): PC에서 `pair` 창을 띄우고 앱으로 QR을 찍어 짝 맺었다. PC에서 y로 허용한 뒤 첫 화면에 PC가 '연결됨'으로 떴다. PC 기기 목록에 폰 이름(Android 기기 이름)으로 새 기기가 생겼고, 시험 페이지 기기와 따로 남는다.
