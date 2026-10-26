@@ -301,3 +301,4 @@ Asksemble/
 - 에이전트 쪽: 설정의 '끊기'가 PC의 기기 정보도 지우려면 `DELETE /v1/devices/self`가 필요하다(필드·경로를 더하기만).
 
 B1-1 결과: `npx tsc --noEmit` 통과, `npx jest` 4개 묶음 40개 통과(클라이언트, QR 링크, 연결 저장, 문구), `npx expo-doctor` 20/20. Android 묶음이 오류 없이 만들어진다(1295개 모듈). 테스트 파일은 `*-test.ts`이고, Windows에서 `<rootDir>`가 든 testMatch가 파일을 못 찾아 `**/src/**/*-test.[jt]s?(x)`로 적었다. 템플릿의 `app/.claude/settings.json`(Expo 플러그인 켜기)과 MIT `LICENSE`는 지웠다.
+- 실제 폰(2026-10-27, S23): Expo Go에서 `exp://PC-TAILSCALE-IP:8081`(Tailscale 주소)로 열려 '내 PC' 첫 화면이 보였다. Windows 방화벽은 따로 손대지 않아도 됐다.
