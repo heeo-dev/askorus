@@ -338,6 +338,7 @@ func pair(dir string, args []string, in io.Reader, out io.Writer) error {
 		return err
 	}
 	fmt.Fprintf(out, "\nPC:                https://%s:%d\n", host, port)
+	fmt.Fprintf(out, "Link / 링크:       %s\n", link)
 	fmt.Fprintf(out, "Code / 코드:       %s\n", groupCode(code))
 	if pngPath != "" {
 		fmt.Fprintf(out, "Image / 이미지:    %s\n", pngPath)
