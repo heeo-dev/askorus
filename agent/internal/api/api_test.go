@@ -34,6 +34,17 @@ type env struct {
 	h     http.Handler
 	token string
 	logs  *bytes.Buffer
+	store *devices.Store
+}
+
+// addDevice pairs another device and returns its token.
+func (e env) addDevice(t *testing.T, name string) string {
+	t.Helper()
+	tok, _, err := e.store.Add(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return tok
 }
 
 func newEnv(t *testing.T, a core.Adapter, mutate func(*Options)) env {
@@ -54,7 +65,7 @@ func newEnv(t *testing.T, a core.Adapter, mutate func(*Options)) env {
 	if mutate != nil {
 		mutate(&o)
 	}
-	return env{h: New(o).Handler(), token: tok, logs: &logs}
+	return env{h: New(o).Handler(), token: tok, logs: &logs, store: store}
 }
 
 func (e env) do(method, target string, hdr map[string]string) *httptest.ResponseRecorder {

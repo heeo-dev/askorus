@@ -18,6 +18,7 @@ import (
 	"github.com/asksemble/asksemble/agent/internal/config"
 	"github.com/asksemble/asksemble/agent/internal/core"
 	"github.com/asksemble/asksemble/agent/internal/devices"
+	"github.com/asksemble/asksemble/agent/internal/jobs"
 	"github.com/asksemble/asksemble/agent/internal/pairing"
 )
 
@@ -85,6 +86,7 @@ type Server struct {
 	o       Options
 	hosts   map[string]bool
 	limiter *limiter
+	jobs    *jobs.Manager
 }
 
 // New builds a server.
@@ -93,6 +95,7 @@ func New(o Options) *Server {
 		o:       o,
 		hosts:   map[string]bool{"127.0.0.1": true, "localhost": true, "::1": true},
 		limiter: newLimiter(),
+		jobs:    jobs.NewManager(),
 	}
 	for _, h := range o.ServeHosts {
 		s.hosts[strings.ToLower(h)] = true
@@ -125,6 +128,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/sessions/{id}/open", s.openSession)
 	mux.HandleFunc("POST /v1/sessions/{id}/stop", s.stopSession)
 	mux.HandleFunc("DELETE /v1/sessions/{id}", s.removeSession)
+	route("GET", "/v1/jobs/{jobId}", s.jobStatus)
 	route("GET", "/v1/folders", s.folders)
 	mux.HandleFunc("/v1/sessions/{id}/{action}", methodNotAllowed)
 	mux.HandleFunc("/v1/sessions/{id}", methodNotAllowed)

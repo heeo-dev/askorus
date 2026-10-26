@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/asksemble/asksemble/agent/internal/config"
 	"github.com/asksemble/asksemble/agent/internal/core"
+	"github.com/asksemble/asksemble/agent/internal/jobs"
 )
 
 // HiddenStore keeps the sessions removed from the list.
@@ -21,6 +23,7 @@ const (
 	CodeBadSessionID  = "bad_session_id"
 	CodeNotSupported  = "not_supported"
 	CodeFolderUnknown = "folder_not_found"
+	CodeJobNotFound   = "job_not_found"
 )
 
 // actionStatus maps adapter error codes to HTTP status.
@@ -83,18 +86,93 @@ func (s *Server) launcherFor(w http.ResponseWriter, r *http.Request) (core.Launc
 	return l, id, native, true
 }
 
-// openSession is POST /v1/sessions/{id}/open (F3, F6).
+// JobStarted is the 202 answer to a slow action. The phone then reads
+// GET /v1/jobs/{jobId} until it is no longer running.
+type JobStarted struct {
+	JobID       string `json:"jobId"`
+	Kind        string `json:"kind"`
+	Status      string `json:"status"` // "running"
+	PollAfterMs int    `json:"pollAfterMs"`
+}
+
+// JobStatus is GET /v1/jobs/{jobId}.
+type JobStatus struct {
+	JobID       string           `json:"jobId"`
+	Kind        string           `json:"kind"`
+	Status      string           `json:"status"` // running | done | failed
+	PollAfterMs int              `json:"pollAfterMs,omitempty"`
+	Result      *core.OpenResult `json:"result,omitempty"`
+	Error       *jobError        `json:"error,omitempty"`
+}
+
+type jobError struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
+const jobPollMs = 1000
+
+func deviceOf(r *http.Request) string {
+	if info, _ := r.Context().Value(reqInfoKey{}).(*reqInfo); info != nil {
+		return info.device
+	}
+	return ""
+}
+
+func (s *Server) startJob(w http.ResponseWriter, r *http.Request, kind, target string, fn func(ctx context.Context) (core.OpenResult, error)) {
+	j := s.jobs.Start(deviceOf(r), kind, target, func(ctx context.Context) (any, error) {
+		res, err := fn(ctx)
+		if err != nil {
+			if s.o.Logger != nil {
+				code := core.ErrorCode(err)
+				if code == "" {
+					code = err.Error()
+				}
+				s.o.Logger.Warn("job failed", "kind", kind, "code", code)
+			}
+			return nil, err
+		}
+		return res, nil
+	})
+	writeJSON(w, http.StatusAccepted, JobStarted{JobID: j.ID, Kind: j.Kind, Status: string(j.State), PollAfterMs: jobPollMs})
+}
+
+// openSession is POST /v1/sessions/{id}/open (F3, F6). It answers 202 at
+// once; opening can take 20 s and a phone may drop a request that long.
 func (s *Server) openSession(w http.ResponseWriter, r *http.Request) {
-	l, _, native, ok := s.launcherFor(w, r)
+	l, id, native, ok := s.launcherFor(w, r)
 	if !ok {
 		return
 	}
-	res, err := l.Open(r.Context(), native)
-	if err != nil {
-		s.actionError(w, err)
+	s.startJob(w, r, "open", id, func(ctx context.Context) (core.OpenResult, error) {
+		return l.Open(ctx, native)
+	})
+}
+
+// jobStatus is GET /v1/jobs/{jobId}. A device only sees its own jobs.
+func (s *Server) jobStatus(w http.ResponseWriter, r *http.Request) {
+	j, ok := s.jobs.Get(deviceOf(r), r.PathValue("jobId"))
+	if !ok {
+		writeError(w, http.StatusNotFound, CodeJobNotFound, "no such job (finished more than 10 minutes ago, or the agent restarted)")
 		return
 	}
-	writeJSON(w, http.StatusOK, res)
+	st := JobStatus{JobID: j.ID, Kind: j.Kind, Status: string(j.State)}
+	switch j.State {
+	case jobs.Running:
+		st.PollAfterMs = jobPollMs
+	case jobs.Done:
+		if res, ok := j.Result.(core.OpenResult); ok {
+			st.Result = &res
+		}
+	case jobs.Failed:
+		var ae *core.ActionError
+		if errors.As(j.Err, &ae) {
+			st.Error = &jobError{Code: ae.Code, Message: ae.Detail}
+		} else {
+			st.Error = &jobError{Code: CodeInternal, Message: "action failed"}
+		}
+	}
+	writeJSON(w, http.StatusOK, st)
 }
 
 // StartRequest is the body of POST /v1/sessions (F4).
@@ -134,12 +212,12 @@ func (s *Server) startSession(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotImplemented, CodeNotSupported, "this agent cannot start sessions")
 		return
 	}
-	res, err := l.Start(r.Context(), core.StartRequest{Folder: folder.Path, Name: req.Name, Model: req.Model, Effort: req.Effort})
-	if err != nil {
-		s.actionError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusCreated, res)
+	sreq := core.StartRequest{Folder: folder.Path, Name: req.Name, Model: req.Model, Effort: req.Effort}
+	// The same request sent twice while the first still runs joins it.
+	target := agent + "|" + folder.ID + "|" + req.Name + "|" + req.Model + "|" + req.Effort
+	s.startJob(w, r, "start", target, func(ctx context.Context) (core.OpenResult, error) {
+		return l.Start(ctx, sreq)
+	})
 }
 
 // stopSession is POST /v1/sessions/{id}/stop (F5).

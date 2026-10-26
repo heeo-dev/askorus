@@ -156,6 +156,66 @@ function when(iso) {
   return isNaN(d) ? "" : d.toLocaleString("ko-KR", { dateStyle: "short", timeStyle: "short" });
 }
 
+// runJob sends a slow action (open, new session). The agent answers at
+// once with a job id; this asks for the result every second. A dropped
+// connection while asking is retried, and the job id is kept so a reload
+// picks the wait up again.
+const JOB = "asksemble-test-job";
+async function runJob(method, path, body, label) {
+  const started = await call(method, path, body);
+  store(JOB, JSON.stringify({ id: started.jobId, label }));
+  return pollJob(started.jobId, started.pollAfterMs);
+}
+
+async function pollJob(id, every) {
+  let misses = 0;
+  try {
+    for (;;) {
+      await sleep(every || 1000);
+      let st;
+      try {
+        st = await call("GET", "jobs/" + id);
+      } catch (e) {
+        if (e instanceof TypeError && misses++ < 30) continue; // network blip: ask again
+        throw e;
+      }
+      misses = 0;
+      if (st.status === "done") return st.result;
+      if (st.status === "failed") {
+        const code = st.error && st.error.code;
+        throw new Error((errorNames[code] || code || "실패") + (st.error && st.error.message ? " (" + st.error.message + ")" : ""));
+      }
+      every = st.pollAfterMs || every;
+    }
+  } finally {
+    store(JOB, "");
+  }
+}
+
+function showResult(target, links, r) {
+  if (r.hint === "use_rc_in_terminal") {
+    say(target, "PC 터미널에서 열려 있는 세션입니다. 그 터미널에 /rc를 입력하세요.");
+    return;
+  }
+  const what = { none: "이미 열려 있음", resumed: "깨움", started: "시작함" }[r.action] || r.action;
+  say(target, what + ": " + ((r.session && (r.session.title || r.session.name)) || ""));
+  if (r.remoteUrl) links.replaceChildren(remoteLink(r.remoteUrl));
+}
+
+// A job that was still running when the page was left or reloaded.
+async function resumeJob() {
+  let job;
+  try { job = JSON.parse(load(JOB) || "null"); } catch { job = null; }
+  if (!job || !token()) return;
+  say($("useMsg"), "이전 작업(" + job.label + ")의 결과를 기다리는 중…");
+  try {
+    const r = await pollJob(job.id, 500);
+    showResult($("useMsg"), $("resumeLink"), r);
+  } catch (e) {
+    say($("useMsg"), e.message, true);
+  }
+}
+
 function el(tag, cls, text) {
   const e = document.createElement(tag);
   if (cls) e.className = cls;
@@ -194,17 +254,11 @@ function renderSession(s) {
   };
   const path = "sessions/" + encodeURIComponent(s.id);
   act("열기", "", async () => {
-    say(msg, "켜는 중… (보통 10~20초)");
+    say(msg, "켜는 중… (보통 10~20초, 다른 화면에 다녀와도 됩니다)");
     const started = performance.now();
-    const r = await call("POST", path + "/open");
-    const secs = ((performance.now() - started) / 1000).toFixed(1);
-    if (r.hint === "use_rc_in_terminal") {
-      say(msg, "PC 터미널에서 열려 있는 세션입니다. 그 터미널에 /rc를 입력하세요.");
-      return;
-    }
-    const what = { none: "이미 열려 있음", resumed: "깨움", started: "시작함" }[r.action] || r.action;
-    say(msg, what + " · " + secs + "초");
-    links.replaceChildren(remoteLink(r.remoteUrl));
+    const r = await runJob("POST", path + "/open", undefined, "열기: " + (s.title || s.name || ""));
+    showResult(msg, links, r);
+    msg.textContent += " · " + ((performance.now() - started) / 1000).toFixed(1) + "초";
   });
   if (s.state === "running") {
     act("멈추기", "secondary", async () => {
@@ -253,12 +307,11 @@ $("newBtn").addEventListener("click", async () => {
   }
   const btn = $("newBtn");
   btn.disabled = true;
-  say($("newMsg"), "새 세션을 켜는 중… (보통 10~20초)");
+  say($("newMsg"), "새 세션을 켜는 중… (보통 10~20초, 다른 화면에 다녀와도 됩니다)");
   $("newLink").replaceChildren();
   try {
-    const r = await call("POST", "sessions", { folder: $("folder").value, name: $("newName").value });
-    say($("newMsg"), "시작함: " + (r.session.title || r.session.name));
-    $("newLink").append(remoteLink(r.remoteUrl));
+    const r = await runJob("POST", "sessions", { folder: $("folder").value, name: $("newName").value }, "새 세션: " + $("newName").value);
+    showResult($("newMsg"), $("newLink"), r);
   } catch (e) {
     say($("newMsg"), e.message, true);
   } finally {
@@ -296,6 +349,7 @@ $("forgetBtn").addEventListener("click", () => {
 
 showUse();
 showWho();
+resumeJob();
 if (!token() && load(REQ)) {
   waitForPC(load(REQ));
 }
