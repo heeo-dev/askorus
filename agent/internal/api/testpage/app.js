@@ -5,6 +5,7 @@
 const $ = (id) => document.getElementById(id);
 const KEY = "asksemble-test-token";
 
+const badgeNames = { server: "폴더 서버", desktop: "데스크톱 앱" };
 const stateNames = { running: "실행 중", stopped: "멈춤", terminal: "터미널", history: "기록만", unknown: "알 수 없음" };
 const errorNames = {
   pair_closed: "PC에 열린 짝 맺기 창이 없습니다. PC에서 pair를 다시 실행하세요.",
@@ -197,6 +198,10 @@ function showResult(target, links, r) {
     say(target, "PC 터미널에서 열려 있는 세션입니다. 그 터미널에 /rc를 입력하세요.");
     return;
   }
+  if (r.hint === "server_session") {
+    say(target, "폴더 서버가 돌리는 세션입니다. Claude 앱의 PC 목록에서 이 폴더를 골라 여세요.");
+    return;
+  }
   const what = { none: "이미 열려 있음", resumed: "깨움", started: "시작함" }[r.action] || r.action;
   say(target, what + ": " + ((r.session && (r.session.title || r.session.name)) || ""));
   if (r.remoteUrl) links.replaceChildren(remoteLink(r.remoteUrl));
@@ -239,7 +244,8 @@ function remoteLink(url) {
 function renderSession(s) {
   const li = el("li");
   li.append(el("div", "title", s.title || s.lastPrompt || "(제목 없음)"));
-  li.append(el("div", "meta", [stateNames[s.state] || s.state, s.activity, when(s.lastActive), s.folder].filter(Boolean).join(" · ")));
+  const badges = (s.badges || []).map((b) => "[" + (badgeNames[b] || b) + "]").join(" ");
+  li.append(el("div", "meta", [badges, stateNames[s.state] || s.state, s.activity, when(s.lastActive), s.folder].filter(Boolean).join(" · ")));
   const msg = el("div", "msg");
   const links = el("div", "row");
   const buttons = el("div", "row");
