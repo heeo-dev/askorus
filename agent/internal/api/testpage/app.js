@@ -77,6 +77,7 @@ async function call(method, path, body) {
 function showUse() {
   $("pair").hidden = !!token();
   $("use").hidden = !token();
+  if (token() && !$("folder").value) loadFolders();
 }
 
 // The code arrives in the URL fragment, which is never sent to a server.
@@ -227,7 +228,7 @@ function renderSession(s) {
   return li;
 }
 
-$("folderBtn").addEventListener("click", async () => {
+async function loadFolders() {
   say($("newMsg"), "");
   try {
     const r = await call("GET", "folders");
@@ -242,9 +243,14 @@ $("folderBtn").addEventListener("click", async () => {
   } catch (e) {
     say($("newMsg"), e.message, true);
   }
-});
+}
+$("folderBtn").addEventListener("click", loadFolders);
 
 $("newBtn").addEventListener("click", async () => {
+  if (!$("folder").value) {
+    say($("newMsg"), "폴더를 먼저 고르세요.", true);
+    return;
+  }
   const btn = $("newBtn");
   btn.disabled = true;
   say($("newMsg"), "새 세션을 켜는 중… (보통 10~20초)");
