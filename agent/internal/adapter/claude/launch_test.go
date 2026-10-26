@@ -298,6 +298,34 @@ func TestOneActionPerSession(t *testing.T) {
 	}
 }
 
+// Each claude agents call costs 1.3–1.5 s on a real PC. Opening a running
+// session needs exactly one (to know the state), starting needs none.
+func TestAgentsCallsPerAction(t *testing.T) {
+	count := func(e launchEnv) int {
+		n := 0
+		for _, c := range recordedCalls(t, e.argsFile) {
+			if len(c.Args) > 0 && c.Args[0] == "agents" {
+				n++
+			}
+		}
+		return n
+	}
+	e := newLaunchEnv(t, []agentEntry{runningEntry})
+	if _, err := e.a.Open(context.Background(), id1); err != nil {
+		t.Fatal(err)
+	}
+	if n := count(e); n != 1 {
+		t.Errorf("open running: %d agents calls, want 1", n)
+	}
+	e2 := newLaunchEnv(t, nil)
+	if _, err := e2.a.Start(context.Background(), core.StartRequest{Folder: e2.folder, Name: "x"}); err != nil {
+		t.Fatal(err)
+	}
+	if n := count(e2); n != 0 {
+		t.Errorf("start: %d agents calls, want 0", n)
+	}
+}
+
 func TestSessionName(t *testing.T) {
 	cases := map[string]string{
 		"my job":                "my job",

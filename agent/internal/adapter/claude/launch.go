@@ -116,15 +116,13 @@ func (a *Adapter) Open(ctx context.Context, id string) (core.OpenResult, error) 
 	}
 	switch state {
 	case core.StateTerminal:
-		s, _ := a.session(ctx, id)
-		return core.OpenResult{Session: s, Action: core.ActionNone, Hint: core.HintUseRCInTerminal}, nil
+		return core.OpenResult{Session: a.sessionWith(id, e, state), Action: core.ActionNone, Hint: core.HintUseRCInTerminal}, nil
 	case core.StateRunning:
 		url, err := a.waitLink(ctx, id, time.Time{}, e.ID)
 		if err != nil {
 			return core.OpenResult{}, err
 		}
-		s, _ := a.session(ctx, id)
-		return core.OpenResult{Session: s, RemoteURL: url, Action: core.ActionNone}, nil
+		return core.OpenResult{Session: a.sessionWith(id, e, state), RemoteURL: url, Action: core.ActionNone}, nil
 	}
 
 	// Never resume while a process still runs the session: claude would
@@ -138,10 +136,11 @@ func (a *Adapter) Open(ctx context.Context, id string) (core.OpenResult, error) 
 		return core.OpenResult{}, core.Fail(core.ErrCodeLaunchFailed, "the session's folder no longer exists")
 	}
 	var args []string
+	title := ""
 	if state == core.StateStopped {
 		args = []string{"--bg", "--resume", id}
 	} else {
-		title := sessionName(firstNonEmpty(t.Title, "asksemble "+id[:8]))
+		title = sessionName(firstNonEmpty(t.Title, "asksemble "+id[:8]))
 		args = append([]string{"--bg", "--resume", id, "--remote-control", "-n", title}, a.modelArgs("", "")...)
 	}
 	start := time.Now()
@@ -150,12 +149,16 @@ func (a *Adapter) Open(ctx context.Context, id string) (core.OpenResult, error) 
 	if err != nil {
 		return core.OpenResult{}, launchError(res, err, folder)
 	}
-	url, err := a.waitLink(ctx, id, start, firstNonEmpty(e.ID, parseShortID(res.Stdout)))
+	short := firstNonEmpty(e.ID, parseShortID(res.Stdout))
+	url, err := a.waitLink(ctx, id, start, short)
 	if err != nil {
 		return core.OpenResult{}, err
 	}
-	s, _ := a.session(ctx, id)
-	return core.OpenResult{Session: s, RemoteURL: url, Action: core.ActionResumed}, nil
+	if !has {
+		e = agentEntry{ID: short, SessionID: id, Kind: kindBackground, Cwd: folder}
+	}
+	e.Name = firstNonEmpty(e.Name, title)
+	return core.OpenResult{Session: a.sessionWith(id, e, core.StateRunning), RemoteURL: url, Action: core.ActionResumed}, nil
 }
 
 // Start creates a new remote session in req.Folder.
@@ -181,16 +184,42 @@ func (a *Adapter) Start(ctx context.Context, req core.StartRequest) (core.OpenRe
 	if short == "" {
 		return core.OpenResult{}, core.Fail(core.ErrCodeLaunchFailed, "claude did not report the new session")
 	}
+	id, url, err := a.waitNewLink(ctx, short, start)
+	if err != nil {
+		return core.OpenResult{}, err
+	}
+	e := agentEntry{ID: short, SessionID: id, Kind: kindBackground, Name: name, Cwd: req.Folder}
+	return core.OpenResult{Session: a.sessionWith(id, e, core.StateRunning), RemoteURL: url, Action: core.ActionStarted}, nil
+}
+
+// waitNewLink finds a new session by the short id claude printed: its
+// transcript file name starts with it. This needs no claude agents call
+// (1.3–1.5 s each). If the file does not show up, the process list maps
+// the short id instead.
+func (a *Adapter) waitNewLink(ctx context.Context, short string, since time.Time) (string, string, error) {
+	timeout := a.linkWait
+	if timeout == 0 {
+		timeout = linkTimeout
+	}
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if ts, err := a.transcripts.Scan(); err == nil {
+			for _, t := range ts {
+				if strings.HasPrefix(t.SessionID, short) && t.RemoteURL != "" && !t.RemoteURLAt.Before(since.Add(-linkSkew)) {
+					return t.SessionID, t.RemoteURL, nil
+				}
+			}
+		}
+		if !sleepCtx(ctx, a.pollEvery()) {
+			return "", "", ctx.Err()
+		}
+	}
 	id, err := a.sessionIDFor(ctx, short)
 	if err != nil {
-		return core.OpenResult{}, err
+		return "", "", err
 	}
-	url, err := a.waitLink(ctx, id, start, short)
-	if err != nil {
-		return core.OpenResult{}, err
-	}
-	s, _ := a.session(ctx, id)
-	return core.OpenResult{Session: s, RemoteURL: url, Action: core.ActionStarted}, nil
+	url, err := a.waitLink(ctx, id, since, short)
+	return id, url, err
 }
 
 // Stop stops a running background session and waits until it is down.
@@ -212,7 +241,8 @@ func (a *Adapter) Stop(ctx context.Context, id string) (core.Session, error) {
 			return core.Session{}, err
 		}
 	}
-	return a.session(ctx, id)
+	e.PID = 0 // stopEntry waited until the process was gone
+	return a.sessionWith(id, e, core.StateStopped), nil
 }
 
 // Remove takes a background session off claude's list (claude rm). The
@@ -308,7 +338,7 @@ func (a *Adapter) waitLink(ctx context.Context, id string, since time.Time, shor
 				lastCheck = time.Now()
 				a.Invalidate()
 				if entries, ok := a.agents(ctx); ok {
-					if e, has := bestEntry(entries, id); has && e.state() == core.StateRunning && e.PID > 0 && time.Since(since) > 5*time.Second {
+					if e, has := bestEntry(entries, id); has && e.state() == core.StateRunning && e.PID > 0 && time.Since(since) > 3*time.Second {
 						return t.RemoteURL, nil
 					}
 				}
@@ -366,20 +396,26 @@ func (a *Adapter) transcript(id string) (Transcript, bool) {
 	return Transcript{}, false
 }
 
-// session returns the list entry for id, from a fresh process list: right
-// after a launch the cached one can predate the new process.
-func (a *Adapter) session(ctx context.Context, id string) (core.Session, error) {
-	a.Invalidate()
-	res, err := a.ListSessions(ctx)
-	if err != nil {
-		return core.Session{}, err
+// sessionWith builds the result session from what the action already knows
+// (its state after the action and the process entry), so no extra claude
+// agents call (1.3–1.5 s) is needed. The app refreshes its list anyway.
+func (a *Adapter) sessionWith(id string, e agentEntry, state core.State) core.Session {
+	t, _ := a.transcript(id)
+	if t.SessionID == "" {
+		t = Transcript{SessionID: id, Cwd: e.Cwd}
 	}
-	for _, s := range res.Sessions {
-		if s.ID == core.MakeID(Name, id) {
-			return s, nil
-		}
+	s := build(t, e, true, true)
+	s.State = state
+	if state != core.StateRunning && state != core.StateTerminal {
+		s.Activity = ""
 	}
-	return core.Session{}, core.Fail(core.ErrCodeNotFound, "")
+	switch state {
+	case core.StateRunning, core.StateStopped:
+		s.AttachCommand = "claude attach " + quoteArg(firstNonEmpty(e.Name, e.ID, id))
+	case core.StateTerminal:
+		s.AttachCommand = ""
+	}
+	return s
 }
 
 // modelArgs adds --model/--effort only when a value is set, so Claude Code's
