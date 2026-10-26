@@ -127,6 +127,12 @@ func (a *Adapter) Open(ctx context.Context, id string) (core.OpenResult, error) 
 		return core.OpenResult{Session: s, RemoteURL: url, Action: core.ActionNone}, nil
 	}
 
+	// Never resume while a process still runs the session: claude would
+	// fork a copy. state() already treats any pid as running; this guards
+	// the rule if that ever changes.
+	if has && e.PID > 0 {
+		return core.OpenResult{}, core.Fail(core.ErrCodeBusy, "the session still has a running process")
+	}
 	folder := firstNonEmpty(t.Cwd, e.Cwd)
 	if !dirExists(folder) {
 		return core.OpenResult{}, core.Fail(core.ErrCodeLaunchFailed, "the session's folder no longer exists")
@@ -271,8 +277,8 @@ func (a *Adapter) stopEntry(ctx context.Context, e agentEntry) error {
 		a.Invalidate()
 		entries, ok := a.agents(ctx)
 		if ok {
-			if cur, has := bestEntry(entries, e.SessionID); !has || cur.state() != core.StateRunning {
-				return nil
+			if cur, has := bestEntry(entries, e.SessionID); !has || cur.PID == 0 {
+				return nil // the process is gone
 			}
 		}
 		if !sleepCtx(ctx, a.pollEvery()) {

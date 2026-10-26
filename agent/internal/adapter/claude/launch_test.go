@@ -243,6 +243,32 @@ func TestRemoveRunningStopsFirst(t *testing.T) {
 	}
 }
 
+// After answering a prompt a live session reports state "done". It is
+// still running: stop must stop it, and open must not resume it (resuming
+// a live session forks a copy). Seen on a real PC, 2026-10-26.
+func TestDoneIsStillRunning(t *testing.T) {
+	done := agentEntry{PID: 300, ID: "11111111", Kind: kindBackground, SessionID: id1, Name: "job one", Status: "idle", State: "done"}
+	if done.state() != core.StateRunning {
+		t.Fatalf("state(done with pid) = %q", done.state())
+	}
+
+	e := newLaunchEnv(t, []agentEntry{done})
+	res, err := e.a.Open(context.Background(), id1)
+	if err != nil || res.Action != core.ActionNone {
+		t.Fatalf("open = %+v, %v", res, err)
+	}
+	if got := e.launches(t); len(got) != 0 {
+		t.Fatalf("open ran %+v on a live session", got)
+	}
+	s, err := e.a.Stop(context.Background(), id1)
+	if err != nil || s.State != core.StateStopped {
+		t.Fatalf("stop = %+v, %v", s, err)
+	}
+	if got := e.launches(t); len(got) != 1 || !slices.Equal(got[0].Args, []string{"stop", "11111111"}) {
+		t.Errorf("calls = %+v", got)
+	}
+}
+
 // A new session that never got a prompt leaves claude's list as soon as
 // it is stopped; removing it must still succeed (seen on a real PC).
 func TestRemoveWhenStopDropsTheSession(t *testing.T) {

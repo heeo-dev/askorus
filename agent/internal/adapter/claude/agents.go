@@ -47,14 +47,13 @@ func parseAgents(b []byte) ([]agentEntry, error) {
 	return nil, errors.New("claude agents --json: unexpected output")
 }
 
-var stoppedWords = map[string]bool{
-	"stopped": true, "exited": true, "dead": true, "done": true, "failed": true,
-	"killed": true, "completed": true, "terminated": true, "stale": true,
-}
-
-// state maps an entry to the list state (design: 실행 규칙).
+// state maps an entry to the list state (design: 실행 규칙). A process id
+// alone decides: a stopped entry has none (state "stopped"), while a live
+// one may say "done" after finishing a reply. Reading "done" as stopped
+// once made the agent resume a live session, which forks a copy, so state
+// words never count as stopped.
 func (e agentEntry) state() core.State {
-	alive := e.PID > 0 && !stoppedWords[strings.ToLower(e.Status)] && !stoppedWords[strings.ToLower(e.State)]
+	alive := e.PID > 0
 	switch {
 	case e.Kind == kindBackground && alive:
 		return core.StateRunning
