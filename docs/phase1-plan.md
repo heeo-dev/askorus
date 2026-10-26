@@ -33,7 +33,7 @@ Asksemble/
 | A2 | 기기 토큰과 짝 맺기: `asksemble-agent pair`(5분 창, QR, 128비트 코드), `POST /v1/pair`, PC 화면 허용 확인, `devices`·`revoke`, 실패 횟수 제한, `Tailscale-User-Login` 검사 | 폰 브라우저나 curl로 짝 맺고 토큰으로 `/v1/info` 접근 **(PC 안 시험까지 완료. 폰에서 하는 시험은 serve 설정 뒤)** |
 | A3 | 실행기: 열기(실행 규칙 5가지), 새 세션, 멈추기, 지우기. 원격 링크 20초 대기, `Workspace not trusted` 잡기. 열기·새 세션은 작업 id 방식 | 가짜 claude 테스트 통과, 실제 PC에서 F3–F6 수동 시험 **(완료, 8절)** |
 | A4 | 서버 관리자(F10): 폴더별 `claude remote-control`, Ctrl+C 종료, 재시작 시 다시 띄우기, 서버 세션에 '서버' 배지 | 실제 PC에서 Claude 앱으로 그 폴더에 새 세션 생성 **(PC 쪽 시험 완료, 폰에서 새 세션 만들기는 사용자 확인 대기, 10절)** |
-| A5 | 설치 점검(`check`), serve 포트 고르기 안내, 자동 시작(일반 권한), `uninstall`, 관리자 권한 서비스 감지(A3에서 옮김, 2026-10-26) | **에이전트 관문:** 명령줄 요청만으로 F1–F6, F10 동작 + 확장 원칙 11개 |
+| A5 | 설치 점검(`check`), serve 포트 고르기 안내, 자동 시작(일반 권한), `uninstall`, 관리자 권한 서비스 감지(A3에서 옮김, 2026-10-26) | **에이전트 관문:** 명령줄 요청만으로 F1–F6, F10 동작 + 확장 원칙 11개 **(만듦. 자동 시작 등록은 사용자 확인 대기, 11절)** |
 | B1 | Expo 앱: 짝 맺기(QR), 세션 목록·검색·필터, 상세 시트, 새 세션, 폴더 화면, 설정, 오류 화면, ko/en | — |
 | B2 | Android 내부 테스트 트랙 | **본인 폰에서 1주일 실제 사용** |
 | C | iOS(EAS 빌드, TestFlight), 데모 모드 | TestFlight 외부 테스터 심사 통과 |
@@ -53,7 +53,7 @@ Asksemble/
 | F10 | 폴더 열어 두기 | `config.Folder.Server`, `adapter/claude/server.go`(A4), `api` `GET /v1/folders`·`PUT /v1/folders/{id}/server` |
 | N1 | 중계 서버 없음 | 에이전트는 외부로 나가는 요청이 없다. 앱은 연결 목록의 주소로만 접속 |
 | N2 | 정해진 동작만 | `runner.go`: 명령 종류(enum)별로 인자를 만들고 금지 플래그 검사. 셸 없이 `exec.Command(exe, args...)`. `.cmd`/`.bat`은 실행 거부 |
-| N3 | 일반 권한 | 시작할 때 관리자 권한이면 경고(A5), 관리자 서비스 감지(A3) |
+| N3 | 일반 권한 | `serve`는 관리자 권한이면 시작을 거부, 자동 시작은 HKCU Run(일반 권한), 관리자 서비스 감지(`adapter/claude/daemon.go`) |
 | N4 | 짝 맺은 기기만 | `devices` 해시 저장소, `api` 토큰 미들웨어와 실패 횟수 제한(`api/pair.go`), `pairing`(QR 코드·PC 허용), `devices revoke` |
 | N5 | 빠름 | 수집기 캐시: 파일별 크기·수정 시각, 덧붙은 부분만 읽기 |
 | N6 | 플랫폼 | Go 크로스 빌드, 경로는 `os.UserHomeDir`·`os.UserConfigDir` |
@@ -253,3 +253,30 @@ Asksemble/
 남은 것:
 - 앱(B1)의 폴더 화면은 이 API를 그대로 쓴다.
 - macOS·Linux 서버는 D 단계(지금은 Windows만 `serve`를 알림).
+
+## 11. A5 결과 (2026-10-27)
+
+만든 것:
+
+- **관리자 권한 서비스 감지**(`adapter/claude/daemon.go`): `~/.claude/daemon.lock`의 pid가 살아 있고 그 프로세스가 관리자 권한이면, 열기·새 세션이 45초 기다리지 않고 바로 `service_elevated`(503)로 "관리자 터미널에서 `claude daemon stop --any`"를 안내한다. `/v1/info`에도 알림(`claude_service_elevated`)이 뜬다.
+- **관리자로 실행 거부(N3)**: `serve`는 관리자 권한이면 시작하지 않는다. 그 아래에서 켠 세션이 모두 관리자 권한을 갖게 되기 때문이다.
+- **백그라운드 실행**: `start`(창 없이 `serve`를 띄우고 끝남), `shutdown`(이름 붙은 이벤트로 멈춤 신호, 포트마다 따로. 에이전트가 폴더 서버를 Ctrl+C로 정리하고 끝날 때까지 기다림), `status`.
+- **자동 시작**: `autostart on|off|status`. 이 사용자의 `HKCU\…\Run`에 `"asksemble-agent.exe" start`를 넣는다. 관리자 권한이 필요 없고 일반 권한으로 켜진다. 관리자 터미널에서 켜려 하면 거부한다. 로그인할 때 콘솔 창이 잠깐 깜빡일 수 있다(콘솔 프로그램이라서).
+- **`check`**: 권한, Claude Code 버전, 관리자 서비스, Remote Control을 막는 환경 변수, Tailscale(로그인 계정, HTTPS 인증서, 에이전트를 가리키는 serve 포트(없으면 비어 있는 포트를 골라 실행할 명령을 보여 줌), Funnel), 에이전트 실행·자동 시작, 짝 맺은 폰, 폴더, 절전 설정, 한 번만 할 일(`claude --rc` 동의, 푸시 설정)을 본다. 읽기만 하고, 고칠 명령은 사람이 실행한다.
+- **`uninstall [-yes] [-all]`**: 묻고 나서 에이전트를 멈추고, 자동 시작을 지우고, 짝 맺은 폰을 끊고(`devices.json` 삭제), 에이전트를 가리키는 tailscale serve 포트 하나만 끈다(`tailscale serve --https=<포트> off`). 다른 serve 설정과 Claude Code는 건드리지 않는다. `-all`이면 설정 폴더도 지운다.
+- **실행 중 Funnel 점검**: 1분마다 확인해서, 에이전트 포트에 Funnel이 켜지면 멈춘다.
+- **절전 막기**: 설정 `"keepAwake": true`이면 bg 세션이나 폴더 서버가 도는 동안 PC가 잠들지 않게 한다(기본 꺼짐).
+
+시험 결과:
+
+- `go vet ./...`(Windows·Linux), `go test ./...` 통과(12개 패키지). 관리자 서비스가 있으면 아무것도 실행하지 않고 실패하는지, uninstall을 거절하면 아무것도 안 바뀌는지, 테스트가 실제 레지스트리를 건드리지 않는지 본다.
+- 실제 PC:
+  - `check`: 실제 설정을 맞게 읽었다(문제 0개, 주의 1개: 자동 시작 꺼짐). 한국어 Windows의 `powercfg` 출력도 읽었다.
+  - 임시 설정 폴더(포트 8791)로 `start` → `status` → 다시 `start`('이미 실행 중') → `shutdown`: 창 없이 떴고, 띄운 쪽 프로세스가 끝나도 계속 돌았고, 0.4초 만에 멈췄다.
+  - 폴더 서버를 켠 채 `shutdown`: 1.6초 만에 서버를 Ctrl+C로 정리하고 끝났다. 처음에는 포트만 닫힌 것을 보고 "멈췄다"고 일찍 말해서, 에이전트가 pid 파일을 쓰고 `shutdown`이 그 프로세스가 끝날 때까지 기다리게 고쳤다.
+- 실제 PC에서 하지 않은 것: `autostart on`(레지스트리 등록), 실제 설정으로 `uninstall`(serve 8790을 끔). 사용자 확인 뒤에 한다.
+
+## 12. 물어볼 것
+
+1. **자동 시작 등록**: 이 PC에서 `asksemble-agent autostart on`을 실행해 로그인할 때 에이전트가 켜지게 할지. 실행 파일은 `D:\ClaudeHome\Asksemble\.local\bin\asksemble-agent.exe`. 지금 켜져 있는 에이전트는 이 Claude 세션이 띄운 것이라, 이 세션이 끝나면 함께 꺼진다. 등록하면 `start`로 옮겨 켜겠다.
+2. **시험 페이지**: 자동 시작에는 시험 페이지를 넣지 않는다(`start`만). 폰 앱(B1)이 나오기 전까지 시험 페이지가 필요하면 `start -test-page`로 등록할지.

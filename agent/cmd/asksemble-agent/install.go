@@ -13,6 +13,7 @@ import (
 	"runtime"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/asksemble/asksemble/agent/internal/adapter/claude"
@@ -86,13 +87,27 @@ func startCmd(dir string, args []string, out io.Writer) error {
 	return nil
 }
 
-// shutdownCmd asks the running agent to stop; it stops its folder servers
-// with Ctrl+C first.
+// pidFile holds the running agent's process id while it serves.
+const pidFile = "agent.pid"
+
+func readPID(dir string) int {
+	b, err := os.ReadFile(filepath.Join(dir, pidFile))
+	if err != nil {
+		return 0
+	}
+	n, _ := strconv.Atoi(strings.TrimSpace(string(b)))
+	return n
+}
+
+// shutdownCmd asks the running agent to stop and waits until its process
+// has ended: it closes the port at once, then stops its folder servers
+// with Ctrl+C.
 func shutdownCmd(dir string, out io.Writer) error {
 	cfg, err := config.Load(dir)
 	if err != nil {
 		return err
 	}
+	pid := readPID(dir)
 	if err := signalStop(cfg.Port); err != nil {
 		if !agentListening(cfg.Port) {
 			say(out, m("the agent is not running", "에이전트가 돌고 있지 않습니다"))
@@ -101,8 +116,12 @@ func shutdownCmd(dir string, out io.Writer) error {
 		return fail("the agent on 127.0.0.1:%d did not take the stop signal (started from another account?)",
 			"127.0.0.1:%d의 에이전트가 멈춤 신호를 받지 않았습니다 (다른 계정에서 켰나요?)", cfg.Port)
 	}
-	if !waitListening(cfg.Port, false, 20*time.Second) {
-		return fail("the agent is still running after 20 s", "20초가 지나도 에이전트가 돌고 있습니다")
+	deadline := time.Now().Add(30 * time.Second)
+	for time.Now().Before(deadline) && (agentListening(cfg.Port) || (pid > 0 && processRunning(pid))) {
+		time.Sleep(200 * time.Millisecond)
+	}
+	if agentListening(cfg.Port) || (pid > 0 && processRunning(pid)) {
+		return fail("the agent is still running after 30 s", "30초가 지나도 에이전트가 돌고 있습니다")
 	}
 	say(out, m("the agent stopped", "에이전트를 멈췄습니다"))
 	return nil

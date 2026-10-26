@@ -320,6 +320,8 @@ func serve(dir string, args []string) error {
 			"아직 짝을 맺은 기기가 없습니다. 다른 창에서 `asksemble-agent pair`를 실행하세요"))
 	}
 	logger.Info("listening", "addr", ln.Addr().String(), "version", version, "tailscale_served", ti.served)
+	_ = config.WriteFileAtomic(filepath.Join(dir, pidFile), []byte(strconv.Itoa(os.Getpid())+"\n"))
+	defer os.Remove(filepath.Join(dir, pidFile))
 	say(os.Stderr, m("asksemble-agent %s listening on http://%s (Ctrl+C to stop)",
 		"asksemble-agent %s가 http://%s에서 기다립니다 (Ctrl+C로 멈춤)", version, ln.Addr()))
 	if *testPage {
