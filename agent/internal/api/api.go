@@ -67,6 +67,9 @@ type Options struct {
 	// another login are refused, and pairing needs it to be known.
 	TailscaleOwner string
 	HiddenFolders  []string
+	// TestPage serves the phone-browser test page at /test/ and accepts
+	// same-origin browser requests from it.
+	TestPage bool
 }
 
 // Server serves /v1.
@@ -97,6 +100,10 @@ func (s *Server) Handler() http.Handler {
 	top.HandleFunc("/v1/pair", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusMethodNotAllowed, CodeMethod, "method not allowed")
 	})
+	if s.o.TestPage {
+		top.Handle("GET /test/", s.testPage())
+		top.Handle("GET /test", http.RedirectHandler("/test/", http.StatusFound))
+	}
 	mux := http.NewServeMux()
 	top.Handle("/", s.authenticate(mux))
 	route := func(method, path string, h http.HandlerFunc) {
@@ -176,10 +183,13 @@ func (s *Server) checkHost(next http.Handler) http.Handler {
 }
 
 // checkOrigin refuses browser cross-origin requests. The app is native and
-// sends no Origin header; CORS is never enabled.
+// sends no Origin header; CORS is never enabled. Only the test page, when
+// turned on, may call from its own origin.
 func (s *Server) checkOrigin(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("Origin") != "" || r.Method == http.MethodOptions {
+		origin := r.Header.Get("Origin")
+		allowed := origin == "" || (s.o.TestPage && s.sameOrigin(r))
+		if !allowed || r.Method == http.MethodOptions {
 			writeError(w, http.StatusForbidden, CodeCrossOrigin, "cross-origin requests are not allowed")
 			return
 		}

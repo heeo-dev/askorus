@@ -56,7 +56,7 @@ func TestListSessions(t *testing.T) {
 		return s
 	}
 	s1 := check(id1, core.StateRunning, `claude attach "login job"`)
-	if s1.Activity != "busy" || s1.Title != "Login fix" || s1.Name != "login job" {
+	if s1.Activity != "working" || s1.Title != "Login fix" || s1.Name != "login job" {
 		t.Errorf("running bg session: %+v", s1)
 	}
 	check(id2, core.StateStopped, "claude attach named-bg")

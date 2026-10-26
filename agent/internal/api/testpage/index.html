@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Asksemble 시험 페이지</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <h1>Asksemble 시험 페이지</h1>
+  <p class="note">앱이 나오기 전에 짝 맺기와 세션 목록을 폰 브라우저로 시험하는 페이지입니다. Anthropic의 공식 제품이 아닙니다.</p>
+
+  <section id="pair">
+    <h2>1. 짝 맺기</h2>
+    <label>코드 <input id="code" autocomplete="off" autocapitalize="characters" spellcheck="false"></label>
+    <label>기기 이름 <input id="name" value="폰 브라우저 시험" maxlength="64"></label>
+    <button id="pairBtn">짝 맺기</button>
+    <p id="pairMsg" class="msg"></p>
+  </section>
+
+  <section id="use" hidden>
+    <h2>2. 써 보기</h2>
+    <p id="who" class="msg"></p>
+    <div class="row">
+      <button id="infoBtn">정보</button>
+      <button id="listBtn">세션 목록</button>
+      <button id="forgetBtn" class="secondary">토큰 지우기</button>
+    </div>
+    <div class="row">
+      <select id="state">
+        <option value="">모든 상태</option>
+        <option value="running">실행 중</option>
+        <option value="stopped">멈춤</option>
+        <option value="terminal">터미널</option>
+        <option value="history">기록만</option>
+      </select>
+      <input id="q" placeholder="검색">
+    </div>
+    <p id="useMsg" class="msg"></p>
+    <pre id="info" hidden></pre>
+    <ul id="list"></ul>
+  </section>
+</main>
+<script src="app.js"></script>
+</body>
+</html>

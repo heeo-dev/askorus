@@ -38,9 +38,12 @@ var version = "0.1.0-dev"
 const usage = `Asksemble PC agent (not an official Anthropic product)
 
 Usage:
-  asksemble-agent serve [-port N]        start the API on 127.0.0.1
-  asksemble-agent pair [-host H] [-port N] [-light-terminal]
+  asksemble-agent serve [-port N] [-test-page]
+                                         start the API on 127.0.0.1
+                                         (-test-page: phone-browser test page at /test/)
+  asksemble-agent pair [-host H] [-port N] [-light-terminal] [-test-page]
                                          show a QR code for 5 minutes to pair a phone
+                                         (-test-page: the QR opens the test page)
   asksemble-agent sessions [-state S] [-q TEXT] [-folder DIR] [-json]
                                          print the session list
   asksemble-agent info                   print what the agent can do
@@ -124,6 +127,7 @@ func lookTailnet(ctx context.Context, localPort int) tailnetInfo {
 func serve(dir string, args []string) error {
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
 	port := fs.Int("port", 0, "port on 127.0.0.1 (default from settings)")
+	testPage := fs.Bool("test-page", false, "serve the phone-browser test page at /test/")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -185,6 +189,7 @@ func serve(dir string, args []string) error {
 		ServeHosts:     hosts,
 		TailscaleOwner: owner,
 		HiddenFolders:  cfg.HiddenFolders,
+		TestPage:       *testPage,
 	}).Handler())
 	ln, err := api.Listen(cfg.Port)
 	if err != nil {
@@ -195,6 +200,9 @@ func serve(dir string, args []string) error {
 	}
 	logger.Info("listening", "addr", ln.Addr().String(), "version", version, "tailscale_served", ti.served)
 	fmt.Fprintf(os.Stderr, "asksemble-agent %s listening on http://%s (Ctrl+C to stop)\n", version, ln.Addr())
+	if *testPage {
+		fmt.Fprintln(os.Stderr, "test page is on at /test/ (for trying pairing in a phone browser; leave it off otherwise)")
+	}
 
 	go adapter.Warm(ctx)
 	errc := make(chan error, 1)
@@ -235,11 +243,18 @@ func PairURL(host string, port int, code string) string {
 	return "asksemble://pair?" + q.Encode()
 }
 
+// TestPageURL opens the test page with the code in the fragment, which the
+// browser never sends to the server.
+func TestPageURL(host string, port int, code string) string {
+	return "https://" + net.JoinHostPort(host, strconv.Itoa(port)) + "/test/#code=" + url.QueryEscape(code)
+}
+
 func pair(dir string, args []string, in io.Reader, out io.Writer) error {
 	fs := flag.NewFlagSet("pair", flag.ContinueOnError)
 	hostFlag := fs.String("host", "", "MagicDNS name the phone connects to (default from tailscale)")
 	portFlag := fs.Int("port", 0, "HTTPS port of tailscale serve (default from tailscale serve status)")
 	light := fs.Bool("light-terminal", false, "draw the QR code for a light terminal background")
+	testPage := fs.Bool("test-page", false, "make the QR open the test page (serve must run with -test-page)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -282,6 +297,10 @@ func pair(dir string, args []string, in io.Reader, out io.Writer) error {
 	}
 	defer pairing.Close(dir)
 	link := PairURL(host, port, code)
+	scanWith := "the Asksemble app (Settings > Add PC)"
+	if *testPage {
+		link, scanWith = TestPageURL(host, port, code), "the phone camera; it opens the test page"
+	}
 	pngPath := filepath.Join(dir, "pairing-qr.png")
 	if png, err := qrPNG(link); err == nil && os.WriteFile(pngPath, png, 0o600) == nil {
 		defer os.Remove(pngPath)
@@ -289,7 +308,7 @@ func pair(dir string, args []string, in io.Reader, out io.Writer) error {
 		pngPath = ""
 	}
 
-	fmt.Fprintln(out, "Scan this with the Asksemble app (Settings > Add PC):")
+	fmt.Fprintf(out, "Scan this with %s:\n", scanWith)
 	fmt.Fprintln(out)
 	if err := printQR(out, link, !*light); err != nil {
 		return err

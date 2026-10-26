@@ -19,6 +19,12 @@ func TestPairURL(t *testing.T) {
 	}
 }
 
+func TestTestPageURL(t *testing.T) {
+	if got := TestPageURL("pc.example.ts.net", 8790, "ABC234"); got != "https://pc.example.ts.net:8790/test/#code=ABC234" {
+		t.Errorf("TestPageURL = %q", got)
+	}
+}
+
 func TestNormalizeAnswer(t *testing.T) {
 	for in, want := range map[string]string{"y": "y", "Y\r": "y", string(rune(0xFEFF)) + "y": "y", " Yes ": "yes", "": ""} {
 		if got := normalizeAnswer(in); got != want {

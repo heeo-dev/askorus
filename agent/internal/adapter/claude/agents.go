@@ -19,8 +19,8 @@ type agentEntry struct {
 	StartedAt int64  `json:"startedAt"`
 	SessionID string `json:"sessionId"`
 	Name      string `json:"name"`
-	Status    string `json:"status"` // e.g. busy, blocked
-	State     string `json:"state"`  // e.g. working
+	Status    string `json:"status"` // busy, idle; absent once stopped
+	State     string `json:"state"`  // working, blocked (waiting for input), stopped
 }
 
 const (
@@ -66,8 +66,10 @@ func (e agentEntry) state() core.State {
 	return core.StateHistory
 }
 
+// activity prefers state: "blocked" tells the app the session waits for
+// input, which status ("idle") does not.
 func (e agentEntry) activity() string {
-	return firstNonEmpty(strings.ToLower(e.Status), strings.ToLower(e.State))
+	return firstNonEmpty(strings.ToLower(e.State), strings.ToLower(e.Status))
 }
 
 // rank orders entries of the same session: a live process wins.
