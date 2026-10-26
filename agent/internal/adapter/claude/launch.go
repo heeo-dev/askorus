@@ -69,6 +69,7 @@ func (a *Adapter) find(ctx context.Context, id string) (Transcript, agentEntry, 
 	if !ok {
 		return Transcript{}, agentEntry{}, false, core.Fail(core.ErrCodeStateUnknown, "")
 	}
+	entries = withLive(entries, a.live())
 	ts, err := a.transcripts.Scan()
 	if err != nil {
 		return Transcript{}, agentEntry{}, false, err
@@ -116,18 +117,28 @@ func (a *Adapter) Open(ctx context.Context, id string) (core.OpenResult, error) 
 	}
 	switch state {
 	case core.StateTerminal:
+		liveURL := a.live()[id].remoteURL()
 		if a.srv.serverSessions([]agentEntry{e}, processParents)[id] {
 			// A folder server runs it: reachable in the official app, and
 			// never resumed from here.
 			s := a.sessionWith(id, e, core.StateRunning)
 			s.AttachCommand = ""
 			s.Badges = append(s.Badges, "server")
-			if t.RemoteURL != "" {
-				return core.OpenResult{Session: s, RemoteURL: t.RemoteURL, Action: core.ActionNone}, nil
+			if u := firstNonEmpty(liveURL, t.RemoteURL); u != "" {
+				s.RemoteURL = u
+				return core.OpenResult{Session: s, RemoteURL: u, Action: core.ActionNone}, nil
 			}
 			return core.OpenResult{Session: s, Action: core.ActionNone, Hint: core.HintServerSession}, nil
 		}
-		return core.OpenResult{Session: a.sessionWith(id, e, state), Action: core.ActionNone, Hint: core.HintUseRCInTerminal}, nil
+		s := a.sessionWith(id, e, state)
+		if liveURL != "" {
+			// Opened in a terminal with remote control on (--rc or /rc):
+			// nothing to run, just hand over the link.
+			s.RemoteURL = liveURL
+			s.Badges = append(s.Badges, "rc")
+			return core.OpenResult{Session: s, RemoteURL: liveURL, Action: core.ActionNone}, nil
+		}
+		return core.OpenResult{Session: s, Action: core.ActionNone, Hint: core.HintUseRCInTerminal}, nil
 	case core.StateRunning:
 		url, err := a.waitLink(ctx, id, time.Time{}, e.ID)
 		if err != nil {
@@ -214,6 +225,11 @@ func (a *Adapter) waitNewLink(ctx context.Context, short string, since time.Time
 	}
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
+		for id, l := range a.live() {
+			if u := l.remoteURL(); u != "" && strings.HasPrefix(id, short) {
+				return id, u, nil
+			}
+		}
 		if ts, err := a.transcripts.Scan(); err == nil {
 			for _, t := range ts {
 				if strings.HasPrefix(t.SessionID, short) && t.RemoteURL != "" && !t.RemoteURLAt.Before(since.Add(-linkSkew)) {
@@ -318,7 +334,9 @@ func (a *Adapter) stopEntry(ctx context.Context, e agentEntry) error {
 		a.Invalidate()
 		entries, ok := a.agents(ctx)
 		if ok {
-			if cur, has := bestEntry(entries, e.SessionID); !has || cur.PID == 0 {
+			cur, has := bestEntry(entries, e.SessionID)
+			_, stillLive := a.live()[e.SessionID]
+			if (!has || cur.PID == 0) && !stillLive {
 				return nil // the process is gone
 			}
 		}
@@ -340,6 +358,12 @@ func (a *Adapter) waitLink(ctx context.Context, id string, since time.Time, shor
 	deadline := time.Now().Add(timeout)
 	lastCheck := time.Time{}
 	for {
+		// A running process with remote control on names its link in
+		// ~/.claude/sessions; that file belongs to the current process,
+		// so it is never a link from before a resume.
+		if u := a.live()[id].remoteURL(); u != "" {
+			return u, nil
+		}
 		t, _ := a.transcript(id)
 		if t.RemoteURL != "" {
 			if since.IsZero() || !t.RemoteURLAt.Before(since.Add(-linkSkew)) {

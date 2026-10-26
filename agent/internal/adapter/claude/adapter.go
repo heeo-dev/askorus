@@ -75,6 +75,10 @@ type Adapter struct {
 	poll     time.Duration
 
 	srv *servers // folder servers (F10)
+
+	// live returns the running session processes and their remote links
+	// (~/.claude/sessions/<pid>.json, see livesessions.go).
+	live func() map[string]liveSession
 }
 
 // DefaultClaudeDir is $CLAUDE_CONFIG_DIR or ~/.claude.
@@ -111,6 +115,8 @@ func New(opts Options) *Adapter {
 		start:   startPTY,
 		pointer: livePointer(projects),
 	}
+	sessionsDir := filepath.Join(opts.ClaudeDir, "sessions")
+	a.live = func() map[string]liveSession { return readLiveSessions(sessionsDir, processAlive) }
 	return a
 }
 
@@ -194,8 +200,13 @@ func (a *Adapter) ListSessions(ctx context.Context) (core.ListResult, error) {
 		return core.ListResult{}, err
 	}
 	entries, agentsOK := ar.entries, ar.ok
+	live := a.live()
+	if agentsOK {
+		entries = withLive(entries, live)
+	}
 	res := core.ListResult{Sessions: merge(ts, entries, agentsOK)}
 	markServerSessions(res.Sessions, a.srv.serverSessions(entries, processParents))
+	applyLive(res.Sessions, live)
 	if !agentsOK {
 		res.Warnings = append(res.Warnings, WarnAgentsUnavailable)
 	}
@@ -276,6 +287,26 @@ func (a *Adapter) Warm(ctx context.Context) {
 // merge builds the session list. Without the process list every state is
 // unknown, because a "history" guess could make the app resume a session
 // that is open elsewhere.
+// applyLive takes the current remote link from the running process when
+// remote control is on. A terminal session with it on gets an "rc" badge:
+// the app can open it directly instead of asking for /rc.
+func applyLive(ss []core.Session, live map[string]liveSession) {
+	if len(live) == 0 {
+		return
+	}
+	for i := range ss {
+		_, native, _ := core.ParseID(ss[i].ID)
+		u := live[native].remoteURL()
+		if u == "" {
+			continue
+		}
+		ss[i].RemoteURL = u
+		if ss[i].State == core.StateTerminal {
+			ss[i].Badges = append(ss[i].Badges, "rc")
+		}
+	}
+}
+
 // markServerSessions shows sessions a folder server runs as running with a
 // "server" badge: claude lists them as interactive, but nobody types in a
 // terminal there; they are reached through the official app.

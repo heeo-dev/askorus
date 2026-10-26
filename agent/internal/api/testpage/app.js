@@ -5,7 +5,7 @@
 const $ = (id) => document.getElementById(id);
 const KEY = "asksemble-test-token";
 
-const badgeNames = { server: "폴더 서버", desktop: "데스크톱 앱" };
+const badgeNames = { server: "폴더 서버", desktop: "데스크톱 앱", rc: "원격 켜짐" };
 const stateNames = { running: "실행 중", stopped: "멈춤", terminal: "터미널", history: "기록만", unknown: "알 수 없음" };
 const errorNames = {
   pair_closed: "PC에 열린 짝 맺기 창이 없습니다. PC에서 pair를 다시 실행하세요.",
