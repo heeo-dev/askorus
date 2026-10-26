@@ -77,7 +77,7 @@ async function call(method, path, body) {
 function showUse() {
   $("pair").hidden = !!token();
   $("use").hidden = !token();
-  if (token() && !$("folder").value) loadFolders();
+  if (token() && !$("folder").value) { loadFolders(); loadServe(); }
 }
 
 // The code arrives in the URL fragment, which is never sent to a server.
@@ -299,6 +299,59 @@ async function loadFolders() {
   }
 }
 $("folderBtn").addEventListener("click", loadFolders);
+
+// Folder servers (F10).
+const serveNames = {
+  off: "꺼짐", starting: "켜는 중", running: "열려 있음", failed: "꺼짐(다시 켜는 중)",
+  untrusted: "PC에서 신뢰 필요", external: "다른 서버가 실행 중",
+};
+let servePoll = 0;
+
+function renderServeFolder(f) {
+  const li = el("li");
+  li.append(el("div", "title", f.name));
+  const st = f.status || { state: "off" };
+  const parts = [serveNames[st.state] || st.state];
+  if (st.state === "running") parts.push("세션 " + st.sessions + "/" + (st.capacity || f.server.capacity));
+  if (f.server.enabled) parts.push(f.server.spawn === "worktree" ? "worktree" : "같은 폴더");
+  li.append(el("div", "meta", parts.join(" · ") + " · " + f.path));
+  if (st.state === "untrusted") {
+    li.append(el("div", "msg err", "PC에서 이 폴더로 claude를 한 번 실행해 신뢰를 허용하세요. 1분마다 다시 확인합니다."));
+  } else if (st.error && st.state !== "running") {
+    li.append(el("div", "msg", st.error));
+  }
+  const msg = el("div", "msg");
+  const b = el("button", f.server.enabled ? "secondary" : "", f.server.enabled ? "끄기" : "켜기");
+  b.addEventListener("click", async () => {
+    b.disabled = true;
+    try {
+      await call("PUT", "folders/" + encodeURIComponent(f.id) + "/server", { enabled: !f.server.enabled });
+      servePoll = 10; // follow the change for a while
+      await loadServe();
+    } catch (e) {
+      say(msg, e.message, true);
+      b.disabled = false;
+    }
+  });
+  li.append(b, msg);
+  return li;
+}
+
+async function loadServe() {
+  try {
+    const r = await call("GET", "folders");
+    $("serveList").replaceChildren(...r.folders.map(renderServeFolder));
+    if (!r.folders.length) $("serveList").append(el("li", "msg", "허용된 폴더가 없습니다."));
+    const moving = r.folders.some((f) => f.status && ["starting", "failed"].includes(f.status.state));
+    if (servePoll > 0 || moving) {
+      servePoll--;
+      setTimeout(loadServe, 2000);
+    }
+  } catch (e) {
+    $("serveList").replaceChildren(el("li", "msg err", e.message));
+  }
+}
+$("serveBtn").addEventListener("click", loadServe);
 
 $("newBtn").addEventListener("click", async () => {
   if (!$("folder").value) {
