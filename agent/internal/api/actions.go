@@ -40,6 +40,7 @@ var actionStatus = map[string]int{
 	core.ErrCodeLaunchFailed:     http.StatusBadGateway,
 	core.ErrCodeFolderNotFound:   http.StatusNotFound,
 	core.ErrCodeAgentUnavailable: http.StatusServiceUnavailable,
+	core.ErrCodeServiceElevated:  http.StatusServiceUnavailable,
 }
 
 func (s *Server) actionError(w http.ResponseWriter, err error) {

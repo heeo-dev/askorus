@@ -126,6 +126,26 @@ func (p *ptyProc) Close() {
 
 func ptySupported() bool { return true }
 
+// processElevated reports whether pid runs as administrator. A normal
+// process may not open an elevated process's token; that refusal itself
+// says it is elevated.
+func processElevated(pid int) (elevated, known bool) {
+	h, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, uint32(pid))
+	if err != nil {
+		return false, false
+	}
+	defer windows.CloseHandle(h)
+	var tok windows.Token
+	if err := windows.OpenProcessToken(h, windows.TOKEN_QUERY, &tok); err != nil {
+		return err == windows.ERROR_ACCESS_DENIED, err == windows.ERROR_ACCESS_DENIED
+	}
+	defer tok.Close()
+	return tok.IsElevated(), true
+}
+
+// selfElevated reports whether this process runs as administrator.
+func selfElevated() bool { return windows.GetCurrentProcessToken().IsElevated() }
+
 // processParents maps each running process id to its parent's. Sessions a
 // folder server creates run as its child processes.
 func processParents() map[int]int {

@@ -15,3 +15,7 @@ func ptySupported() bool { return false }
 func processAlive(pid int, procStart string) bool { return false }
 
 func processParents() map[int]int { return nil }
+
+func processElevated(pid int) (elevated, known bool) { return false, false }
+
+func selfElevated() bool { return false }

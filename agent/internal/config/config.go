@@ -44,6 +44,9 @@ type Config struct {
 	TailscaleOwner string `json:"tailscaleOwner,omitempty"`
 	// ClaudePath overrides where the claude executable is looked up.
 	ClaudePath string `json:"claudePath,omitempty"`
+	// KeepAwake stops the PC from sleeping while a background session or a
+	// folder server runs (design: 절전). Off by default.
+	KeepAwake bool `json:"keepAwake,omitempty"`
 }
 
 // Folder is a folder new sessions may be started in (F4).

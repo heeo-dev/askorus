@@ -1,0 +1,445 @@
+package main
+
+import (
+	"bufio"
+	"context"
+	"errors"
+	"flag"
+	"fmt"
+	"io"
+	"net"
+	"os"
+	"path/filepath"
+	"runtime"
+	"slices"
+	"strconv"
+	"time"
+
+	"github.com/asksemble/asksemble/agent/internal/adapter/claude"
+	"github.com/asksemble/asksemble/agent/internal/config"
+	"github.com/asksemble/asksemble/agent/internal/core"
+	"github.com/asksemble/asksemble/agent/internal/devices"
+	"github.com/asksemble/asksemble/agent/internal/tailnet"
+)
+
+// Installing and running the agent on the PC (A5, design: PC 설치 흐름).
+
+// agentListening reports whether something answers on 127.0.0.1:port.
+func agentListening(port int) bool {
+	c, err := net.DialTimeout("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)), 500*time.Millisecond)
+	if err != nil {
+		return false
+	}
+	c.Close()
+	return true
+}
+
+func waitListening(port int, want bool, d time.Duration) bool {
+	deadline := time.Now().Add(d)
+	for time.Now().Before(deadline) {
+		if agentListening(port) == want {
+			return true
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	return agentListening(port) == want
+}
+
+// startCmd runs `serve` in the background without a window.
+func startCmd(dir string, args []string, out io.Writer) error {
+	fs := flag.NewFlagSet("start", flag.ContinueOnError)
+	testPage := fs.Bool("test-page", false, "serve the phone-browser test page")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if !controlSupported() {
+		return fail("start is only supported on Windows for now; run `asksemble-agent serve`", "start는 지금 Windows에서만 됩니다. `asksemble-agent serve`를 쓰세요")
+	}
+	cfg, err := config.Load(dir)
+	if err != nil {
+		return err
+	}
+	if agentListening(cfg.Port) {
+		say(out, m("the agent already runs on 127.0.0.1:%d", "에이전트가 이미 127.0.0.1:%d에서 돌고 있습니다", cfg.Port))
+		return nil
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "logs"), 0o700); err != nil {
+		return err
+	}
+	serveArgs := []string{"serve"}
+	if *testPage {
+		serveArgs = append(serveArgs, "-test-page")
+	}
+	pid, err := startDetached(exe, serveArgs, dir, filepath.Join(dir, "logs", "background.out"))
+	if err != nil {
+		return err
+	}
+	if !waitListening(cfg.Port, true, 15*time.Second) {
+		return fail("the agent (pid %d) did not start listening; see %s", "에이전트(pid %d)가 열리지 않았습니다. %s를 보세요", pid, filepath.Join(dir, "logs", "background.out"))
+	}
+	say(out, m("the agent runs in the background on 127.0.0.1:%d (pid %d); stop it with: asksemble-agent shutdown",
+		"에이전트가 백그라운드에서 127.0.0.1:%d로 돕니다 (pid %d). 끄려면: asksemble-agent shutdown", cfg.Port, pid))
+	return nil
+}
+
+// shutdownCmd asks the running agent to stop; it stops its folder servers
+// with Ctrl+C first.
+func shutdownCmd(dir string, out io.Writer) error {
+	cfg, err := config.Load(dir)
+	if err != nil {
+		return err
+	}
+	if err := signalStop(cfg.Port); err != nil {
+		if !agentListening(cfg.Port) {
+			say(out, m("the agent is not running", "에이전트가 돌고 있지 않습니다"))
+			return nil
+		}
+		return fail("the agent on 127.0.0.1:%d did not take the stop signal (started from another account?)",
+			"127.0.0.1:%d의 에이전트가 멈춤 신호를 받지 않았습니다 (다른 계정에서 켰나요?)", cfg.Port)
+	}
+	if !waitListening(cfg.Port, false, 20*time.Second) {
+		return fail("the agent is still running after 20 s", "20초가 지나도 에이전트가 돌고 있습니다")
+	}
+	say(out, m("the agent stopped", "에이전트를 멈췄습니다"))
+	return nil
+}
+
+func statusCmd(dir string, out io.Writer) error {
+	cfg, err := config.Load(dir)
+	if err != nil {
+		return err
+	}
+	if agentListening(cfg.Port) {
+		say(out, m("running on 127.0.0.1:%d", "127.0.0.1:%d에서 돌고 있습니다", cfg.Port))
+	} else {
+		say(out, m("not running", "돌고 있지 않습니다"))
+	}
+	if a := autostartGet(); a != "" {
+		say(out, m("starts at logon: %s", "로그인할 때 켜짐: %s", a))
+	} else {
+		say(out, m("does not start at logon (asksemble-agent autostart on)", "로그인할 때 켜지지 않음 (asksemble-agent autostart on)"))
+	}
+	return nil
+}
+
+func autostartCmd(args []string, out io.Writer) error {
+	if len(args) != 1 || !slices.Contains([]string{"on", "off", "status"}, args[0]) {
+		return fail("usage: asksemble-agent autostart on|off|status", "사용법: asksemble-agent autostart on|off|status")
+	}
+	switch args[0] {
+	case "on":
+		if !controlSupported() {
+			return fail("autostart is only supported on Windows for now", "자동 시작은 지금 Windows에서만 됩니다")
+		}
+		if claude.SelfElevated() {
+			return fail("run this from a normal (not administrator) terminal, so the agent starts with normal rights",
+				"관리자가 아닌 일반 터미널에서 실행하세요. 그래야 에이전트가 일반 권한으로 켜집니다")
+		}
+		exe, err := os.Executable()
+		if err != nil {
+			return err
+		}
+		if err := autostartSet(exe); err != nil {
+			return err
+		}
+		say(out, m("the agent starts at logon for this user, with normal rights: %s", "이 사용자로 로그인할 때 에이전트가 일반 권한으로 켜집니다: %s", autostartCommand(exe)))
+	case "off":
+		if err := autostartRemove(); err != nil {
+			return err
+		}
+		say(out, m("the agent no longer starts at logon", "로그인할 때 에이전트가 켜지지 않게 했습니다"))
+	default:
+		if a := autostartGet(); a != "" {
+			say(out, m("on: %s", "켜짐: %s", a))
+		} else {
+			say(out, m("off", "꺼짐"))
+		}
+	}
+	return nil
+}
+
+// checkLine prints one check: ok, warn or bad.
+type checker struct {
+	out  io.Writer
+	bad  int
+	warn int
+}
+
+func (c *checker) line(level string, x msg) {
+	mark := map[string]string{"ok": "[ok]  ", "warn": "[!]   ", "bad": "[X]   ", "info": "[i]   "}[level]
+	switch level {
+	case "bad":
+		c.bad++
+	case "warn":
+		c.warn++
+	}
+	fmt.Fprintf(c.out, "%s%s\n      %s\n", mark, x.en, x.ko)
+}
+
+// checkCmd looks at everything the agent needs (design: PC 설치 흐름).
+// It only reads; the fixes it prints are for the person to run.
+func checkCmd(dir string, out io.Writer) error {
+	c := &checker{out: out}
+	ctx := context.Background()
+	cfg, err := config.Load(dir)
+	if err != nil {
+		c.line("bad", m("settings: %v", "설정 파일: %v", err))
+		return errors.New("check failed")
+	}
+	if claude.SelfElevated() {
+		c.line("bad", m("this terminal runs as administrator; run the agent from a normal terminal (sessions would get full rights)",
+			"이 터미널은 관리자 권한입니다. 에이전트는 일반 터미널에서 켜세요 (세션이 모든 권한을 갖게 됨)"))
+	} else {
+		c.line("ok", m("normal user rights", "일반 사용자 권한"))
+	}
+
+	adapter, err := newAdapter(cfg)
+	if err != nil {
+		return err
+	}
+	info := adapter.Info(ctx)
+	if info.Available {
+		c.line("ok", m("Claude Code %s found", "Claude Code %s 찾음", info.Version))
+	} else {
+		c.line("bad", m("Claude Code not found or not working: install it and sign in", "Claude Code를 찾지 못했거나 동작하지 않습니다. 설치하고 로그인하세요"))
+	}
+	for _, n := range info.Notices {
+		switch n {
+		case claude.NoticeServiceElevated:
+			c.line("bad", m("the Claude background service runs as administrator; in an administrator terminal run: claude daemon stop --any",
+				"Claude 백그라운드 서비스가 관리자 권한입니다. 관리자 터미널에서 실행하세요: claude daemon stop --any"))
+		case claude.NoticeRCDisabledEnv:
+			c.line("bad", m("CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC or DISABLE_GROWTHBOOK is set: Remote Control cannot work",
+				"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC 또는 DISABLE_GROWTHBOOK이 켜져 있어 Remote Control을 쓸 수 없습니다"))
+		}
+	}
+
+	ti := lookTailnet(ctx, cfg.Port)
+	var be biError
+	if errors.As(ti.problem, &be) {
+		c.line("bad", msg{"Tailscale: " + be.en, "Tailscale: " + be.ko})
+	} else {
+		c.line("ok", m("Tailscale connected as %s (%s)", "Tailscale 연결됨: %s (%s)", ti.status.OwnerLogin, ti.status.DNSName))
+		if !ti.status.HTTPS {
+			c.line("bad", m("HTTPS certificates are off for the tailnet: turn on MagicDNS and HTTPS in the Tailscale admin console",
+				"tailnet에 HTTPS 인증서가 꺼져 있습니다. Tailscale 관리 화면에서 MagicDNS와 HTTPS를 켜세요"))
+		}
+		switch {
+		case ti.served && ti.serve.Funnel:
+			c.line("bad", m("tailscale funnel exposes the agent port to the internet; turn it off: tailscale funnel --https=%d off",
+				"tailscale funnel이 에이전트 포트를 인터넷에 엽니다. 끄세요: tailscale funnel --https=%d off", ti.serve.HTTPSPort))
+		case ti.served:
+			c.line("ok", m("phones reach the agent at https://%s:%d", "폰은 https://%s:%d로 에이전트에 닿습니다", ti.serve.Host, ti.serve.HTTPSPort))
+		default:
+			port := suggestServePort(ctx, cfg.Port)
+			c.line("bad", m("tailscale serve does not point at the agent yet; run: tailscale serve --bg --https=%d http://127.0.0.1:%d",
+				"tailscale serve가 아직 에이전트를 가리키지 않습니다. 실행하세요: tailscale serve --bg --https=%d http://127.0.0.1:%d", port, cfg.Port))
+		}
+	}
+
+	if agentListening(cfg.Port) {
+		c.line("ok", m("the agent runs on 127.0.0.1:%d", "에이전트가 127.0.0.1:%d에서 돌고 있습니다", cfg.Port))
+	} else {
+		c.line("warn", m("the agent is not running: asksemble-agent start", "에이전트가 돌고 있지 않습니다: asksemble-agent start"))
+	}
+	if controlSupported() {
+		if autostartGet() != "" {
+			c.line("ok", m("starts at logon", "로그인할 때 켜짐"))
+		} else {
+			c.line("warn", m("does not start at logon: asksemble-agent autostart on", "로그인할 때 켜지지 않습니다: asksemble-agent autostart on"))
+		}
+	}
+
+	if store, err := devices.Open(dir); err == nil {
+		if list, _ := store.List(); len(list) > 0 {
+			c.line("ok", m("%d paired devices", "짝 맺은 기기 %d개", len(list)))
+		} else {
+			c.line("warn", m("no paired phone yet: asksemble-agent pair", "아직 짝 맺은 폰이 없습니다: asksemble-agent pair"))
+		}
+	}
+
+	if len(cfg.Folders) == 0 {
+		c.line("warn", m("no folders for new sessions: asksemble-agent folders add PATH", "새 세션에 쓸 폴더가 없습니다: asksemble-agent folders add 경로"))
+	}
+	for _, f := range cfg.Folders {
+		if info, err := os.Stat(f.Path); err != nil || !info.IsDir() {
+			c.line("bad", m("folder %q is missing: %s", "%q 폴더가 없습니다: %s", f.ID, f.Path))
+			continue
+		}
+		srv := ""
+		if f.Server.Enabled {
+			srv = " (kept open)"
+		}
+		c.line("ok", m("folder %q: %s%s", "폴더 %q: %s%s", f.ID, f.Path, srv))
+	}
+
+	switch s := sleepAfterAC(); {
+	case s == 0:
+		c.line("ok", m("the PC does not sleep on AC power", "PC가 전원 연결 중에는 잠들지 않습니다"))
+	case s > 0 && !cfg.KeepAwake:
+		c.line("warn", m("the PC sleeps after %d minutes idle; a sleeping PC cannot be reached from the phone. Change the power settings, or set \"keepAwake\": true in %s",
+			"PC가 %d분 동안 쓰지 않으면 잠듭니다. 잠든 PC에는 폰에서 닿을 수 없습니다. 전원 설정을 바꾸거나 %s에 \"keepAwake\": true를 넣으세요",
+			s/60, filepath.Join(dir, config.FileName)))
+	case s > 0:
+		c.line("ok", m("the PC sleeps after %d minutes idle, but the agent keeps it awake while sessions run", "PC가 %d분 뒤 잠들지만, 세션이 도는 동안은 에이전트가 깨워 둡니다", s/60))
+	}
+
+	c.line("info", m("once per PC, run `claude --rc` in a terminal and accept the Remote Control prompt", "PC마다 한 번, 터미널에서 `claude --rc`를 실행해 Remote Control 동의를 하세요"))
+	c.line("info", m("to get pushes on the phone, turn on \"Push when actions required\" and \"Push when Claude decides\" in Claude Code /config",
+		"폰으로 알림을 받으려면 Claude Code /config에서 \"Push when actions required\"와 \"Push when Claude decides\"를 켜세요"))
+
+	fmt.Fprintln(out)
+	if c.bad > 0 {
+		say(out, m("%d problems, %d warnings", "문제 %d개, 주의 %d개", c.bad, c.warn))
+		return errors.New("check found problems")
+	}
+	say(out, m("ready (%d warnings)", "준비됨 (주의 %d개)", c.warn))
+	return nil
+}
+
+// suggestServePort picks an HTTPS port tailscale serve does not use yet,
+// preferring the agent's own port number.
+func suggestServePort(ctx context.Context, localPort int) int {
+	used := map[int]bool{}
+	if c, err := tailnet.New(); err == nil {
+		if ports, err := c.ServePorts(ctx); err == nil {
+			for _, p := range ports {
+				used[p] = true
+			}
+		}
+	}
+	for p := localPort; p < localPort+100; p++ {
+		if !used[p] {
+			return p
+		}
+	}
+	return localPort
+}
+
+// uninstallAutostart is replaced in tests so they never touch the real
+// logon entry.
+var uninstallAutostart = autostartRemove
+
+// uninstallCmd undoes what installing set up: the background agent, the
+// logon entry, the agent's own tailscale serve port and the device token
+// hashes. Other serve settings and Claude Code are left alone.
+func uninstallCmd(dir string, args []string, in io.Reader, out io.Writer) error {
+	fs := flag.NewFlagSet("uninstall", flag.ContinueOnError)
+	yes := fs.Bool("yes", false, "do not ask")
+	all := fs.Bool("all", false, "also delete settings and logs (the whole agent folder)")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	cfg, err := config.Load(dir)
+	if err != nil {
+		return err
+	}
+	ctx := context.Background()
+	ti := lookTailnet(ctx, cfg.Port)
+	plan := []msg{
+		m("stop the agent if it runs", "돌고 있으면 에이전트를 멈춤"),
+		m("remove the logon entry", "로그인할 때 켜기를 없앰"),
+		m("disconnect every paired phone (delete %s)", "짝 맺은 폰을 모두 끊음 (%s 삭제)", devices.FileName),
+	}
+	if ti.served {
+		plan = append(plan, m("turn off tailscale serve on https://%s:%d (only this port)", "tailscale serve의 https://%s:%d만 끔 (이 포트만)", ti.serve.Host, ti.serve.HTTPSPort))
+	}
+	if *all {
+		plan = append(plan, m("delete %s", "%s 삭제", dir))
+	}
+	say(out, m("This will:", "다음을 합니다:"))
+	for _, p := range plan {
+		fmt.Fprintf(out, "  - %s / %s\n", p.en, p.ko)
+	}
+	if !*yes {
+		fmt.Fprint(out, "[y/N]: ")
+		line, _ := bufio.NewReader(in).ReadString('\n')
+		if !yesAnswers[normalizeAnswer(line)] {
+			say(out, m("nothing was changed", "아무것도 바꾸지 않았습니다"))
+			return nil
+		}
+	}
+	if agentListening(cfg.Port) {
+		if err := shutdownCmd(dir, out); err != nil {
+			return err
+		}
+	}
+	if err := uninstallAutostart(); err != nil {
+		return err
+	}
+	for _, f := range []string{devices.FileName, "pairing.json", "pairing-request.json", "pairing-decision.json", "pairing-result.json", "pairing-qr.png"} {
+		os.Remove(filepath.Join(dir, f))
+	}
+	if ti.served {
+		if c, err := tailnet.New(); err == nil {
+			if err := c.ServeOff(ctx, ti.serve.HTTPSPort); err != nil {
+				say(out, m("could not turn off tailscale serve (%v); run: tailscale serve --https=%d off",
+					"tailscale serve를 끄지 못했습니다 (%v). 직접 실행하세요: tailscale serve --https=%d off", err, ti.serve.HTTPSPort))
+			}
+		}
+	}
+	if *all {
+		if err := os.RemoveAll(dir); err != nil {
+			return err
+		}
+	}
+	say(out, m("uninstalled; delete asksemble-agent.exe yourself", "지웠습니다. asksemble-agent.exe 파일은 직접 지우세요"))
+	return nil
+}
+
+// funnelWatch ends serve when tailscale funnel opens the agent port to
+// the internet while it runs (design 보안: Funnel이면 시작을 거부).
+func funnelWatch(ctx context.Context, port int, every time.Duration, onFunnel func()) {
+	t := time.NewTicker(every)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+		if ti := lookTailnet(ctx, port); ti.served && ti.serve.Funnel {
+			onFunnel()
+			return
+		}
+	}
+}
+
+// awakeWatch keeps the PC awake while a background session or a folder
+// server runs, when the settings ask for it.
+func awakeWatch(ctx context.Context, dir string, a core.Adapter, srv core.Server, every time.Duration) {
+	// Windows keeps the "stay awake" request per thread.
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	t := time.NewTicker(every)
+	defer t.Stop()
+	defer keepAwake(false)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+		cfg, err := config.Load(dir)
+		if err != nil || !cfg.KeepAwake {
+			keepAwake(false)
+			continue
+		}
+		busy := len(srv.ServerFolders()) > 0
+		if !busy {
+			if res, err := a.ListSessions(ctx); err == nil {
+				for _, s := range res.Sessions {
+					if s.State == core.StateRunning {
+						busy = true
+						break
+					}
+				}
+			}
+		}
+		keepAwake(busy)
+	}
+}

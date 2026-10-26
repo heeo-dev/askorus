@@ -165,6 +165,9 @@ func (a *Adapter) Open(ctx context.Context, id string) (core.OpenResult, error) 
 		title = sessionName(firstNonEmpty(t.Title, "asksemble "+id[:8]))
 		args = append([]string{"--bg", "--resume", id, "--remote-control", "-n", title}, a.modelArgs("", "")...)
 	}
+	if err := a.checkService(); err != nil {
+		return core.OpenResult{}, err
+	}
 	start := time.Now()
 	res, err := a.runner.RunFor(ctx, launchTimeout, folder, args...)
 	a.Invalidate()
@@ -196,6 +199,9 @@ func (a *Adapter) Start(ctx context.Context, req core.StartRequest) (core.OpenRe
 		name = sessionName(filepath.Base(req.Folder) + " " + time.Now().Format("01-02 15:04"))
 	}
 	args := append([]string{"--bg", "--remote-control", name, "-n", name}, a.modelArgs(req.Model, req.Effort)...)
+	if err := a.checkService(); err != nil {
+		return core.OpenResult{}, err
+	}
 	start := time.Now()
 	res, err := a.runner.RunFor(ctx, launchTimeout, req.Folder, args...)
 	a.Invalidate()

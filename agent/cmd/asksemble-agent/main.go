@@ -82,6 +82,18 @@ Usage / 사용법:
   asksemble-agent hidden [list | unhide SESSION_ID]
       sessions removed from the list
       목록에서 지운 세션
+  asksemble-agent check
+      check everything the agent needs and print fixes
+      에이전트에 필요한 것을 점검하고 고칠 방법을 보여 줍니다
+  asksemble-agent start [-test-page] | shutdown | status
+      run the agent in the background, stop it, or show whether it runs
+      에이전트를 백그라운드로 켜고, 끄고, 상태를 봅니다
+  asksemble-agent autostart on|off|status
+      start the agent at logon, with normal rights
+      로그인할 때 에이전트를 일반 권한으로 켭니다
+  asksemble-agent uninstall [-yes] [-all]
+      undo the setup (logon entry, the agent's serve port, paired phones)
+      설치한 것을 되돌립니다 (자동 시작, 에이전트 serve 포트, 짝 맺은 폰)
   asksemble-agent version
 
 Settings live in %s (override with ASKSEMBLE_AGENT_DIR).
@@ -130,6 +142,18 @@ func run(args []string, in io.Reader, out io.Writer) error {
 		return rmCmd(dir, args[1:], out)
 	case "hidden":
 		return hiddenCmd(dir, args[1:], out)
+	case "start":
+		return startCmd(dir, args[1:], out)
+	case "shutdown":
+		return shutdownCmd(dir, out)
+	case "status":
+		return statusCmd(dir, out)
+	case "autostart":
+		return autostartCmd(args[1:], out)
+	case "check":
+		return checkCmd(dir, out)
+	case "uninstall":
+		return uninstallCmd(dir, args[1:], in, out)
 	}
 	return fail("unknown command %q (try: asksemble-agent help)", "모르는 명령 %q입니다 (asksemble-agent help로 확인하세요)", args[0])
 }
@@ -203,6 +227,11 @@ func serve(dir string, args []string) error {
 	testPage := fs.Bool("test-page", false, "serve the phone-browser test page at /test/")
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+	// N3: every session the agent starts inherits its rights.
+	if claude.SelfElevated() {
+		return fail("refusing to run as administrator: sessions started from here would get full rights. Start the agent from a normal terminal",
+			"관리자 권한으로는 실행하지 않습니다. 여기서 켠 세션이 모든 권한을 갖게 됩니다. 일반 터미널에서 에이전트를 켜세요")
 	}
 	cfg, err := config.Load(dir)
 	if err != nil {
@@ -301,6 +330,10 @@ func serve(dir string, args []string) error {
 	go adapter.Warm(ctx)
 	recCtx, stopRec := context.WithCancel(ctx)
 	go rec.run(recCtx)
+	exposed := make(chan struct{})
+	go funnelWatch(recCtx, cfg.Port, time.Minute, func() { close(exposed) })
+	go awakeWatch(recCtx, dir, adapter, adapter, time.Minute)
+	stopReq := listenStop(cfg.Port) // `asksemble-agent shutdown`
 	errc := make(chan error, 1)
 	go func() { errc <- srv.Serve(ln) }()
 	var serveErr error
@@ -310,6 +343,12 @@ func serve(dir string, args []string) error {
 			serveErr = err
 		}
 	case <-ctx.Done():
+	case <-stopReq:
+		logger.Info("stop requested")
+	case <-exposed:
+		logger.Error("tailscale funnel exposes the agent port; stopping")
+		serveErr = fail("tailscale funnel now exposes the agent port to the internet; stopped. Turn it off first",
+			"tailscale funnel이 에이전트 포트를 인터넷에 열어서 멈췄습니다. 먼저 끄세요")
 	}
 	shutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

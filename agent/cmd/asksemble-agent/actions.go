@@ -77,6 +77,8 @@ func explain(err error) error {
 		core.ErrCodeLaunchFailed:     m("claude failed", "claude 실행이 실패했습니다"),
 		core.ErrCodeFolderNotFound:   m("the folder does not exist", "폴더가 없습니다"),
 		core.ErrCodeAgentUnavailable: m("claude was not found", "claude를 찾지 못했습니다"),
+		core.ErrCodeServiceElevated: m("the Claude background service runs as administrator; stop it from an administrator terminal: claude daemon stop --any",
+			"Claude 백그라운드 서비스가 관리자 권한으로 돌고 있습니다. 관리자 터미널에서 멈추세요: claude daemon stop --any"),
 	}
 	x, ok := texts[ae.Code]
 	if !ok {

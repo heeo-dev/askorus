@@ -48,6 +48,28 @@ func TestParseServe(t *testing.T) {
 	}
 }
 
+func TestParseServePortsAndHTTPS(t *testing.T) {
+	ports, err := ParseServePorts([]byte(`{"TCP":{"443":{"HTTPS":true},"8443":{"HTTPS":true}},"Web":{"pc.ts.net:8790":{}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[int]bool{}
+	for _, p := range ports {
+		got[p] = true
+	}
+	if len(ports) != 3 || !got[443] || !got[8443] || !got[8790] {
+		t.Errorf("ports = %v", ports)
+	}
+	s, _ := ParseStatus([]byte(`{"BackendState":"Running","CertDomains":["pc.example.ts.net"]}`))
+	if !s.HTTPS {
+		t.Error("HTTPS not seen")
+	}
+	s, _ = ParseStatus([]byte(`{"BackendState":"Running"}`))
+	if s.HTTPS {
+		t.Error("HTTPS without cert domains")
+	}
+}
+
 func TestIsTailnetIP(t *testing.T) {
 	for _, ip := range []string{"100.64.0.1", "100.127.255.254", "fd7a:115c:a1e0::1", "::ffff:100.100.1.1"} {
 		if !IsTailnetIP(ip) {

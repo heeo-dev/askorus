@@ -76,6 +76,9 @@ const (
 	ErrCodeLaunchFailed     = "launch_failed"
 	ErrCodeFolderNotFound   = "folder_not_found"
 	ErrCodeAgentUnavailable = "agent_unavailable"
+	// The AI's background service runs as administrator, so a normal-rights
+	// agent can neither use nor stop it (구현 전 테스트 6).
+	ErrCodeServiceElevated = "service_elevated"
 )
 
 // Fail builds an ActionError.

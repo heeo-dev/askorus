@@ -79,6 +79,9 @@ type Adapter struct {
 	// live returns the running session processes and their remote links
 	// (~/.claude/sessions/<pid>.json, see livesessions.go).
 	live func() map[string]liveSession
+
+	// serviceCheck reports an elevated Claude service (daemon.go).
+	serviceCheck func() (elevated bool, pid int)
 }
 
 // DefaultClaudeDir is $CLAUDE_CONFIG_DIR or ~/.claude.
@@ -117,6 +120,7 @@ func New(opts Options) *Adapter {
 	}
 	sessionsDir := filepath.Join(opts.ClaudeDir, "sessions")
 	a.live = func() map[string]liveSession { return readLiveSessions(sessionsDir, processAlive) }
+	a.serviceCheck = func() (bool, int) { return serviceElevated(opts.ClaudeDir, processAlive, processElevated) }
 	return a
 }
 
@@ -167,6 +171,9 @@ func (a *Adapter) Info(ctx context.Context) core.AdapterInfo {
 	}
 	if os.Getenv("CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC") != "" || os.Getenv("DISABLE_GROWTHBOOK") != "" {
 		info.Notices = append(info.Notices, NoticeRCDisabledEnv)
+	}
+	if elevated, _ := a.serviceCheck(); elevated {
+		info.Notices = append(info.Notices, NoticeServiceElevated)
 	}
 	return info
 }

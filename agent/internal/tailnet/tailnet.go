@@ -1,5 +1,6 @@
-// Package tailnet reads Tailscale state with the tailscale CLI. It only runs
-// read-only commands; it never changes serve, funnel or any other setting.
+// Package tailnet reads Tailscale state with the tailscale CLI. Apart from
+// ServeOff (uninstall, the agent's own port, after confirmation) it only
+// runs read-only commands; it never changes funnel or any other setting.
 package tailnet
 
 import (
@@ -23,6 +24,7 @@ type Status struct {
 	Running    bool
 	DNSName    string // MagicDNS name without the trailing dot, lowercase
 	OwnerLogin string // login of the user this PC is signed in as
+	HTTPS      bool   // HTTPS certificates are enabled for the tailnet
 }
 
 // Serve is how tailscale serve exposes one local port.
@@ -100,11 +102,12 @@ func ParseStatus(b []byte) (Status, error) {
 		User map[string]struct {
 			LoginName string
 		}
+		CertDomains []string
 	}
 	if err := json.Unmarshal(b, &v); err != nil {
 		return Status{}, fmt.Errorf("tailscale status: %w", err)
 	}
-	s := Status{Running: v.BackendState == "Running"}
+	s := Status{Running: v.BackendState == "Running", HTTPS: len(v.CertDomains) > 0}
 	if v.Self != nil {
 		s.DNSName = strings.ToLower(strings.TrimSuffix(v.Self.DNSName, "."))
 		if u, ok := v.User[strconv.FormatInt(v.Self.UserID, 10)]; ok {
@@ -152,6 +155,58 @@ func ParseServe(b []byte, localPort int) (Serve, bool, error) {
 		return Serve{Host: strings.ToLower(host), HTTPSPort: port, Funnel: v.AllowFunnel[hostPort]}, true, nil
 	}
 	return Serve{}, false, nil
+}
+
+// ServePorts lists the HTTPS ports tailscale serve already uses, so a new
+// one can be picked without touching them.
+func (c *Client) ServePorts(ctx context.Context) ([]int, error) {
+	b, err := c.run(ctx, argsServeStatus)
+	if err != nil {
+		return nil, err
+	}
+	return ParseServePorts(b)
+}
+
+// ParseServePorts reads the used ports out of `tailscale serve status --json`.
+func ParseServePorts(b []byte) ([]int, error) {
+	if len(strings.TrimSpace(string(b))) == 0 {
+		return nil, nil
+	}
+	var v struct {
+		TCP map[string]json.RawMessage
+		Web map[string]json.RawMessage
+	}
+	if err := json.Unmarshal(b, &v); err != nil {
+		return nil, fmt.Errorf("tailscale serve status: %w", err)
+	}
+	seen := map[int]bool{}
+	var out []int
+	add := func(p string) {
+		if n, err := strconv.Atoi(p); err == nil && !seen[n] {
+			seen[n] = true
+			out = append(out, n)
+		}
+	}
+	for p := range v.TCP {
+		add(p)
+	}
+	for hp := range v.Web {
+		if _, p, err := net.SplitHostPort(hp); err == nil {
+			add(p)
+		}
+	}
+	return out, nil
+}
+
+// ServeOff turns off tailscale serve on one HTTPS port. The agent calls it
+// only from `uninstall`, after the person confirmed, and only for the port
+// that proxies to the agent; every other serve setting stays.
+func (c *Client) ServeOff(ctx context.Context, httpsPort int) error {
+	if httpsPort < 1 || httpsPort > 65535 {
+		return errors.New("bad port")
+	}
+	_, err := c.run(ctx, []string{"serve", "--https=" + strconv.Itoa(httpsPort), "off"})
+	return err
 }
 
 var (
