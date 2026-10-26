@@ -155,7 +155,7 @@ func (a *Adapter) Open(ctx context.Context, id string) (core.OpenResult, error) 
 	}
 	folder := firstNonEmpty(t.Cwd, e.Cwd)
 	if !dirExists(folder) {
-		return core.OpenResult{}, core.Fail(core.ErrCodeLaunchFailed, "the session's folder no longer exists")
+		return core.OpenResult{}, core.Fail(core.ErrCodeFolderMissing, folder)
 	}
 	var args []string
 	title := ""

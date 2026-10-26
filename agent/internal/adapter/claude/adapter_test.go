@@ -17,7 +17,9 @@ func testAdapter(t *testing.T) *Adapter {
 	agents, _ := filepath.Abs(filepath.Join("testdata", "agents.json"))
 	t.Setenv("ASKSEMBLE_FAKE_AGENTS", agents)
 	claudeDir := filepath.Dir(copyProjects(t))
-	return New(Options{ClaudeDir: claudeDir, ClaudePath: r.Path()})
+	a := New(Options{ClaudeDir: claudeDir, ClaudePath: r.Path()})
+	a.folderExists = func(string) bool { return true } // testdata folders are from another PC
+	return a
 }
 
 func sessionsByID(ss []core.Session) map[string]core.Session {

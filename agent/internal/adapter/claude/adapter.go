@@ -82,6 +82,9 @@ type Adapter struct {
 
 	// serviceCheck reports an elevated Claude service (daemon.go).
 	serviceCheck func() (elevated bool, pid int)
+
+	// folderExists tells whether a session's folder is still on the PC.
+	folderExists func(string) bool
 }
 
 // DefaultClaudeDir is $CLAUDE_CONFIG_DIR or ~/.claude.
@@ -121,6 +124,7 @@ func New(opts Options) *Adapter {
 	sessionsDir := filepath.Join(opts.ClaudeDir, "sessions")
 	a.live = func() map[string]liveSession { return readLiveSessions(sessionsDir, processAlive) }
 	a.serviceCheck = func() (bool, int) { return serviceElevated(opts.ClaudeDir, processAlive, processElevated) }
+	a.folderExists = dirExists
 	return a
 }
 
@@ -214,6 +218,7 @@ func (a *Adapter) ListSessions(ctx context.Context) (core.ListResult, error) {
 	res := core.ListResult{Sessions: merge(ts, entries, agentsOK)}
 	markServerSessions(res.Sessions, a.srv.serverSessions(entries, processParents))
 	applyLive(res.Sessions, live)
+	markMissingFolders(res.Sessions, a.folderExists)
 	if !agentsOK {
 		res.Warnings = append(res.Warnings, WarnAgentsUnavailable)
 	}
@@ -327,6 +332,29 @@ func markServerSessions(ss []core.Session, server map[string]bool) {
 			ss[i].State = core.StateRunning
 			ss[i].AttachCommand = ""
 			ss[i].Badges = append(ss[i].Badges, "server")
+		}
+	}
+}
+
+// markMissingFolders flags stopped and history sessions whose folder is
+// gone: resuming them would fail, so they offer no open mode. Each folder
+// is checked once per list.
+func markMissingFolders(ss []core.Session, exists func(string) bool) {
+	seen := map[string]bool{}
+	for i := range ss {
+		s := &ss[i]
+		if (s.State != core.StateStopped && s.State != core.StateHistory) || s.Folder == "" {
+			continue
+		}
+		ok, done := seen[s.Folder]
+		if !done {
+			ok = exists(s.Folder)
+			seen[s.Folder] = ok
+		}
+		if !ok {
+			s.Badges = append(s.Badges, core.BadgeFolderMissing)
+			s.OpenModes = []string{}
+			s.AttachCommand = ""
 		}
 	}
 }

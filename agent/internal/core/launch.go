@@ -79,7 +79,14 @@ const (
 	// The AI's background service runs as administrator, so a normal-rights
 	// agent can neither use nor stop it (구현 전 테스트 6).
 	ErrCodeServiceElevated = "service_elevated"
+	// The folder a stopped or history session ran in is gone from the PC,
+	// so it cannot be resumed.
+	ErrCodeFolderMissing = "session_folder_missing"
 )
+
+// BadgeFolderMissing marks a session that can no longer be opened because
+// its folder is gone; such sessions list no open modes.
+const BadgeFolderMissing = "folder_missing"
 
 // Fail builds an ActionError.
 func Fail(code, detail string) error { return &ActionError{Code: code, Detail: detail} }

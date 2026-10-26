@@ -103,5 +103,8 @@
   "sheet.copy": "Copy command",
   "sheet.copied": "Copied.",
   "sheet.close": "Close",
-  "sheet.cancel": "Cancel"
+  "sheet.cancel": "Cancel",
+  "badge.folder_missing": "Folder gone",
+  "error.session_folder_missing": "This session's folder was deleted from the PC, so it can't be opened.",
+  "sheet.folderMissing": "This session's folder was deleted from the PC, so it can't be opened. Remove it to clear it from the list."
 }

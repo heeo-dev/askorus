@@ -41,6 +41,7 @@ var actionStatus = map[string]int{
 	core.ErrCodeFolderNotFound:   http.StatusNotFound,
 	core.ErrCodeAgentUnavailable: http.StatusServiceUnavailable,
 	core.ErrCodeServiceElevated:  http.StatusServiceUnavailable,
+	core.ErrCodeFolderMissing:    http.StatusGone,
 }
 
 func (s *Server) actionError(w http.ResponseWriter, err error) {

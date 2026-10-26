@@ -5,7 +5,7 @@
 const $ = (id) => document.getElementById(id);
 const KEY = "asksemble-test-token";
 
-const badgeNames = { server: "폴더 서버", desktop: "데스크톱 앱", rc: "원격 켜짐" };
+const badgeNames = { server: "폴더 서버", desktop: "데스크톱 앱", rc: "원격 켜짐", folder_missing: "폴더 없음" };
 const stateNames = { running: "실행 중", stopped: "멈춤", terminal: "터미널", history: "기록만", unknown: "알 수 없음" };
 const errorNames = {
   pair_closed: "PC에 열린 짝 맺기 창이 없습니다. PC에서 pair를 다시 실행하세요.",
@@ -27,6 +27,7 @@ const errorNames = {
   remote_link_timeout: "세션은 떴지만 원격 링크가 생기지 않았습니다.",
   launch_failed: "PC에서 claude 실행이 실패했습니다.",
   folder_not_found: "허용된 폴더가 아닙니다.",
+  session_folder_missing: "이 세션의 폴더가 PC에서 지워져 열 수 없습니다.",
 };
 
 const REQ = "asksemble-test-request";
@@ -259,13 +260,15 @@ function renderSession(s) {
     buttons.append(b);
   };
   const path = "sessions/" + encodeURIComponent(s.id);
-  act("열기", "", async () => {
-    say(msg, "켜는 중… (보통 10~20초, 다른 화면에 다녀와도 됩니다)");
-    const started = performance.now();
-    const r = await runJob("POST", path + "/open", undefined, "열기: " + (s.title || s.name || ""));
-    showResult(msg, links, r);
-    msg.textContent += " · " + ((performance.now() - started) / 1000).toFixed(1) + "초";
-  });
+  if ((s.openModes || []).length) {
+    act("열기", "", async () => {
+      say(msg, "켜는 중… (보통 10~20초, 다른 화면에 다녀와도 됩니다)");
+      const started = performance.now();
+      const r = await runJob("POST", path + "/open", undefined, "열기: " + (s.title || s.name || ""));
+      showResult(msg, links, r);
+      msg.textContent += " · " + ((performance.now() - started) / 1000).toFixed(1) + "초";
+    });
+  }
   if (s.state === "running") {
     act("멈추기", "secondary", async () => {
       say(msg, "멈추는 중…");

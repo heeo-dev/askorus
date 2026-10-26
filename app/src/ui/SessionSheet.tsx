@@ -169,6 +169,7 @@ export function SessionSheet({
           {session.model ? <Row th={th} name={t('sheet.model')} value={session.model} /> : null}
           {session.lastPrompt ? <Row th={th} name={t('sheet.lastPrompt')} value={session.lastPrompt} /> : null}
 
+          {session.badges?.includes('folder_missing') ? <Text style={s.note}>{t('sheet.folderMissing')}</Text> : null}
           {note ? <Text style={note.error ? s.error : s.note}>{note.text}</Text> : null}
 
           {busy === 'open' ? (
