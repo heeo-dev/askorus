@@ -116,6 +116,17 @@ func (a *Adapter) Open(ctx context.Context, id string) (core.OpenResult, error) 
 	}
 	switch state {
 	case core.StateTerminal:
+		if a.srv.serverSessions([]agentEntry{e}, processParents)[id] {
+			// A folder server runs it: reachable in the official app, and
+			// never resumed from here.
+			s := a.sessionWith(id, e, core.StateRunning)
+			s.AttachCommand = ""
+			s.Badges = append(s.Badges, "server")
+			if t.RemoteURL != "" {
+				return core.OpenResult{Session: s, RemoteURL: t.RemoteURL, Action: core.ActionNone}, nil
+			}
+			return core.OpenResult{Session: s, Action: core.ActionNone, Hint: core.HintServerSession}, nil
+		}
 		return core.OpenResult{Session: a.sessionWith(id, e, state), Action: core.ActionNone, Hint: core.HintUseRCInTerminal}, nil
 	case core.StateRunning:
 		url, err := a.waitLink(ctx, id, time.Time{}, e.ID)

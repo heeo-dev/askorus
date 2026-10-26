@@ -130,6 +130,10 @@ func (a *Adapter) ServerStatus(folder string) core.ServeStatus { return a.srv.Se
 func (a *Adapter) ServerFolders() []string                     { return a.srv.ServerFolders() }
 func (a *Adapter) StopAllServers()                             { a.srv.StopAllServers() }
 
+// OnServerState reports folder server state changes (for the agent log).
+// Call it before starting any server.
+func (a *Adapter) OnServerState(f func(folder string, st core.ServeStatus)) { a.srv.notify = f }
+
 // Agent returns "claude".
 func (a *Adapter) Agent() string { return Name }
 
@@ -191,6 +195,7 @@ func (a *Adapter) ListSessions(ctx context.Context) (core.ListResult, error) {
 	}
 	entries, agentsOK := ar.entries, ar.ok
 	res := core.ListResult{Sessions: merge(ts, entries, agentsOK)}
+	markServerSessions(res.Sessions, a.srv.serverSessions(entries, processParents))
 	if !agentsOK {
 		res.Warnings = append(res.Warnings, WarnAgentsUnavailable)
 	}
@@ -271,6 +276,23 @@ func (a *Adapter) Warm(ctx context.Context) {
 // merge builds the session list. Without the process list every state is
 // unknown, because a "history" guess could make the app resume a session
 // that is open elsewhere.
+// markServerSessions shows sessions a folder server runs as running with a
+// "server" badge: claude lists them as interactive, but nobody types in a
+// terminal there; they are reached through the official app.
+func markServerSessions(ss []core.Session, server map[string]bool) {
+	if len(server) == 0 {
+		return
+	}
+	for i := range ss {
+		_, native, _ := core.ParseID(ss[i].ID)
+		if server[native] {
+			ss[i].State = core.StateRunning
+			ss[i].AttachCommand = ""
+			ss[i].Badges = append(ss[i].Badges, "server")
+		}
+	}
+}
+
 func merge(ts []Transcript, entries []agentEntry, agentsOK bool) []core.Session {
 	best := map[string]agentEntry{}
 	for _, e := range entries {

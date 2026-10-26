@@ -13,3 +13,5 @@ func startPTY(exe, dir string, args []string) (serverProcess, error) {
 func ptySupported() bool { return false }
 
 func processAlive(pid int, procStart string) bool { return false }
+
+func processParents() map[int]int { return nil }

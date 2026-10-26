@@ -133,29 +133,40 @@ func fakeBackground(args []string) int {
 //	ASKSEMBLE_FAKE_SERVE_EXIT "1": end by itself after a moment (a crash)
 func fakeRemoteControl(args []string) int {
 	cwd, _ := os.Getwd()
-	if os.Getenv("ASKSEMBLE_FAKE_UNTRUSTED") == "1" {
-		fmt.Printf("Workspace not trusted. Run claude in %s once and accept the trust prompt, then retry.\r\n", cwd)
-		return 1
-	}
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt)
 	fakeRawInput()
-	keys := make(chan struct{}, 1)
+	keys := make(chan byte, 4)
 	go func() {
 		b := make([]byte, 16)
 		for {
 			n, err := os.Stdin.Read(b)
 			for _, c := range b[:n] {
-				if c == 0x03 {
-					keys <- struct{}{}
-					return
-				}
+				keys <- c
 			}
 			if err != nil {
 				return
 			}
 		}
 	}()
+	if os.Getenv("ASKSEMBLE_FAKE_UNTRUSTED") == "1" {
+		// The real server asks in a terminal and waits for an answer.
+		fmt.Printf("Quick safety check: is this a project you created or one you trust?\r\n")
+		fmt.Printf("Trust %s? [y/N] \r\n", cwd)
+		for c := range keys {
+			switch c {
+			case 'y', 'Y':
+				os.WriteFile(filepath.Join(cwd, "TRUSTED-BY-AGENT"), nil, 0o600) // the test fails on this
+				fmt.Print("\r\n")
+				return 0
+			case 0x03, 'n', 'N', '\r':
+				fmt.Printf("Remote Control did not start: %s is not trusted. Run `claude rc` again to trust it.\r\n", cwd)
+				fmt.Print("\r\n.\r\n")
+				return 1
+			}
+		}
+		return 1
+	}
 	capacity := fakeFlag(args, "--capacity")
 	fmt.Print("\x1b[?25l·|· Connecting · fake · main\r\n")
 	time.Sleep(100 * time.Millisecond)
@@ -167,14 +178,20 @@ func fakeRemoteControl(args []string) int {
 		time.Sleep(200 * time.Millisecond)
 		return 3
 	}
-	select {
-	case <-keys:
-		fmt.Print("Environment preserved. Restart `claude remote-control` to reconnect existing sessions.\r\n")
-		return 0
-	case <-stop:
-		return 5 // the real server ignores the signal; reaching this is a bug
-	case <-time.After(60 * time.Second):
-		return 4
+	deadline := time.After(60 * time.Second)
+	for {
+		select {
+		case c := <-keys:
+			if c != 0x03 {
+				continue // other keys (space: QR, w: spawn mode) do not stop it
+			}
+			fmt.Print("Environment preserved. Restart `claude remote-control` to reconnect existing sessions.\r\n")
+			return 0
+		case <-stop:
+			return 5 // the real server ignores the signal; reaching this is a bug
+		case <-deadline:
+			return 4
+		}
 	}
 }
 

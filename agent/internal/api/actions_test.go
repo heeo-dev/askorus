@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -212,6 +214,89 @@ func TestJobsPerDevice(t *testing.T) {
 	}
 	if w := e.doBody("POST", "/v1/jobs/"+started.JobID, ""); w.Code != 405 {
 		t.Errorf("POST job = %d", w.Code)
+	}
+}
+
+// fakeServing adds folder servers to fakeLauncher.
+type fakeServing struct {
+	fakeLauncher
+}
+
+func (fakeServing) StartServer(string, core.ServeOptions) error { return nil }
+func (fakeServing) StopServer(string) error                     { return nil }
+func (fakeServing) ServerStatus(string) core.ServeStatus {
+	return core.ServeStatus{State: core.ServeRunning, Sessions: 1, Capacity: 4}
+}
+func (fakeServing) ServerFolders() []string { return nil }
+func (fakeServing) StopAllServers()         {}
+
+func TestFolderServerSetting(t *testing.T) {
+	gitDir := t.TempDir()
+	os.Mkdir(filepath.Join(gitDir, ".git"), 0o700)
+	folders := []config.Folder{
+		{ID: "app", Path: t.TempDir(), Server: config.FolderServer{Spawn: "same-dir", Capacity: 4}},
+		{ID: "repo", Path: gitDir, Server: config.FolderServer{Spawn: "same-dir", Capacity: 4}},
+	}
+	applied := 0
+	l := fakeServing{fakeLauncher{calls: &[]string{}, starts: &[]core.StartRequest{}}}
+	e := newEnv(t, l, func(o *Options) {
+		o.Folders = func() []config.Folder { return folders }
+		o.SetFolderServer = func(id string, fs config.FolderServer) (config.Folder, error) {
+			for i := range folders {
+				if folders[i].ID == id {
+					folders[i].Server = fs
+					return folders[i], nil
+				}
+			}
+			return config.Folder{}, core.Fail(core.ErrCodeFolderNotFound, "")
+		}
+		o.ApplyFolders = func() { applied++ }
+	})
+
+	w := e.doBody("PUT", "/v1/folders/app/server", `{"enabled":true,"capacity":2}`)
+	var fi FolderInfo
+	json.Unmarshal(w.Body.Bytes(), &fi)
+	if w.Code != 200 || !fi.Server.Enabled || fi.Server.Capacity != 2 || fi.Server.Spawn != "same-dir" || fi.Status == nil || fi.Status.State != core.ServeRunning {
+		t.Fatalf("put = %d %s", w.Code, w.Body)
+	}
+	if !folders[0].Server.Enabled || applied != 1 {
+		t.Errorf("not saved or applied: %+v, applied %d", folders[0].Server, applied)
+	}
+	if w := e.doBody("PUT", "/v1/folders/repo/server", `{"enabled":true,"spawn":"worktree"}`); w.Code != 200 {
+		t.Errorf("worktree in a git repo = %d %s", w.Code, w.Body)
+	}
+	bad := map[string]struct {
+		path, body string
+		status     int
+		code       string
+	}{
+		"worktree outside git": {"/v1/folders/app/server", `{"enabled":true,"spawn":"worktree"}`, 400, CodeNotGit},
+		"spawn":                {"/v1/folders/app/server", `{"enabled":true,"spawn":"anywhere"}`, 400, CodeBadRequest},
+		"capacity":             {"/v1/folders/app/server", `{"enabled":true,"capacity":99}`, 400, CodeBadRequest},
+		"unknown folder":       {"/v1/folders/nope/server", `{"enabled":true}`, 404, CodeFolderUnknown},
+		"bad json":             {"/v1/folders/app/server", `{`, 400, CodeBadRequest},
+	}
+	for name, c := range bad {
+		w := e.doBody("PUT", c.path, c.body)
+		if w.Code != c.status || errCode(t, w) != c.code {
+			t.Errorf("%s: %d %s", name, w.Code, w.Body)
+		}
+	}
+	if applied != 2 {
+		t.Errorf("bad requests applied settings: %d", applied)
+	}
+	w = e.doBody("GET", "/v1/folders", "")
+	var resp struct{ Folders []FolderInfo }
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	if len(resp.Folders) != 2 || resp.Folders[0].IsGit || !resp.Folders[1].IsGit || resp.Folders[1].Status == nil {
+		t.Errorf("folders = %s", w.Body)
+	}
+}
+
+func TestFolderServerNeedsSupport(t *testing.T) {
+	e, _, _, _ := newActionEnv(t, nil) // fakeLauncher cannot serve folders
+	if w := e.doBody("PUT", "/v1/folders/app/server", `{"enabled":true}`); w.Code != 501 {
+		t.Errorf("put without server support = %d", w.Code)
 	}
 }
 

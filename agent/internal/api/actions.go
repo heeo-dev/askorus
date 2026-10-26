@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"os"
 	"path/filepath"
 
 	"github.com/asksemble/asksemble/agent/internal/config"
@@ -24,6 +25,7 @@ const (
 	CodeNotSupported  = "not_supported"
 	CodeFolderUnknown = "folder_not_found"
 	CodeJobNotFound   = "job_not_found"
+	CodeNotGit        = "not_a_git_repository"
 )
 
 // actionStatus maps adapter error codes to HTTP status.
@@ -254,22 +256,105 @@ func (s *Server) removeSession(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"id": id, "hidden": s.o.Hidden != nil})
 }
 
-// FolderInfo is one entry of GET /v1/folders.
+// FolderInfo is one entry of GET /v1/folders. Server is the setting (what
+// the person asked for); Status is what runs now (F10).
 type FolderInfo struct {
 	ID     string              `json:"id"`
 	Name   string              `json:"name"`
 	Path   string              `json:"path"`
 	Server config.FolderServer `json:"server"`
+	Status *core.ServeStatus   `json:"status,omitempty"`
+	IsGit  bool                `json:"isGit"` // worktree spawn needs a git repository
+}
+
+// serverAdapter is the adapter that can serve folders, if any.
+func (s *Server) serverAdapter() core.Server {
+	for _, a := range s.o.Adapters {
+		if srv, ok := a.(core.Server); ok {
+			return srv
+		}
+	}
+	return nil
+}
+
+func (s *Server) folderInfo(f config.Folder) FolderInfo {
+	fi := FolderInfo{ID: f.ID, Name: filepath.Base(f.Path), Path: f.Path, Server: f.Server, IsGit: isGitRepo(f.Path)}
+	if srv := s.serverAdapter(); srv != nil {
+		st := srv.ServerStatus(f.Path)
+		fi.Status = &st
+	}
+	return fi
+}
+
+func isGitRepo(path string) bool {
+	_, err := os.Stat(filepath.Join(path, ".git"))
+	return err == nil
 }
 
 func (s *Server) folders(w http.ResponseWriter, r *http.Request) {
 	out := []FolderInfo{}
 	if s.o.Folders != nil {
 		for _, f := range s.o.Folders() {
-			out = append(out, FolderInfo{ID: f.ID, Name: filepath.Base(f.Path), Path: f.Path, Server: f.Server})
+			out = append(out, s.folderInfo(f))
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"folders": out})
+}
+
+// ServerRequest is the body of PUT /v1/folders/{id}/server. Spawn and
+// capacity keep their current values when left out.
+type ServerRequest struct {
+	Enabled  bool   `json:"enabled"`
+	Spawn    string `json:"spawn,omitempty"`
+	Capacity int    `json:"capacity,omitempty"`
+}
+
+// setFolderServer is PUT /v1/folders/{id}/server (F10): it saves the
+// setting and lets the agent start or stop the server to match. The answer
+// carries the status right away ("starting"); GET /v1/folders follows it.
+func (s *Server) setFolderServer(w http.ResponseWriter, r *http.Request) {
+	if s.serverAdapter() == nil || s.o.SetFolderServer == nil {
+		writeError(w, http.StatusNotImplemented, CodeNotSupported, "folder servers are not available here")
+		return
+	}
+	f, ok := s.folderByID(r.PathValue("id"))
+	if !ok {
+		writeError(w, http.StatusNotFound, CodeFolderUnknown, "folder is not in the allowed list")
+		return
+	}
+	var req ServerRequest
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10)).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, CodeBadRequest, "body must be {enabled, spawn, capacity}")
+		return
+	}
+	fs := f.Server
+	fs.Enabled = req.Enabled
+	if req.Spawn != "" {
+		fs.Spawn = req.Spawn
+	}
+	if req.Capacity != 0 {
+		fs.Capacity = req.Capacity
+	}
+	switch {
+	case fs.Spawn != config.SpawnSameDir && fs.Spawn != config.SpawnWorktree:
+		writeError(w, http.StatusBadRequest, CodeBadRequest, "spawn must be same-dir or worktree")
+		return
+	case fs.Spawn == config.SpawnWorktree && !isGitRepo(f.Path):
+		writeError(w, http.StatusBadRequest, CodeNotGit, "worktree spawn needs a git repository")
+		return
+	case fs.Capacity < 1 || fs.Capacity > 32:
+		writeError(w, http.StatusBadRequest, CodeBadRequest, "capacity must be 1-32")
+		return
+	}
+	saved, err := s.o.SetFolderServer(f.ID, fs)
+	if err != nil {
+		s.actionError(w, err)
+		return
+	}
+	if s.o.ApplyFolders != nil {
+		s.o.ApplyFolders()
+	}
+	writeJSON(w, http.StatusOK, s.folderInfo(saved))
 }
 
 func (s *Server) folderByID(id string) (config.Folder, bool) {

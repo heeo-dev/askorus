@@ -64,6 +64,9 @@ Usage / 사용법:
   asksemble-agent folders [list] | folders add [-id ID] PATH | folders remove ID
       folders new sessions may start in
       새 세션을 열 수 있는 폴더
+  asksemble-agent folders serve ID on|off [-spawn same-dir|worktree] [-capacity N]
+      keep a folder open so the Claude app can start sessions there (off by default)
+      폴더를 열어 두어 Claude 앱에서 바로 새 세션을 만들게 합니다 (기본은 꺼짐)
   asksemble-agent open SESSION_ID
       wake a session and print its remote link
       세션을 켜고 원격 링크를 보여 줍니다
@@ -259,19 +262,25 @@ func serve(dir string, args []string) error {
 		return err
 	}
 	host, _ := os.Hostname()
+	rec := newReconciler(dir, adapter, logger)
+	adapter.OnServerState(func(folder string, st core.ServeStatus) {
+		logger.Info("folder server", "folder", folder, "state", st.State, "restarts", st.Restarts, "err", st.Error)
+	})
 	srv := api.HTTPServer(api.New(api.Options{
-		Version:        version,
-		Hostname:       host,
-		Adapters:       []core.Adapter{adapter},
-		Devices:        store,
-		Pairer:         &pairing.Pairer{Dir: dir, Devices: store},
-		Logger:         logger,
-		ServeHosts:     hosts,
-		TailscaleOwner: owner,
-		HiddenFolders:  cfg.HiddenFolders,
-		TestPage:       *testPage,
-		Hidden:         hid,
-		Folders:        foldersFrom(dir, cfg.Folders),
+		Version:         version,
+		Hostname:        host,
+		Adapters:        []core.Adapter{adapter},
+		Devices:         store,
+		Pairer:          &pairing.Pairer{Dir: dir, Devices: store},
+		Logger:          logger,
+		ServeHosts:      hosts,
+		TailscaleOwner:  owner,
+		HiddenFolders:   cfg.HiddenFolders,
+		TestPage:        *testPage,
+		Hidden:          hid,
+		Folders:         foldersFrom(dir, cfg.Folders),
+		SetFolderServer: setFolderServer(dir),
+		ApplyFolders:    rec.trigger,
 	}).Handler())
 	ln, err := api.Listen(cfg.Port)
 	if err != nil {
@@ -290,19 +299,33 @@ func serve(dir string, args []string) error {
 	}
 
 	go adapter.Warm(ctx)
+	recCtx, stopRec := context.WithCancel(ctx)
+	go rec.run(recCtx)
 	errc := make(chan error, 1)
 	go func() { errc <- srv.Serve(ln) }()
+	var serveErr error
 	select {
 	case err := <-errc:
 		if !errors.Is(err, http.ErrServerClosed) {
-			return err
+			serveErr = err
 		}
 	case <-ctx.Done():
 	}
 	shutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	logger.Info("stopping")
-	return srv.Shutdown(shutdown)
+	err = srv.Shutdown(shutdown)
+	// Folder servers end with the agent; Ctrl+C lets each clean up.
+	stopRec()
+	<-rec.done
+	if n := len(adapter.ServerFolders()); n > 0 {
+		say(os.Stderr, m("stopping %d folder servers…", "폴더 서버 %d개를 멈추는 중…", n))
+		adapter.StopAllServers()
+	}
+	if serveErr != nil {
+		return serveErr
+	}
+	return err
 }
 
 // openLog writes JSON lines to stderr and <dir>/logs/agent.log.

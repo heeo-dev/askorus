@@ -79,6 +79,10 @@ type Options struct {
 	// Folders returns the folders new sessions may start in. It is called
 	// per request so edits to the settings file apply without a restart.
 	Folders func() []config.Folder
+	// SetFolderServer saves a folder's server setting (F10) and returns
+	// the saved folder; ApplyFolders then makes the servers match.
+	SetFolderServer func(id string, fs config.FolderServer) (config.Folder, error)
+	ApplyFolders    func()
 }
 
 // Server serves /v1.
@@ -130,6 +134,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("DELETE /v1/sessions/{id}", s.removeSession)
 	route("GET", "/v1/jobs/{jobId}", s.jobStatus)
 	route("GET", "/v1/folders", s.folders)
+	route("PUT", "/v1/folders/{id}/server", s.setFolderServer)
 	mux.HandleFunc("/v1/sessions/{id}/{action}", methodNotAllowed)
 	mux.HandleFunc("/v1/sessions/{id}", methodNotAllowed)
 	// Reserved for the realtime channel (principle 5).

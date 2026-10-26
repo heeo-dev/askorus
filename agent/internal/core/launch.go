@@ -39,6 +39,7 @@ const (
 // Hints tell the app what the person has to do. The app turns them into text.
 const (
 	HintUseRCInTerminal = "use_rc_in_terminal" // session is open in a terminal: type /rc there
+	HintServerSession   = "server_session"     // a folder server runs it: open it from the official app's PC list
 )
 
 // OpenResult is the answer to Open and Start.

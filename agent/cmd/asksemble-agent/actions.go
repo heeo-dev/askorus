@@ -277,6 +277,47 @@ func foldersCmd(dir string, args []string, out io.Writer) error {
 		say(out, m("allowed %s as %q. New sessions there need the folder to be trusted: run claude in it once.",
 			"%s를 %q로 허용했습니다. 이 폴더에서 새 세션을 열려면 먼저 그 폴더에서 claude를 한 번 실행해 신뢰를 허용하세요.", added.Path, added.ID))
 		return nil
+	case "serve":
+		fs := flag.NewFlagSet("folders serve", flag.ContinueOnError)
+		spawn := fs.String("spawn", "", "same-dir or worktree (git repositories only)")
+		capacity := fs.Int("capacity", 0, "concurrent sessions, 1-32")
+		if len(args) < 3 || (args[2] != "on" && args[2] != "off") {
+			return fail("usage: asksemble-agent folders serve ID on|off [-spawn same-dir|worktree] [-capacity N]",
+				"사용법: asksemble-agent folders serve ID on|off [-spawn same-dir|worktree] [-capacity N]")
+		}
+		if err := fs.Parse(args[3:]); err != nil {
+			return err
+		}
+		f, ok := cfg.FolderByID(args[1])
+		if !ok {
+			return fail("no folder %q", "%q 폴더가 없습니다", args[1])
+		}
+		srv := f.Server
+		srv.Enabled = args[2] == "on"
+		if *spawn != "" {
+			srv.Spawn = *spawn
+		}
+		if *capacity != 0 {
+			srv.Capacity = *capacity
+		}
+		if srv.Spawn == config.SpawnWorktree {
+			if _, err := os.Stat(filepath.Join(f.Path, ".git")); err != nil {
+				return fail("worktree spawn needs a git repository", "worktree 방식은 git 저장소에서만 됩니다")
+			}
+		}
+		saved, err := setFolderServer(dir)(f.ID, srv)
+		if err != nil {
+			return err
+		}
+		if saved.Server.Enabled {
+			say(out, m("folder %q will be kept open (%s, up to %d sessions). The running agent applies it within %s.",
+				"%q 폴더를 열어 둡니다 (%s, 세션 최대 %d개). 실행 중인 에이전트가 %s 안에 반영합니다.",
+				saved.ID, saved.Server.Spawn, saved.Server.Capacity, reconcileEvery))
+		} else {
+			say(out, m("folder %q will no longer be kept open; the running agent stops its server within %s.",
+				"%q 폴더 열어 두기를 껐습니다. 실행 중인 에이전트가 %s 안에 서버를 멈춥니다.", saved.ID, reconcileEvery))
+		}
+		return nil
 	case "remove":
 		if len(args) != 2 {
 			return fail("usage: asksemble-agent folders remove ID", "사용법: asksemble-agent folders remove ID")

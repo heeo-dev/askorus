@@ -52,6 +52,8 @@ var (
 	ansiRe     = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(\x07|\x1b\\)|\x1b[=>()][0-9A-Za-z]?|\x1b`)
 	envRe      = regexp.MustCompile(`environment=(env_[A-Za-z0-9]+)`)
 	capacityRe = regexp.MustCompile(`Capacity:\s*(\d+)\s*/\s*(\d+)`)
+	// "Trust C:\…\folder? [y/N]" (Claude Code 2.1.310)
+	trustPromptRe = regexp.MustCompile(`^Trust .+\?\s*\[y/N\]`)
 )
 
 // servers keeps the folder servers of one adapter.
@@ -61,6 +63,7 @@ type servers struct {
 	pointer func(folder string) (pid int, procStart string, ok bool)
 	backoff []time.Duration
 	now     func() time.Time
+	notify  func(folder string, st core.ServeStatus) // state changes, for the agent log
 
 	mu       sync.Mutex
 	byFolder map[string]*server
@@ -71,6 +74,7 @@ type server struct {
 	opts   core.ServeOptions
 	stop   chan struct{}
 	done   chan struct{}
+	notify func(folder string, st core.ServeStatus)
 
 	mu        sync.Mutex
 	st        core.ServeStatus
@@ -115,7 +119,7 @@ func (ss *servers) StartServer(folder string, opts core.ServeOptions) error {
 	ss.init()
 	key := folderKey(folder)
 	old := ss.byFolder[key]
-	if old != nil && old.opts == opts && old.state() != core.ServeExternal {
+	if old != nil && old.opts == opts && !ss.recheck(old) {
 		ss.mu.Unlock()
 		return nil // already serving with these options
 	}
@@ -124,7 +128,7 @@ func (ss *servers) StartServer(folder string, opts core.ServeOptions) error {
 		ss.stopServer(old)
 	}
 
-	s := &server{folder: folder, opts: opts, stop: make(chan struct{}), done: make(chan struct{})}
+	s := &server{folder: folder, opts: opts, stop: make(chan struct{}), done: make(chan struct{}), notify: ss.notify}
 	s.st = core.ServeStatus{State: core.ServeStarting, Since: ss.now().UTC(), Capacity: opts.Capacity}
 	if pid, _, ok := ss.pointer(folder); ok {
 		// Someone else's server runs here (not one of ours, which would be
@@ -140,6 +144,25 @@ func (ss *servers) StartServer(folder string, opts core.ServeOptions) error {
 	return nil
 }
 
+// untrustedRetry is how long an untrusted folder waits before the agent
+// tries again (the person may have trusted it on the PC meanwhile).
+const untrustedRetry = time.Minute
+
+// recheck reports whether a server with unchanged options should be tried
+// again: someone else's server may have gone, and an untrusted folder may
+// have been trusted since.
+func (ss *servers) recheck(s *server) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	switch s.st.State {
+	case core.ServeExternal:
+		return true
+	case core.ServeUntrusted:
+		return ss.now().Sub(s.st.Since) >= untrustedRetry
+	}
+	return false
+}
+
 func (s *server) state() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -148,8 +171,13 @@ func (s *server) state() string {
 
 func (s *server) set(f func(st *core.ServeStatus)) {
 	s.mu.Lock()
+	before := s.st.State
 	f(&s.st)
+	st := s.st
 	s.mu.Unlock()
+	if st.State != before && s.notify != nil {
+		s.notify(s.folder, st)
+	}
 }
 
 // supervise runs the server until stopped, restarting it after a pause
@@ -249,6 +277,11 @@ func (s *server) readScreen(r io.Reader) {
 			if len(pending) > 4096 {
 				pending = pending[len(pending)-4096:]
 			}
+			// A prompt waits for an answer on the same line.
+			if p := strings.TrimSpace(pending); trustPromptRe.MatchString(p) {
+				s.screenLine(p)
+				pending = ""
+			}
 		}
 		if err != nil {
 			if pending != "" {
@@ -271,13 +304,27 @@ func (s *server) screenLine(line string) {
 			s.lines = s.lines[1:]
 		}
 	}
-	if strings.Contains(line, untrustedMarker) {
+	if strings.Contains(line, untrustedMarker) || strings.Contains(line, "is not trusted") {
 		s.untrusted = true
+	}
+	// In a terminal the server asks "Trust <folder>? [y/N]" and waits.
+	// Trusting a folder is the person's decision, so the agent never says
+	// yes: it presses Ctrl+C (the server then ends with "is not trusted")
+	// and reports the folder as untrusted.
+	if trustPromptRe.MatchString(line) && !s.untrusted {
+		s.untrusted = true
+		if p := s.proc; p != nil {
+			go p.Interrupt()
+		}
 	}
 	if strings.Contains(line, "Connected") && !strings.Contains(line, "Connecting") && s.st.State == core.ServeStarting {
 		s.st.State = core.ServeRunning
 		s.st.Since = time.Now().UTC()
 		s.st.Error = ""
+		if s.notify != nil {
+			st := s.st
+			go s.notify(s.folder, st)
+		}
 	}
 	if m := envRe.FindStringSubmatch(line); m != nil {
 		s.st.EnvironmentID = m[1]
@@ -383,6 +430,23 @@ func (ss *servers) pids() map[int]bool {
 		s.mu.Unlock()
 	}
 	return m
+}
+
+// serverSessions returns the session ids whose process is a child of one
+// of our folder servers. claude agents lists them as interactive.
+func (ss *servers) serverSessions(entries []agentEntry, parents func() map[int]int) map[string]bool {
+	pids := ss.pids()
+	if len(pids) == 0 {
+		return nil
+	}
+	pp := parents()
+	out := map[string]bool{}
+	for _, e := range entries {
+		if e.PID > 0 && (pids[e.PID] || pids[pp[e.PID]]) {
+			out[e.SessionID] = true
+		}
+	}
+	return out
 }
 
 // projectDirName is how Claude Code names a folder's transcript directory:

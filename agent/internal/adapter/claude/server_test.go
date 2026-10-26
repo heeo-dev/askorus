@@ -118,11 +118,26 @@ func TestServerUntrustedIsNotRetried(t *testing.T) {
 	t.Setenv("ASKSEMBLE_FAKE_UNTRUSTED", "1")
 	dir := t.TempDir()
 	ss.StartServer(dir, core.ServeOptions{Spawn: "same-dir", Capacity: 1})
-	waitState(t, ss, dir, core.ServeUntrusted)
+	st := waitState(t, ss, dir, core.ServeUntrusted)
 	time.Sleep(300 * time.Millisecond) // well past the 50 ms backoff
 	if n := len(recordedCalls(t, argsFile)); n != 1 {
 		t.Errorf("untrusted folder started %d times", n)
 	}
+	if _, err := os.Stat(filepath.Join(dir, "TRUSTED-BY-AGENT")); err == nil {
+		t.Fatal("the agent answered yes to the trust prompt")
+	}
+	if !strings.Contains(st.Error, dir) {
+		t.Errorf("status = %+v", st)
+	}
+	ss.StartServer(dir, core.ServeOptions{Spawn: "same-dir", Capacity: 1}) // the agent re-applies settings
+	if n := len(recordedCalls(t, argsFile)); n != 1 {
+		t.Errorf("retried at once: %d starts", n)
+	}
+	// After a minute it tries again, in case the folder was trusted meanwhile.
+	ss.now = func() time.Time { return time.Now().Add(untrustedRetry + time.Second) }
+	t.Setenv("ASKSEMBLE_FAKE_UNTRUSTED", "")
+	ss.StartServer(dir, core.ServeOptions{Spawn: "same-dir", Capacity: 1})
+	waitState(t, ss, dir, core.ServeRunning)
 	ss.StopServer(dir)
 }
 
@@ -199,6 +214,52 @@ func TestReadScreen(t *testing.T) {
 		if strings.Contains(l, "\x1b") {
 			t.Errorf("escape left in %q", l)
 		}
+	}
+}
+
+// Sessions a folder server runs are its child processes (seen on a real
+// PC: the pre-made session ran as `claude --print --sdk-url …` under the
+// server). They show as running with a "server" badge.
+func TestServerSessionsAreMarked(t *testing.T) {
+	p := newMemProc(false)
+	ss := &servers{
+		exe:     func() (string, error) { return "claude", nil },
+		start:   func(string, string, []string) (serverProcess, error) { return p, nil },
+		pointer: func(string) (int, string, bool) { return 0, "", false },
+	}
+	dir := t.TempDir()
+	ss.StartServer(dir, core.ServeOptions{Spawn: "same-dir", Capacity: 1})
+	waitState(t, ss, dir, core.ServeRunning)
+	defer ss.StopAllServers()
+
+	entries := []agentEntry{
+		{PID: 500, Kind: kindInteractive, SessionID: id1}, // child of the server (pid 99)
+		{PID: 600, Kind: kindInteractive, SessionID: id5}, // someone's terminal
+	}
+	parents := func() map[int]int { return map[int]int{500: 99, 600: 1} }
+	got := ss.serverSessions(entries, parents)
+	if !got[id1] || got[id5] {
+		t.Fatalf("server sessions = %v", got)
+	}
+	list := []core.Session{
+		{ID: "claude:" + id1, State: core.StateTerminal},
+		{ID: "claude:" + id5, State: core.StateTerminal},
+	}
+	markServerSessions(list, got)
+	if list[0].State != core.StateRunning || !slices.Contains(list[0].Badges, "server") || list[1].State != core.StateTerminal {
+		t.Errorf("marked = %+v", list)
+	}
+}
+
+// The real untrusted-folder screen (Claude Code 2.1.310) is recognised.
+func TestTrustPromptRecognised(t *testing.T) {
+	p := newMemProc(true)
+	s := &server{st: core.ServeStatus{State: core.ServeStarting}, proc: p}
+	s.readScreen(strings.NewReader("Remote Control starts Claude Code sessions in this folder, driven from your other devices:\r\n" +
+		"Quick safety check: is this a project you created or one you trust? Sessions started here can read\r\n" +
+		`Trust C:\work\new? [y/N] ` + "\r\n"))
+	if !s.untrusted {
+		t.Error("trust prompt not recognised")
 	}
 }
 

@@ -126,6 +126,23 @@ func (p *ptyProc) Close() {
 
 func ptySupported() bool { return true }
 
+// processParents maps each running process id to its parent's. Sessions a
+// folder server creates run as its child processes.
+func processParents() map[int]int {
+	snap, err := windows.CreateToolhelp32Snapshot(windows.TH32CS_SNAPPROCESS, 0)
+	if err != nil {
+		return nil
+	}
+	defer windows.CloseHandle(snap)
+	m := map[int]int{}
+	var e windows.ProcessEntry32
+	e.Size = uint32(unsafe.Sizeof(e))
+	for err = windows.Process32First(snap, &e); err == nil; err = windows.Process32Next(snap, &e) {
+		m[int(e.ProcessID)] = int(e.ParentProcessID)
+	}
+	return m
+}
+
 // processAlive reports whether pid runs and, when procStart is given
 // (FILETIME as written in bridge-pointer.json), started at that time.
 func processAlive(pid int, procStart string) bool {
