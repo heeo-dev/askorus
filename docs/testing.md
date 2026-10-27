@@ -4,23 +4,25 @@ Asksemble Phase 1의 테스트 기준이다. 버그를 고치면 그 버그를 �
 
 ## 1. 단계
 
-| 단계 | 무엇을 보나 | 어디 | 실행 |
-| --- | --- | --- | --- |
-| UT 에이전트 | 함수·패키지 하나: 설정, 파서, 상태 판정, 실행 인자, 짝 맺기, 토큰 | `agent/**/*_test.go` | `go test ./...` |
-| UT 앱 | API 클라이언트, QR 링크, 연결 저장, 문구, 원인 판정 | `app/src/**/*-test.ts` | `npx jest` |
-| IT 에이전트 (시나리오) | 실제 HTTP 서버·API·짝 맺기·기기 저장소·Claude 어댑터를 다 붙이고 `claude`만 가짜로 둔 채, 폰이 하는 순서대로 요청 | `agent/internal/adapter/claude/scenario_it_test.go` | `go test ./internal/adapter/claude -run TestIT` |
-| ST 앱 (화면) | 실제 화면(`src/app`)을 Expo Router로 띄우고 가짜 에이전트(`src/test/fakeAgent.ts`)를 붙여 사람처럼 누름 | `app/src/test/*-test.tsx` | `npx jest src/test` |
-| E2E (에뮬레이터) | 에뮬레이터의 Expo Go 앱 → 실제 에이전트 → 실제 `claude`(시험 폴더 `rc-test`) | `app/e2e/*.yaml` (Maestro) | 4절 |
-| MT (실제 폰) | 에뮬레이터로 못 보는 것: 카메라 QR, Claude 앱으로 넘어가기, Tailscale on/off, 재부팅 | 5절 | 사람이 |
+테스트는 피라미드 모양으로 둔다. 아래쪽(빠르고 안정적)을 많이, 위쪽(느리고 잘 깨짐)을 적게. 기능을 만들 때는 1단계로 빠르게 돌고, 2·3단계는 정해진 때만 돈다.
 
-가짜 `claude`는 테스트 실행 파일이 `ASKSEMBLE_FAKE_CLAUDE=1`일 때 `claude`처럼 동작하는 것이다(`fake_test.go`). 받은 인자를 기록하고 `agents --json`, `--bg`, `stop`, `rm`, `remote-control`을 흉내 내며, 환경 변수로 신뢰 안 됨·링크 없음 같은 상황을 만든다.
+| 단계 | 무엇을 보나 | 어디 | 실행 | 언제 | 걸리는 시간 |
+| --- | --- | --- | --- | --- | --- |
+| **1. 매번** | UT: 함수·패키지 하나(에이전트·앱). IT: 에이전트 전체를 가짜 `claude`로 폰 순서대로. ST: 앱 화면 전체를 가짜 에이전트로 사람처럼 | `agent/**/*_test.go`, `scenario_it_test.go`, `app/src/**/*-test.ts(x)` | `scripts\test-all.ps1` | 고칠 때마다, 합치기·배포 전 | 2~5분, 에뮬레이터 없음 |
+| **2. 실제 연동** | LT: 에이전트 + **실제 `claude`** + 실제 `~/.claude`, HTTP로 폰 순서대로. E2E-07: claude.ai 쪽 상태(목록·연결됨·보관됨) | `agent/internal/live/live_test.go`(태그 `live`), PC Chrome | `scripts\test-live.ps1`, E2E-07은 Claude in Chrome | 에이전트가 claude를 다루는 부분을 바꿨을 때 | 1~2분 |
+| **3. 앱 전체** | E2E: 에뮬레이터의 Expo Go 앱 → Tailscale → 실제 에이전트 → 실제 `claude`. Android에만 있는 것(뒤로 가기, 링크 열기, 키보드, 화면 배치)과 앱·에이전트 연동 | `app/e2e/*.yaml`(Maestro) | `scripts\e2e.ps1` | 앱이 바뀐 것을 main에 합치기 전 | 5분 + 부팅 2분 |
+| **4. 실제 폰** | MT: 카메라 QR, Claude 앱으로 넘어가기, 폰 Tailscale on/off, PC 재부팅 | 5절 | 사람이 | 단계(B1, B2 …)를 마칠 때 | - |
+
+- 가짜 `claude`: 테스트 실행 파일이 `ASKSEMBLE_FAKE_CLAUDE=1`일 때 `claude`처럼 동작한다(`fake_test.go`). 받은 인자를 기록하고 `agents --json`, `--bg`, `stop`, `rm`, `remote-control`을 흉내 내며, 환경 변수로 신뢰 안 됨·링크 없음·rm 한 번 실패 같은 상황을 만든다.
+- 가짜 에이전트(앱): `app/src/test/fakeAgent.ts`. 실제 에이전트처럼 서버 상태가 한 박자 늦게 바뀐다(R-12).
+- 시험 페이지(`/test/`)는 앱이 나오기 전 손으로 보던 도구다. 앱과 코드가 따로라 앱 버그(R-09, R-12)는 못 잡는다. 테스트 단계로 쓰지 않는다.
 
 ## 2. 회귀 규칙
 
-1. **main에 합치기 전**: `powershell -NoProfile -File scripts\test-all.ps1`이 `ALL PASSED`여야 한다. gofmt, `go vet`(Windows·Linux), Go 전체(UT+IT), 앱 타입 검사, jest 전체(UT+ST), expo-doctor를 돈다(`-Quick`이면 expo-doctor 생략).
-2. **앱 화면이나 흐름을 바꾸면**: E2E 흐름도 돌린다(4절). 에뮬레이터를 못 쓰면 MT 해당 항목을 실제 폰으로 본다.
-3. **버그를 고치면**: 고치기 전에 실패하는 테스트를 먼저 만들고(가능하면), 고친 뒤 통과를 보고, 아래 회귀 표에 한 줄 더한다.
-4. **실제 PC에 배포하기 전**: 회귀 스크립트를 돌린 빌드만 `.local\bin`에 넣는다.
+1. **고칠 때마다·main에 합치기 전·`.local\bin`에 배포하기 전**: `scripts\test-all.ps1`이 `ALL PASSED`. gofmt, `go vet`(Windows·Linux), Go 전체(UT+IT), 앱 타입 검사, jest 전체(UT+ST), expo-doctor(`-Quick`이면 생략).
+2. **에이전트가 claude를 다루는 부분(실행 인자, 상태 판정, 링크, 폴더 서버)을 바꾸면**: `scripts\test-live.ps1`이 `LIVE PASSED`. claude.ai 쪽 동작이 걸리면 E2E-07도 본다.
+3. **앱을 바꾼 것을 main에 합치기 전**: `scripts\e2e.ps1`이 모두 Passed. 에뮬레이터는 창 없이 떴다가 끝나면 꺼진다(`-Window`로 보면서, `-Keep`으로 켜 둔 채).
+4. **버그를 고치면**: 가능하면 실패하는 테스트를 먼저 만들고, 고친 뒤 통과를 보고, 회귀 표에 한 줄 더한다. 그 버그를 잡은 단계보다 아래 단계에서 재현할 수 있으면 아래에 넣는다(예: E2E가 잡은 R-12·R-13도 ST·UT로 재현).
 5. 테스트 파일은 `app/src/app` 안에 두지 않는다. 그 안의 파일은 Expo Router가 화면으로 묶는다.
 
 ## 3. 시나리오 목록
@@ -38,6 +40,16 @@ Asksemble Phase 1의 테스트 기준이다. 버그를 고치면 그 버그를 �
 | IT-07 | 지우기 → 목록에서 빠짐 | F5 |
 | IT-08 | 신뢰 안 된 폴더 → `workspace_not_trusted`, 폴더가 지워짐 → 열기 버튼 없음·`session_folder_missing` | F3, R-06 |
 | IT-09 | 다른 Tailscale 계정 403, 폰이 스스로 짝 끊기 → 그 토큰 401 | N4 |
+
+### LT (실제 연동, `agent/internal/live/live_test.go`)
+
+시험 폴더 `.local/rc-test`에서만 만들고 끝나면 지운다. 기기 토큰은 테스트가 임시 폴더에 스스로 만들어 짝 맺기가 필요 없다.
+
+| ID | 시나리오 | 결과(10-28) |
+| --- | --- | --- |
+| LT-01 | `/v1/info`: Claude Code가 있고 PC가 알리는 문제가 없음 | 통과(2.1.311) |
+| LT-02 | 실제 claude로 새 세션(22초) → 실행 중 → 멈춤 → 깨우기(17초, 다시 붙은 링크) → 실행 중 세션 열기는 바로 → 지우기 | 통과 |
+| LT-03 | 실제 `claude remote-control` 폴더 서버 켜기 → running → 끄기(1.1초) | 통과 |
 
 ### ST (앱 화면, `app/src/test`)
 
@@ -72,7 +84,7 @@ powershell -NoProfile -File scripts\e2e.ps1             # 에뮬레이터를 띄
 powershell -NoProfile -File scripts\e2e.ps1 -Flow 02    # 하나만
 ```
 
-`e2e.ps1`은 에뮬레이터가 없으면 창으로 띄우고(`-Headless`면 창 없이), Expo Go가 없으면 깔고, 흐름마다 최신 코드를 받도록 Expo Go를 새로 시작한다.
+`e2e.ps1`은 에뮬레이터가 없으면 **창 없이** 띄우고(`-Window`면 창으로), Expo Go가 없으면 깔고, 에뮬레이터 안의 Tailscale이 PC에 닿을 때까지 기다리고, 최신 코드를 받도록 Expo Go를 새로 시작한다. 직접 띄운 에뮬레이터는 끝나면 끈다(`-Keep`이면 둔다). 창 없이 띄워도 램은 비슷하게 쓰고(약 2.5GB), 화면을 그리는 CPU·GPU만 준다. 큰 이득은 끝나면 끄는 것이다.
 
 ### 흐름 (`app/e2e`)
 
@@ -120,3 +132,4 @@ powershell -NoProfile -File scripts\e2e.ps1 -Flow 02    # 하나만
 | R-10 | 10-26 | 신뢰 확인 창에 대신 y를 누르지 않음(Ctrl+C 뒤 다시 시도) | `TestTrustPromptRecognised`, `TestServerUntrustedIsNotRetried` |
 | R-11 | 10-27 | 관리자 권한 서비스가 떠 있으면 45초 기다림 → 바로 안내 | `TestLaunchRefusedWithElevatedService`, `TestServiceElevated` |
 | R-12 | 10-27 | 폴더 열어 두기를 켜도 화면이 'Off'에 머묾: 켠 직후 답에는 아직 예전 상태가 실려 오는데 화면은 '켜는 중'일 때만 다시 물었다 | E2E-05, `screens2-test.tsx` 폴더(가짜 에이전트가 실제처럼 늦게 켜짐) |
+| R-13 | 10-28 | 실행 중 세션을 지우면 멈춘 직후 `claude rm`이 한 번 실패해(서비스가 방금 멈춘 작업을 정리하는 중) 지우기가 502로 끝남 | `TestRemoveRetriesWhileTheServiceSettles`(가짜 claude의 rm 한 번 실패), E2E-04 |

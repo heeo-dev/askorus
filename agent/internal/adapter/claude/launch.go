@@ -306,16 +306,25 @@ func (a *Adapter) Remove(ctx context.Context, id string) error {
 			return nil
 		}
 	}
-	res, err := a.runner.Run(ctx, "", "rm", firstNonEmpty(e.ID, id))
-	a.Invalidate()
-	if err != nil {
-		if !a.inAgents(ctx, id) {
-			return nil // gone anyway
+	// Right after a stop the Claude service may still be settling the job,
+	// and rm fails once (seen by E2E-04, 2026-10-28); a moment later it works.
+	var res Result
+	for attempt := 0; ; attempt++ {
+		res, err = a.runner.Run(ctx, "", "rm", firstNonEmpty(e.ID, id))
+		a.Invalidate()
+		if err == nil || !a.inAgents(ctx, id) {
+			return nil // removed, or gone anyway
 		}
-		return core.Fail(core.ErrCodeLaunchFailed, tail(res, 300))
+		if attempt == rmRetries || !sleepCtx(ctx, rmRetryWait) {
+			return core.Fail(core.ErrCodeLaunchFailed, tail(res, 300))
+		}
 	}
-	return nil
 }
+
+const (
+	rmRetries   = 2
+	rmRetryWait = 2 * time.Second
+)
 
 // inAgents reports whether claude still lists the session. When the list
 // cannot be read it answers true, so callers do not assume it is gone.

@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+	"unicode/utf8"
 
 	"github.com/asksemble/asksemble/agent/internal/config"
 	"github.com/asksemble/asksemble/agent/internal/core"
@@ -45,12 +46,28 @@ var actionStatus = map[string]int{
 	core.ErrCodeFolderMissing:    http.StatusGone,
 }
 
+// clip keeps the first n bytes of s, cut at a rune boundary.
+func clip(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	for n > 0 && !utf8.RuneStart(s[n]) {
+		n--
+	}
+	return s[:n] + "…"
+}
+
 func (s *Server) actionError(w http.ResponseWriter, err error) {
 	var ae *core.ActionError
 	if errors.As(err, &ae) {
 		status, ok := actionStatus[ae.Code]
 		if !ok {
 			status = http.StatusInternalServerError
+		}
+		// The detail is claude's own message (never conversation content);
+		// without it a failure like R-13 cannot be traced afterwards.
+		if s.o.Logger != nil && status >= 500 {
+			s.o.Logger.Warn("action failed", "code", ae.Code, "detail", clip(ae.Detail, 300))
 		}
 		writeError(w, status, ae.Code, ae.Detail)
 		return
@@ -133,7 +150,12 @@ func (s *Server) startJob(w http.ResponseWriter, r *http.Request, kind, target s
 				if code == "" {
 					code = err.Error()
 				}
-				s.o.Logger.Warn("job failed", "kind", kind, "code", code)
+				detail := ""
+				var ae *core.ActionError
+				if errors.As(err, &ae) {
+					detail = clip(ae.Detail, 300)
+				}
+				s.o.Logger.Warn("job failed", "kind", kind, "code", code, "detail", detail)
 			}
 			return nil, err
 		}

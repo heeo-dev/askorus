@@ -1,9 +1,13 @@
 # Runs the app E2E flows (app\e2e, Maestro) on the Android emulator against
 # the real agent. Starts the emulator and installs Expo Go when needed. The
 # dev server must already run (exp://<PC>:8081). Keep this file ASCII.
-#   powershell -NoProfile -File scripts\e2e.ps1 [-Flow 01] [-Headless] [-Prepare]
-param([string]$Flow = '', [switch]$Headless, [switch]$Prepare)
-# -Prepare only boots the emulator and installs Expo Go.
+#   powershell -NoProfile -File scripts\e2e.ps1 [-Flow 01] [-Window] [-Keep] [-Prepare]
+param([string]$Flow = '', [switch]$Window, [switch]$Keep, [switch]$Prepare)
+# Runs without a window unless -Window (to watch it). An emulator this
+# script started is shut down afterwards unless -Keep; one that was already
+# running is left as it was. -Prepare only boots it and installs Expo Go.
+$Headless = -not $Window
+$startedHere = $false
 
 $android = 'D:\Android'
 $env:JAVA_HOME = "$android\jdk17"
@@ -40,13 +44,19 @@ if (-not (Booted)) {
   Start-Process -FilePath "$android\Sdk\emulator\emulator.exe" -ArgumentList $emuArgs -WindowStyle Hidden
   for ($i = 0; $i -lt 180 -and -not (Booted); $i++) { Start-Sleep 2 }
   if (-not (Booted)) { Write-Output 'emulator did not boot'; exit 1 }
+  $startedHere = $true
   if (-not $Headless) { Show-EmulatorWindow }
 }
 Write-Output 'emulator ready'
 
 # Tailscale must be up inside the emulator, or every flow fails to reach
 # the PC (open the Tailscale app there and connect).
-$ping = & $adb shell 'ping -c1 -W3 MY-PC.example.ts.net' 2>$null
+# After a fresh boot Tailscale reconnects by itself within a minute or so.
+for ($i = 0; $i -lt 30; $i++) {
+  $ping = & $adb shell 'ping -c1 -W2 MY-PC.example.ts.net' 2>$null
+  if ($ping -match '1 received') { break }
+  Start-Sleep 3
+}
 if (-not ($ping -match '1 received')) { Write-Output 'the emulator cannot reach the PC: is Tailscale connected in the emulator?'; exit 1 }
 
 $installed = & $adb shell pm list packages host.exp.exponent 2>$null
@@ -73,4 +83,9 @@ if ($Flow) {
   $all = Get-ChildItem $flows -Filter '*.yaml' | Where-Object { $_.Name -notlike '_*' } | Sort-Object Name
   & maestro test @($all.FullName)
 }
-exit $LASTEXITCODE
+$code = $LASTEXITCODE
+if ($startedHere -and -not $Keep) {
+  Write-Output 'shutting the emulator down'
+  & $adb emu kill | Out-Null
+}
+exit $code

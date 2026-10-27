@@ -25,6 +25,7 @@ import (
 //	ASKSEMBLE_FAKE_UNTRUSTED  "1": --bg fails like an untrusted folder
 //	ASKSEMBLE_FAKE_NOLINK     "1": --bg never writes a remote link
 //	ASKSEMBLE_FAKE_STOP_DROPS "1": stop also drops the session from the list
+//	ASKSEMBLE_FAKE_RM_BUSY    file: while it exists, rm fails once (and deletes it)
 //	ASKSEMBLE_FAKE_EXIT       exit code
 //	ASKSEMBLE_FAKE_SLEEP      duration to sleep first
 func TestMain(m *testing.M) {
@@ -196,6 +197,15 @@ func fakeRemoteControl(args []string) int {
 }
 
 func fakeStopRemove(verb, target string) int {
+	// ASKSEMBLE_FAKE_RM_BUSY names a file; while it exists, rm fails once
+	// and deletes it, like the Claude service settling a just-stopped job.
+	if busy := os.Getenv("ASKSEMBLE_FAKE_RM_BUSY"); verb == "rm" && busy != "" {
+		if _, err := os.Stat(busy); err == nil {
+			os.Remove(busy)
+			fmt.Fprintln(os.Stderr, "session is still settling")
+			return 1
+		}
+	}
 	state := fakeLoadState()
 	out := state[:0]
 	found := false
