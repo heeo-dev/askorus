@@ -141,7 +141,6 @@
   "settings.leftOnPC": "PC에 닿지 않아 PC에는 기기가 남아 있을 수 있습니다. PC에서 asksemble-agent devices revoke {id}로 지우세요.",
   "settings.defaults": "새 세션 기본값",
   "settings.about": "정보",
-  "diag.unreachable": "PC에 닿지 않습니다. 폰의 Tailscale이 켜져 있는지, PC가 켜져 있고 잠들지 않았는지, 에이전트가 도는지 확인하세요.",
   "diag.reached": "PC에 닿음",
   "diag.paired": "PC가 이 폰을 알고 있음",
   "diag.agent": "에이전트 {version}",
@@ -153,5 +152,17 @@
   "notice.claude_service_elevated": "Claude 백그라운드 서비스가 관리자 권한으로 돌고 있습니다. PC의 관리자 터미널에서 claude daemon stop --any를 실행하세요.",
   "new.allowedFolders": "PC에서 허용한 폴더",
   "new.recentFolders": "최근 대화한 폴더",
-  "folders.recentHint": "켜면 이 폴더를 PC 허용 목록에 저장하고 열어 둡니다."
+  "folders.recentHint": "켜면 이 폴더를 PC 허용 목록에 저장하고 열어 둡니다.",
+  "reach.offline": "PC에 닿지 않습니다",
+  "reach.agent_down": "PC는 켜져 있지만 에이전트가 꺼져 있습니다",
+  "reach.unpaired": "이 PC와의 짝이 끊겼습니다",
+  "reach.wrong_account": "PC 주인과 다른 Tailscale 계정입니다",
+  "reach.other": "PC가 요청을 처리하지 못했습니다",
+  "reach.check.phone": "폰의 Tailscale이 켜져 있고 연결됐는지 보세요(다른 VPN은 끄기).",
+  "reach.check.pc": "PC가 켜져 있고 잠들지 않았는지, PC의 Tailscale이 켜져 있는지 보세요.",
+  "reach.check.agent": "PC에서 asksemble-agent start로 에이전트를 켜세요. 로그인할 때 켜지게 하려면 asksemble-agent autostart on.",
+  "reach.check.account": "폰의 Tailscale을 PC와 같은 계정으로 로그인하세요.",
+  "reach.retry": "다시 시도",
+  "ask.title": "한 번에 묻기",
+  "ask.soon": "여러 AI에게 한 번에 묻고 답을 비교하는 기능은 다음 단계(Phase 2)에서 나옵니다."
 }

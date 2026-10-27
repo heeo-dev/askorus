@@ -33,6 +33,8 @@ export class FakeAgent {
   remoteUrl = 'https://claude.ai/code/session_test';
   /** Codes /v1/info reports for Claude, such as claude_service_elevated. */
   notices: string[] = [];
+  /** How the PC can be reached: fine, agent stopped behind serve, or not at all. */
+  reach: 'ok' | 'agent_down' | 'offline' = 'ok';
   private jobs = new Map<string, any>();
   private n = 0;
 
@@ -47,7 +49,9 @@ export class FakeAgent {
       auth: headers.Authorization,
     };
     this.calls.push(call);
-    if (url.host !== `${HOST}:${PORT}`) throw new TypeError('Network request failed');
+    if (this.reach === 'offline' || url.host !== `${HOST}:${PORT}`) throw new TypeError('Network request failed');
+    // tailscale serve answers by itself when nothing listens behind it.
+    if (this.reach === 'agent_down') return new Response('<html>502 Bad Gateway</html>', { status: 502 });
     return this.route(call);
   }) as typeof fetch;
 

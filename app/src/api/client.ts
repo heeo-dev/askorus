@@ -30,7 +30,11 @@ export class AgentError extends Error {
 
 /** The request never got an answer: phone offline, Tailscale off, PC asleep, agent down. */
 export class NetworkError extends Error {
-  constructor(readonly cause?: unknown) {
+  constructor(
+    readonly cause?: unknown,
+    /** No answer before the client's timeout (rather than an error right away). */
+    readonly timedOut = false,
+  ) {
     super('network');
     this.name = 'NetworkError';
   }
@@ -120,7 +124,7 @@ export class AgentClient {
       });
     } catch (e) {
       if (signal?.aborted) throw new CancelledError();
-      throw new NetworkError(e);
+      throw new NetworkError(e, ctl.signal.aborted);
     } finally {
       clearTimeout(timer);
       signal?.removeEventListener('abort', onAbort);

@@ -3,8 +3,10 @@ import { useCallback, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
 import { AgentClient, baseUrl } from '@/api/client';
+import { cause } from '@/connections/reach';
 import { type Connection, ConnectionStore } from '@/connections/store';
-import { errorText, t } from '@/i18n';
+import { t } from '@/i18n';
+import { reachTitle } from '@/ui/ReachError';
 import { type Theme, useTheme } from '@/ui/theme';
 
 const store = new ConnectionStore();
@@ -31,7 +33,7 @@ export default function Home() {
           const info = await client.info();
           r = { state: 'ok', version: info.version };
         } catch (e) {
-          r = { state: 'error', text: errorText(e) };
+          r = { state: 'error', text: reachTitle(cause(e)) };
         }
         setReach((prev) => ({ ...prev, [c.id]: r }));
       }),

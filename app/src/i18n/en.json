@@ -141,7 +141,6 @@
   "settings.leftOnPC": "Couldn't reach the PC, so the device may still be listed there. Remove it on the PC with asksemble-agent devices revoke {id}.",
   "settings.defaults": "New session defaults",
   "settings.about": "About",
-  "diag.unreachable": "Can't reach the PC. Check that Tailscale is on on this phone, the PC is on and awake, and the agent is running.",
   "diag.reached": "Reached the PC",
   "diag.paired": "The PC knows this phone",
   "diag.agent": "Agent {version}",
@@ -153,5 +152,17 @@
   "notice.claude_service_elevated": "The Claude background service runs as administrator. In an administrator terminal on the PC, run: claude daemon stop --any",
   "new.allowedFolders": "Allowed on the PC",
   "new.recentFolders": "Folders with recent conversations",
-  "folders.recentHint": "Turning one on saves it to the allowed list on the PC and keeps it open."
+  "folders.recentHint": "Turning one on saves it to the allowed list on the PC and keeps it open.",
+  "reach.offline": "Can't reach the PC",
+  "reach.agent_down": "The PC is on, but the agent is not running",
+  "reach.unpaired": "This phone is no longer paired with the PC",
+  "reach.wrong_account": "This Tailscale account is not the PC owner's",
+  "reach.other": "The PC couldn't handle the request",
+  "reach.check.phone": "Check that Tailscale is on and connected on this phone (turn other VPNs off).",
+  "reach.check.pc": "Check that the PC is on and awake, with Tailscale running there.",
+  "reach.check.agent": "Start the agent on the PC with asksemble-agent start. To start it at logon: asksemble-agent autostart on.",
+  "reach.check.account": "Sign in to Tailscale on this phone with the same account as the PC.",
+  "reach.retry": "Try again",
+  "ask.title": "Ask all",
+  "ask.soon": "Asking several AIs at once and comparing their answers comes in the next phase (Phase 2)."
 }

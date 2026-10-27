@@ -15,12 +15,14 @@ import {
   View,
 } from 'react-native';
 
-import { AgentError, type AgentClient } from '@/api/client';
+import type { AgentClient } from '@/api/client';
 import type { Session } from '@/api/types';
 import { connect } from '@/connections/open';
 import { type Connection, ConnectionStore } from '@/connections/store';
-import { errorText, label, t } from '@/i18n';
+import { type Cause, cause } from '@/connections/reach';
+import { errorText, has, label, type MessageKey, t } from '@/i18n';
 import { Button } from '@/ui/Button';
+import { ReachError } from '@/ui/ReachError';
 import { SessionSheet } from '@/ui/SessionSheet';
 import { ago, folderName, sessionTitle } from '@/ui/format';
 import { type Theme, useTheme } from '@/ui/theme';
@@ -30,7 +32,7 @@ const store = new ConnectionStore();
 const filters = ['', 'running', 'stopped', 'terminal', 'history'] as const;
 type Filter = (typeof filters)[number];
 
-type Load = { state: 'loading' } | { state: 'ok' } | { state: 'error'; text: string; unauthorized: boolean };
+type Load = { state: 'loading' } | { state: 'ok' } | { state: 'error'; cause: Cause; text: string };
 
 export default function PCSessions() {
   const th = useTheme();
@@ -38,6 +40,7 @@ export default function PCSessions() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [pc, setPC] = useState<{ conn: Connection; client: AgentClient } | null | undefined>(undefined);
   const [caps, setCaps] = useState<string[]>([]);
+  const [notices, setNotices] = useState<string[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [load, setLoad] = useState<Load>({ state: 'loading' });
@@ -56,7 +59,10 @@ export default function PCSessions() {
     if (!pc) return;
     pc.client
       .info()
-      .then((i) => setCaps(i.capabilities))
+      .then((i) => {
+        setCaps(i.capabilities);
+        setNotices(i.agents.flatMap((a) => a.notices ?? []));
+      })
       .catch(() => setCaps([]));
   }, [pc]);
 
@@ -77,11 +83,7 @@ export default function PCSessions() {
       setLoad({ state: 'ok' });
     } catch (e) {
       if (mine !== seq.current) return;
-      setLoad({
-        state: 'error',
-        text: errorText(e),
-        unauthorized: e instanceof AgentError && e.code === 'unauthorized',
-      });
+      setLoad({ state: 'error', cause: cause(e), text: errorText(e) });
     }
   }, [pc, q, filter]);
 
@@ -170,12 +172,15 @@ export default function PCSessions() {
         <Text style={s.warning}>{t('sessions.agentsUnavailable')}</Text>
       ) : null}
 
+      {notices.map((n) => (
+        <Text key={n} style={s.notice}>
+          {has(`notice.${n}`) ? t(`notice.${n}` as MessageKey) : n}
+        </Text>
+      ))}
+
       {load.state === 'error' ? (
         <View style={s.errorBox}>
-          <Text style={s.error}>{load.text}</Text>
-          {load.unauthorized ? (
-            <Button label={t('sessions.repair')} onPress={() => router.push('/pair')} />
-          ) : null}
+          <ReachError cause={load.cause} detail={load.text} onRetry={refresh} />
         </View>
       ) : null}
 
@@ -275,7 +280,7 @@ const styles = (th: Theme) =>
     filterTextOn: { color: th.accentText, fontWeight: '600' },
     warning: { color: th.muted, fontSize: 13, paddingHorizontal: 16, paddingTop: 8 },
     errorBox: { paddingHorizontal: 16, paddingTop: 12, gap: 10 },
-    error: { color: th.danger, fontSize: 15, lineHeight: 22 },
+    notice: { color: th.danger, fontSize: 14, lineHeight: 20, paddingHorizontal: 16, paddingTop: 8 },
     list: { padding: 16, gap: 10 },
     empty: { textAlign: 'center', paddingTop: 32 },
     row: {

@@ -52,7 +52,7 @@ describe('home', () => {
     await pairedPC();
     agent.tokenValid = false;
     await renderRouter(appDir, { initialUrl: '/' });
-    expect(await screen.findByText('This phone is no longer paired with the PC. Pair again.')).toBeTruthy();
+    expect(await screen.findByText('This phone is no longer paired with the PC')).toBeTruthy();
   });
 });
 
