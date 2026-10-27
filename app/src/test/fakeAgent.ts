@@ -98,6 +98,20 @@ export class FakeAgent {
       const f = this.folders.find((x) => x.id === id);
       if (!f) return err(404, 'folder_not_found');
       const enabled = !!c.body?.enabled;
+      if (f.source === 'history') {
+        if (!enabled) return json(200, f);
+        // Keeping a history folder open saves it to the allowed list.
+        const saved = {
+          ...f,
+          id: f.name,
+          source: 'config',
+          lastActive: undefined,
+          server: { ...f.server, enabled: true },
+          status: { state: 'running', sessions: 0, capacity: f.server.capacity },
+        };
+        this.folders = [...this.folders.filter((x) => x.id !== id && x.source !== 'history'), saved, ...this.folders.filter((x) => x.source === 'history' && x.id !== id)];
+        return json(200, saved);
+      }
       const next = {
         ...f,
         server: { ...f.server, enabled },

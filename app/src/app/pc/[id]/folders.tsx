@@ -10,6 +10,7 @@ import type { Folder } from '@/api/types';
 import { connect } from '@/connections/open';
 import { ConnectionStore } from '@/connections/store';
 import { errorText, has, t } from '@/i18n';
+import { isHistory } from '@/ui/FolderPicker';
 import { type Theme, useTheme } from '@/ui/theme';
 
 const store = new ConnectionStore();
@@ -69,8 +70,13 @@ export default function Folders() {
     setFolders((list) => list?.map((x) => (x.id === f.id ? { ...x, server: { ...x.server, enabled } } : x)) ?? list);
     try {
       const saved = await client.setFolderServer(f.id, enabled);
-      setFolders((list) => list?.map((x) => (x.id === f.id ? saved : x)) ?? list);
       followUntil.current = Date.now() + followForMs;
+      if (isHistory(f)) {
+        // It moved to the allowed list under a new id.
+        await load(client);
+      } else {
+        setFolders((list) => list?.map((x) => (x.id === f.id ? saved : x)) ?? list);
+      }
     } catch (e) {
       setRowError((m) => ({ ...m, [f.id]: errorText(e) }));
       load(client);
@@ -84,6 +90,39 @@ export default function Folders() {
     setRefreshing(false);
   };
 
+  const allowed = folders?.filter((f) => !isHistory(f)) ?? [];
+  const recent = folders?.filter(isHistory) ?? [];
+
+  const card = (f: Folder) => {
+    const st = f.status?.state ?? 'off';
+    const stateKey = `folders.state.${st}`;
+    return (
+      <View key={f.id} style={s.card}>
+        <View style={s.top}>
+          <View style={s.names}>
+            <Text style={s.title}>{f.name || f.id}</Text>
+            <Text style={s.muted} numberOfLines={2}>
+              {f.path}
+            </Text>
+          </View>
+          <Switch
+            value={f.server.enabled}
+            onValueChange={(v) => toggle(f, v)}
+            disabled={!supported || st === 'external'}
+            accessibilityLabel={t('folders.keepOpen', { name: f.name || f.id })}
+          />
+        </View>
+        <Text style={st === 'failed' || st === 'untrusted' ? s.error : s.muted}>
+          {has(stateKey) ? t(stateKey) : st}
+          {st === 'running'
+            ? ` · ${t('folders.sessions', { n: f.status?.sessions ?? 0, max: f.status?.capacity ?? f.server.capacity ?? 0 })}`
+            : ''}
+        </Text>
+        {rowError[f.id] ? <Text style={s.error}>{rowError[f.id]}</Text> : null}
+      </View>
+    );
+  };
+
   return (
     <ScrollView
       style={s.screen}
@@ -94,35 +133,14 @@ export default function Folders() {
       {!supported ? <Text style={s.muted}>{t('folders.notSupported')}</Text> : null}
       {error ? <Text style={s.error}>{error}</Text> : null}
       {folders?.length === 0 ? <Text style={s.muted}>{t('new.noFolders')}</Text> : null}
-      {folders?.map((f) => {
-        const st = f.status?.state ?? 'off';
-        const stateKey = `folders.state.${st}`;
-        return (
-          <View key={f.id} style={s.card}>
-            <View style={s.top}>
-              <View style={s.names}>
-                <Text style={s.title}>{f.name || f.id}</Text>
-                <Text style={s.muted} numberOfLines={2}>
-                  {f.path}
-                </Text>
-              </View>
-              <Switch
-                value={f.server.enabled}
-                onValueChange={(v) => toggle(f, v)}
-                disabled={!supported || st === 'external'}
-                accessibilityLabel={t('folders.keepOpen', { name: f.name || f.id })}
-              />
-            </View>
-            <Text style={st === 'failed' || st === 'untrusted' ? s.error : s.muted}>
-              {has(stateKey) ? t(stateKey) : st}
-              {st === 'running'
-                ? ` · ${t('folders.sessions', { n: f.status?.sessions ?? 0, max: f.status?.capacity ?? f.server.capacity ?? 0 })}`
-                : ''}
-            </Text>
-            {rowError[f.id] ? <Text style={s.error}>{rowError[f.id]}</Text> : null}
-          </View>
-        );
-      })}
+      {allowed.map(card)}
+      {recent.length ? (
+        <>
+          <Text style={s.group}>{t('new.recentFolders')}</Text>
+          <Text style={s.muted}>{t('folders.recentHint')}</Text>
+        </>
+      ) : null}
+      {recent.map(card)}
     </ScrollView>
   );
 }
@@ -145,4 +163,5 @@ const styles = (th: Theme) =>
     title: { color: th.text, fontSize: 16, fontWeight: '600' },
     muted: { color: th.muted, fontSize: 13 },
     error: { color: th.danger, fontSize: 14, lineHeight: 20 },
+    group: { color: th.text, fontSize: 15, fontWeight: '600', marginTop: 8 },
   });

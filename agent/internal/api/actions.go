@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/asksemble/asksemble/agent/internal/config"
 	"github.com/asksemble/asksemble/agent/internal/core"
@@ -202,9 +203,9 @@ func (s *Server) startSession(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, CodeBadRequest, "effort must be low, medium, high, xhigh or max")
 		return
 	}
-	folder, ok := s.folderByID(req.Folder)
+	folder, _, ok := s.resolveFolder(r.Context(), req.Folder)
 	if !ok {
-		writeError(w, http.StatusNotFound, CodeFolderUnknown, "folder is not in the allowed list")
+		writeError(w, http.StatusNotFound, CodeFolderUnknown, "folder is not allowed and has no past sessions")
 		return
 	}
 	agent := req.Agent
@@ -267,6 +268,10 @@ type FolderInfo struct {
 	Server config.FolderServer `json:"server"`
 	Status *core.ServeStatus   `json:"status,omitempty"`
 	IsGit  bool                `json:"isGit"` // worktree spawn needs a git repository
+	// Source is "config" for the allowed list or "history" for a folder
+	// with past sessions; LastActive is set for history folders.
+	Source     string     `json:"source"`
+	LastActive *time.Time `json:"lastActive,omitempty"`
 }
 
 // serverAdapter is the adapter that can serve folders, if any.
@@ -280,7 +285,7 @@ func (s *Server) serverAdapter() core.Server {
 }
 
 func (s *Server) folderInfo(f config.Folder) FolderInfo {
-	fi := FolderInfo{ID: f.ID, Name: filepath.Base(f.Path), Path: f.Path, Server: f.Server, IsGit: isGitRepo(f.Path)}
+	fi := FolderInfo{ID: f.ID, Name: filepath.Base(f.Path), Path: f.Path, Server: f.Server, IsGit: isGitRepo(f.Path), Source: sourceConfig}
 	if srv := s.serverAdapter(); srv != nil {
 		st := srv.ServerStatus(f.Path)
 		fi.Status = &st
@@ -299,6 +304,9 @@ func (s *Server) folders(w http.ResponseWriter, r *http.Request) {
 		for _, f := range s.o.Folders() {
 			out = append(out, s.folderInfo(f))
 		}
+	}
+	for _, h := range s.historyFolders(r.Context()) {
+		out = append(out, historyInfo(h))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"folders": out})
 }
@@ -319,15 +327,29 @@ func (s *Server) setFolderServer(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotImplemented, CodeNotSupported, "folder servers are not available here")
 		return
 	}
-	f, ok := s.folderByID(r.PathValue("id"))
-	if !ok {
-		writeError(w, http.StatusNotFound, CodeFolderUnknown, "folder is not in the allowed list")
-		return
-	}
 	var req ServerRequest
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10)).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, CodeBadRequest, "body must be {enabled, spawn, capacity}")
 		return
+	}
+	f, source, ok := s.resolveFolder(r.Context(), r.PathValue("id"))
+	if !ok {
+		writeError(w, http.StatusNotFound, CodeFolderUnknown, "folder is not allowed and has no past sessions")
+		return
+	}
+	if source == sourceHistory {
+		// Keeping a history folder open saves it to the allowed list first;
+		// turning one off changes nothing.
+		if !req.Enabled || s.o.AddFolder == nil {
+			writeJSON(w, http.StatusOK, historyInfo(historyFolder{ID: f.ID, Path: f.Path}))
+			return
+		}
+		added, err := s.o.AddFolder(f.Path)
+		if err != nil {
+			s.actionError(w, err)
+			return
+		}
+		f = added
 	}
 	fs := f.Server
 	fs.Enabled = req.Enabled

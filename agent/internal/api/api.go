@@ -83,6 +83,11 @@ type Options struct {
 	// the saved folder; ApplyFolders then makes the servers match.
 	SetFolderServer func(id string, fs config.FolderServer) (config.Folder, error)
 	ApplyFolders    func()
+	// HistoryFolders reports whether folders with past sessions may be
+	// used too (기록 폴더); nil means no. AddFolder saves one of them to the
+	// allowed list, for keeping it open.
+	HistoryFolders func() bool
+	AddFolder      func(path string) (config.Folder, error)
 }
 
 // Server serves /v1.

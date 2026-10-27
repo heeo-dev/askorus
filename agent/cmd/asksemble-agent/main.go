@@ -310,6 +310,8 @@ func serve(dir string, args []string) error {
 		Folders:         foldersFrom(dir, cfg.Folders),
 		SetFolderServer: setFolderServer(dir),
 		ApplyFolders:    rec.trigger,
+		HistoryFolders:  historyFoldersOn(dir),
+		AddFolder:       addFolder(dir),
 	}).Handler())
 	ln, err := api.Listen(cfg.Port)
 	if err != nil {

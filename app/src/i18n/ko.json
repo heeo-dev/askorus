@@ -112,7 +112,7 @@
   "home.settings": "설정",
   "new.title": "새 세션",
   "new.folder": "폴더",
-  "new.noFolders": "PC에 허용된 폴더가 없습니다. PC에서 asksemble-agent folders add <폴더>로 더하세요.",
+  "new.noFolders": "고를 폴더가 없습니다. PC에서 Claude Code로 한 번 대화한 폴더가 여기에 나오고, PC에서 asksemble-agent folders add <폴더>로 더할 수도 있습니다.",
   "new.name": "이름",
   "new.namePlaceholder": "비우면 폴더 이름과 시각",
   "new.model": "모델",
@@ -150,5 +150,8 @@
   "notice.claude_not_found": "PC에서 Claude Code를 찾지 못했습니다.",
   "notice.claude_version_failed": "PC에서 Claude Code 버전을 읽지 못했습니다. 로그인돼 있는지 확인하세요.",
   "notice.claude_remote_control_disabled_env": "PC의 환경 변수가 Remote Control을 막고 있습니다.",
-  "notice.claude_service_elevated": "Claude 백그라운드 서비스가 관리자 권한으로 돌고 있습니다. PC의 관리자 터미널에서 claude daemon stop --any를 실행하세요."
+  "notice.claude_service_elevated": "Claude 백그라운드 서비스가 관리자 권한으로 돌고 있습니다. PC의 관리자 터미널에서 claude daemon stop --any를 실행하세요.",
+  "new.allowedFolders": "PC에서 허용한 폴더",
+  "new.recentFolders": "최근 대화한 폴더",
+  "folders.recentHint": "켜면 이 폴더를 PC 허용 목록에 저장하고 열어 둡니다."
 }

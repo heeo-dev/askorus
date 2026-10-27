@@ -14,6 +14,7 @@ import { ConnectionStore } from '@/connections/store';
 import { errorText, t } from '@/i18n';
 import { Button } from '@/ui/Button';
 import { Choices } from '@/ui/Choices';
+import { FolderPicker } from '@/ui/FolderPicker';
 import { type Theme, useTheme } from '@/ui/theme';
 
 const store = new ConnectionStore();
@@ -85,14 +86,8 @@ export default function NewSession() {
       ) : folders.length === 0 ? (
         <Text style={s.muted}>{t('new.noFolders')}</Text>
       ) : (
-        <Choices
-          options={folders.map((f) => f.id)}
-          value={folder}
-          onChange={setFolder}
-          labelOf={(fid) => folders.find((f) => f.id === fid)?.name || fid}
-        />
+        <FolderPicker folders={folders} value={folder} onChange={setFolder} />
       )}
-      {folder ? <Text style={s.muted}>{folders?.find((f) => f.id === folder)?.path}</Text> : null}
 
       <Text style={s.label}>{t('new.name')}</Text>
       <TextInput

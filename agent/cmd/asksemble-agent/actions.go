@@ -263,18 +263,12 @@ func foldersCmd(dir string, args []string, out io.Writer) error {
 		if info, err := os.Stat(path); err != nil || !info.IsDir() {
 			return fail("%s is not a folder", "%s는 폴더가 아닙니다", path)
 		}
-		for _, f := range cfg.Folders {
-			if strings.EqualFold(f.Path, path) {
-				return fail("%s is already allowed (id %s)", "%s는 이미 허용돼 있습니다 (id %s)", path, f.ID)
-			}
+		added, isNew := cfg.AddFolder(path, *id)
+		if !isNew {
+			return fail("%s is already allowed (id %s)", "%s는 이미 허용돼 있습니다 (id %s)", path, added.ID)
 		}
-		cfg.Folders = append(cfg.Folders, config.Folder{ID: *id, Path: path})
 		if err := config.Save(dir, cfg); err != nil {
 			return err
-		}
-		added := cfg.Folders[len(cfg.Folders)-1]
-		if saved, err := config.Load(dir); err == nil {
-			added = saved.Folders[len(saved.Folders)-1]
 		}
 		say(out, m("allowed %s as %q. New sessions there need the folder to be trusted: run claude in it once.",
 			"%s를 %q로 허용했습니다. 이 폴더에서 새 세션을 열려면 먼저 그 폴더에서 claude를 한 번 실행해 신뢰를 허용하세요.", added.Path, added.ID))

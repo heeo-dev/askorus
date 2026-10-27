@@ -47,6 +47,26 @@ type Config struct {
 	// KeepAwake stops the PC from sleeping while a background session or a
 	// folder server runs (design: 절전). Off by default.
 	KeepAwake bool `json:"keepAwake,omitempty"`
+	// HistoryFolders lets the phone also start sessions in folders that
+	// already have conversations (2026-10-27). On unless set to false.
+	HistoryFolders *bool `json:"historyFolders,omitempty"`
+}
+
+// HistoryFoldersOn reports whether folders with conversations may be used.
+func (c Config) HistoryFoldersOn() bool { return c.HistoryFolders == nil || *c.HistoryFolders }
+
+// AddFolder allows path for new sessions and returns the saved entry. A
+// folder that is already allowed is returned as it is.
+func (c *Config) AddFolder(path, id string) (Folder, bool) {
+	path = filepath.Clean(path)
+	for _, f := range c.Folders {
+		if strings.EqualFold(f.Path, path) {
+			return f, false
+		}
+	}
+	c.Folders = append(c.Folders, Folder{ID: id, Path: path})
+	c.normalize()
+	return c.Folders[len(c.Folders)-1], true
 }
 
 // Folder is a folder new sessions may be started in (F4).

@@ -97,6 +97,33 @@ func (r *reconciler) once() {
 	}
 }
 
+// historyFoldersOn reads the historyFolders setting per request, so editing
+// the settings file applies without a restart.
+func historyFoldersOn(dir string) func() bool {
+	return func() bool {
+		cfg, err := config.Load(dir)
+		return err == nil && cfg.HistoryFoldersOn()
+	}
+}
+
+// addFolder saves a folder with past sessions to the allowed list, for
+// keeping it open from the phone.
+func addFolder(dir string) func(path string) (config.Folder, error) {
+	return func(path string) (config.Folder, error) {
+		cfg, err := config.Load(dir)
+		if err != nil {
+			return config.Folder{}, err
+		}
+		f, isNew := cfg.AddFolder(path, "")
+		if isNew {
+			if err := config.Save(dir, cfg); err != nil {
+				return config.Folder{}, err
+			}
+		}
+		return f, nil
+	}
+}
+
 // setFolderServer saves one folder's server setting.
 func setFolderServer(dir string) func(id string, fs config.FolderServer) (config.Folder, error) {
 	return func(id string, fs config.FolderServer) (config.Folder, error) {

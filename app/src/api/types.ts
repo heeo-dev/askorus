@@ -69,6 +69,9 @@ export type Folder = {
   server: { enabled: boolean; spawn?: string; capacity?: number };
   status?: ServeStatus;
   isGit: boolean;
+  /** "config": allowed on the PC; "history": has past sessions. Older agents leave it out. */
+  source?: 'config' | 'history' | (string & {});
+  lastActive?: string;
 };
 
 export type FolderList = {

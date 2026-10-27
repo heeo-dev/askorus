@@ -112,7 +112,7 @@
   "home.settings": "Settings",
   "new.title": "New session",
   "new.folder": "Folder",
-  "new.noFolders": "No folders are allowed on the PC yet. Add one there with asksemble-agent folders add <folder>.",
+  "new.noFolders": "No folders to pick. Folders you have used with Claude Code on the PC show up here, or add one on the PC with asksemble-agent folders add <folder>.",
   "new.name": "Name",
   "new.namePlaceholder": "Leave empty for the folder name and time",
   "new.model": "Model",
@@ -150,5 +150,8 @@
   "notice.claude_not_found": "Claude Code wasn't found on the PC.",
   "notice.claude_version_failed": "Couldn't read the Claude Code version on the PC. Check that it is signed in.",
   "notice.claude_remote_control_disabled_env": "An environment variable on the PC turns Remote Control off.",
-  "notice.claude_service_elevated": "The Claude background service runs as administrator. In an administrator terminal on the PC, run: claude daemon stop --any"
+  "notice.claude_service_elevated": "The Claude background service runs as administrator. In an administrator terminal on the PC, run: claude daemon stop --any",
+  "new.allowedFolders": "Allowed on the PC",
+  "new.recentFolders": "Folders with recent conversations",
+  "folders.recentHint": "Turning one on saves it to the allowed list on the PC and keeps it open."
 }
