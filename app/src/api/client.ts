@@ -183,6 +183,11 @@ export class AgentClient {
     return this.request<{ id: string; hidden: boolean }>('DELETE', `sessions/${encodeURIComponent(id)}`);
   }
 
+  /** Unpairs this phone on the PC, so its token stops working there. */
+  forgetSelf() {
+    return this.request<{ deviceId: string; removed: boolean }>('DELETE', 'devices/self');
+  }
+
   job(jobId: string, signal?: AbortSignal) {
     return this.request<Job>('GET', `jobs/${encodeURIComponent(jobId)}`, undefined, signal);
   }

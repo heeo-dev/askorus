@@ -1,7 +1,7 @@
 // One PC's sessions (F1, F2): search, state filter, badges, pull to
 // refresh. Tapping a session opens its sheet.
 
-import { router, Stack, useLocalSearchParams } from 'expo-router';
+import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   AppState,
@@ -85,9 +85,12 @@ export default function PCSessions() {
     }
   }, [pc, q, filter]);
 
-  useEffect(() => {
-    fetchSessions();
-  }, [fetchSessions]);
+  // Also on coming back from a new session or the folders screen.
+  useFocusEffect(
+    useCallback(() => {
+      fetchSessions();
+    }, [fetchSessions]),
+  );
 
   // Coming back from the Claude app: states have likely changed.
   useEffect(() => {
@@ -123,6 +126,18 @@ export default function PCSessions() {
     <View style={s.screen}>
       <Stack.Screen options={{ title: pc?.conn.name ?? '' }} />
       <View style={s.top}>
+        <View style={s.actions}>
+          <View style={s.action}>
+            <Button label={t('sessions.new')} onPress={() => router.push({ pathname: '/pc/[id]/new', params: { id } })} />
+          </View>
+          <View style={s.action}>
+            <Button
+              secondary
+              label={t('sessions.folders')}
+              onPress={() => router.push({ pathname: '/pc/[id]/folders', params: { id } })}
+            />
+          </View>
+        </View>
         <TextInput
           style={s.search}
           value={query}
@@ -234,6 +249,8 @@ const styles = (th: Theme) =>
     screen: { flex: 1, backgroundColor: th.bg },
     center: { alignItems: 'center', justifyContent: 'center', padding: 24 },
     top: { paddingHorizontal: 16, paddingTop: 12, gap: 10 },
+    actions: { flexDirection: 'row', gap: 10 },
+    action: { flex: 1 },
     search: {
       backgroundColor: th.card,
       borderColor: th.border,

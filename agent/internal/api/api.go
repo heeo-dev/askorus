@@ -135,6 +135,7 @@ func (s *Server) Handler() http.Handler {
 	route("GET", "/v1/jobs/{jobId}", s.jobStatus)
 	route("GET", "/v1/folders", s.folders)
 	route("PUT", "/v1/folders/{id}/server", s.setFolderServer)
+	route("DELETE", "/v1/devices/self", s.forgetSelf)
 	mux.HandleFunc("/v1/sessions/{id}/{action}", methodNotAllowed)
 	mux.HandleFunc("/v1/sessions/{id}", methodNotAllowed)
 	// Reserved for the realtime channel (principle 5).

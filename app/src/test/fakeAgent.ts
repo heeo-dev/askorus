@@ -1,7 +1,7 @@
 // A pretend PC agent for screen tests. It answers the /v1 routes the app
 // uses, keeps a little state, and records what it was asked.
 
-import type { Session } from '@/api/types';
+import type { Folder, Session } from '@/api/types';
 
 export const HOST = 'desktop-test.tail0.ts.net';
 export const PORT = 8790;
@@ -24,12 +24,15 @@ export function session(over: Partial<Session> & { id: string }): Session {
 
 export class FakeAgent {
   sessions: Session[] = [];
+  folders: Folder[] = [];
   calls: Call[] = [];
   /** What the PC answers to pairing: approve, deny, or keep waiting. */
   pairAnswer: 'approve' | 'deny' | 'wait' = 'approve';
   /** When false, every token is refused, as after `devices revoke`. */
   tokenValid = true;
   remoteUrl = 'https://claude.ai/code/session_test';
+  /** Codes /v1/info reports for Claude, such as claude_service_elevated. */
+  notices: string[] = [];
   private jobs = new Map<string, any>();
   private n = 0;
 
@@ -79,10 +82,38 @@ export class FakeAgent {
         apiVersion: 1,
         hostname: 'DESKTOP-TEST',
         os: 'windows',
-        agents: [],
-        capabilities: ['list', 'start', 'resume', 'stop', 'remove', 'open_official'],
+        agents: [{ agent: 'claude', version: '2.1.310', available: true, capabilities: [], notices: this.notices }],
+        capabilities: ['list', 'start', 'resume', 'stop', 'remove', 'open_official', 'serve'],
         reserved: [],
       });
+    }
+    if (key === 'DELETE /v1/devices/self') {
+      this.tokenValid = false;
+      return json(200, { deviceId: 'dev-1', removed: true });
+    }
+    if (key === 'GET /v1/folders') return json(200, { folders: this.folders });
+    const fs = c.path.match(/^\/v1\/folders\/([^/]+)\/server$/);
+    if (fs && c.method === 'PUT') {
+      const id = decodeURIComponent(fs[1]);
+      const f = this.folders.find((x) => x.id === id);
+      if (!f) return err(404, 'folder_not_found');
+      const enabled = !!c.body?.enabled;
+      const next = {
+        ...f,
+        server: { ...f.server, enabled },
+        status: enabled ? { state: 'running', sessions: 0, capacity: f.server.capacity } : { state: 'off', sessions: 0 },
+      };
+      this.folders = this.folders.map((x) => (x.id === id ? next : x));
+      return json(200, next);
+    }
+    if (key === 'POST /v1/sessions') {
+      const f = this.folders.find((x) => x.id === c.body?.folder);
+      if (!f) return err(404, 'folder_not_found');
+      const jobId = `job-${++this.n}`;
+      const s = session({ id: `claude:new-${this.n}`, title: c.body.name || f.name, state: 'running', folder: f.path });
+      this.sessions = [s, ...this.sessions];
+      this.jobs.set(jobId, { action: 'started', remoteUrl: this.remoteUrl, session: s });
+      return json(202, { jobId, kind: 'start', status: 'running', pollAfterMs: 1 });
     }
     if (key === 'GET /v1/sessions') {
       const q = (c.query.get('q') ?? '').toLowerCase();

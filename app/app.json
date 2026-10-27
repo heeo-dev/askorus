@@ -31,9 +31,6 @@
           "recordAudioAndroid": false
         }
       ]
-    ],
-    "experiments": {
-      "typedRoutes": true
-    }
+    ]
   }
 }
