@@ -27,9 +27,11 @@ import (
 
 const (
 	launchTimeout = 60 * time.Second // the first --bg also starts the service
-	linkTimeout   = 20 * time.Second
-	stopTimeout   = 15 * time.Second
-	linkSkew      = 3 * time.Second // clock slack when comparing line times
+	// Claude can take ~20 s to reconnect a woken session (seen 19 s after
+	// a reboot); its link must not be handed out before that.
+	linkTimeout = 45 * time.Second
+	stopTimeout = 15 * time.Second
+	linkSkew    = 3 * time.Second // clock slack when comparing line times
 )
 
 var (
@@ -362,7 +364,6 @@ func (a *Adapter) waitLink(ctx context.Context, id string, since time.Time, shor
 		timeout = linkTimeout
 	}
 	deadline := time.Now().Add(timeout)
-	lastCheck := time.Time{}
 	for {
 		// A running process with remote control on names its link in
 		// ~/.claude/sessions; that file belongs to the current process,
@@ -370,20 +371,12 @@ func (a *Adapter) waitLink(ctx context.Context, id string, since time.Time, shor
 		if u := a.live()[id].remoteURL(); u != "" {
 			return u, nil
 		}
+		// After a resume, only a link line written since then counts: the
+		// old link stays archived until Claude reconnects, and handing it
+		// out early showed the session as archived (2026-10-27).
 		t, _ := a.transcript(id)
-		if t.RemoteURL != "" {
-			if since.IsZero() || !t.RemoteURLAt.Before(since.Add(-linkSkew)) {
-				return t.RemoteURL, nil
-			}
-			if time.Since(lastCheck) > 3*time.Second {
-				lastCheck = time.Now()
-				a.Invalidate()
-				if entries, ok := a.agents(ctx); ok {
-					if e, has := bestEntry(entries, id); has && e.state() == core.StateRunning && e.PID > 0 && time.Since(since) > 3*time.Second {
-						return t.RemoteURL, nil
-					}
-				}
-			}
+		if t.RemoteURL != "" && (since.IsZero() || !t.RemoteURLAt.Before(since.Add(-linkSkew))) {
+			return t.RemoteURL, nil
 		}
 		if time.Now().After(deadline) {
 			hint := "no remote link after " + timeout.String()

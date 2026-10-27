@@ -104,6 +104,7 @@ export function SessionSheet({
     try {
       const r = await client.stopSession(session.id);
       if (r.session) onChanged(r.session);
+      setLink(null); // a stopped session's link shows as archived; opening must wake it
       setNote({ text: t('sheet.stopped') });
     } catch (e) {
       setNote({ text: errorText(e), error: true });
@@ -180,7 +181,9 @@ export function SessionSheet({
           ) : (
             <View style={s.actions}>
               {link ? (
-                <Button label={t('sheet.openAgain')} onPress={() => openLink(link)} />
+                // Asks the PC again rather than reusing the link: the session
+                // may have stopped since, and its old link is then archived.
+                <Button label={t('sheet.openAgain')} onPress={open} />
               ) : can('open_official') && session.openModes.includes('official') ? (
                 <Button label={t('sheet.open')} onPress={open} disabled={busy !== null} />
               ) : null}
