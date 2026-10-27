@@ -15,6 +15,12 @@ import { type Theme, useTheme } from '@/ui/theme';
 
 const store = new ConnectionStore();
 
+/** unsettled is true while a folder's server has not caught up with its setting. */
+function unsettled(f: Folder): boolean {
+  const st = f.status?.state ?? 'off';
+  return st === 'starting' || (f.server.enabled ? st === 'off' : st === 'running');
+}
+
 // While a server is starting, ask again this often, for at most this long.
 const followEveryMs = 2000;
 const followForMs = 60000;
@@ -56,9 +62,11 @@ export default function Folders() {
     })();
   }, [id, load]);
 
-  // Follow a server that is starting until it settles.
+  // After a switch, follow until each server matches its setting: the
+  // PC applies the setting a moment later, so the first answer can still
+  // say "off" for a folder just turned on (found by E2E-05).
   useEffect(() => {
-    if (!client || !folders?.some((f) => f.status?.state === 'starting')) return;
+    if (!client || !folders?.some(unsettled)) return;
     if (Date.now() > followUntil.current) return;
     const timer = setTimeout(() => load(client), followEveryMs);
     return () => clearTimeout(timer);

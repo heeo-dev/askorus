@@ -1,0 +1,27 @@
+# E2E-05: keep rc-test open (the PC starts a folder server), then close it.
+# Only a running server shows "Open · n/m sessions", so that text tells the
+# state of rc-test apart from the other folders' "Off".
+appId: host.exp.exponent
+---
+- runFlow: 01-home-and-list.yaml
+- tapOn: "Folders"
+- extendedWaitUntil:
+    visible: "Keep rc-test open"
+    timeout: 20000
+# Start from closed, even if an earlier run left it open.
+- runFlow:
+    when:
+      visible: "Open · .*"
+    commands:
+      - tapOn: "Keep rc-test open"
+      - extendedWaitUntil:
+          notVisible: "Open · .*"
+          timeout: 60000
+- tapOn: "Keep rc-test open"
+- extendedWaitUntil:
+    visible: "Open · .*"
+    timeout: 60000
+- tapOn: "Keep rc-test open"
+- extendedWaitUntil:
+    notVisible: "Open · .*"
+    timeout: 60000

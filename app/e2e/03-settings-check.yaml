@@ -1,0 +1,24 @@
+# E2E-06: the connection check in settings passes every step.
+# Settings is opened by its link: in Expo Go a floating tools button sits
+# over the header's "Settings" (the built app has no such button).
+appId: host.exp.exponent
+---
+- runFlow: _open-app.yaml
+- openLink: exp://10.0.2.2:8081/--/settings
+- extendedWaitUntil:
+    visible: "Check connection|Go home"
+    timeout: 20000
+- runFlow:
+    when:
+      visible: "Go home"
+    commands:
+      - pressKey: back
+      - waitForAnimationToEnd
+- tapOn: "Check connection"
+- extendedWaitUntil:
+    visible: ".*Reached the PC"
+    timeout: 20000
+- assertVisible: ".*The PC knows this phone"
+- assertVisible: ".*Agent .*"
+- assertVisible: ".*Claude Code .*"
+- assertNotVisible: ".*out of date.*|.*administrator.*|.*turns Remote Control off.*"

@@ -95,13 +95,20 @@ describe('new session', () => {
 });
 
 describe('folders', () => {
-  test('keeping a folder open turns its server on', async () => {
+  // The PUT answer still shows the old state; the screen must keep asking
+  // until the server catches up (found by E2E-05, R-12).
+  test('keeping a folder open follows the server until it is open, and back off', async () => {
     const c = await pairedPC();
     await renderRouter(appDir, { initialUrl: `/pc/${c.id}/folders` });
-    await fireEvent(await screen.findByLabelText('Keep shop open'), 'valueChange', true);
-    expect(await screen.findByText('Open · 0/4 sessions')).toBeTruthy();
+    const toggle = await screen.findByLabelText('Keep shop open');
+    await fireEvent(toggle, 'valueChange', true);
+    expect(await screen.findByText('Open · 0/4 sessions', {}, { timeout: 5000 })).toBeTruthy();
     expect(agent.calls.find((x) => x.method === 'PUT')?.body).toEqual({ enabled: true });
     expect(agent.folders[0].server.enabled).toBe(true);
+
+    await fireEvent(screen.getByLabelText('Keep shop open'), 'valueChange', false);
+    await waitFor(() => expect(screen.queryByText('Open · 0/4 sessions')).toBeNull(), { timeout: 5000 });
+    expect(screen.getAllByText('Off').length).toBeGreaterThan(0);
   });
 });
 

@@ -1,0 +1,38 @@
+# Opens the app from the dev server in Expo Go and waits for the home screen.
+# Expo Go shows its developer menu on the first open; it is closed here.
+# Opening the same link again keeps the screen the last flow left, so go
+# back until the home screen shows.
+appId: host.exp.exponent
+---
+- openLink: exp://10.0.2.2:8081
+# Any text: the bundle has loaded (a sheet left open hides the screen below).
+- extendedWaitUntil:
+    visible: ".+"
+    timeout: 90000
+- waitForAnimationToEnd
+# The developer menu can rise a few seconds after the app shows.
+- extendedWaitUntil:
+    visible: "Continue|Go home"
+    timeout: 8000
+    optional: true
+- runFlow:
+    when:
+      visible: "Continue"
+    commands:
+      - tapOn: "Continue"
+- runFlow:
+    when:
+      visible: "Go home"
+    commands:
+      - pressKey: back
+      - waitForAnimationToEnd
+- repeat:
+    times: 5
+    while:
+      notVisible: "My PCs"
+    commands:
+      - pressKey: back
+      - waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "My PCs"
+    timeout: 30000

@@ -1,0 +1,20 @@
+# Pairs the emulator app with the agent using the link the PC prints
+# in the environment variable MAESTRO_LINK (a -e argument would break on the
+# "&" in the link through maestro.bat). A person allows it on the PC.
+appId: host.exp.exponent
+---
+- runFlow: _open-app.yaml
+- tapOn: "Pair with a PC"
+- tapOn: "asksemble://pair?…"
+- inputText: ${MAESTRO_LINK}
+- hideKeyboard
+- tapOn: "Pair with this link"
+- extendedWaitUntil:
+    visible: "Is this your PC?"
+    timeout: 10000
+- tapOn:
+    text: "Pair"
+    index: 0
+- extendedWaitUntil:
+    visible: "Connected · agent .*"
+    timeout: 150000

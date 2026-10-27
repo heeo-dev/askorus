@@ -33,6 +33,12 @@ export class FakeAgent {
   remoteUrl = 'https://claude.ai/code/session_test';
   /** Codes /v1/info reports for Claude, such as claude_service_elevated. */
   notices: string[] = [];
+  /**
+   * Like the real agent, the PUT answer still shows the old server state;
+   * the new one appears on the next GET /v1/folders.
+   */
+  serverLag = true;
+  private settle: Array<() => void> = [];
   /** How the PC can be reached: fine, agent stopped behind serve, or not at all. */
   reach: 'ok' | 'agent_down' | 'offline' = 'ok';
   private jobs = new Map<string, any>();
@@ -95,7 +101,10 @@ export class FakeAgent {
       this.tokenValid = false;
       return json(200, { deviceId: 'dev-1', removed: true });
     }
-    if (key === 'GET /v1/folders') return json(200, { folders: this.folders });
+    if (key === 'GET /v1/folders') {
+      this.settle.splice(0).forEach((apply) => apply()); // by the next ask the server caught up
+      return json(200, { folders: this.folders });
+    }
     const fs = c.path.match(/^\/v1\/folders\/([^/]+)\/server$/);
     if (fs && c.method === 'PUT') {
       const id = decodeURIComponent(fs[1]);
@@ -121,8 +130,17 @@ export class FakeAgent {
         server: { ...f.server, enabled },
         status: enabled ? { state: 'running', sessions: 0, capacity: f.server.capacity } : { state: 'off', sessions: 0 },
       };
-      this.folders = this.folders.map((x) => (x.id === id ? next : x));
-      return json(200, next);
+      if (!this.serverLag) {
+        this.folders = this.folders.map((x) => (x.id === id ? next : x));
+        return json(200, next);
+      }
+      // The setting is saved at once; the server catches up later.
+      const saved = { ...f, server: next.server };
+      this.folders = this.folders.map((x) => (x.id === id ? saved : x));
+      this.settle.push(() => {
+        this.folders = this.folders.map((x) => (x.id === id ? next : x));
+      });
+      return json(200, saved);
     }
     if (key === 'POST /v1/sessions') {
       const f = this.folders.find((x) => x.id === c.body?.folder);
