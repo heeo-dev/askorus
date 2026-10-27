@@ -5,10 +5,12 @@
 appId: host.exp.exponent
 ---
 - openLink: exp://10.0.2.2:8081
-# Any text: the bundle has loaded (a sheet left open hides the screen below).
+# Text from one of our screens (or the developer menu over it): the bundle
+# has loaded. Expo Go's own loading screen must not count, or the back
+# presses below would close Expo Go.
 - extendedWaitUntil:
-    visible: ".+"
-    timeout: 90000
+    visible: "My PCs|Go home|Continue|\\+ New session|Folders|Pair with a PC|Remove|Open again|Check connection|Is this your PC\\?"
+    timeout: 120000
 - waitForAnimationToEnd
 # The developer menu can rise a few seconds after the app shows.
 - extendedWaitUntil:

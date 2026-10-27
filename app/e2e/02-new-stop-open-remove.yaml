@@ -16,7 +16,6 @@ env:
     index: 0
 - tapOn: "Leave empty for the folder name and time"
 - inputText: ${NAME}
-- hideKeyboard
 - tapOn: "Start and open in the Claude app"
 # The Claude link opens a browser on the emulator; come back to the app.
 - extendedWaitUntil:
@@ -60,13 +59,13 @@ env:
     timeout: 20000
 - tapOn: ${NAME}
 - tapOn: "Remove"
+# The confirm dialog repeats "Remove"; press the one under its message.
+- extendedWaitUntil:
+    visible: "Remove this session\\?"
+    timeout: 10000
 - tapOn:
-    text: "REMOVE"
-    optional: true
-- tapOn:
-    text: "Remove"
-    index: 1
-    optional: true
+    text: "(?i)remove"
+    below: "If it is running it stops.*"
 - extendedWaitUntil:
     notVisible: ${NAME}
     timeout: 30000

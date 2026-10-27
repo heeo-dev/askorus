@@ -17,18 +17,37 @@ $adb = "$android\Sdk\platform-tools\adb.exe"
 
 function Booted { (& $adb shell getprop sys.boot_completed 2>$null) -eq '1' }
 
+# The emulator remembers its window position, which can be off this PC's
+# small screen; bring it back to the top of the screen.
+function Show-EmulatorWindow {
+  Add-Type -Namespace E2E -Name Win -MemberDefinition @'
+[DllImport("user32.dll")] public static extern bool ShowWindow(System.IntPtr h, int c);
+[DllImport("user32.dll")] public static extern bool SetWindowPos(System.IntPtr h, System.IntPtr a, int x, int y, int cx, int cy, uint f);
+'@
+  $p = Get-Process -Name 'qemu-system-x86_64' -ErrorAction SilentlyContinue | Select-Object -First 1
+  if ($p -and $p.MainWindowHandle -ne [System.IntPtr]::Zero) {
+    [E2E.Win]::ShowWindow($p.MainWindowHandle, 9) | Out-Null
+    [E2E.Win]::SetWindowPos($p.MainWindowHandle, [System.IntPtr]::Zero, 400, 0, 0, 0, 5) | Out-Null
+  }
+}
+
 if (-not (Booted)) {
   Write-Output 'starting emulator'
-  # The agent is reached by its MagicDNS name, which only Tailscale's own
-  # resolver knows and the emulator ignores. The name is in the emulator's
-  # /system/etc/hosts (docs/testing.md 4), which needs a writable system.
-  $emuArgs = @('-avd', 'asksemble', '-no-audio', '-no-boot-anim', '-no-snapshot-save', '-writable-system')
+  # asksemble-play: Google Play image with the Tailscale app signed in, so it
+  # reaches the agent by its MagicDNS name like a real phone. Host GPU.
+  $emuArgs = @('-avd', 'asksemble-play', '-no-audio', '-no-boot-anim', '-gpu', 'host')
   if ($Headless) { $emuArgs += '-no-window' }
   Start-Process -FilePath "$android\Sdk\emulator\emulator.exe" -ArgumentList $emuArgs -WindowStyle Hidden
   for ($i = 0; $i -lt 180 -and -not (Booted); $i++) { Start-Sleep 2 }
   if (-not (Booted)) { Write-Output 'emulator did not boot'; exit 1 }
+  if (-not $Headless) { Show-EmulatorWindow }
 }
 Write-Output 'emulator ready'
+
+# Tailscale must be up inside the emulator, or every flow fails to reach
+# the PC (open the Tailscale app there and connect).
+$ping = & $adb shell 'ping -c1 -W3 MY-PC.example.ts.net' 2>$null
+if (-not ($ping -match '1 received')) { Write-Output 'the emulator cannot reach the PC: is Tailscale connected in the emulator?'; exit 1 }
 
 $installed = & $adb shell pm list packages host.exp.exponent 2>$null
 if (-not $installed) {
