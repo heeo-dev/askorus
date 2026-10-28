@@ -113,6 +113,10 @@ powershell -NoProfile -File scripts\e2e.ps1 -Flow 02    # 하나만
 | MT-04 | 폰 Tailscale을 끄고 열기 → '폰 쪽부터 확인' 안내 |
 | MT-05 | PC 재부팅 뒤: 에이전트 자동 시작, 꺼진 세션 열기가 '보관됨' 없이 열림(R-08) |
 | MT-06 | 열어 두기 켠 폴더로 Claude 앱 PC 목록에서 새 세션 |
+| MT-07 | 설치본(EAS 빌드, B2부터): 폰 다크 모드를 따름(R-14), 앱을 껐다 켜도 짝이 남음, 권한은 카메라만 물음 |
+| MT-08 | 설치본: `pair`가 띄운 QR(`asksemble://pair?…`)을 폰 기본 카메라 앱으로 찍으면 이 앱의 짝 맺기 화면이 열림 |
+
+E2E는 Expo Go로 돌아서 설치본에서만 드러나는 차이(다크 모드, 권한, 딥 링크 scheme)를 못 본다. 이런 설정은 `app/src/config-test.ts`(UT)로 지키고, 설치본은 MT-07·08로 본다.
 
 ## 6. 회귀 표
 
@@ -133,3 +137,5 @@ powershell -NoProfile -File scripts\e2e.ps1 -Flow 02    # 하나만
 | R-11 | 10-27 | 관리자 권한 서비스가 떠 있으면 45초 기다림 → 바로 안내 | `TestLaunchRefusedWithElevatedService`, `TestServiceElevated` |
 | R-12 | 10-27 | 폴더 열어 두기를 켜도 화면이 'Off'에 머묾: 켠 직후 답에는 아직 예전 상태가 실려 오는데 화면은 '켜는 중'일 때만 다시 물었다 | E2E-05, `screens2-test.tsx` 폴더(가짜 에이전트가 실제처럼 늦게 켜짐) |
 | R-13 | 10-28 | 실행 중 세션을 지우면 멈춘 직후 `claude rm`이 한 번 실패해(서비스가 방금 멈춘 작업을 정리하는 중) 지우기가 502로 끝남 | `TestRemoveRetriesWhileTheServiceSettles`(가짜 claude의 rm 한 번 실패), E2E-04 |
+| R-14 | 10-28 | 설치본에서 다크 모드를 따르지 않음: `userInterfaceStyle: automatic`은 `expo-system-ui`가 있어야 Android에 적용되는데 Expo Go는 이를 가렸다(prebuild 경고로 찾음) | `config-test.ts`, MT-07 |
+| R-15 | 10-28 | 열어 두기를 끈 폴더가 Claude 앱에 남고 거기서 만든 세션이 '연결 중…'에 머무는데 앱이 아무 말도 안 함(Claude Code가 환경을 약 4시간 남김, 계획 17절) | `screens2-test.tsx` 폴더 끄기 안내, MT-06 |

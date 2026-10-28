@@ -131,6 +131,8 @@
   "folders.state.failed": "Couldn't start. Trying again shortly.",
   "folders.state.untrusted": "This folder isn't trusted on the PC yet. Run claude in it once and accept the trust prompt.",
   "folders.state.external": "A server started separately on the PC runs here, so it is left alone.",
+  "folders.offNote": "Turning a folder off doesn't remove it from the Claude app right away; it shows as offline. A new session started there waits, and begins only when you turn the folder back on here within about 4 hours. After about 4 hours the folder drops out of the Claude app's list, and turning it on connects afresh, so the waiting session never starts.",
+  "folders.justOff": "It is still listed in the Claude app. A session started there now begins when you turn the folder back on here within about 4 hours.",
   "settings.title": "Settings",
   "settings.pcs": "Paired PCs",
   "settings.thisPhone": "This phone: {name} (id {id})",

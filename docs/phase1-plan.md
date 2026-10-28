@@ -35,7 +35,7 @@ Asksemble/
 | A4 | 서버 관리자(F10): 폴더별 `claude remote-control`, Ctrl+C 종료, 재시작 시 다시 띄우기, 서버 세션에 '서버' 배지 | 실제 PC에서 Claude 앱으로 그 폴더에 새 세션 생성 **(PC 쪽 시험 완료, 폰에서 새 세션 만들기는 사용자 확인 대기, 10절)** |
 | A5 | 설치 점검(`check`), serve 포트 고르기 안내, 자동 시작(일반 권한), `uninstall`, 관리자 권한 서비스 감지(A3에서 옮김, 2026-10-26) | **에이전트 관문:** 명령줄 요청만으로 F1–F6, F10 동작 + 확장 원칙 11개 **(만듦. 자동 시작 등록은 사용자 확인 대기, 11절)** |
 | B1 | Expo 앱: 짝 맺기(QR), 세션 목록·검색·필터, 상세 시트, 새 세션, 폴더 화면, 설정, 오류 화면, ko/en (13절) | 실제 폰에서 시험 페이지로 되던 것이 앱으로 모두 됨 |
-| B2 | Android 내부 테스트 트랙 | **본인 폰에서 1주일 실제 사용** |
+| B2 | Android 내부 테스트 트랙(15절, 절차는 `docs/android-release.md`) | **본인 폰에서 1주일 실제 사용** |
 | C | iOS(EAS 빌드, TestFlight), 데모 모드 | TestFlight 외부 테스터 심사 통과 |
 | D | macOS·Linux 에이전트(구현 전 테스트 5 포함), 서명·공증, 공개 | — |
 
@@ -323,3 +323,46 @@ B1-1 결과: `npx tsc --noEmit` 통과, `npx jest` 4개 묶음 40개 통과(클�
 - 시험 세션 `resume-test`(rc-test)와 시험 중 생긴 복사본 `79ecd11b`(목록에서 숨김)가 남아 있다.
 
 - 10-28 확인(E2E-07, PC Chrome): `claude stop`만 해도 Claude가 원격 세션을 보관하고 Code 목록에서 뺀다. 에이전트로 다시 깨우면 연결이 붙으면서 보관이 저절로 풀리고 목록에 '연결됨'으로 돌아온다. 재부팅 때의 '보관됨'은 앱이 다시 붙기 전에 링크를 연 탓이었고, 링크를 늦게 주는 고침(3ea3ddc)으로 해결됐다. 에뮬레이터는 Google Play 이미지 + Tailscale 앱으로 바꿨다(Claude 앱은 Play 프로텍트 미인증이라 로그인 불가).
+
+## 15. B2 계획 (2026-10-28)
+
+설치 파일은 EAS 클라우드에서 빌드한다(PC에 Android SDK·JDK를 깔지 않음, 13절). 절차와 누가 무엇을 하는지는 `docs/android-release.md`에 있다.
+
+| 단계 | 할 일 |
+| --- | --- |
+| B2-1 빌드 설정 | `eas.json`(preview APK, production AAB, 빌드 번호는 EAS가 보관), 패키지 이름, 쓰지 않는 권한 빼기, 설치본에서만 드러나는 설정을 UT로 지키기 **(완료)** |
+| B2-2 첫 빌드 | 사용자가 Expo에 로그인한 뒤 `eas init`, preview APK를 폰에 설치해 MT-01~08 |
+| B2-3 Play | 개발자 등록, 앱 만들기, 서비스 계정 키, production AAB를 내부 테스트에 올리기 |
+| B2-4 1주일 사용 | Play에서 받은 앱으로 매일 쓰고, 문제는 회귀 표에 적고 고친다 |
+
+B2-1 결과:
+
+- `npx expo prebuild`로 Android 프로젝트를 만들어(빌드는 하지 않고 확인 뒤 지움) 매니페스트를 봤다. Expo가 기본으로 넣는 저장소 읽기·쓰기, 다른 앱 위에 그리기, 진동 권한을 `blockedPermissions`로 뺐다. 남는 권한은 카메라와 인터넷이다.
+- prebuild가 `userInterfaceStyle`에는 `expo-system-ui`가 필요하다고 경고했다. 없으면 설치본은 늘 밝은 화면이다. Expo Go에서는 보이지 않던 문제라 `expo-system-ui`를 더하고 `src/config-test.ts`로 지킨다(R-14).
+- SDK 58의 새 패치(`expo` 58.0.20 등)로 맞췄다(expo-doctor 20/20).
+- 패키지 이름은 `app.asksemble`(2026-10-28 사용자 확정).
+
+B2-2(2026-10-28): `eas init`으로 `@heeodev/asksemble`을 만들었다. 첫 preview 빌드 때 EAS가 서명 키를 클라우드에서 만들었고(PC에 keytool 없음), versionCode는 1에서 시작한다. 올린 파일은 1.6MB다(`.local`·비밀값은 gitignore로 빠짐). 빌드는 19분 만에 끝났다(0.1.0, versionCode 1). 다음은 폰에 설치해 MT-01~08.
+- 개인정보처리방침 초안 `docs/privacy.md`(한국어·영어). 공개 주소는 아직 없다.
+
+## 16. PATH (2026-10-28)
+
+`.local\bin`이 PATH에 없어 터미널에서 `asksemble-agent pair`가 안 됐다(사용자 지적). 이 PC는 사용자 PATH(HKCU)에 `.local\bin`을 넣었고, 배포판에서도 되도록 `path` 명령을 더했다. 설계의 'PC 설치 흐름' 5번과 지우기에 PATH를 더했다(rev 63).
+
+- `asksemble-agent path on|off|status`: 이 exe가 있는 폴더를 이 사용자의 PATH(`HKCU\Environment`의 `Path`)에 넣고 뺀다. 관리자 권한이 필요 없고 시스템 PATH는 건드리지 않는다. 다른 항목은 순서와 적힌 그대로 두고, 값의 종류(REG_SZ·REG_EXPAND_SZ)도 지킨다. 같은 폴더를 대소문자·끝의 `\`·따옴표·`%LOCALAPPDATA%`가 달라도 같은 것으로 본다. 바꾼 뒤 Windows에 알려(WM_SETTINGCHANGE) 새로 연 터미널부터 적용된다.
+- exe가 내려받기 폴더나 임시 폴더에 있으면 계속 둘 폴더로 옮기라고 알린다.
+- `check`는 PATH에 없으면 주의로 `path on`을 안내하고, `uninstall`은 PATH 항목도 뺀다.
+- 배포판 설치 순서(D 단계의 설치 문서에 쓴다): exe를 `%LOCALAPPDATA%\Programs\Asksemble`에 둔다 → `asksemble-agent.exe path on` → 새 터미널에서 `asksemble-agent autostart on`, `check`, `pair`. 나중에 winget(portable)으로 내면 winget이 PATH를 맡는다.
+- 시험: `pathenv_test.go`(문자열만, 실제 PATH는 안 건드림), uninstall 테스트는 PATH 빼기를 가짜로 바꾼다. 실제 PC에서 임시 폴더의 빌드로 on → on(이미 있음) → status → off를 돌려 PATH가 원래 값 그대로 돌아온 것을 봤다.
+- `.local\bin`에 배포(2026-10-28): 열어 둔 폴더 서버가 없는 것을 보고 `shutdown` → 교체 → `start -test-page`. `check` 주의 0개(PATH ok), Tailscale 주소의 `/v1/info`는 토큰 없이 401. 예전 빌드는 `asksemble-agent.prev.exe`로 남겼다.
+
+## 17. 열어 두기를 꺼도 Claude 앱에 폴더가 남음 (2026-10-28, MT-06)
+
+설치본으로 MT-06을 하다 찾았다. 폴더 열어 두기를 꺼도 Claude 앱의 PC 목록에 그 폴더가 남고, 거기서 만든 새 세션('테스트 안녕')이 '연결 중…'에 머물렀다.
+
+- 에이전트는 서버를 제대로 껐다(Ctrl+C, 남은 프로세스 없음). Claude Code(2.1.312)는 일반 종료 때 늘 환경을 지우지 않고 오프라인으로만 표시한다(`Environment preserved`). 지우는 것은 오류나 조직 정책으로 끝날 때뿐이고 고르는 옵션은 없다.
+- 끈 뒤 약 4시간(`BRIDGE_POINTER_TTL_MS` 14,400,000) 안에 그 폴더에서 다시 켜면 같은 환경에 다시 붙는다. 실제로 다시 켜자 10초 안에 기다리던 세션이 시작됐고, 처음 켤 때 미리 만든 세션도 새로 만들지 않고 다시 붙었다. 4시간이 지나면 새 환경으로 켜져 기다리던 세션은 시작되지 않는다(실행 파일의 코드로 읽은 것이고 4시간을 기다려 보지는 않았다). 끌 때 돌던 세션을 이어 주는 시간은 15분(`PERSISTED_SESSION_RESUME_WINDOW_MS`)이다.
+- 미리 만든 세션을 없애려고 `--no-create-session-in-dir`를 시험했다. 이 폴더에 예전 서버의 `bridge-pointer.json`이 있으면 'This folder is already served by a terminal `claude remote-control` on this device'로 바로 끝나서 켜지지 않았다(세 번 모두). 옵션 없이는 같은 상황에서 바로 켜졌다. 그래서 쓰지 않는다(사용자가 고른 2번을 되돌림).
+- 앱 폴더 화면 위에 꺼질 때의 동작을 적고(약 4시간), 방금 끈 폴더 카드에 'Claude 앱 목록에는 아직 남아 있음'을 띄운다(R-15). 두 번째 preview APK(빌드 d25950af)를 폰에 덮어 설치해 화면 위 문구가 보이는 것을 사용자가 확인했다(10-28). 끈 직후 카드 문구는 19:31 확인 뒤에 본다.
+- claude.ai에서 본 것: 15:18에 끄고 15:30까지는 목록에 그대로(표시 없음), 16:07에는 같은 목록에 '오프라인' 표시와 새 세션 화면의 '기기가 오프라인 상태입니다' 경고. 다른 원격 세션은 계속 '연결됨'.
+- 19:31(끈 지 4시간 13분, 그사이 다시 켜지 않음, 포인터 환경 id 그대로): 환경 목록에서 'Remote Control' 항목이 통째로 없어졌고 `/code`는 GitHub 연결 안내로 넘어가며 기본 환경이 `Default`(클라우드)로 바뀌었다. 세션 '테스트 안녕'·`rc-test`는 목록에 'Remote Control · 오프라인'으로 남고, 열면 '다시 연결되면 이 세션이 재연결됩니다'. 사라진 시각은 16:07과 19:31 사이라 4시간과 맞는지는 확정하지 못했다.
