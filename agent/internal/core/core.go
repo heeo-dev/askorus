@@ -45,6 +45,7 @@ const (
 	CapRemove       Capability = "remove"
 	CapOpenOfficial Capability = "open_official"
 	CapServe        Capability = "serve"
+	CapPreview      Capability = "preview" // F8: the last question and answer, read only
 	CapAsk          Capability = "ask"
 	CapTUI          Capability = "tui"
 	CapChat         Capability = "chat"
@@ -53,7 +54,7 @@ const (
 // AllCapabilities lists every name the API knows, implemented or not.
 var AllCapabilities = []Capability{
 	CapList, CapStart, CapResume, CapStop, CapRemove,
-	CapOpenOfficial, CapServe, CapAsk, CapTUI, CapChat,
+	CapOpenOfficial, CapServe, CapPreview, CapAsk, CapTUI, CapChat,
 }
 
 // OpenModeOfficial opens a session in the AI's official app (principle 6).

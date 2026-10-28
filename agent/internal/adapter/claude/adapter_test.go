@@ -95,7 +95,7 @@ func TestInfo(t *testing.T) {
 	t.Setenv("CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "")
 	t.Setenv("DISABLE_GROWTHBOOK", "")
 	info := a.Info(context.Background())
-	wantCaps := []core.Capability{core.CapList, core.CapStart, core.CapResume, core.CapStop, core.CapRemove, core.CapOpenOfficial}
+	wantCaps := []core.Capability{core.CapList, core.CapPreview, core.CapStart, core.CapResume, core.CapStop, core.CapRemove, core.CapOpenOfficial}
 	if ptySupported() {
 		wantCaps = append(wantCaps, core.CapServe)
 	}
@@ -108,7 +108,7 @@ func TestInfo(t *testing.T) {
 	}
 
 	missing := New(Options{ClaudeDir: t.TempDir(), ClaudePath: filepath.Join(t.TempDir(), "claude.cmd")})
-	if info := missing.Info(context.Background()); info.Available || !slices.Contains(info.Notices, NoticeNotFound) || !slices.Equal(info.Capabilities, []core.Capability{core.CapList}) {
+	if info := missing.Info(context.Background()); info.Available || !slices.Contains(info.Notices, NoticeNotFound) || !slices.Equal(info.Capabilities, []core.Capability{core.CapList, core.CapPreview}) {
 		t.Errorf("missing claude info = %+v", info)
 	}
 	if res, err := missing.ListSessions(context.Background()); err != nil || !slices.Contains(res.Warnings, WarnAgentsUnavailable) {

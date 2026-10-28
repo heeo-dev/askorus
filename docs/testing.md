@@ -10,7 +10,7 @@ Asksemble Phase 1의 테스트 기준이다. 버그를 고치면 그 버그를 �
 | --- | --- | --- | --- | --- | --- |
 | **1. 매번** | UT: 함수·패키지 하나(에이전트·앱). IT: 에이전트 전체를 가짜 `claude`로 폰 순서대로. ST: 앱 화면 전체를 가짜 에이전트로 사람처럼 | `agent/**/*_test.go`, `scenario_it_test.go`, `app/src/**/*-test.ts(x)` | `scripts\test-all.ps1` | 고칠 때마다, 합치기·배포 전 | 2~5분, 에뮬레이터 없음 |
 | **2. 실제 연동** | LT: 에이전트 + **실제 `claude`** + 실제 `~/.claude`, HTTP로 폰 순서대로. E2E-07: claude.ai 쪽 상태(목록·연결됨·보관됨) | `agent/internal/live/live_test.go`(태그 `live`), PC Chrome | `scripts\test-live.ps1`, E2E-07은 Claude in Chrome | 에이전트가 claude를 다루는 부분을 바꿨을 때 | 1~2분 |
-| **3. 앱 전체** | E2E: 에뮬레이터의 Expo Go 앱 → Tailscale → 실제 에이전트 → 실제 `claude`. Android에만 있는 것(뒤로 가기, 링크 열기, 키보드, 화면 배치)과 앱·에이전트 연동 | `app/e2e/*.yaml`(Maestro) | `scripts\e2e.ps1` | 앱이 바뀐 것을 main에 합치기 전 | 5분 + 부팅 2분 |
+| **3. 앱 전체** | E2E: 에뮬레이터의 Expo Go 앱 → Tailscale → 실제 에이전트 → 실제 `claude`. Android에만 있는 것(뒤로 가기, 링크 열기, 키보드, 화면 배치)과 앱·에이전트 연동 | `app/e2e/*.yaml`(Maestro) | `scripts\e2e.ps1` | 기본은 건너뜀. Phase 중간에 한두 번(10-29 사용자 결정) | 5분 + 부팅 2분 |
 | **4. 실제 폰** | MT: 카메라 QR, Claude 앱으로 넘어가기, 폰 Tailscale on/off, PC 재부팅 | 5절 | 사람이 | 단계(B1, B2 …)를 마칠 때 | - |
 
 - 가짜 `claude`: 테스트 실행 파일이 `ASKSEMBLE_FAKE_CLAUDE=1`일 때 `claude`처럼 동작한다(`fake_test.go`). 받은 인자를 기록하고 `agents --json`, `--bg`, `stop`, `rm`, `remote-control`을 흉내 내며, 환경 변수로 신뢰 안 됨·링크 없음·rm 한 번 실패 같은 상황을 만든다.
@@ -40,6 +40,7 @@ Asksemble Phase 1의 테스트 기준이다. 버그를 고치면 그 버그를 �
 | IT-07 | 지우기 → 목록에서 빠짐 | F5 |
 | IT-08 | 신뢰 안 된 폴더 → `workspace_not_trusted`, 폴더가 지워짐 → 열기 버튼 없음·`session_folder_missing` | F3, R-06 |
 | IT-09 | 다른 Tailscale 계정 403, 폰이 스스로 짝 끊기 → 그 토큰 401 | N4 |
+| IT-10 | 미리보기: 짝 맺기 전 401 → capability `preview` → 기록 세션의 마지막 질문 → 없는 세션 404 | F8, N4 |
 
 ### LT (실제 연동, `agent/internal/live/live_test.go`)
 
@@ -50,6 +51,7 @@ Asksemble Phase 1의 테스트 기준이다. 버그를 고치면 그 버그를 �
 | LT-01 | `/v1/info`: Claude Code가 있고 PC가 알리는 문제가 없음 | 통과(2.1.311) |
 | LT-02 | 실제 claude로 새 세션(22초) → 실행 중 → 멈춤 → 깨우기(17초, 다시 붙은 링크) → 실행 중 세션 열기는 바로 → 지우기 | 통과 |
 | LT-03 | 실제 `claude remote-control` 폴더 서버 켜기 → running → 끄기(1.1초) | 통과 |
+| LT-04 | 이 PC의 실제 기록 최근 40개 미리보기: 모양(질문 → 답, 최대 2개)과 시간. 개수와 시간만 기록하고 내용은 남기지 않음 | 통과(16개에 미리보기, 가장 느린 것 16ms) |
 
 ### ST (앱 화면, `app/src/test`)
 
@@ -60,6 +62,7 @@ Asksemble Phase 1의 테스트 기준이다. 버그를 고치면 그 버그를 �
 | `history-test.tsx` | 기록 폴더: 새 세션 화면에 따로 보이고 그 폴더로 시작, 열어 두기를 켜면 허용 목록으로 옮김 |
 | `errors-test.tsx` | 원인별 오류(에이전트 꺼짐·닿지 않음·다시 시도), 첫 화면 한 줄 원인, PC 알림, PC 두 대(F7), '한 번에 묻기' 숨김 |
 | `reopen-test.tsx` | '다시 열기'와 멈춘 뒤 열기가 매번 PC에 묻기(R-09) |
+| `preview-test.tsx` | 세션 시트의 '최근 대화'(F8): 질문·답·도구 종류별 횟수(모르는 종류는 코드 그대로, 예전 에이전트는 합계), 아직 답이 없음, PC가 못 읽으면 조용히 예전 '마지막 질문' 줄, `preview`를 모르는 예전 에이전트에는 묻지 않음 |
 
 ## 4. E2E (에뮬레이터)
 
@@ -112,7 +115,7 @@ powershell -NoProfile -File scripts\e2e.ps1 -Flow 02    # 하나만
 | MT-02 | 열기 → Claude 앱으로 바로 넘어감(브라우저가 아님) |
 | MT-03 | Claude 앱에서 돌아오면 목록이 저절로 새로 고쳐짐 |
 | MT-04 | 폰 Tailscale을 끄고 열기 → '폰 쪽부터 확인' 안내 |
-| MT-05 | PC 재부팅 뒤: 에이전트 자동 시작, 꺼진 세션 열기가 '보관됨' 없이 열림(R-08) |
+| MT-05 | PC 재부팅 뒤: 에이전트 자동 시작, 꺼진 세션 열기가 '보관됨' 없이 열림(R-08). 10-29 통과(재부팅 뒤 앱에서 이 개발 세션을 열어 이어 씀) |
 | MT-06 | 열어 두기 켠 폴더로 Claude 앱 PC 목록에서 새 세션 |
 | MT-07 | 설치본(EAS 빌드, B2부터): 폰 다크 모드를 따름(R-14), 앱을 껐다 켜도 짝이 남음, 권한은 카메라만 물음 |
 | MT-08 | 설치본: `pair`가 띄운 QR(`asksemble://pair?…`)을 폰 기본 카메라 앱으로 찍으면 이 앱의 짝 맺기 화면이 열림 |
@@ -140,5 +143,5 @@ E2E는 Expo Go로 돌아서 설치본에서만 드러나는 차이(다크 모드
 | R-13 | 10-28 | 실행 중 세션을 지우면 멈춘 직후 `claude rm`이 한 번 실패해(서비스가 방금 멈춘 작업을 정리하는 중) 지우기가 502로 끝남 | `TestRemoveRetriesWhileTheServiceSettles`(가짜 claude의 rm 한 번 실패), E2E-04 |
 | R-14 | 10-28 | 설치본에서 다크 모드를 따르지 않음: `userInterfaceStyle: automatic`은 `expo-system-ui`가 있어야 Android에 적용되는데 Expo Go는 이를 가렸다(prebuild 경고로 찾음) | `config-test.ts`, MT-07 |
 | R-15 | 10-28 | 열어 두기를 끈 폴더가 Claude 앱에 남고 거기서 만든 세션이 '연결 중…'에 머무는데 앱이 아무 말도 안 함(Claude Code가 환경을 약 4시간 남김, 계획 17절) | `screens2-test.tsx` 폴더 끄기 안내, MT-06 |
-| R-16 | 10-28 | 화면 키보드가 입력 칸과 그 아래 버튼을 가림(짝 맺기 링크, 새 세션 이름). 에뮬레이터는 화면 키보드를 꺼 둬서 가려져 있었다(사용자 지적) | `ui/FormScroll.tsx`(키보드 위로 줄이고 입력 칸 + 버튼 한 줄을 보이게 스크롤), 화면 키보드를 켠 E2E-01~06·`_pair.yaml` |
+| R-16 | 10-28 | 화면 키보드가 입력 칸과 그 아래 버튼을 가림(짝 맺기 링크, 새 세션 이름). 에뮬레이터는 화면 키보드를 꺼 둬서 가려져 있었다(사용자 지적) | `ui/FormScroll.tsx`(입력 칸 + 버튼 한 줄을 보이게 스크롤), `FormScroll-test.tsx`, 화면 키보드를 켠 E2E-01~06·`_pair.yaml`, MT. 10-29 S23 실기기: 짝 맺기 링크 칸이 화면 맨 끝이라 덜 올라가 여전히 가려짐 → `KeyboardAvoidingView`가 S23에서 아무것도 안 해서, 키보드가 떠 있는 동안 끝에 키보드 높이만큼 빈 공간을 붙이고 내용 크기가 바뀔 때마다(빈 공간·버튼이 생길 때) 다시 맞추게 고침. 링크 칸의 키보드 이동 키로도 짝 맺기 |
 | R-17 | 10-28 | 실행 중 세션 지우기가 502: 멈춘 뒤 Claude 서비스 정리가 rm 세 번(2초 간격)보다 오래 걸렸고 rm이 아무것도 출력하지 않아 이유가 비었다. 앱도 15초에서 끊었다 | `TestRemoveWaitsForALongSettle`(가짜 rm 4번 실패·출력 없음), 앱 `client-test` 멈추기·지우기는 45초까지 기다림, E2E-04 |

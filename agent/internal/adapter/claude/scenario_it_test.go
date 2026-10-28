@@ -360,3 +360,26 @@ func TestIT09Access(t *testing.T) {
 		t.Errorf("after unpair = %d, want 401", st)
 	}
 }
+
+// IT-10 The phone reads the last question and answer of a session (F8):
+// announced as a capability, paired phones only.
+func TestIT10Preview(t *testing.T) {
+	p := newPhone(t, nil)
+	const blog = "/v1/sessions/claude:77777777-7777-4777-8777-777777777777/preview"
+	if st, _ := p.call("GET", blog, nil); st != 401 {
+		t.Errorf("before pairing = %d, want 401", st)
+	}
+	p.pair()
+	_, info := p.call("GET", "/v1/info", nil)
+	if caps, _ := json.Marshal(info["capabilities"]); !strings.Contains(string(caps), `"preview"`) {
+		t.Errorf("capabilities = %s, want preview", caps)
+	}
+	st, pv := p.call("GET", blog, nil)
+	turns, _ := pv["turns"].([]any)
+	if st != 200 || len(turns) != 1 || turns[0].(map[string]any)["text"] != "x" {
+		t.Fatalf("preview = %d %v", st, pv)
+	}
+	if st, _ := p.call("GET", "/v1/sessions/claude:99999999-9999-4999-8999-999999999999/preview", nil); st != 404 {
+		t.Errorf("unknown session = %d, want 404", st)
+	}
+}

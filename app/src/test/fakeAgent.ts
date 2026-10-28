@@ -1,7 +1,7 @@
 // A pretend PC agent for screen tests. It answers the /v1 routes the app
 // uses, keeps a little state, and records what it was asked.
 
-import type { Folder, Session } from '@/api/types';
+import type { Folder, Preview, Session } from '@/api/types';
 
 export const HOST = 'desktop-test.tail0.ts.net';
 export const PORT = 8790;
@@ -33,6 +33,10 @@ export class FakeAgent {
   remoteUrl = 'https://claude.ai/code/session_test';
   /** Codes /v1/info reports for Claude, such as claude_service_elevated. */
   notices: string[] = [];
+  /** What /v1/info announces; drop 'preview' to act like an older agent. */
+  capabilities = ['list', 'preview', 'start', 'resume', 'stop', 'remove', 'open_official', 'serve'];
+  /** Previews by session id (F8); 'fail' answers 500, a missing id 404. */
+  previews: Record<string, Preview | 'fail'> = {};
   /**
    * Like the real agent, the PUT answer still shows the old server state;
    * the new one appears on the next GET /v1/folders.
@@ -93,7 +97,7 @@ export class FakeAgent {
         hostname: 'DESKTOP-TEST',
         os: 'windows',
         agents: [{ agent: 'claude', version: '2.1.310', available: true, capabilities: [], notices: this.notices }],
-        capabilities: ['list', 'start', 'resume', 'stop', 'remove', 'open_official', 'serve'],
+        capabilities: this.capabilities,
         reserved: [],
       });
     }
@@ -160,6 +164,12 @@ export class FakeAgent {
       return json(200, { sessions: list, warnings: [] });
     }
 
+    const pv = c.path.match(/^\/v1\/sessions\/([^/]+)\/preview$/);
+    if (pv && c.method === 'GET') {
+      const p = this.previews[decodeURIComponent(pv[1])];
+      if (p === 'fail') return err(500, 'internal');
+      return p ? json(200, p) : err(404, 'session_not_found');
+    }
     const m = c.path.match(/^\/v1\/sessions\/([^/]+)(?:\/(open|stop))?$/);
     if (m) {
       const id = decodeURIComponent(m[1]);

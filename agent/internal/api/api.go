@@ -137,6 +137,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/sessions/{id}/open", s.openSession)
 	mux.HandleFunc("POST /v1/sessions/{id}/stop", s.stopSession)
 	mux.HandleFunc("DELETE /v1/sessions/{id}", s.removeSession)
+	route("GET", "/v1/sessions/{id}/preview", s.previewSession)
 	route("GET", "/v1/jobs/{jobId}", s.jobStatus)
 	route("GET", "/v1/folders", s.folders)
 	route("PUT", "/v1/folders/{id}/server", s.setFolderServer)

@@ -9,6 +9,7 @@ import type {
   OpenResult,
   PairStarted,
   PairStatus,
+  Preview,
   Paired,
   Session,
   SessionFilter,
@@ -190,6 +191,11 @@ export class AgentClient {
 
   removeSession(id: string) {
     return this.request<{ id: string; hidden: boolean }>('DELETE', `sessions/${encodeURIComponent(id)}`, undefined, undefined, slowActionMs);
+  }
+
+  /** The last question and answer of a session, read only (F8). Shown, never stored. */
+  preview(id: string, signal?: AbortSignal) {
+    return this.request<Preview>('GET', `sessions/${encodeURIComponent(id)}/preview`, undefined, signal);
   }
 
   /** Unpairs this phone on the PC, so its token stops working there. */
