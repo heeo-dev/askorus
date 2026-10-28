@@ -227,6 +227,68 @@ func TestLT02SessionLife(t *testing.T) {
 	}
 }
 
+// LT-04 Preview (F8) on this PC's real transcripts: every answer has the
+// expected shape and comes fast, the biggest files included. Only counts
+// and times are logged, never conversation text.
+func TestLT04Preview(t *testing.T) {
+	e := newLive(t)
+	st, list := e.call("GET", "/v1/sessions", nil)
+	if st != 200 {
+		t.Fatalf("sessions = %d", st)
+	}
+	sessions, _ := list["sessions"].([]any)
+	if len(sessions) > 40 {
+		sessions = sessions[:40]
+	}
+	withTurns, slowest := 0, time.Duration(0)
+	for _, x := range sessions {
+		id := x.(map[string]any)["id"].(string)
+		start := time.Now()
+		st, pv := e.call("GET", "/v1/sessions/"+id+"/preview", nil)
+		slowest = max(slowest, time.Since(start))
+		if st == 404 {
+			continue // a live session without a transcript yet
+		}
+		if st != 200 {
+			t.Errorf("%s: status %d", id, st)
+			continue
+		}
+		turns, ok := pv["turns"].([]any)
+		if !ok {
+			t.Errorf("%s: no turns array", id)
+			continue
+		}
+		if len(turns) > 2 {
+			t.Errorf("%s: %d turns, want at most a question and its answer", id, len(turns))
+		}
+		for i, tr := range turns {
+			m := tr.(map[string]any)
+			role, _ := m["role"].(string)
+			if (i == 0 && role != "user") || (i == 1 && role != "assistant") {
+				t.Errorf("%s: turn %d role %q", id, i, role)
+			}
+			// Tool kinds add up to the tool total.
+			total, _ := m["tools"].(float64)
+			sum := 0.0
+			kinds, _ := m["toolKinds"].([]any)
+			for _, k := range kinds {
+				c, _ := k.(map[string]any)["count"].(float64)
+				sum += c
+			}
+			if sum != total {
+				t.Errorf("%s: tool kinds add up to %v, tools %v", id, sum, total)
+			}
+		}
+		if len(turns) > 0 {
+			withTurns++
+		}
+	}
+	t.Logf("%d sessions, %d with a preview, slowest %s", len(sessions), withTurns, slowest.Round(time.Millisecond))
+	if slowest > 2*time.Second {
+		t.Errorf("slowest preview took %s", slowest)
+	}
+}
+
 // LT-03 Keeping the test folder open starts a real `claude remote-control`
 // server, and closing it stops the server cleanly.
 func TestLT03FolderServer(t *testing.T) {

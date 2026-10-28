@@ -18,7 +18,7 @@ import {
 } from 'react-native';
 
 import { type AgentClient, CancelledError } from '@/api/client';
-import type { OpenResult, Session } from '@/api/types';
+import type { OpenResult, Preview, Session } from '@/api/types';
 import { errorText, has, label, t } from '@/i18n';
 
 import { Button } from './Button';
@@ -49,6 +49,7 @@ export function SessionSheet({
   const [note, setNote] = useState<Note | null>(null);
   const [link, setLink] = useState<string | null>(null);
   const abort = useRef<AbortController | null>(null);
+  const [preview, setPreview] = useState<Preview | null>(null);
 
   // A new session in the sheet starts clean.
   useEffect(() => {
@@ -57,6 +58,20 @@ export function SessionSheet({
     setNote(null);
     setLink(null);
   }, [session?.id]);
+
+  // The last question and answer (F8). Shown while the sheet is open and
+  // never stored; when it cannot be read the sheet simply goes without.
+  const canPreview = capabilities.includes('preview');
+  useEffect(() => {
+    setPreview(null);
+    if (!session || !canPreview) return;
+    const ctl = new AbortController();
+    client
+      .preview(session.id, ctl.signal)
+      .then((p) => !ctl.signal.aborted && setPreview(p.turns.length ? p : null))
+      .catch(() => undefined);
+    return () => ctl.abort();
+  }, [session?.id, canPreview, client]);
 
   useEffect(() => () => abort.current?.abort(), []);
 
@@ -168,7 +183,11 @@ export function SessionSheet({
           <Row th={th} name={t('sheet.folder')} value={session.folder && `${folderName(session.folder)}  ·  ${session.folder}`} />
           <Row th={th} name={t('sheet.lastActive')} value={ago(session.lastActive)} />
           {session.model ? <Row th={th} name={t('sheet.model')} value={session.model} /> : null}
-          {session.lastPrompt ? <Row th={th} name={t('sheet.lastPrompt')} value={session.lastPrompt} /> : null}
+          {preview ? (
+            <RecentTurns th={th} preview={preview} />
+          ) : session.lastPrompt ? (
+            <Row th={th} name={t('sheet.lastPrompt')} value={session.lastPrompt} />
+          ) : null}
 
           {session.badges?.includes('folder_missing') ? <Text style={s.note}>{t('sheet.folderMissing')}</Text> : null}
           {note ? <Text style={note.error ? s.error : s.note}>{note.text}</Text> : null}
@@ -210,6 +229,30 @@ export function SessionSheet({
         </ScrollView>
       </View>
     </Modal>
+  );
+}
+
+// "Tools: ran commands 3 · read files 2", or the total from an older agent.
+function toolsText(turn: Preview['turns'][number]): string {
+  if (!turn.toolKinds?.length) return t('sheet.tools', { n: turn.tools ?? 0 });
+  return t('sheet.toolsBy', { list: turn.toolKinds.map((k) => `${label('tool', k.kind)} ${k.count}`).join(' · ') });
+}
+
+function RecentTurns({ th, preview }: { th: Theme; preview: Preview }) {
+  const s = styles(th);
+  const answered = preview.turns.some((x) => x.role === 'assistant');
+  return (
+    <View style={s.recent} accessibilityLabel={t('sheet.recent')}>
+      <Text style={s.rowName}>{t('sheet.recent')}</Text>
+      {preview.turns.map((turn, i) => (
+        <View key={i} style={s.turn}>
+          <Text style={s.turnWho}>{turn.role === 'user' ? t('sheet.you') : t('sheet.claude')}</Text>
+          {turn.text ? <Text style={s.rowValue}>{turn.text}</Text> : null}
+          {turn.tools ? <Text style={s.muted}>{toolsText(turn)}</Text> : null}
+        </View>
+      ))}
+      {!answered ? <Text style={s.muted}>{t('sheet.noAnswerYet')}</Text> : null}
+    </View>
   );
 }
 
@@ -259,6 +302,9 @@ const styles = (th: Theme) =>
     },
     chipRunning: { color: th.ok, borderColor: th.ok },
     row: { gap: 2 },
+    recent: { gap: 8, backgroundColor: th.card, borderRadius: 10, padding: 12 },
+    turn: { gap: 2 },
+    turnWho: { color: th.muted, fontSize: 13, fontWeight: '600' },
     rowName: { color: th.muted, fontSize: 13 },
     rowValue: { color: th.text, fontSize: 15 },
     note: { color: th.text, fontSize: 15, lineHeight: 22 },

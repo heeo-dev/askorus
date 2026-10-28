@@ -27,6 +27,21 @@ export type SessionList = {
   warnings: string[];
 };
 
+/** GET /v1/sessions/{id}/preview (F8): the last question and its answer. */
+export type Turn = {
+  role: 'user' | 'assistant' | (string & {});
+  text: string;
+  at?: string;
+  tools?: number; // tool calls in the answer; their content stays on the PC
+  /** tools by kind, most used first: read, edit, run, search, web, agent, other */
+  toolKinds?: { kind: string; count: number }[];
+};
+
+export type Preview = {
+  turns: Turn[];
+  truncated: boolean;
+};
+
 export type SessionFilter = {
   q?: string;
   folder?: string;

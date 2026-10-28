@@ -89,6 +89,11 @@ export default function Pair() {
     }
   };
 
+  // The keyboard's Go key does the same as the button (R-16).
+  const pairWithPasted = () => {
+    if (pasted.trim() && !accept(pasted)) setPasteError(t('pair.badLink'));
+  };
+
   if (step.kind === 'scan') return <Scanner onLink={accept} onCancel={() => setStep({ kind: 'start' })} />;
 
   return (
@@ -121,16 +126,10 @@ export default function Pair() {
             placeholderTextColor={th.muted}
             autoCapitalize="none"
             autoCorrect={false}
+            returnKeyType="go"
+            onSubmitEditing={pairWithPasted}
           />
-          {pasted ? (
-            <Button
-              secondary
-              label={t('pair.usePasted')}
-              onPress={() => {
-                if (!accept(pasted)) setPasteError(t('pair.badLink'));
-              }}
-            />
-          ) : null}
+          {pasted ? <Button secondary label={t('pair.usePasted')} onPress={pairWithPasted} /> : null}
           {pasteError ? <Text style={s.error}>{pasteError}</Text> : null}
         </>
       )}

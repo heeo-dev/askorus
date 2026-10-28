@@ -153,7 +153,7 @@ func (a *Adapter) Agent() string { return Name }
 
 // capabilities lists what works here; serve needs a pseudo console.
 func (a *Adapter) capabilities() []core.Capability {
-	caps := []core.Capability{core.CapList}
+	caps := []core.Capability{core.CapList, core.CapPreview} // preview only reads transcripts
 	if a.runner != nil {
 		caps = append(caps, core.CapStart, core.CapResume, core.CapStop, core.CapRemove, core.CapOpenOfficial)
 		if ptySupported() {

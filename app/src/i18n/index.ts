@@ -39,7 +39,7 @@ export function has(key: string): key is MessageKey {
 }
 
 /** label turns an agent code (state, badge) into words; unknown codes show as they are. */
-export function label(prefix: 'state' | 'badge', code: string): string {
+export function label(prefix: 'state' | 'badge' | 'tool', code: string): string {
   const key = `${prefix}.${code}`;
   return has(key) ? t(key) : code;
 }

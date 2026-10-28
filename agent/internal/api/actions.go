@@ -261,6 +261,34 @@ func (s *Server) stopSession(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"session": sess})
 }
 
+// previewSession is GET /v1/sessions/{id}/preview (F8): the last question
+// and its answer, read only. The body is conversation text, so it is never
+// logged (the request log has method, path and status only) or cached.
+func (s *Server) previewSession(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	agent, native, err := core.ParseID(id)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, CodeBadSessionID, "session id must be <agent>:<id>")
+		return
+	}
+	a := s.adapterFor(agent)
+	if a == nil {
+		writeError(w, http.StatusNotFound, core.ErrCodeNotFound, "")
+		return
+	}
+	p, ok := a.(core.Previewer)
+	if !ok {
+		writeError(w, http.StatusNotImplemented, CodeNotSupported, "this agent cannot do that")
+		return
+	}
+	pv, err := p.Preview(r.Context(), native)
+	if err != nil {
+		s.actionError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, pv)
+}
+
 // removeSession is DELETE /v1/sessions/{id} (F5): claude rm, then hidden
 // from the list. The transcript is never deleted.
 func (s *Server) removeSession(w http.ResponseWriter, r *http.Request) {

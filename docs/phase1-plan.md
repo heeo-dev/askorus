@@ -401,4 +401,12 @@ B2-2(2026-10-28): `eas init`으로 `@heeodev/asksemble`을 만들었다. 첫 pre
 - 로그인 정보 파일은 여전히 열지 않는다(N10). 읽는 것은 지금도 읽는 기록 파일뿐이다.
 - `/v1`에 경로와 capability를 더하기만 한다(원칙 4). 예전 앱은 모르는 capability를 무시한다.
 
-정할 것(사용자): 몇 턴을 보일지(추천: 마지막 질문 1개 + 그 답), 목록 화면에도 보일지(추천: 시트에만. 목록은 이미 마지막 질문 몇 글자가 있고, 세션마다 기록을 읽으면 느려짐), 도구 사용 횟수를 보일지(추천: 보임).
+정한 것(2026-10-28, 사용자가 추천대로): 마지막 질문 1개 + 그 답, 세션 시트에만, 도구 사용 횟수는 보임.
+
+F8-1·F8-2 결과(2026-10-28):
+
+- 에이전트: `core.Previewer`·`core.Preview`(`internal/core/preview.go`), capability `preview`(claude 없이도 기록만 읽으므로 늘 알림), `GET /v1/sessions/{id}/preview`(짝 맺은 기기만, `Cache-Control: no-store`, 요청 로그에는 경로·상태만). 읽기는 `adapter/claude/preview.go`: 기록 폴더에서 `<uuid>.jsonl`을 찾아 끝 1MB만 읽는다.
+- 실제 기록 모양을 세어 보니(내용은 보지 않음) 끝부분 사용자 줄은 대부분 도구 결과였고, 백그라운드 작업 알림(`<task-notification>`)도 사용자 줄로 기록된다. 사람이 쓴 게 아니라 질문에서 뺀다.
+- 앱: 세션 시트에 '최근 대화'(질문 · Claude · 도구 n번 사용 · 아직 답이 없음). 있으면 예전 '마지막 질문' 줄을 대신하고, 못 읽거나 예전 에이전트면 예전처럼 보인다. 폰에 저장하지 않는다.
+- 도구 종류(10-29, 사용자 요청): 횟수만으로는 뜻이 안 와닿아 종류별로 묶는다. 에이전트는 도구 이름(입력·결과는 보지 않음)을 코드로 바꿔 `toolKinds`(많은 순)로 보낸다: read(Read), edit(Edit·Write 등), run(Bash·PowerShell 등), search(Grep·Glob), web(WebFetch·WebSearch), agent(Task), other(MCP 도구 등 나머지). 앱은 "도구: 명령 실행 3 · 파일 읽기 2"로 보이고, 모르는 코드는 코드 그대로, `toolKinds`가 없는 예전 에이전트는 "도구 n번 사용"으로 보인다.
+- 시험: UT(`preview_test.go` 6개, API `preview_test.go` 2개), IT-10, LT-04(실제 기록 40개, 가장 느린 것 16ms), ST `preview-test.tsx` 4개. E2E 흐름은 아직 없다(시험 세션은 질문이 없어 볼 것이 없음). MT는 다음 APK에서.
