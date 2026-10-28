@@ -84,6 +84,8 @@ export function defaultSleep(ms: number, signal?: AbortSignal): Promise<void> {
   });
 }
 
+const slowActionMs = 45000;
+
 export class AgentClient {
   private readonly token?: string;
   private readonly fetchFn: typeof fetch;
@@ -105,7 +107,7 @@ export class AgentClient {
     return new AgentClient(this.base, { token, fetch: this.fetchFn, sleep: this.sleep, timeoutMs: this.timeoutMs });
   }
 
-  async request<T>(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
+  async request<T>(method: string, path: string, body?: unknown, signal?: AbortSignal, timeoutMs = this.timeoutMs): Promise<T> {
     const headers: Record<string, string> = { Accept: 'application/json' };
     if (this.token) headers.Authorization = `Bearer ${this.token}`;
     if (body !== undefined) headers['Content-Type'] = 'application/json';
@@ -113,7 +115,7 @@ export class AgentClient {
     const ctl = new AbortController();
     const onAbort = () => ctl.abort();
     signal?.addEventListener('abort', onAbort, { once: true });
-    const timer = setTimeout(() => ctl.abort(), this.timeoutMs);
+    const timer = setTimeout(() => ctl.abort(), timeoutMs);
     let res: Response;
     try {
       res = await this.fetchFn(`${this.base}/v1/${path}`, {
@@ -179,12 +181,15 @@ export class AgentClient {
     return this.waitJob(started, wait);
   }
 
+  // Stop waits until the process is gone, and remove may stop first and
+  // then retry rm while the Claude service settles (R-17): together up to
+  // about 25 s on this PC, past the usual 15 s.
   stopSession(id: string) {
-    return this.request<{ session: Session }>('POST', `sessions/${encodeURIComponent(id)}/stop`);
+    return this.request<{ session: Session }>('POST', `sessions/${encodeURIComponent(id)}/stop`, undefined, undefined, slowActionMs);
   }
 
   removeSession(id: string) {
-    return this.request<{ id: string; hidden: boolean }>('DELETE', `sessions/${encodeURIComponent(id)}`);
+    return this.request<{ id: string; hidden: boolean }>('DELETE', `sessions/${encodeURIComponent(id)}`, undefined, undefined, slowActionMs);
   }
 
   /** Unpairs this phone on the PC, so its token stops working there. */

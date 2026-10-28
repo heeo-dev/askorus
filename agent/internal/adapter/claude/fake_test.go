@@ -197,12 +197,20 @@ func fakeRemoteControl(args []string) int {
 }
 
 func fakeStopRemove(verb, target string) int {
-	// ASKSEMBLE_FAKE_RM_BUSY names a file; while it exists, rm fails once
-	// and deletes it, like the Claude service settling a just-stopped job.
+	// ASKSEMBLE_FAKE_RM_BUSY names a file; while it exists, rm fails, like
+	// the Claude service settling a just-stopped job. The file holds how
+	// many more times to fail (empty: once); it is deleted on the last one.
+	// With ASKSEMBLE_FAKE_RM_SILENT=1 the failure prints nothing.
 	if busy := os.Getenv("ASKSEMBLE_FAKE_RM_BUSY"); verb == "rm" && busy != "" {
-		if _, err := os.Stat(busy); err == nil {
-			os.Remove(busy)
-			fmt.Fprintln(os.Stderr, "session is still settling")
+		if b, err := os.ReadFile(busy); err == nil {
+			if n, _ := strconv.Atoi(strings.TrimSpace(string(b))); n > 1 {
+				os.WriteFile(busy, []byte(strconv.Itoa(n-1)), 0o600)
+			} else {
+				os.Remove(busy)
+			}
+			if os.Getenv("ASKSEMBLE_FAKE_RM_SILENT") != "1" {
+				fmt.Fprintln(os.Stderr, "session is still settling")
+			}
 			return 1
 		}
 	}

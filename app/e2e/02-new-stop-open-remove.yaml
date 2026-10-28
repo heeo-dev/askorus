@@ -16,6 +16,8 @@ env:
     index: 0
 - tapOn: "Leave empty for the folder name and time"
 - inputText: ${NAME}
+# Done on the on-screen keyboard closes it, as a person would (R-16).
+- pressKey: Enter
 - tapOn: "Start and open in the Claude app"
 # The Claude link opens a browser on the emulator; come back to the app.
 - extendedWaitUntil:
