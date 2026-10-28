@@ -155,3 +155,20 @@ test('a pairing refusal surfaces its code', async () => {
 test('normalizeCode drops dashes and spaces', () => {
   expect(normalizeCode(' ab-cd ef ')).toBe('ABCDEF');
 });
+
+// R-17: stop and remove can take longer than the usual timeout (stopping,
+// then rm retried while the Claude service settles); they wait longer.
+test('stop and remove wait longer than ordinary requests', async () => {
+  const slow = ((_input: RequestInfo | URL, init?: RequestInit) =>
+    new Promise<Response>((resolve, reject) => {
+      const t = setTimeout(() => resolve(new Response(JSON.stringify({ id: 'claude:x', hidden: true }), { status: 200 })), 60);
+      init?.signal?.addEventListener('abort', () => {
+        clearTimeout(t);
+        reject(new TypeError('aborted'));
+      });
+    })) as typeof fetch;
+  const c = new AgentClient(base, { token: 'tok', fetch: slow, timeoutMs: 20 });
+  await expect(c.info()).rejects.toBeInstanceOf(NetworkError);
+  await expect(c.removeSession('claude:x')).resolves.toEqual({ id: 'claude:x', hidden: true });
+  await expect(c.stopSession('claude:x')).resolves.toBeTruthy();
+});

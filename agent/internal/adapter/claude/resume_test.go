@@ -2,9 +2,12 @@ package claude
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/asksemble/asksemble/agent/internal/core"
 )
@@ -31,6 +34,31 @@ func TestRemoveRetriesWhileTheServiceSettles(t *testing.T) {
 	}
 	if rms != 2 {
 		t.Errorf("rm ran %d times, want 2 (one refused, one done)", rms)
+	}
+}
+
+// R-17: settling once outlasted three rm tries 2 s apart, and the failure
+// said nothing because rm printed nothing.
+func TestRemoveWaitsForALongSettle(t *testing.T) {
+	wait := rmRetryWait
+	rmRetryWait = 10 * time.Millisecond
+	t.Cleanup(func() { rmRetryWait = wait })
+	e := newLaunchEnv(t, []agentEntry{runningEntry})
+	busy := filepath.Join(t.TempDir(), "busy")
+	os.WriteFile(busy, []byte("4"), 0o600)
+	t.Setenv("ASKSEMBLE_FAKE_RM_BUSY", busy)
+	t.Setenv("ASKSEMBLE_FAKE_RM_SILENT", "1")
+	if err := e.a.Remove(context.Background(), id1); err != nil {
+		t.Fatalf("remove = %v, want it to keep trying while the service settles", err)
+	}
+
+	// When it never settles, the error still says why.
+	e = newLaunchEnv(t, []agentEntry{runningEntry})
+	os.WriteFile(busy, []byte("99"), 0o600)
+	err := e.a.Remove(context.Background(), id1)
+	var ae *core.ActionError
+	if !errors.As(err, &ae) || ae.Code != core.ErrCodeLaunchFailed || strings.TrimSpace(ae.Detail) == "" {
+		t.Fatalf("remove = %v, want launch_failed with a detail", err)
 	}
 }
 

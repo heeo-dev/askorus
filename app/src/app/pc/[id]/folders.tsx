@@ -35,6 +35,8 @@ export default function Folders() {
   const [error, setError] = useState('');
   const [rowError, setRowError] = useState<Record<string, string>>({});
   const [refreshing, setRefreshing] = useState(false);
+  // Folders turned off on this screen: Claude still lists them (R-15).
+  const [justOff, setJustOff] = useState<Record<string, boolean>>({});
   const followUntil = useRef(0);
 
   const load = useCallback(async (c: AgentClient) => {
@@ -75,6 +77,7 @@ export default function Folders() {
   const toggle = async (f: Folder, enabled: boolean) => {
     if (!client) return;
     setRowError((m) => ({ ...m, [f.id]: '' }));
+    setJustOff((m) => ({ ...m, [f.id]: !enabled }));
     setFolders((list) => list?.map((x) => (x.id === f.id ? { ...x, server: { ...x.server, enabled } } : x)) ?? list);
     try {
       const saved = await client.setFolderServer(f.id, enabled);
@@ -126,6 +129,7 @@ export default function Folders() {
             ? ` · ${t('folders.sessions', { n: f.status?.sessions ?? 0, max: f.status?.capacity ?? f.server.capacity ?? 0 })}`
             : ''}
         </Text>
+        {justOff[f.id] && !f.server.enabled ? <Text style={s.muted}>{t('folders.justOff')}</Text> : null}
         {rowError[f.id] ? <Text style={s.error}>{rowError[f.id]}</Text> : null}
       </View>
     );
@@ -138,6 +142,7 @@ export default function Folders() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
     >
       <Text style={s.intro}>{t('folders.intro')}</Text>
+      {supported ? <Text style={s.muted}>{t('folders.offNote')}</Text> : null}
       {!supported ? <Text style={s.muted}>{t('folders.notSupported')}</Text> : null}
       {error ? <Text style={s.error}>{error}</Text> : null}
       {folders?.length === 0 ? <Text style={s.muted}>{t('new.noFolders')}</Text> : null}

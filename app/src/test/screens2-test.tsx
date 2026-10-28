@@ -110,6 +110,22 @@ describe('folders', () => {
     await waitFor(() => expect(screen.queryByText('Open · 0/4 sessions')).toBeNull(), { timeout: 5000 });
     expect(screen.getAllByText('Off').length).toBeGreaterThan(0);
   });
+
+  // R-15: turning a folder off leaves it in the Claude app, where a new
+  // session waits until the folder is opened again (Claude Code keeps the
+  // environment for about 4 hours). The screen says so.
+  test('turning a folder off says what stays in the Claude app', async () => {
+    const c = await pairedPC();
+    await renderRouter(appDir, { initialUrl: `/pc/${c.id}/folders` });
+    expect(await screen.findByText(/drops out of the Claude app's list/)).toBeTruthy();
+    expect(screen.queryByText(/still listed in the Claude app/)).toBeNull();
+
+    await fireEvent(await screen.findByLabelText('Keep shop open'), 'valueChange', true);
+    await screen.findByText('Open · 0/4 sessions', {}, { timeout: 5000 });
+    expect(screen.queryByText(/still listed in the Claude app/)).toBeNull();
+    await fireEvent(screen.getByLabelText('Keep shop open'), 'valueChange', false);
+    expect(await screen.findByText(/still listed in the Claude app/)).toBeTruthy();
+  });
 });
 
 describe('settings', () => {

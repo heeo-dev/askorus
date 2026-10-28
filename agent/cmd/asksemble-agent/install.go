@@ -272,6 +272,13 @@ func checkCmd(dir string, out io.Writer) error {
 		} else {
 			c.line("warn", m("does not start at logon: asksemble-agent autostart on", "로그인할 때 켜지지 않습니다: asksemble-agent autostart on"))
 		}
+		if d, err := exeDir(); err == nil {
+			if userPathHas(d) {
+				c.line("ok", m("on this user's PATH: %s", "이 사용자의 PATH에 있음: %s", d))
+			} else {
+				c.line("warn", m("not on PATH, so terminals need the full path: asksemble-agent path on", "PATH에 없어 터미널에서 전체 경로로 실행해야 합니다: asksemble-agent path on"))
+			}
+		}
 	}
 
 	if store, err := devices.Open(dir); err == nil {
@@ -340,9 +347,12 @@ func suggestServePort(ctx context.Context, localPort int) int {
 	return localPort
 }
 
-// uninstallAutostart is replaced in tests so they never touch the real
-// logon entry.
-var uninstallAutostart = autostartRemove
+// uninstallAutostart and uninstallPath are replaced in tests so they never
+// touch the real logon entry or PATH.
+var (
+	uninstallAutostart = autostartRemove
+	uninstallPath      = userPathRemove
+)
 
 // uninstallCmd undoes what installing set up: the background agent, the
 // logon entry, the agent's own tailscale serve port and the device token
@@ -364,6 +374,11 @@ func uninstallCmd(dir string, args []string, in io.Reader, out io.Writer) error 
 		m("stop the agent if it runs", "돌고 있으면 에이전트를 멈춤"),
 		m("remove the logon entry", "로그인할 때 켜기를 없앰"),
 		m("disconnect every paired phone (delete %s)", "짝 맺은 폰을 모두 끊음 (%s 삭제)", devices.FileName),
+	}
+	exeFolder, _ := exeDir()
+	onPath := exeFolder != "" && userPathHas(exeFolder)
+	if onPath {
+		plan = append(plan, m("remove %s from this user's PATH", "이 사용자의 PATH에서 %s를 뺌", exeFolder))
 	}
 	if ti.served {
 		plan = append(plan, m("turn off tailscale serve on https://%s:%d (only this port)", "tailscale serve의 https://%s:%d만 끔 (이 포트만)", ti.serve.Host, ti.serve.HTTPSPort))
@@ -390,6 +405,11 @@ func uninstallCmd(dir string, args []string, in io.Reader, out io.Writer) error 
 	}
 	if err := uninstallAutostart(); err != nil {
 		return err
+	}
+	if onPath {
+		if _, err := uninstallPath(exeFolder); err != nil {
+			return err
+		}
 	}
 	for _, f := range []string{devices.FileName, "pairing.json", "pairing-request.json", "pairing-decision.json", "pairing-result.json", "pairing-qr.png"} {
 		os.Remove(filepath.Join(dir, f))

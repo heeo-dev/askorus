@@ -11,7 +11,6 @@ import {
   Linking,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -24,6 +23,7 @@ import { type PairLink, parsePairLink } from '@/connections/pairLink';
 import { ConnectionStore } from '@/connections/store';
 import { errorText, t } from '@/i18n';
 import { Button } from '@/ui/Button';
+import { FormScroll } from '@/ui/FormScroll';
 import { type Theme, useTheme } from '@/ui/theme';
 
 const store = new ConnectionStore();
@@ -92,7 +92,7 @@ export default function Pair() {
   if (step.kind === 'scan') return <Scanner onLink={accept} onCancel={() => setStep({ kind: 'start' })} />;
 
   return (
-    <ScrollView style={s.screen} contentContainerStyle={s.body} keyboardShouldPersistTaps="handled">
+    <FormScroll style={s.screen} contentContainerStyle={s.body}>
       {step.kind === 'start' && (
         <>
           <Text style={s.heading}>{t('pair.title')}</Text>
@@ -173,7 +173,7 @@ export default function Pair() {
           <Button label={t('pair.retry')} onPress={() => setStep({ kind: 'start' })} />
         </>
       )}
-    </ScrollView>
+    </FormScroll>
   );
 }
 

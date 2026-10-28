@@ -70,10 +70,11 @@ Asksemble Phase 1의 테스트 기준이다. 버그를 고치면 그 버그를 �
 - `D:\Android`: JDK 17(Temurin), Android SDK, 에뮬레이터, Maestro 2.11.0(`D:\Android\maestro`). AVD `asksemble-play`(Android 35, **Google Play** 이미지, x86_64, 램 2GB, 4코어, 호스트 GPU)는 `D:\Android\avd`에 둔다(C:는 공간이 적다). 하드웨어 가속은 WHPX.
 - 에뮬레이터 안에 **Tailscale 앱**을 깔고 PC와 같은 계정으로 로그인했다. 에뮬레이터가 tailnet 기기 하나로 붙어 MagicDNS 이름으로 에이전트에 닿는다(실제 폰과 같은 경로). E2E 전에 `e2e.ps1`이 PC 이름으로 ping해서 확인한다.
 - Expo Go(58.0.5)는 앱 언어를 영어로 지정했다(`adb shell cmd locale set-app-locales host.exp.exponent --locales en-US`). 에뮬레이터 자체는 한국어다. 흐름은 영어 문구로 쓴다.
-- 하드웨어 키보드를 켜 두어 화면 키보드가 없다. 흐름에 `hideKeyboard`를 쓰지 않는다(뒤로 가기로 동작해 화면을 닫음).
+- 화면 키보드는 실제 폰처럼 켜 둔다(`adb shell settings put secure show_ime_with_hard_keyboard 1`, 10-28부터). 입력 칸 뒤의 버튼은 흐름이 키보드의 완료(`pressKey: Enter`)로 키보드를 닫고 누른다. `hideKeyboard`는 쓰지 않는다(뒤로 가기로 동작해 화면을 닫음).
 - 이 PC 화면이 작아(1280×680) 에뮬레이터 창이 화면 밖에 뜰 수 있다. `e2e.ps1`이 창을 화면 위쪽으로 옮긴다.
 - 앱은 에뮬레이터의 Expo Go가 개발 서버 `exp://10.0.2.2:8081`에서 받는다. 개발 서버는 `scripts\dev-server.ps1`이 띄운다. 스크립트가 있는 작업 폴더의 앱을 보여 주므로, worktree의 변경은 그 worktree에서 띄워야 E2E에 들어간다.
-- 에뮬레이터 앱은 에이전트와 짝 맺어 두었다(`_pair.yaml`, 링크는 환경 변수 `MAESTRO_LINK`, PC 허용 y는 사람이).
+- 에뮬레이터 앱은 에이전트와 짝 맺어 두었다(`_pair.yaml`, 링크는 환경 변수 `MAESTRO_LINK`, PC 허용 y는 사람이). 10-28 `eas init`으로 app.json에 `owner`·`projectId`가 생긴 뒤 Expo Go의 앱 저장소가 바뀌어 짝 정보가 안 보였고, 다시 짝 맺었다(PC에 `asksemble-agent pair` 창을 띄우고 출력의 링크를 `MAESTRO_LINK`로).
+- 에뮬레이터를 새로 띄우면 안의 Tailscale이 바로 붙지 않을 때가 있다. Tailscale 앱을 열면(`adb shell monkey -p com.tailscale.ipn -c android.intent.category.LAUNCHER 1`) 30~40초 안에 붙는다. 새 worktree에서 처음 묶는 번들은 약 30초 걸려 첫 흐름이 실패할 수 있다(한 번 열어 데운 뒤 돌린다).
 - **Claude 앱은 이 에뮬레이터에서 못 쓴다**: Play 프로텍트 인증이 '인증되지 않음'이라 Claude 앱 로그인(Google·이메일 모두)이 Play Integrity에서 막힌다. Claude 쪽 상태는 E2E-07처럼 PC Chrome의 claude.ai로 본다. Claude 앱으로 넘어가는 동작은 MT-02.
 
 ### 실행
@@ -113,6 +114,10 @@ powershell -NoProfile -File scripts\e2e.ps1 -Flow 02    # 하나만
 | MT-04 | 폰 Tailscale을 끄고 열기 → '폰 쪽부터 확인' 안내 |
 | MT-05 | PC 재부팅 뒤: 에이전트 자동 시작, 꺼진 세션 열기가 '보관됨' 없이 열림(R-08) |
 | MT-06 | 열어 두기 켠 폴더로 Claude 앱 PC 목록에서 새 세션 |
+| MT-07 | 설치본(EAS 빌드, B2부터): 폰 다크 모드를 따름(R-14), 앱을 껐다 켜도 짝이 남음, 권한은 카메라만 물음 |
+| MT-08 | 설치본: `pair`가 띄운 QR(`asksemble://pair?…`)을 폰 기본 카메라 앱으로 찍으면 이 앱의 짝 맺기 화면이 열림 |
+
+E2E는 Expo Go로 돌아서 설치본에서만 드러나는 차이(다크 모드, 권한, 딥 링크 scheme)를 못 본다. 이런 설정은 `app/src/config-test.ts`(UT)로 지키고, 설치본은 MT-07·08로 본다.
 
 ## 6. 회귀 표
 
@@ -133,3 +138,7 @@ powershell -NoProfile -File scripts\e2e.ps1 -Flow 02    # 하나만
 | R-11 | 10-27 | 관리자 권한 서비스가 떠 있으면 45초 기다림 → 바로 안내 | `TestLaunchRefusedWithElevatedService`, `TestServiceElevated` |
 | R-12 | 10-27 | 폴더 열어 두기를 켜도 화면이 'Off'에 머묾: 켠 직후 답에는 아직 예전 상태가 실려 오는데 화면은 '켜는 중'일 때만 다시 물었다 | E2E-05, `screens2-test.tsx` 폴더(가짜 에이전트가 실제처럼 늦게 켜짐) |
 | R-13 | 10-28 | 실행 중 세션을 지우면 멈춘 직후 `claude rm`이 한 번 실패해(서비스가 방금 멈춘 작업을 정리하는 중) 지우기가 502로 끝남 | `TestRemoveRetriesWhileTheServiceSettles`(가짜 claude의 rm 한 번 실패), E2E-04 |
+| R-14 | 10-28 | 설치본에서 다크 모드를 따르지 않음: `userInterfaceStyle: automatic`은 `expo-system-ui`가 있어야 Android에 적용되는데 Expo Go는 이를 가렸다(prebuild 경고로 찾음) | `config-test.ts`, MT-07 |
+| R-15 | 10-28 | 열어 두기를 끈 폴더가 Claude 앱에 남고 거기서 만든 세션이 '연결 중…'에 머무는데 앱이 아무 말도 안 함(Claude Code가 환경을 약 4시간 남김, 계획 17절) | `screens2-test.tsx` 폴더 끄기 안내, MT-06 |
+| R-16 | 10-28 | 화면 키보드가 입력 칸과 그 아래 버튼을 가림(짝 맺기 링크, 새 세션 이름). 에뮬레이터는 화면 키보드를 꺼 둬서 가려져 있었다(사용자 지적) | `ui/FormScroll.tsx`(키보드 위로 줄이고 입력 칸 + 버튼 한 줄을 보이게 스크롤), 화면 키보드를 켠 E2E-01~06·`_pair.yaml` |
+| R-17 | 10-28 | 실행 중 세션 지우기가 502: 멈춘 뒤 Claude 서비스 정리가 rm 세 번(2초 간격)보다 오래 걸렸고 rm이 아무것도 출력하지 않아 이유가 비었다. 앱도 15초에서 끊었다 | `TestRemoveWaitsForALongSettle`(가짜 rm 4번 실패·출력 없음), 앱 `client-test` 멈추기·지우기는 45초까지 기다림, E2E-04 |

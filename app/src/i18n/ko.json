@@ -131,6 +131,8 @@
   "folders.state.failed": "켜지 못했습니다. 잠시 뒤 다시 시도합니다.",
   "folders.state.untrusted": "PC에서 아직 신뢰하지 않은 폴더입니다. 그 폴더에서 claude를 한 번 실행해 신뢰를 허용하세요.",
   "folders.state.external": "PC에서 따로 켠 서버가 돌고 있어 여기서는 바꾸지 않습니다.",
+  "folders.offNote": "끄면 Claude 앱 목록에서 이 폴더가 바로 사라지지 않고 '오프라인'으로 남습니다. 그 폴더로 만든 새 세션은 시작되지 않고 기다리다가, 끈 뒤 약 4시간 안에 여기서 다시 켜면 그때 시작됩니다. 약 4시간이 지나면 폴더가 Claude 앱 목록에서도 빠지고, 다시 켜면 새로 연결되어 기다리던 세션은 시작되지 않습니다.",
+  "folders.justOff": "Claude 앱 목록에는 아직 남아 있습니다. 거기서 새 세션을 만들면 약 4시간 안에 여기서 다시 켤 때 시작됩니다.",
   "settings.title": "설정",
   "settings.pcs": "짝 맺은 PC",
   "settings.thisPhone": "이 폰: {name} (id {id})",

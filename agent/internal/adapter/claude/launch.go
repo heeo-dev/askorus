@@ -316,15 +316,20 @@ func (a *Adapter) Remove(ctx context.Context, id string) error {
 			return nil // removed, or gone anyway
 		}
 		if attempt == rmRetries || !sleepCtx(ctx, rmRetryWait) {
-			return core.Fail(core.ErrCodeLaunchFailed, tail(res, 300))
+			detail := tail(res, 300)
+			if detail == "" {
+				detail = err.Error() // rm can fail without printing anything (E2E-04, 10-28 night)
+			}
+			return core.Fail(core.ErrCodeLaunchFailed, detail)
 		}
 	}
 }
 
-const (
-	rmRetries   = 2
-	rmRetryWait = 2 * time.Second
-)
+// Settling took longer than three tries 2 s apart once (E2E-04, 10-28
+// night), so rm is tried for about 10 s. A variable so tests can shorten it.
+const rmRetries = 5
+
+var rmRetryWait = 2 * time.Second
 
 // inAgents reports whether claude still lists the session. When the list
 // cannot be read it answers true, so callers do not assume it is gone.

@@ -9,7 +9,10 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "test": "jest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "eas": "npx --yes eas-cli@25.3.0",
+    "build:apk": "npx --yes eas-cli@25.3.0 build -p android --profile preview",
+    "build:aab": "npx --yes eas-cli@25.3.0 build -p android --profile production"
   },
   "jest": {
     "preset": "jest-expo",
@@ -22,17 +25,18 @@
     ]
   },
   "dependencies": {
-    "expo": "~58.0.19",
-    "expo-camera": "~58.0.12",
+    "expo": "~58.0.20",
+    "expo-camera": "~58.0.13",
     "expo-clipboard": "~58.0.4",
     "expo-constants": "~58.0.13",
     "expo-crypto": "~58.0.7",
     "expo-device": "~58.0.5",
     "expo-linking": "~58.0.14",
     "expo-localization": "~58.0.5",
-    "expo-router": "~58.0.26",
+    "expo-router": "~58.0.27",
     "expo-secure-store": "~58.0.2",
     "expo-status-bar": "~58.0.4",
+    "expo-system-ui": "~58.0.6",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "react-native": "0.88.0",

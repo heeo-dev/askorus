@@ -4,7 +4,7 @@
 
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Linking, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Linking, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { type AgentClient, CancelledError } from '@/api/client';
 import type { Folder } from '@/api/types';
@@ -15,6 +15,7 @@ import { errorText, t } from '@/i18n';
 import { Button } from '@/ui/Button';
 import { Choices } from '@/ui/Choices';
 import { FolderPicker } from '@/ui/FolderPicker';
+import { FormScroll } from '@/ui/FormScroll';
 import { type Theme, useTheme } from '@/ui/theme';
 
 const store = new ConnectionStore();
@@ -79,7 +80,7 @@ export default function NewSession() {
   };
 
   return (
-    <ScrollView style={s.screen} contentContainerStyle={s.body} keyboardShouldPersistTaps="handled">
+    <FormScroll style={s.screen} contentContainerStyle={s.body}>
       <Text style={s.label}>{t('new.folder')}</Text>
       {folders === null ? (
         <ActivityIndicator color={th.accent} />
@@ -97,6 +98,7 @@ export default function NewSession() {
         placeholder={t('new.namePlaceholder')}
         placeholderTextColor={th.muted}
         maxLength={64}
+        returnKeyType="done"
       />
 
       <Text style={s.label}>{t('new.model')}</Text>
@@ -115,7 +117,7 @@ export default function NewSession() {
       ) : (
         <Button label={t('new.start')} onPress={start} disabled={!client || !folder} />
       )}
-    </ScrollView>
+    </FormScroll>
   );
 }
 
