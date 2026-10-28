@@ -16,6 +16,9 @@ func autostartCommand(exe string, _ bool) string                  { return exe +
 func autostartSet(string, bool) error                             { return errNotYet }
 func autostartRemove() error                                      { return nil }
 func autostartGet() string                                        { return "" }
+func userPathHas(string) bool                                     { return false }
+func userPathAdd(string) (bool, error)                            { return false, errNotYet }
+func userPathRemove(string) (bool, error)                         { return false, nil }
 func keepAwake(bool)                                              {}
 func sleepAfterAC() int                                           { return -1 }
 func controlSupported() bool                                      { return false }

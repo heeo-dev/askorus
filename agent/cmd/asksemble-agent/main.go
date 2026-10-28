@@ -91,9 +91,12 @@ Usage / 사용법:
   asksemble-agent autostart on [-test-page] | off | status
       start the agent at logon, with normal rights
       로그인할 때 에이전트를 일반 권한으로 켭니다
+  asksemble-agent path on | off | status
+      put the folder of this asksemble-agent.exe on this user's PATH
+      이 asksemble-agent.exe가 있는 폴더를 이 사용자의 PATH에 넣습니다
   asksemble-agent uninstall [-yes] [-all]
-      undo the setup (logon entry, the agent's serve port, paired phones)
-      설치한 것을 되돌립니다 (자동 시작, 에이전트 serve 포트, 짝 맺은 폰)
+      undo the setup (logon entry, PATH entry, the agent's serve port, paired phones)
+      설치한 것을 되돌립니다 (자동 시작, PATH, 에이전트 serve 포트, 짝 맺은 폰)
   asksemble-agent version
 
 Settings live in %s (override with ASKSEMBLE_AGENT_DIR).
@@ -150,6 +153,8 @@ func run(args []string, in io.Reader, out io.Writer) error {
 		return statusCmd(dir, out)
 	case "autostart":
 		return autostartCmd(args[1:], out)
+	case "path":
+		return pathCmd(args[1:], out)
 	case "check":
 		return checkCmd(dir, out)
 	case "uninstall":

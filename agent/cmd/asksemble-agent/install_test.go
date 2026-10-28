@@ -10,8 +10,11 @@ import (
 	"github.com/asksemble/asksemble/agent/internal/devices"
 )
 
-// Tests never touch the real logon entry in the registry.
-func init() { uninstallAutostart = func() error { return nil } }
+// Tests never touch the real logon entry or PATH in the registry.
+func init() {
+	uninstallAutostart = func() error { return nil }
+	uninstallPath = func(string) (bool, error) { return false, nil }
+}
 
 // Saying no to uninstall changes nothing.
 func TestUninstallDeclined(t *testing.T) {

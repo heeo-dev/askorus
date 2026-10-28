@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strconv"
 	"syscall"
+	"unsafe"
 
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/registry"
@@ -120,6 +121,85 @@ func autostartGet() string {
 		return ""
 	}
 	return v
+}
+
+// This user's PATH lives in HKCU\Environment. Its value type is kept
+// (REG_EXPAND_SZ when new), and running programs such as Explorer are told
+// so that terminals opened afterwards see the change.
+const (
+	envKey       = `Environment`
+	envValueName = "Path"
+)
+
+func expandEnv(s string) string {
+	if v, err := registry.ExpandString(s); err == nil {
+		return v
+	}
+	return s
+}
+
+func userPath() (string, uint32, error) {
+	k, err := registry.OpenKey(registry.CURRENT_USER, envKey, registry.QUERY_VALUE)
+	if err != nil {
+		return "", 0, err
+	}
+	defer k.Close()
+	v, typ, err := k.GetStringValue(envValueName)
+	if errors.Is(err, registry.ErrNotExist) {
+		return "", registry.EXPAND_SZ, nil
+	}
+	return v, typ, err
+}
+
+func setUserPath(v string, typ uint32) error {
+	k, _, err := registry.CreateKey(registry.CURRENT_USER, envKey, registry.SET_VALUE)
+	if err != nil {
+		return err
+	}
+	defer k.Close()
+	if typ == registry.SZ {
+		err = k.SetStringValue(envValueName, v)
+	} else {
+		err = k.SetExpandStringValue(envValueName, v)
+	}
+	if err != nil {
+		return err
+	}
+	const hwndBroadcast, wmSettingChange, smtoAbortIfHung = 0xffff, 0x001A, 0x0002
+	name, _ := windows.UTF16PtrFromString("Environment")
+	var res uintptr
+	windows.NewLazySystemDLL("user32.dll").NewProc("SendMessageTimeoutW").Call(
+		hwndBroadcast, wmSettingChange, 0, uintptr(unsafe.Pointer(name)), smtoAbortIfHung, 5000, uintptr(unsafe.Pointer(&res)))
+	return nil
+}
+
+func userPathHas(dir string) bool {
+	v, _, err := userPath()
+	return err == nil && pathListHas(v, dir, expandEnv)
+}
+
+func userPathAdd(dir string) (bool, error) {
+	v, typ, err := userPath()
+	if err != nil {
+		return false, err
+	}
+	nv, changed := pathListWith(v, dir, expandEnv)
+	if !changed {
+		return false, nil
+	}
+	return true, setUserPath(nv, typ)
+}
+
+func userPathRemove(dir string) (bool, error) {
+	v, typ, err := userPath()
+	if err != nil {
+		return false, err
+	}
+	nv, changed := pathListWithout(v, dir, expandEnv)
+	if !changed {
+		return false, nil
+	}
+	return true, setUserPath(nv, typ)
 }
 
 // keepAwake asks Windows not to sleep while on is true (design: 절전).
