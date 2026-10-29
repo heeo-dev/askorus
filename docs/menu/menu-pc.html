@@ -1,0 +1,216 @@
+<title>Asksemble 메뉴 구조 PC</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: wide desktop page. A hand-drawn left-to-right map (entrance → mode → menus → choices) in a grid,
+   then the name table at full page width, then the review notes. */
+:root {
+  --bg: #f6f7f9; --panel: #ffffff; --ink: #1c2230; --muted: #5c6677; --line: #d6dce5;
+  --all: #1f6f6b; --all-soft: #e3f1ef; --dev: #4a4fb0; --dev-soft: #e8e9f8; --base-soft: #eef0f4;
+  --p1: #6b7280; --p2: #1f6f6b; --p3: #9a6a12; --p4: #a3405a;
+  --font: "IBM Plex Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #12151c; --panel: #1a1f29; --ink: #e8ebf1; --muted: #9aa3b2; --line: #2f3746;
+  --all: #5cc3bb; --all-soft: #173533; --dev: #9ca0f0; --dev-soft: #23264a; --base-soft: #222834;
+  --p1: #9aa3b2; --p2: #5cc3bb; --p3: #e0b25a; --p4: #e58aa2; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #12151c; --panel: #1a1f29; --ink: #e8ebf1; --muted: #9aa3b2; --line: #2f3746;
+  --all: #5cc3bb; --all-soft: #173533; --dev: #9ca0f0; --dev-soft: #23264a; --base-soft: #222834;
+  --p1: #9aa3b2; --p2: #5cc3bb; --p3: #e0b25a; --p4: #e58aa2; color-scheme: dark }
+
+body { background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 15px; line-height: 1.5; }
+.wrap { max-width: 1680px; margin: 0 auto; padding-block: 28px 56px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 24px; }
+h1 { margin: 0; font-size: 1.6rem; text-wrap: balance; }
+h2 { margin: 0 0 12px; font-size: 1.1rem; }
+.lead { color: var(--muted); margin: 6px 0 0; max-width: 90ch; }
+.en { color: var(--muted); font-size: 0.85em; font-weight: 400; }
+.ph { font-family: var(--mono); font-size: 0.7rem; font-weight: 500; padding: 0 5px; border-radius: 4px; border: 1px solid currentColor; white-space: nowrap; vertical-align: 1px; }
+.p1 { color: var(--p1); } .p2 { color: var(--p2); } .p3 { color: var(--p3); } .p4 { color: var(--p4); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 0.86rem; color: var(--muted); }
+
+/* Map: one row per mode. Columns: entrance | mode | menu | choices. Entrance cells span their modes. */
+.map { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; overflow-x: auto; }
+.grid { display: grid; grid-template-columns: 190px 230px 260px minmax(420px, 1fr); column-gap: 26px; row-gap: 8px; min-width: 1150px; }
+.colhead { font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 600; padding-bottom: 4px; border-bottom: 1px solid var(--line); }
+.node { border-radius: 9px; padding: 9px 12px; border: 1px solid var(--line); position: relative; min-width: 0; }
+.node b { display: block; font-weight: 700; }
+.node .sub { font-size: 0.82rem; color: var(--muted); }
+.code { font-family: var(--mono); font-size: 0.74rem; color: var(--muted); }
+.ent { align-self: stretch; display: flex; flex-direction: column; justify-content: center; gap: 2px; }
+.ent .who { font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
+.ent b { font-size: 1.15rem; }
+.all { background: var(--all-soft); border-color: var(--all); }
+.all .who { color: var(--all); }
+.dev { background: var(--dev-soft); border-color: var(--dev); }
+.dev .who { color: var(--dev); }
+.base { background: var(--base-soft); }
+.mode { align-self: start; }
+/* connector from each node to the next column */
+.node.link::after { content: ""; position: absolute; top: 22px; right: -26px; width: 26px; border-top: 2px solid var(--line); }
+.menus { display: grid; gap: 6px; align-content: start; }
+.menu { display: grid; grid-template-columns: 260px minmax(420px, 1fr); column-gap: 26px; align-items: start; }
+.menu .node { padding: 6px 10px; }
+.menu .node b { display: inline; }
+.choices { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding-top: 3px; }
+.chip { font-size: 0.82rem; border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 2px 10px; white-space: nowrap; }
+.dash { font-size: 0.82rem; color: var(--muted); }
+.span-modes { grid-column: 3 / 5; }
+.sep { grid-column: 1 / -1; height: 0; border-top: 1px dashed var(--line); margin-block: 6px; }
+
+/* Name table: full page width, no squeezing. */
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; min-width: 0; }
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+th, td { text-align: left; vertical-align: top; padding: 9px 12px; border-bottom: 1px solid var(--line); }
+th { font-size: 0.76rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); font-weight: 600; white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+td.where { white-space: nowrap; color: var(--muted); }
+td.pick { font-weight: 700; white-space: nowrap; }
+td.alt { color: var(--muted); white-space: nowrap; }
+td.en2 { font-family: var(--mono); font-size: 0.86rem; white-space: nowrap; }
+ol { margin: 0; padding-left: 1.2em; display: grid; gap: 8px; max-width: 120ch; }
+.note { color: var(--muted); font-size: 0.86rem; }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Asksemble 두 입구와 메뉴 (PC 화면용)</h1>
+    <p class="lead">왼쪽에서 오른쪽으로 입구 → 모드 → 메뉴 → 고를 것 순서입니다. 각 칸은 한국어 다음에 영어를 적었습니다. 2026-10-29 확정(사용자).</p>
+  </header>
+
+  <div class="legend">
+    <span><span class="ph p1">P1</span> 지금 있음</span>
+    <span><span class="ph p2">P2</span> 다음, 한 번에 묻기</span>
+    <span><span class="ph p3">P3</span> 다른 AI 세션</span>
+    <span><span class="ph p4">P4</span> 일 맡기기·코딩하기</span>
+    <span>초록 = 입구 1(모두) · 보라 = 입구 2(개발자)</span>
+  </div>
+
+  <section class="map" aria-label="메뉴 지도">
+    <div class="grid">
+      <div class="colhead">입구 · Entrance</div>
+      <div class="colhead">모드 · Mode</div>
+      <div class="colhead">메뉴 · Menu</div>
+      <div class="colhead">고를 것 · Choices</div>
+
+      <!-- Entrance 1: everyone -->
+      <div class="node ent all link" style="grid-row: span 2">
+        <span class="who">입구 1 · 모두 · Everyone</span>
+        <b>한 번에</b><span class="en">All at once</span>
+        <span class="sub">PC가 있으면 자동, 없으면 공식 앱으로 넘기기</span>
+      </div>
+
+      <div class="node mode all link">
+        <b>묻기 <span class="en">Ask</span> <span class="ph p2">P2</span></b>
+        <span class="code">mode: ask</span>
+        <div class="sub">답(글)을 받음 · 웹 검색 켬, 파일 쓰기·명령 끔</div>
+      </div>
+      <div class="menus span-modes">
+        <div class="menu"><div class="node all"><b>질문 입력</b> <span class="en">Ask a question</span></div>
+          <div class="choices"><span class="chip">빠르게 <span class="en">Quick</span></span><span class="chip">기본 <span class="en">Standard</span></span><span class="chip">깊게 <span class="en">Deep</span></span><span class="dash">·</span><span class="chip">Claude</span><span class="chip">Codex</span><span class="chip">OpenCode</span><span class="dash">길게 눌러 모델 고르기 · Long-press to pick a model</span></div></div>
+        <div class="menu"><div class="node all"><b>답 카드</b> <span class="en">Answers</span></div>
+          <div class="choices"><span class="dash">AI별 카드, 모델 이름과 걸린 시간</span></div></div>
+        <div class="menu"><div class="node all"><b>비교</b> <span class="en">Compare</span></div>
+          <div class="choices"><span class="chip">같은 말 <span class="en">Agree</span></span><span class="chip">다른 말 <span class="en">Differ</span></span><span class="chip">한 AI만 <span class="en">Only one</span></span><span class="chip">확인 필요 <span class="en">Check this</span></span></div></div>
+        <div class="menu"><div class="node all"><b>이어서 묻기</b> <span class="en">Follow up</span></div>
+          <div class="choices"><span class="chip">모두에게 <span class="en">Everyone</span></span><span class="chip">이 AI에게만 <span class="en">Only this AI</span></span><span class="chip">더 따져 보기 <span class="en">Cross-check</span></span></div></div>
+        <div class="menu"><div class="node all"><b>Claude 앱에서 이어서 하기</b> <span class="en">Continue in the Claude app</span></div>
+          <div class="choices"><span class="dash">Claude 답 카드에만 · 내 PC의 '세션 시트'와 같은 Claude 대화를 연다</span></div></div>
+        <div class="menu"><div class="node all"><b>기록</b> <span class="en">History</span></div>
+          <div class="choices"><span class="dash">폰에만 저장 · 질문 하나에 세 AI의 답이 묶임</span></div></div>
+      </div>
+
+      <div class="node mode all link">
+        <b>일 맡기기 <span class="en">Work</span> <span class="ph p4">P4</span></b>
+        <span class="code">mode: work</span>
+        <div class="sub">파일(문서·PPT·md·표)을 받음 · 작업마다 새 결과 폴더</div>
+      </div>
+      <div class="menus span-modes">
+        <div class="menu"><div class="node all"><b>할 일 적기</b> <span class="en">Describe the task</span></div><div class="choices"></div></div>
+        <div class="menu"><div class="node all"><b>나눈 계획 확인</b> <span class="en">Review the plan</span></div><div class="choices"><span class="dash">AI별로 맡을 부분</span></div></div>
+        <div class="menu"><div class="node all"><b>진행</b> <span class="en">Progress</span></div><div class="choices"></div></div>
+        <div class="menu"><div class="node all"><b>결과 파일</b> <span class="en">Results</span></div><div class="choices"><span class="chip">열기 <span class="en">Open</span></span><span class="chip">공유 <span class="en">Share</span></span></div></div>
+      </div>
+
+      <div class="sep"></div>
+
+      <!-- Entrance 2: developers -->
+      <div class="node ent dev link" style="grid-row: span 2">
+        <span class="who">입구 2 · 개발자 · Developers</span>
+        <b>내 PC</b><span class="en">My PCs</span>
+        <span class="sub">PC의 코딩 AI를 폰에서 켜고 이어 쓰기 · 지금 첫 화면</span>
+      </div>
+
+      <div class="node mode dev link">
+        <b>원격 세션 <span class="en">Remote sessions</span> <span class="ph p1">P1</span> <span class="ph p3">P3</span></b>
+        <div class="sub">PC를 고르면 그 PC의 세션 목록 · P3에서 Codex·OpenCode 추가</div>
+      </div>
+      <div class="menus span-modes">
+        <div class="menu"><div class="node dev"><b>세션</b> <span class="en">Sessions</span></div>
+          <div class="choices"><span class="chip">전체 <span class="en">All</span></span><span class="chip">실행 중 <span class="en">Running</span></span><span class="chip">멈춤 <span class="en">Stopped</span></span><span class="chip">터미널 <span class="en">Terminal</span></span><span class="chip">기록만 <span class="en">History only</span></span><span class="chip">묻기 대화 <span class="en">Ask chats</span> <span class="ph p2">P2</span></span></div></div>
+        <div class="menu"><div class="node dev"><b>세션 시트</b> <span class="en">Session</span></div>
+          <div class="choices"><span class="dash">최근 대화 · Recent conversation</span><span class="chip">Claude 앱에서 열기 <span class="en">Open in the Claude app</span></span><span class="chip">멈추기 <span class="en">Stop</span></span><span class="chip">지우기 <span class="en">Remove</span></span></div></div>
+        <div class="menu"><div class="node dev"><b>새 세션</b> <span class="en">New session</span></div>
+          <div class="choices"><span class="dash">폴더 · 이름 · 모델 · 노력 수준</span></div></div>
+        <div class="menu"><div class="node dev"><b>폴더</b> <span class="en">Folders</span></div>
+          <div class="choices"><span class="chip">열어 두기 <span class="en">Keep open</span></span></div></div>
+      </div>
+
+      <div class="node mode dev link">
+        <b>코딩하기 <span class="en">Code</span> <span class="ph p4">P4</span></b>
+        <span class="code">mode: code</span>
+        <div class="sub">코드 변경 · AI마다 git worktree</div>
+      </div>
+      <div class="menus span-modes">
+        <div class="menu"><div class="node dev"><b>할 일 적기</b> <span class="en">Describe the change</span></div><div class="choices"><span class="dash">저장소 고르기</span></div></div>
+        <div class="menu"><div class="node dev"><b>나눈 계획 확인</b> <span class="en">Review the plan</span></div><div class="choices"></div></div>
+        <div class="menu"><div class="node dev"><b>권한 요청</b> <span class="en">Approvals</span></div><div class="choices"><span class="dash">사람이 승인, 자동 승인 없음</span></div></div>
+        <div class="menu"><div class="node dev"><b>바뀐 곳</b> <span class="en">Changes</span></div><div class="choices"><span class="dash">diff · 테스트 결과</span></div></div>
+        <div class="menu"><div class="node dev"><b>합치기</b> <span class="en">Merge</span></div><div class="choices"><span class="dash">사람이 승인</span></div></div>
+      </div>
+
+      <div class="sep"></div>
+
+      <div class="node ent base"><span class="who" style="color:var(--muted)">공통 · Shared</span><b>설정</b><span class="en">Settings</span> <span class="ph p1">P1</span></div>
+      <div class="node base" style="grid-column: 2 / 5; align-self: center">
+        <div class="sub" style="color:var(--ink)">PC 목록과 끊기 · 연결 진단 · 새 세션 기본값 · AI 연결(내 PC · 공식 앱으로 넘기기) <span class="ph p2">P2</span> · 묻기 기본 단계 <span class="ph p2">P2</span> · 공식 제품 아님</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>한국어 이름 (확정 · 후보는 참고)</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>자리</th><th>추천</th><th>다른 후보</th><th>영어</th><th style="width:100%">고른 이유</th></tr></thead>
+        <tbody>
+          <tr><td class="where">입구 1 탭</td><td class="pick">한 번에</td><td class="alt">모아 묻기 · 여럿에게 · AI 모두</td><td class="en2">All at once</td><td>묻기와 일 맡기기를 함께 담고, 소개 문구 'Ask around, all at once'와 맞는다.</td></tr>
+          <tr><td class="where">입구 2 탭</td><td class="pick">내 PC</td><td class="alt">내 컴퓨터 · 개발</td><td class="en2">My PCs</td><td>지금 이름 그대로. 연결 방식 이름 '내 PC가 대신'과 같은 말.</td></tr>
+          <tr><td class="where">ask</td><td class="pick">묻기</td><td class="alt">질문하기 · 물어보기</td><td class="en2">Ask</td><td>앱 이름의 Ask. 기능 이름은 '한 번에 묻기'.</td></tr>
+          <tr><td class="where">work</td><td class="pick">일 맡기기</td><td class="alt">일하기 · 만들기 · 맡기기</td><td class="en2">Work</td><td>AI가 일하고 사람은 맡긴다. 설계의 Phase 4 이름 '일 나눠 맡기기'와 이어진다. 기능 이름은 '한 번에 맡기기'.</td></tr>
+          <tr><td class="where">code</td><td class="pick">코딩하기</td><td class="alt">코드 맡기기 · 코드 고치기</td><td class="en2">Code</td><td>개발자에게 바로 읽힌다. 개발자 입구에만 있다.</td></tr>
+          <tr><td class="where">묻기 단계</td><td class="pick">빠르게 · 기본 · 깊게</td><td class="alt">가볍게 · 보통 · 꼼꼼히</td><td class="en2">Quick · Standard · Deep</td><td>지금 정한 이름. 영어 'Default'는 설정값처럼 읽혀 'Standard'로.</td></tr>
+          <tr><td class="where">비교 결과</td><td class="pick">같은 말 · 다른 말 · 한 AI만 · 확인 필요</td><td class="alt">일치 · 차이 · 단독 · 검토 필요</td><td class="en2">Agree · Differ · Only one · Check this</td><td>설계의 쉬운 말 원칙대로 한자어(일치·단독)를 피했다.</td></tr>
+          <tr><td class="where">후속 질문</td><td class="pick">이어서 묻기</td><td class="alt">더 묻기 · 후속 질문</td><td class="en2">Follow up</td><td>'후속'보다 쉬운 말.</td></tr>
+          <tr><td class="where">서로 검토</td><td class="pick">더 따져 보기</td><td class="alt">서로 검토 · 교차 확인</td><td class="en2">Cross-check</td><td>설계에 이미 쓴 이름.</td></tr>
+          <tr><td class="where">목록 칩</td><td class="pick">묻기 대화</td><td class="alt">묻기 기록 · 한 번에 묻기</td><td class="en2">Ask chats</td><td>Phase 1 목록 안에서 세션이 아니라 대화로 읽히게.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>정한 것</h2>
+    <ol>
+      <li><b>입구 1 탭 이름 '한 번에':</b> 확정. 화면 제목에는 '한 번에 묻기 / 한 번에 맡기기'로 붙여 씁니다.</li>
+      <li><b>work를 '일 맡기기'로 할지 '일하기'로 할지:</b> '일 맡기기'로 확정. 영어는 Work.</li>
+      <li><b>영어 'All at once'가 탭 이름으로 긴지:</b> 'All at once'로 확정.</li>
+      <li><b>묻기와 내 PC의 연결:</b> 묻기의 'Claude 앱에서 이어서 하기'는 내 PC의 세션 시트와 같은 Claude 대화를 엽니다.</li>
+    </ol>
+    <p class="note" style="margin-top:12px">휴대폰용: menu-mobile.html</p>
+  </section>
+</div>
