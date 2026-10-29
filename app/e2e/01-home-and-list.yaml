@@ -1,13 +1,17 @@
 # E2E-01: the paired PC shows as connected and opens its session list.
+# Taps wait only briefly for the screen to settle (waitToSettleTimeoutMs);
+# the wait after each tap is what checks the next screen.
 appId: host.exp.exponent
 ---
 - runFlow: _open-app.yaml
 - extendedWaitUntil:
     visible: "Connected · agent .*"
-    timeout: 20000
-- tapOn: "Connected · agent .*"
+    timeout: 10000
+- tapOn:
+    text: "Connected · agent .*"
+    waitToSettleTimeoutMs: 300
 - extendedWaitUntil:
     visible: "\\+ New session"
-    timeout: 20000
+    timeout: 10000
 - assertVisible: "Folders"
 - assertVisible: "Search titles, folders, last prompts"

@@ -1,40 +1,35 @@
-# Opens the app from the dev server in Expo Go and waits for the home screen.
+# Opens the app from the dev server in Expo Go on its home screen. The home
+# link (with a query, or Expo Go treats it as the plain link and keeps the
+# screen the last flow left) starts the app or brings a running one home.
 # Expo Go shows its developer menu on the first open; it is closed here.
-# Opening the same link again keeps the screen the last flow left, so go
-# back until the home screen shows.
 appId: host.exp.exponent
 ---
-- openLink: exp://10.0.2.2:8081
-# Text from one of our screens (or the developer menu over it): the bundle
-# has loaded. Expo Go's own loading screen must not count, or the back
-# presses below would close Expo Go.
+- openLink: exp://${MAESTRO_HOST}:8081/--/?home=1
+# The first bundle of a new worktree takes about 30 s to build.
 - extendedWaitUntil:
-    visible: "My PCs|Go home|Continue|\\+ New session|Folders|Pair with a PC|Remove|Open again|Check connection|Is this your PC\\?"
-    timeout: 120000
-- waitForAnimationToEnd
-# The developer menu can rise a few seconds after the app shows.
-- extendedWaitUntil:
-    visible: "Continue|Go home"
-    timeout: 8000
-    optional: true
+    visible: "My PCs|Go home|Continue"
+    timeout: 60000
+# On the emulator the developer menu can rise a moment after the app shows.
+# It has not shown on the test phone, and a "when visible" check for
+# something absent waits about 7 s, so the phone skips it.
 - runFlow:
     when:
-      visible: "Continue"
+      true: ${MAESTRO_DEVICE == 'emulator'}
     commands:
-      - tapOn: "Continue"
-- runFlow:
-    when:
-      visible: "Go home"
-    commands:
-      - pressKey: back
-      - waitForAnimationToEnd
-- repeat:
-    times: 5
-    while:
-      notVisible: "My PCs"
-    commands:
-      - pressKey: back
-      - waitForAnimationToEnd
+      - extendedWaitUntil:
+          visible: "Continue|Go home"
+          timeout: 3000
+          optional: true
+      - runFlow:
+          when:
+            visible: "Continue"
+          commands:
+            - tapOn: "Continue"
+      - runFlow:
+          when:
+            visible: "Go home"
+          commands:
+            - pressKey: back
 - extendedWaitUntil:
     visible: "My PCs"
-    timeout: 30000
+    timeout: 10000

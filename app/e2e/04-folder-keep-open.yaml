@@ -4,24 +4,31 @@
 appId: host.exp.exponent
 ---
 - runFlow: 01-home-and-list.yaml
-- tapOn: "Folders"
+- tapOn:
+    text: "Folders"
+    waitToSettleTimeoutMs: 300
 - extendedWaitUntil:
     visible: "Keep rc-test open"
-    timeout: 20000
-# Start from closed, even if an earlier run left it open.
+    timeout: 10000
+- extendedWaitUntil:
+    visible: "Off|Open · .*"
+    timeout: 10000
+# Open it unless an earlier run left it open, then close it. A "when
+# notVisible" check returns at once; "when visible" waits about 7 s when
+# the text is absent, as it usually is.
 - runFlow:
     when:
-      visible: "Open · .*"
+      notVisible: "Open · .*"
     commands:
-      - tapOn: "Keep rc-test open"
+      - tapOn:
+          text: "Keep rc-test open"
+          waitToSettleTimeoutMs: 300
       - extendedWaitUntil:
-          notVisible: "Open · .*"
-          timeout: 60000
-- tapOn: "Keep rc-test open"
-- extendedWaitUntil:
-    visible: "Open · .*"
-    timeout: 60000
-- tapOn: "Keep rc-test open"
+          visible: "Open · .*"
+          timeout: 30000
+- tapOn:
+    text: "Keep rc-test open"
+    waitToSettleTimeoutMs: 300
 - extendedWaitUntil:
     notVisible: "Open · .*"
-    timeout: 60000
+    timeout: 30000

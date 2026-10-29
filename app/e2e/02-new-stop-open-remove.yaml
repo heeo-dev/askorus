@@ -1,5 +1,6 @@
 # E2E-02..04: start a session in rc-test, stop it, open it again, remove it.
-# The real claude runs these; only the rc-test folder is used.
+# The real claude runs these; only the rc-test folder is used. Waits on
+# claude are long; waits on the app and the agent are short.
 appId: host.exp.exponent
 env:
   NAME: e2e-${new Date().getTime()}
@@ -7,50 +8,63 @@ env:
 - runFlow: 01-home-and-list.yaml
 
 # E2E-02 new session
-- tapOn: "\\+ New session"
+- tapOn:
+    text: "\\+ New session"
+    waitToSettleTimeoutMs: 300
 - extendedWaitUntil:
     visible: "rc-test"
-    timeout: 20000
+    timeout: 10000
 - tapOn:
     text: "rc-test"
     index: 0
+    waitToSettleTimeoutMs: 300
 - tapOn: "Leave empty for the folder name and time"
 - inputText: ${NAME}
 # Done on the on-screen keyboard closes it, as a person would (R-16).
 - pressKey: Enter
-- tapOn: "Start and open in the Claude app"
-# The Claude link opens a browser on the emulator; come back to the app.
+- tapOn:
+    text: "Start and open in the Claude app"
+    waitToSettleTimeoutMs: 300
+# The Claude link opens a browser (emulator) or the Claude app (test phone).
+# Come back by the dev server link, which keeps the app's screen: back would
+# stay in the Claude app, whose header also shows the session name.
 - extendedWaitUntil:
     notVisible: "Starting a new session on the PC.*"
     timeout: 60000
-- back
+- openLink: exp://${MAESTRO_HOST}:8081
+- extendedWaitUntil:
+    visible: "\\+ New session"
+    timeout: 10000
 - extendedWaitUntil:
     visible: ${NAME}
-    timeout: 30000
+    timeout: 15000
 
 # E2E-03 stop, then open again (must ask the PC, not reuse the old link)
-- tapOn: ${NAME}
+- tapOn:
+    text: ${NAME}
+    waitToSettleTimeoutMs: 300
 - extendedWaitUntil:
     visible: "Stop"
     timeout: 10000
-- tapOn: "Stop"
+- tapOn:
+    text: "Stop"
+    waitToSettleTimeoutMs: 300
 - extendedWaitUntil:
     visible: "Stopped. Opening it again resumes it."
-    timeout: 30000
+    timeout: 15000
 - assertNotVisible: "Open again"
-- tapOn: "Open in the Claude app"
+- tapOn:
+    text: "Open in the Claude app"
+    waitToSettleTimeoutMs: 300
 # Waking takes up to ~45 s ("Cancel" shows meanwhile); then the Claude link
-# opens a browser over the app. Come back until the sheet shows again.
+# opens over the app. Come back the same way; the sheet is still open.
 - extendedWaitUntil:
     notVisible: "Cancel"
-    timeout: 90000
-- repeat:
-    times: 3
-    while:
-      notVisible: "Remove"
-    commands:
-      - pressKey: back
-      - waitForAnimationToEnd
+    timeout: 60000
+- openLink: exp://${MAESTRO_HOST}:8081
+- extendedWaitUntil:
+    visible: "Remove"
+    timeout: 10000
 - assertVisible: "Woke the stopped session."
 - assertVisible: "Open again"
 - pressKey: back
@@ -58,9 +72,13 @@ env:
 # E2E-04 remove
 - extendedWaitUntil:
     visible: ${NAME}
-    timeout: 20000
-- tapOn: ${NAME}
-- tapOn: "Remove"
+    timeout: 10000
+- tapOn:
+    text: ${NAME}
+    waitToSettleTimeoutMs: 300
+- tapOn:
+    text: "Remove"
+    waitToSettleTimeoutMs: 300
 # The confirm dialog repeats "Remove"; press the one under its message.
 - extendedWaitUntil:
     visible: "Remove this session\\?"
@@ -68,6 +86,7 @@ env:
 - tapOn:
     text: "(?i)remove"
     below: "If it is running it stops.*"
+    waitToSettleTimeoutMs: 300
 - extendedWaitUntil:
     notVisible: ${NAME}
-    timeout: 30000
+    timeout: 15000
