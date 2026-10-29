@@ -1,4 +1,4 @@
-# Pairs the emulator app with the agent using the link the PC prints
+# Pairs the app on the device with the agent using the link the PC prints
 # in the environment variable MAESTRO_LINK (a -e argument would break on the
 # "&" in the link through maestro.bat). A person allows it on the PC.
 appId: host.exp.exponent

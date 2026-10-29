@@ -10,8 +10,8 @@ Asksemble Phase 1의 테스트 기준이다. 버그를 고치면 그 버그를 �
 | --- | --- | --- | --- | --- | --- |
 | **1. 매번** | UT: 함수·패키지 하나(에이전트·앱). IT: 에이전트 전체를 가짜 `claude`로 폰 순서대로. ST: 앱 화면 전체를 가짜 에이전트로 사람처럼 | `agent/**/*_test.go`, `scenario_it_test.go`, `app/src/**/*-test.ts(x)` | `scripts\test-all.ps1` | 고칠 때마다, 합치기·배포 전 | 2~5분, 에뮬레이터 없음 |
 | **2. 실제 연동** | LT: 에이전트 + **실제 `claude`** + 실제 `~/.claude`, HTTP로 폰 순서대로. E2E-07: claude.ai 쪽 상태(목록·연결됨·보관됨) | `agent/internal/live/live_test.go`(태그 `live`), PC Chrome | `scripts\test-live.ps1`, E2E-07은 Claude in Chrome | 에이전트가 claude를 다루는 부분을 바꿨을 때 | 1~2분 |
-| **3. 앱 전체** | E2E: 에뮬레이터의 Expo Go 앱 → Tailscale → 실제 에이전트 → 실제 `claude`. Android에만 있는 것(뒤로 가기, 링크 열기, 키보드, 화면 배치)과 앱·에이전트 연동 | `app/e2e/*.yaml`(Maestro) | `scripts\e2e.ps1` | 기본은 건너뜀. Phase 중간에 한두 번(10-29 사용자 결정) | 5분 + 부팅 2분 |
-| **4. 실제 폰** | MT: 카메라 QR, Claude 앱으로 넘어가기, 폰 Tailscale on/off, PC 재부팅 | 5절 | 사람이 | 단계(B1, B2 …)를 마칠 때 | - |
+| **3. 앱 전체** | E2E: 테스트 폰(무선 디버깅)의 Expo Go 앱 → Tailscale → 실제 에이전트 → 실제 `claude`. Android에만 있는 것(뒤로 가기, 링크 열기, 키보드, 화면 배치)과 앱·에이전트 연동 | `app/e2e/*.yaml`(Maestro) | `scripts\e2e.ps1` | 기본은 건너뜀. Phase 중간에 한두 번(10-29 사용자 결정) | 약 3분 |
+| **4. 실제 폰** | MT: 카메라 QR, Claude 앱으로 넘어가기, 폰 Tailscale on/off, PC 재부팅. 한 번만 하지만 꼭 봐야 하는 시험(P0-4 공유 등) | 5절 | 테스트 폰은 제가 `scripts\phone.ps1`로, 카메라·PC 재부팅·S23은 사람이 | 단계(B1, B2 …)를 마칠 때, 시험이 생길 때 | - |
 
 - 가짜 `claude`: 테스트 실행 파일이 `ASKSEMBLE_FAKE_CLAUDE=1`일 때 `claude`처럼 동작한다(`fake_test.go`). 받은 인자를 기록하고 `agents --json`, `--bg`, `stop`, `rm`, `remote-control`을 흉내 내며, 환경 변수로 신뢰 안 됨·링크 없음·rm 한 번 실패 같은 상황을 만든다.
 - 가짜 에이전트(앱): `app/src/test/fakeAgent.ts`. 실제 에이전트처럼 서버 상태가 한 박자 늦게 바뀐다(R-12).
@@ -21,7 +21,7 @@ Asksemble Phase 1의 테스트 기준이다. 버그를 고치면 그 버그를 �
 
 1. **고칠 때마다·main에 합치기 전·`.local\bin`에 배포하기 전**: `scripts\test-all.ps1`이 `ALL PASSED`. gofmt, `go vet`(Windows·Linux), Go 전체(UT+IT), 앱 타입 검사, jest 전체(UT+ST), expo-doctor(`-Quick`이면 생략).
 2. **에이전트가 claude를 다루는 부분(실행 인자, 상태 판정, 링크, 폴더 서버)을 바꾸면**: `scripts\test-live.ps1`이 `LIVE PASSED`. claude.ai 쪽 동작이 걸리면 E2E-07도 본다.
-3. **앱을 바꾼 것을 main에 합치기 전**: `scripts\e2e.ps1`이 모두 Passed. 에뮬레이터는 창 없이 떴다가 끝나면 꺼진다(`-Window`로 보면서, `-Keep`으로 켜 둔 채).
+3. **앱을 바꾼 것을 main에 합치기 전**: `scripts\e2e.ps1`이 모두 Passed(테스트 폰). 에뮬레이터로 돌릴 때는 `-Emulator`.
 4. **버그를 고치면**: 가능하면 실패하는 테스트를 먼저 만들고, 고친 뒤 통과를 보고, 회귀 표에 한 줄 더한다. 그 버그를 잡은 단계보다 아래 단계에서 재현할 수 있으면 아래에 넣는다(예: E2E가 잡은 R-12·R-13도 ST·UT로 재현).
 5. 테스트 파일은 `app/src/app` 안에 두지 않는다. 그 안의 파일은 Expo Router가 화면으로 묶는다.
 
@@ -64,18 +64,37 @@ Asksemble Phase 1의 테스트 기준이다. 버그를 고치면 그 버그를 �
 | `reopen-test.tsx` | '다시 열기'와 멈춘 뒤 열기가 매번 PC에 묻기(R-09) |
 | `preview-test.tsx` | 세션 시트의 '최근 대화'(F8): 질문·답·도구 종류별 횟수(모르는 종류는 코드 그대로, 예전 에이전트는 합계), 아직 답이 없음, PC가 못 읽으면 조용히 예전 '마지막 질문' 줄, `preview`를 모르는 예전 에이전트에는 묻지 않음 |
 
-## 4. E2E (에뮬레이터)
+## 4. E2E (테스트 폰)
 
 실제 에이전트와 실제 `claude`를 쓴다. 세션은 시험 폴더 `rc-test`에서만 만들고, 흐름이 끝날 때 지운다.
 
-### 환경 (이 PC, 2026-10-28)
+### 테스트 폰 (2026-10-29~)
+
+10-29부터 E2E는 테스트 전용 폰에서 돈다(에뮬레이터가 불편해서, 사용자 결정). 에뮬레이터는 `-Emulator`로 그대로 쓸 수 있다.
+
+- Galaxy S10(SM-G973N), Android 12. 사람이 쓰지 않는 테스트 전용 폰이다. 시스템 언어는 **영어**(한국어는 두 번째), 화면 잠금은 없음/밀기. 흐름이 영어 문구를 누르는데 Android 12에는 앱별 언어가 없어서 시스템 언어를 바꿨다.
+- **무선 디버깅**으로 붙는다. PC와 같은 Wi-Fi(192.168.0.x)에서 개발자 옵션의 무선 디버깅을 켜 두면 된다. 짝은 QR로 한 번 맺었다(`WIFI:T:ADB;S:<이름>;P:<암호>;;` QR을 폰의 'QR 코드로 기기 페어링'으로 찍고, PC가 mDNS로 폰을 찾아 `adb pair`). 다시 맺어야 하면 폰에서 같은 방식으로 하거나 '페어링 코드로 기기 페어링'의 IP:포트·코드로 `adb pair`.
+- 폰의 Tailscale(VPN)이 켜져 있으면 PC가 mDNS로 폰을 못 볼 때가 있다. `e2e.ps1`은 이미 붙은 폰 → mDNS → 마지막으로 붙은 주소(`D:\Android\phone-adb.txt`) 순서로 찾는다. 무선 디버깅 포트는 그것을 껐다 켜거나 폰을 다시 켜면 바뀐다(그때는 mDNS나 폰 화면의 IP:포트).
+- 폰에 Tailscale을 깔고 PC와 같은 계정으로 로그인했다(폰 tailnet 주소 PHONE-TAILSCALE-IP). Expo Go 58.0.5와 Claude 앱도 깔려 있다.
+- 앱은 개발 서버 `exp://PC-TAILSCALE-IP:8081`(PC의 Tailscale 주소)에서 받는다. 흐름은 이 주소를 `MAESTRO_HOST`로 받는다(에뮬레이터는 10.0.2.2).
+- 폰 앱은 에이전트와 짝 맺어 두었다(10-29, 기기 이름 Galaxy S10). PC 허용은 요청 주소가 폰의 tailnet 주소일 때만 y로 답했다.
+- `e2e.ps1`은 시작할 때 폰을 깨우고 잠금을 풀고, 도는 동안 화면 꺼짐을 30분으로 늘리고 애니메이션을 끈 뒤 끝나면 되돌린다. 화면이 꺼지면 Expo Go가 안 보여 흐름이 실패한다. 오래 돌릴 때는 충전기에 꽂아 둔다.
+- 폰을 사람이 만지는 동안 돌리면 흐름이 엉뚱한 화면을 본다. 돌리기 전에 손을 떼 달라고 한다.
+- 빠르게 하기(10-29, 3분 49초 → 2분 12초, 스크립트 전체 약 2분 40초). 남은 시간의 대부분은 실제 `claude`를 기다리는 시간(새 세션 약 12초, 깨우기 약 15초)과 탭마다 Maestro가 화면이 멈추기를 기다리는 약 2초다.
+  - 홈 화면은 링크 `exp://<MAESTRO_HOST>:8081/--/?home=1`로 연다. 뒤로 가기를 되풀이하던 것보다 흐름마다 약 10초 빠르다. 쿼리가 없으면 Expo Go가 처음 링크와 같다고 보고 화면을 그대로 둔다.
+  - `runFlow: when: visible`은 찾는 글자가 **없을 때** 약 7초를 기다린다. 대개 없는 것을 확인할 때는 `when: notVisible`로 뒤집는다(E2E-05). 개발자 메뉴 확인은 에뮬레이터에서만 한다(`MAESTRO_DEVICE`).
+  - 탭은 `waitToSettleTimeoutMs: 300`으로 누른 뒤 기다림을 줄이고, 다음 화면은 뒤따르는 `extendedWaitUntil`이 확인한다. 입력 칸을 누르는 탭은 그대로 둔다(포커스).
+  - `maestro test --no-reinstall-driver`: 실행마다 폰에 드라이버를 다시 까는 시간(약 6초)을 뺀다.
+  - 타임아웃은 앱·에이전트만 기다리면 10~15초, 실제 `claude`를 기다리면 60초, 첫 번들은 60초. 이상이 있으면 그만큼 빨리 실패한다.
+
+### 에뮬레이터 (`-Emulator`, 2026-10-28)
 
 - `D:\Android`: JDK 17(Temurin), Android SDK, 에뮬레이터, Maestro 2.11.0(`D:\Android\maestro`). AVD `asksemble-play`(Android 35, **Google Play** 이미지, x86_64, 램 2GB, 4코어, 호스트 GPU)는 `D:\Android\avd`에 둔다(C:는 공간이 적다). 하드웨어 가속은 WHPX.
 - 에뮬레이터 안에 **Tailscale 앱**을 깔고 PC와 같은 계정으로 로그인했다. 에뮬레이터가 tailnet 기기 하나로 붙어 MagicDNS 이름으로 에이전트에 닿는다(실제 폰과 같은 경로). E2E 전에 `e2e.ps1`이 PC 이름으로 ping해서 확인한다.
 - Expo Go(58.0.5)는 앱 언어를 영어로 지정했다(`adb shell cmd locale set-app-locales host.exp.exponent --locales en-US`). 에뮬레이터 자체는 한국어다. 흐름은 영어 문구로 쓴다.
 - 화면 키보드는 실제 폰처럼 켜 둔다(`adb shell settings put secure show_ime_with_hard_keyboard 1`, 10-28부터). 입력 칸 뒤의 버튼은 흐름이 키보드의 완료(`pressKey: Enter`)로 키보드를 닫고 누른다. `hideKeyboard`는 쓰지 않는다(뒤로 가기로 동작해 화면을 닫음).
 - 이 PC 화면이 작아(1280×680) 에뮬레이터 창이 화면 밖에 뜰 수 있다. `e2e.ps1`이 창을 화면 위쪽으로 옮긴다.
-- 앱은 에뮬레이터의 Expo Go가 개발 서버 `exp://10.0.2.2:8081`에서 받는다. 개발 서버는 `scripts\dev-server.ps1`이 띄운다. 스크립트가 있는 작업 폴더의 앱을 보여 주므로, worktree의 변경은 그 worktree에서 띄워야 E2E에 들어간다.
+- 앱은 에뮬레이터의 Expo Go가 개발 서버 `exp://10.0.2.2:8081`에서 받는다(폰과 같은 서버). 개발 서버는 `scripts\dev-server.ps1`이 띄운다. 스크립트가 있는 작업 폴더의 앱을 보여 주므로, worktree의 변경은 그 worktree에서 띄워야 E2E에 들어간다.
 - 에뮬레이터 앱은 에이전트와 짝 맺어 두었다(`_pair.yaml`, 링크는 환경 변수 `MAESTRO_LINK`, PC 허용 y는 사람이). 10-28 `eas init`으로 app.json에 `owner`·`projectId`가 생긴 뒤 Expo Go의 앱 저장소가 바뀌어 짝 정보가 안 보였고, 다시 짝 맺었다(PC에 `asksemble-agent pair` 창을 띄우고 출력의 링크를 `MAESTRO_LINK`로).
 - 에뮬레이터를 새로 띄우면 안의 Tailscale이 바로 붙지 않을 때가 있다. Tailscale 앱을 열면(`adb shell monkey -p com.tailscale.ipn -c android.intent.category.LAUNCHER 1`) 30~40초 안에 붙는다. 새 worktree에서 처음 묶는 번들은 약 30초 걸려 첫 흐름이 실패할 수 있다(한 번 열어 데운 뒤 돌린다).
 - **Claude 앱은 이 에뮬레이터에서 못 쓴다**: Play 프로텍트 인증이 '인증되지 않음'이라 Claude 앱 로그인(Google·이메일 모두)이 Play Integrity에서 막힌다. Claude 쪽 상태는 E2E-07처럼 PC Chrome의 claude.ai로 본다. Claude 앱으로 넘어가는 동작은 MT-02.
@@ -84,43 +103,100 @@ Asksemble Phase 1의 테스트 기준이다. 버그를 고치면 그 버그를 �
 
 ```
 powershell -NoProfile -File scripts\dev-server.ps1      # 개발 서버 창
-powershell -NoProfile -File scripts\e2e.ps1             # 에뮬레이터를 띄우고 흐름 전부
+powershell -NoProfile -File scripts\e2e.ps1             # 테스트 폰에서 흐름 전부
 powershell -NoProfile -File scripts\e2e.ps1 -Flow 02    # 하나만
+powershell -NoProfile -File scripts\e2e.ps1 -Prepare   # 폰 준비만(연결·언어·잠금·Tailscale·Expo Go)
+powershell -NoProfile -File scripts\e2e.ps1 -Emulator  # 에뮬레이터에서
 ```
 
-`e2e.ps1`은 에뮬레이터가 없으면 **창 없이** 띄우고(`-Window`면 창으로), Expo Go가 없으면 깔고, 에뮬레이터 안의 Tailscale이 PC에 닿을 때까지 기다리고, 최신 코드를 받도록 Expo Go를 새로 시작한다. 직접 띄운 에뮬레이터는 끝나면 끈다(`-Keep`이면 둔다). 창 없이 띄워도 램은 비슷하게 쓰고(약 2.5GB), 화면을 그리는 CPU·GPU만 준다. 큰 이득은 끝나면 끄는 것이다.
+테스트 폰이면 `e2e.ps1`은 폰을 찾아 붙고, 언어가 영어인지와 잠금이 풀리는지 보고, Tailscale로 PC에 닿는지 확인하고, 최신 코드를 받도록 Expo Go를 새로 시작한다. `-Emulator`이면 에뮬레이터가 없으면 **창 없이** 띄우고(`-Window`면 창으로), Expo Go가 없으면 깔고, 에뮬레이터 안의 Tailscale이 PC에 닿을 때까지 기다리고, 최신 코드를 받도록 Expo Go를 새로 시작한다. 직접 띄운 에뮬레이터는 끝나면 끈다(`-Keep`이면 둔다). 창 없이 띄워도 램은 비슷하게 쓰고(약 2.5GB), 화면을 그리는 CPU·GPU만 준다. 큰 이득은 끝나면 끄는 것이다.
 
 ### 흐름 (`app/e2e`)
 
-| ID | 파일 | 흐름 | 결과(10-27) |
+| ID | 파일 | 흐름 | 결과(에뮬레이터 10-27, 테스트 폰 10-29) |
 | --- | --- | --- | --- |
-| E2E-01 | `01-home-and-list.yaml` | 앱 열기 → PC 카드 '연결됨' → 세션 목록 | 통과 |
-| E2E-02~04 | `02-new-stop-open-remove.yaml` | `rc-test`에 새 세션 → 목록에 '실행 중' → 멈추기('다시 열기' 사라짐) → 열기('멈춘 세션을 깨웠습니다') → 지우기 | 통과 |
-| E2E-05 | `04-folder-keep-open.yaml` | 폴더 화면에서 `rc-test` 열어 두기 켬 → '열려 있음' → 끔 | 통과(R-12를 찾음) |
-| E2E-06 | `03-settings-check.yaml` | 설정 → 연결 진단 → PC·짝·에이전트·Claude Code 모두 정상 | 통과 |
+| E2E-01 | `01-home-and-list.yaml` | 앱 열기 → PC 카드 '연결됨' → 세션 목록 | 통과, 폰 통과 |
+| E2E-02~04 | `02-new-stop-open-remove.yaml` | `rc-test`에 새 세션 → 목록에 '실행 중' → 멈추기('다시 열기' 사라짐) → 열기('멈춘 세션을 깨웠습니다') → 지우기 | 통과, 폰 통과 |
+| E2E-05 | `04-folder-keep-open.yaml` | 폴더 화면에서 `rc-test` 열어 두기 켬 → '열려 있음' → 끔 | 통과(R-12를 찾음), 폰 통과 |
+| E2E-06 | `03-settings-check.yaml` | 설정 → 연결 진단 → PC·짝·에이전트·Claude Code 모두 정상 | 통과, 폰 통과 |
 | E2E-07 | (PC Chrome, Claude in Chrome) | Claude 쪽 상태: rc-test에 새 세션 → claude.ai/code 목록에 'Remote Control · 연결됨' → 멈추기 → 목록에서 빠지고 링크는 '보관되었습니다' → 앱·에이전트로 다시 열기 → 보관이 풀리고 다시 '연결됨' → 지우기 | 통과(10-28) |
 
 알아 둘 것:
-- Expo Go는 앱을 열 때 개발자 메뉴를 늦게 띄우고, 오른쪽 위에 둥근 개발 도구 버튼을 둔다. 이 버튼이 첫 화면의 'Settings'를 덮어서, 설정은 링크(`exp://10.0.2.2:8081/--/settings`)로 연다. 실제로 빌드한 앱에는 이 버튼이 없다.
-- 열기의 Claude 링크는 에뮬레이터 브라우저로 열린다(Claude 앱이 없음). 흐름은 뒤로 가기로 앱에 돌아와 결과를 본다. Claude 앱으로 넘어가는 것은 MT-02에서 본다.
+- Expo Go는 (에뮬레이터에서) 앱을 열 때 개발자 메뉴를 늦게 띄우고, 오른쪽 위에 둥근 개발 도구 버튼을 둔다. 이 버튼이 첫 화면의 'Settings'를 덮어서, 설정은 링크(`exp://<MAESTRO_HOST>:8081/--/settings`)로 연다. 실제로 빌드한 앱에는 이 버튼이 없다.
+- 열기의 Claude 링크는 에뮬레이터에서는 브라우저로, 테스트 폰에서는 Claude 앱(로그인됨)으로 열린다. 흐름은 개발 서버 링크(`exp://<MAESTRO_HOST>:8081`)를 다시 열어 앱에 돌아온다. 이 링크는 앱의 화면을 그대로 둔다. 뒤로 가기는 Claude 앱 안에 머물고, Claude 앱 머리글에도 세션 이름이 떠서 흐름이 앱으로 착각했다(10-29). 테스트 폰의 E2E-02가 지나가면 Claude 앱으로 넘어가는 길(MT-02)도 한 번 지나간 것이다.
 - E2E-07은 제가 PC Chrome(Claude in Chrome 확장)으로 한다. 그 Chrome의 claude.ai 로그인을 쓰며, 읽기와 시험 세션(rc-test) 조작만 한다. 목록 항목은 `a[href*="session_…"]`의 글자('Remote Control · 연결됨/오프라인')로, 보관은 세션 페이지의 '이 세션은 보관되었습니다' 문구로 판단한다.
 - 알게 된 것(10-28): `claude stop`으로 멈추면 Claude가 그 원격 세션을 **보관**하고 Code 목록에서 뺀다. 다시 깨워 연결이 붙으면 보관이 저절로 풀린다. 그래서 연결이 붙기 전에 링크를 열면 '보관됨'이 보인다(R-08).
 - 실패한 흐름이 서버를 켠 채나 세션을 남긴 채 끝날 수 있다. 흐름은 시작 상태를 맞추고 시작한다(E2E-05). 남은 `e2e-…` 세션은 `asksemble-agent rm`으로 지운다.
 
-## 5. MT (실제 폰, S23)
+### 흐름 만들기 (agent-device와 같이, 2026-10-29~)
 
-| ID | 항목 |
-| --- | --- |
-| MT-01 | 카메라로 PC의 QR을 찍어 짝 맺기 |
-| MT-02 | 열기 → Claude 앱으로 바로 넘어감(브라우저가 아님) |
-| MT-03 | Claude 앱에서 돌아오면 목록이 저절로 새로 고쳐짐 |
-| MT-04 | 폰 Tailscale을 끄고 열기 → '폰 쪽부터 확인' 안내 |
-| MT-05 | PC 재부팅 뒤: 에이전트 자동 시작, 꺼진 세션 열기가 '보관됨' 없이 열림(R-08). 10-29 통과(재부팅 뒤 앱에서 이 개발 세션을 열어 이어 씀) |
-| MT-06 | 열어 두기 켠 폴더로 Claude 앱 PC 목록에서 새 세션 |
-| MT-07 | 설치본(EAS 빌드, B2부터): 폰 다크 모드를 따름(R-14), 앱을 껐다 켜도 짝이 남음, 권한은 카메라만 물음 |
-| MT-08 | 설치본: `pair`가 띄운 QR(`asksemble://pair?…`)을 폰 기본 카메라 앱으로 찍으면 이 앱의 짝 맺기 화면이 열림 |
+새 흐름은 테스트 폰을 실시간으로 다뤄 보며 만든다(5절의 `phone.ps1`). 짐작한 문구로 흐름을 쓰고 실패를 보며 고치는 것보다 빠르다.
+
+1. `phone.ps1 ready` 뒤 `phone.ps1 open "exp://PC-TAILSCALE-IP:8081/--/<경로>"`로 시작 화면을 연다.
+2. 사람이 할 순서대로 `snapshot -i` → `click @e…`/`fill @e… "글"` → `snapshot -i`를 되풀이한다. snapshot에 나온 **글자 그대로**를 흐름의 선택자로 쓴다(예: `"Connected · agent 0.1.0-dev"`는 `"Connected · agent .*"`로). 버튼 글자가 목록 글자와 겹치면 `index`·`below`를 정한다.
+3. 화면이 바뀌기까지 걸린 시간을 보고 `extendedWaitUntil` 타임아웃을 정한다(앱·에이전트 10~15초, 실제 `claude` 60초).
+4. `phone.ps1 release` 뒤 `e2e.ps1 -Flow <번호>`로 그 흐름만 돌린다. 통과하면 전체를 돌린다.
+5. 대개 없는 것을 확인할 때는 `when: visible` 대신 `when: notVisible`을 쓴다(4절 '빠르게 하기').
+
+### 실패했을 때
+
+- `e2e.ps1`은 흐름이 실패하면 그 순간의 화면을 Maestro 보고서 폴더(`%USERPROFILE%\.maestro\tests\<시각>`)에 남긴다. `after-failure.txt`(agent-device가 읽은 요소 목록)와 `after-failure.png`(화면 사진)다. 마지막 줄에 폴더가 나온다. Maestro 자체의 스크린숏·화면 구조·`maestro.log`도 같은 폴더에 있다.
+- `after-failure.txt`에서 기다리던 글자가 다르게 나오면 선택자를 고치고, 화면이 아직 바뀌는 중이었으면 타임아웃이나 기다리는 대상을 고치고, 앱이 엉뚱한 화면에 있으면 앱 버그를 의심한다(회귀 규칙 4).
+- 더 볼 것이 있으면 폰은 그대로 두고 `phone.ps1 snapshot -i`·`shot`·`ui`로 이어서 본다. 끝나면 `phone.ps1 release`.
+- agent-device를 스크립트에서 부를 때는 `phone-lib.ps1`의 `Invoke-AgentDevice`를 쓴다. 처음 부를 때 뜨는 agent-device 데몬이 보통 방식으로 띄운 자식 프로세스의 핸들(출력 통로)을 물려받아, 부른 쪽이 끝나지 않는다(10-29에 겪음). 그래서 셸로 띄운 cmd를 거쳐 파일로 출력을 받는다.
+
+## 5. MT (실제 폰)
+
+되풀이하는 확인은 Maestro 흐름(4절)으로 만들고, 한 번만 하지만 꼭 봐야 하는 시험은 테스트 폰을 실시간으로 다뤄서 본다. 테스트 폰으로 되는 것은 제가 하고, 사람에게는 카메라·PC 재부팅·S23처럼 손이 필요한 것만 부탁한다.
+
+| ID | 항목 | 누가 |
+| --- | --- | --- |
+| MT-01 | 카메라로 PC의 QR을 찍어 짝 맺기 | 사람(카메라) |
+| MT-02 | 열기 → Claude 앱으로 바로 넘어감(브라우저가 아님) | 테스트 폰. E2E-02가 지나가면 함께 지나감(10-29) |
+| MT-03 | Claude 앱에서 돌아오면 목록이 저절로 새로 고쳐짐 | 테스트 폰 |
+| MT-04 | 폰 Tailscale을 끄고 열기 → '폰 쪽부터 확인' 안내 | 테스트 폰(adb는 Wi-Fi라 Tailscale을 꺼도 끊기지 않음) |
+| MT-05 | PC 재부팅 뒤: 에이전트 자동 시작, 꺼진 세션 열기가 '보관됨' 없이 열림(R-08). 10-29 통과(재부팅 뒤 앱에서 이 개발 세션을 열어 이어 씀) | 사람(PC 재부팅) |
+| MT-06 | 열어 두기 켠 폴더로 Claude 앱 PC 목록에서 새 세션 | 테스트 폰(Claude 앱 로그인됨) |
+| MT-07 | 설치본(EAS 빌드, B2부터): 폰 다크 모드를 따름(R-14), 앱을 껐다 켜도 짝이 남음, 권한은 카메라만 물음 | 테스트 폰(APK) |
+| MT-08 | 설치본: `pair`가 띄운 QR(`asksemble://pair?…`)을 폰 기본 카메라 앱으로 찍으면 이 앱의 짝 맺기 화면이 열림 | 사람(카메라). 링크 처리만은 테스트 폰에서 `adb shell am start -d 'asksemble://pair?…'`로 |
 
 E2E는 Expo Go로 돌아서 설치본에서만 드러나는 차이(다크 모드, 권한, 딥 링크 scheme)를 못 본다. 이런 설정은 `app/src/config-test.ts`(UT)로 지키고, 설치본은 MT-07·08로 본다.
+
+### 실시간 사용 (`scripts\phone.ps1`, 2026-10-29~)
+
+```
+powershell -NoProfile -File scripts\phone.ps1 ready           # 붙기, 깨우기, 화면 읽기 권한 비우기
+powershell -NoProfile -File scripts\phone.ps1 snapshot -i     # 화면의 요소 목록(@e1, @e2 …)
+powershell -NoProfile -File scripts\phone.ps1 click @e11      # 누르기 (press X Y는 좌표)
+powershell -NoProfile -File scripts\phone.ps1 fill @e12 "글"  # 입력 칸 채우기
+powershell -NoProfile -File scripts\phone.ps1 open <패키지|링크>
+powershell -NoProfile -File scripts\phone.ps1 ui              # 시스템 창(공유 시트, 권한 창)까지 읽기
+powershell -NoProfile -File scripts\phone.ps1 shot 파일.png   # 화면 사진(증거, 사용자에게 보내기)
+powershell -NoProfile -File scripts\phone.ps1 record start 파일.mp4 / record stop
+powershell -NoProfile -File scripts\phone.ps1 release         # 끝나면(e2e.ps1 전에)
+```
+
+- 주 도구는 **agent-device**(Callstack, MIT) 0.21.34. `D:\Android\agent-device`에 버전을 고정해 깔았다. 문서에는 Windows가 적혀 있지 않지만 이 PC의 Windows adb와 무선 디버깅에서 doctor·snapshot·click·open이 됐다(10-29). 화면을 접근성 트리로 짧게 읽어서(@ref) 스크린숏보다 빠르고 정확하다. 한 동작에 4~5초. 처음 쓸 때 폰에 도우미 앱(`com.callstack.agentdevice.snapshothelper`)을 깐다. React Native용 명령(`metro reload`, 오버레이 닫기)과 로그·화면 녹화도 있다.
+- agent-device는 시스템 창(공유 시트 같은 것)을 못 읽는다('insufficient foreground app content'). 그때는 `phone.ps1 ui`(Android 기본 `uiautomator dump`)로 글자와 가운데 좌표를 읽고 `press X Y`로 누른다. 눈으로 확인할 것은 `shot`으로 찍어 본다.
+- 공유 같은 인텐트는 adb로 바로 보낸다. 예: `adb shell 'am start -a android.intent.action.SEND -t text/plain --es android.intent.extra.TEXT hello'`는 공유 시트를 띄운다(10-29, ChatGPT·Claude가 대상에 보임). `-p com.openai.chatgpt`처럼 패키지를 주면 그 앱으로 바로 간다.
+- **화면 읽기 권한은 한 번에 한 도구만** 쓴다(Android UiAutomation). Maestro 드라이버는 실행이 끝나도 잡고 있고, agent-device 도우미는 세션 동안, mobilecli(mobile-mcp)는 30분 동안 서버를 남긴다. 다른 도구가 'UiAutomationService … already registered'로 실패한다. `phone.ps1 ready`·`release`와 `e2e.ps1`이 시작과 끝에 모두 끈다(`phone-lib.ps1`의 `Release-Screen`).
+- 비교한 다른 도구(10-29):
+  - **mobile-mcp**(`@mobilenext/mobile-mcp`): 이 PC에서 폰을 찾고 화면을 읽었다. MCP라 새 세션부터 쓸 수 있고, 결과가 JSON이라 길며, 텔레메트리가 기본으로 켜져 있다(`MOBILEMCP_DISABLE_TELEMETRY=1`). agent-device가 막힐 때의 대안으로 둔다.
+  - **Maestro MCP**(`maestro mcp`): 이미 깔린 Maestro에 들어 있다. 동작을 YAML로 보내야 해서 실시간 사용에는 번거롭지만, 실시간으로 찾은 순서를 흐름으로 옮길 때 쓸 만하다.
+  - **android-use**(Claude Code 스킬): adb와 스크린숏 기반의 작은 프로젝트. `phone.ps1`의 `shot`·`ui`·`press`가 같은 일을 한다.
+
+### Expo Go와 APK
+
+| | Expo Go(지금) | APK(EAS 빌드, B2부터) |
+| --- | --- | --- |
+| 앱 | `host.exp.exponent` 안에서 우리 번들이 돈다 | `app.asksemble` 하나로 깔림 |
+| 여는 법 | `exp://PC-TAILSCALE-IP:8081/--/<경로>`(개발 서버 필요) | `asksemble://<경로>`, 아이콘, `open app.asksemble` |
+| 볼 수 있는 것 | 화면·에이전트 연동, 밖으로 나가는 링크(Claude 앱), 밖으로 보내는 공유 | 위 전부 + 아이콘·이름, 권한 창, 다크 모드(R-14), `asksemble://` 딥 링크(카메라 QR, MT-08), **공유 받기**(다른 앱이 공유 시트에서 Asksemble을 고르는 것), 앱을 껐다 켠 뒤 상태(MT-07) |
+| 못 보는 것 | 설치본 설정(app.json의 scheme·권한·인텐트 필터), Expo Go의 개발 도구 버튼이 화면을 가림 | 코드를 고칠 때마다 다시 빌드(개발 빌드면 JS는 metro로 바로 바뀜) |
+| Maestro | `appId: host.exp.exponent`(지금 흐름) | `appId: app.asksemble`로 바꾼 흐름이 필요 |
+| phone.ps1 | `open exp://…` | `install <apk>`, `open app.asksemble`, 개발 빌드는 `metro reload` |
+
+- P0-4(공식 앱이 공유로 받은 글을 입력창에 넣는지, 답을 공유로 내보낼 수 있는지)는 다른 앱끼리의 시험이라 **Expo Go 단계에서 테스트 폰으로 할 수 있다**. 답을 Asksemble이 공유로 받는 길(P2-4)을 볼 때는 APK가 필요하다.
 
 ## 6. 회귀 표
 
