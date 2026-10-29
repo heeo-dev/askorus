@@ -53,7 +53,7 @@ Asksemble/
 | F6 | PC에서 이어 보기 안내 | `core.Session.AttachCommand`(어댑터가 채움), 앱 복사 버튼 |
 | F7 | 여러 PC | 앱 `connections`(연결 목록, 원칙 8) |
 | F10 | 폴더 열어 두기 | `config.Folder.Server`, `adapter/claude/server.go`(A4), `api` `GET /v1/folders`·`PUT /v1/folders/{id}/server` |
-| N1 | 중계 서버 없음 | 에이전트는 외부로 나가는 요청이 없다. 앱은 연결 목록의 주소로만 접속 |
+| N1 | 중계 서버 없음 | 에이전트는 기본으로 외부로 나가는 요청이 없다. 예외는 사용자가 켠 연동(알림 푸시, 판정 모델)뿐이고 무엇이 어디로 가는지 앱 설정과 `check`에 보인다(2026-10-29 다듬음, 설계 rev 67). AI CLI가 스스로 하는 통신은 규칙 밖. 앱은 연결 목록의 주소로만 접속 |
 | N2 | 정해진 동작만 | `runner.go`: 명령 종류(enum)별로 인자를 만들고 금지 플래그 검사. 셸 없이 `exec.Command(exe, args...)`. `.cmd`/`.bat`은 실행 거부 |
 | N3 | 일반 권한 | `serve`는 관리자 권한이면 시작을 거부, 자동 시작은 HKCU Run(일반 권한), 관리자 서비스 감지(`adapter/claude/daemon.go`) |
 | N4 | 짝 맺은 기기만 | `devices` 해시 저장소, `api` 토큰 미들웨어와 실패 횟수 제한(`api/pair.go`), `pairing`(QR 코드·PC 허용), `devices revoke` |
