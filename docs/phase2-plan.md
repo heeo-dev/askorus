@@ -40,7 +40,7 @@ Phase 2가 다른 AI에게 쓰는 것은 '질문 한 번(ask)'뿐이다. 명령 
 | `work` 일 맡기기 | 파일(문서·PPT·md·표) | 작업마다 새 결과 폴더, git 없음 | 결과 폴더 안 쓰기 | 나눈 계획, 결과 파일 | 입구 1(모두) | 4 |
 | `code` 코딩하기 | 코드 변경 | 내 저장소의 AI별 git worktree | worktree 안 쓰기, 권한 요청은 사람에게 | 계획, 권한 요청, diff, 합치기 | 입구 2(내 PC, 개발자) | 4 |
 
-- research는 따로 두지 않는다. 웹 검색은 묻기에 원래 있어야 한다(사용자). 그래서 P0-7은 "묻기에 웹 검색·읽기를 기본으로 켬"으로 정해졌고, P0-2의 Claude `--tools ""`는 `--tools "WebSearch,WebFetch"` 같은 꼴로 바뀐다. Codex·OpenCode의 웹 검색 옵션은 P2-1 전에 확인한다.
+- research는 따로 두지 않는다. 웹 검색은 묻기에 원래 있어야 한다(사용자). 그래서 P0-7은 "묻기에 웹 검색·읽기를 기본으로 켬"으로 정해졌고, P0-2의 Claude `--tools ""`는 `--tools "WebSearch,WebFetch"` 같은 꼴로 바뀐다. AI별 웹 검색 옵션은 4절 P0-7에서 확인했다(2026-10-30).
 - 실행 틀(CLI 띄우기, 출력 읽기, 세션 id·이어 가기, PWD·폴더, 동시 실행·사용량, 작업 id, 기록)은 세 모드가 같이 쓰고, 도구·권한·폴더 정책만 모드별로 둔다. 모드와 상관없이 권한을 푸는 옵션은 넘기지 않고, 권한 요청을 자동으로 승인하지 않는다.
 - API는 `POST /v1/runs`에 `mode`를 받는다. Phase 2에서는 `ask`만 만들고 `work`·`code`는 자리만 둔다(`/v1`은 더하기만). 묻기 배지도 모드 배지(`ask`·`work`·`code`)로 넓힌다.
 - 두 입구와 하위 메뉴, 한국어·영어 이름은 추천대로 확정(2026-10-29): 입구 1 '한 번에 / All at once'(묻기 Ask · 일 맡기기 Work), 입구 2 '내 PC / My PCs'(원격 세션 · 코딩하기 Code). 흐름도 원본은 `docs/menu/menu-pc.html`·`docs/menu/menu-mobile.html`이고 설계와 함께 유지한다(CLAUDE.md). 원본 설계 '제품 방향과 Phase 설계' rev 72에 반영.
@@ -65,7 +65,7 @@ Phase 2가 다른 AI에게 쓰는 것은 '질문 한 번(ask)'뿐이다. 명령 
 | P0-4 | 공식 앱으로 넘기기: ChatGPT·Claude·Gemini 앱이 공유로 받은 글을 입력창에 넣는지, 답을 공유로 내보낼 수 있는지 | 사용자(폰), Claude(테스트 폰) 교차 확인 | 폰에서 공유 시험. **끝(2026-10-30, Android), 아래 P0-4 절** |
 | P0-5 | `agy`를 설치해 넣을지, 일단 셋으로 시작할지 | 사용자 | **셋으로 시작(2026-10-29)** |
 | P0-6 | 판정 검증용 예시 질문 30개(한국어 포함)와 사람이 단 정답 | 사용자 + Claude | Claude가 초안, 사용자가 정답 확인 |
-| P0-7 | 웹 검색이 필요한 질문에서 각 CLI의 검색을 켤지 | 함께 | P0-1 결과를 보고 |
+| P0-7 | 웹 검색이 필요한 질문에서 각 CLI의 검색을 켤지 | 함께 | 묻기에 기본으로 켬(2절 모드 결정). **옵션 확인 끝(2026-10-30), 아래 P0-7 절** |
 | P0-8 | 후속 질문 이어 가기(resume)와 묻기 세션을 Phase 1 목록에서 거르는 법 | Claude | CLI마다 실제 시험 |
 | P0-9 | 사용자 전역 지시(AGENTS.md 등)가 묻기 답에 섞이지 않게 하는 법 | Claude | 아래 '속도 비교'의 남은 것 |
 
@@ -146,12 +146,12 @@ Phase 2가 다른 AI에게 쓰는 것은 '질문 한 번(ask)'뿐이다. 명령 
 | AI | 실행 | 파일 생김 | 결과 |
 | --- | --- | --- | --- |
 | Claude | `-p` 그대로 | 아니오 | `-p`는 묻지 않고 거절함 |
-| Claude | `-p --tools ""` | 아니오 | **채택.** 도구를 모두 끈다. 사용자 설정의 허용 규칙과 상관없이 막힌다(웹 검색을 켤지는 P0-7) |
+| Claude | `-p --tools ""` | 아니오 | **채택.** 도구를 모두 끈다. 사용자 설정의 허용 규칙과 상관없이 막힌다(P0-7에서 웹 도구 둘만 켜는 것으로 바꿈) |
 | Codex | `exec -s read-only` | **예** | 사용자 설정의 `approvals_reviewer = "auto_review"`가 권한 올림 요청을 자동으로 승인한 것으로 보인다 |
 | Codex | `exec -s read-only --ignore-user-config` | 아니오 | **채택.** `config.toml`만 빼고 로그인은 그대로 쓴다. 모델·생각 수준은 어차피 직접 넘긴다 |
 | OpenCode | `run`(기본 build 에이전트) | **예** | 쓸 수 있다 |
 | OpenCode | `run --agent plan` | 아니오 | 막히지만 계획을 세우는 성격이라 일반 질문에 1,869자로 길게 답한 적이 있다 |
-| OpenCode | `run --standalone --agent asksemble-ask` + `OPENCODE_CONFIG_CONTENT` | 아니오 | **채택.** 이 실행에만 묻기 전용 에이전트(편집·셸 금지, "질문에만 답하고 덧붙이지 말 것")를 넘긴다. 사용자 설정 파일은 건드리지 않는다. 머리말 없이도 덧붙임 0/3 |
+| OpenCode | `run --standalone --agent asksemble-ask` + `OPENCODE_CONFIG_CONTENT` | 아니오(이 시험) | 이 실행에만 묻기 전용 에이전트(편집·셸 금지, "질문에만 답하고 덧붙이지 말 것")를 넘긴다. **2026-10-30에 다시 보니 하위 에이전트(`subagent`)를 불러 파일을 썼다 → 권한을 '모두 금지 + 웹만 허용'으로 바꿈(P0-7 절).** 사용자 설정 파일은 건드리지 않는다. 머리말 없이도 덧붙임 0/3 |
 
 - **OpenCode는 실행 폴더 대신 환경 변수 `PWD`를 따른다.** Git Bash에서 띄운 시험에서는 `PWD`가 worktree라 파일이 worktree에 생겼다(지움). 에이전트는 OpenCode를 띄울 때 `PWD`를 묻기 폴더로 꼭 넣는다. 그래서 앞의 OpenCode 시험 일부는 사실 `D:\ClaudeHome` 아래에서 돌았다. 다시 재도 전역 AGENTS.md 때문에 덧붙임 3/3이라 P0-9 결론은 같다.
 - `OPENCODE_CONFIG_CONTENT`는 백그라운드 서비스에 붙는 `run`에는 전해지지 않아("Agent not found") `--standalone`(이 실행만의 서버)이 필요하다. 시간: 서비스 3.5·4.5초, standalone 6.2·7.4초(+2~3초, 여전히 셋 중 가장 빠름).
@@ -191,6 +191,37 @@ P2-4에 주는 뜻(답 받기는 2026-10-30 사용자 결정, 질문 넘기기�
 - **답 받아 오기:** 공유는 셋 다 링크만이라 답 글을 받을 수 없다(Claude는 공개까지 해야 한다). 그래서 **복사 → Asksemble로 돌아와 붙여 넣기**가 길이다. 복사에는 질문이 없지만 앱이 질문을 알고 있다. 서식은 Claude만 원문 마크다운이고 ChatGPT·Gemini는 굵게가 빠지지만 목록·표는 남아 비교 판정에는 지장이 없다.
 - **사용자 결정(2026-10-30): 답은 복사 → 붙여 넣기로 받는다.** 제품 방향 문서의 "답은 공유로 받아…"를 "복사해 붙여 넣는다"로 고쳤다(rev 79: 개요, 흐름 4단계, 연결 표, Phase 2 범위, 구조, 확인 목록. iOS 시험은 확인 목록에 남김).
 - 시험 흔적: 각 앱에 시험 대화(ChatGPT 2개, Claude 1개, Gemini 2개)와 공개 링크 2개(ChatGPT·Gemini 첫 답)가 남았다. 지울지는 사용자가 정한다. ColorNote 시험 메모는 휴지통으로 옮겼다.
+
+### P0-7 묻기의 웹 검색 (2026-10-30)
+
+묻기에는 웹 검색을 기본으로 켠다(2절 모드 결정). 정답을 아는 질문("Rust 최신 안정판 버전과 확인한 주소", 정답 1.99.1, 2026-10-16 GitHub 릴리스)으로 AI마다 옵션을 바꿔 봤다. 머리말을 붙여 중립 시험 폴더에서, 권한을 푸는 옵션 없이 돌렸다. 모델은 '기본' 단계.
+
+| AI | 실행 | 웹 도구 | 답 | 시간 |
+| --- | --- | --- | --- | --- |
+| Claude | `--tools ""`(지금 명령) | 없음 | "확인 못 함, 1.99(추정)" | 13.9초 |
+| Claude | `--tools "WebSearch,WebFetch"` | **거절됨**(`permission_denials`) | 확인 못 함 | 13.2초 |
+| Claude | `--restricted --tools "WebSearch,WebFetch"` | 거절됨 | 확인 못 함 | 17.6초 |
+| Claude | `--tools "WebSearch,WebFetch" --allowedTools "WebSearch,WebFetch"` | WebFetch | 1.99.1 | 13.8~19.8초 |
+| Claude | `--tools WebSearch --allowedTools WebSearch` | WebSearch 2번 | 1.99.1 + 'Sources:' 목록 | 29.7~42.8초 |
+| Codex | 지금 명령 그대로 | `web_search`(기본으로 켜짐) | 1.99.1 | 11.2초 |
+| Codex | `codex exec --search …` | — | 오류(`exec`에는 없는 옵션) | — |
+| Codex | `codex --search exec …` | `web_search`(실시간) | 1.99.1 | 9.7~11.1초 |
+| OpenCode | 지금 에이전트, npm `opencode.cmd`로 | — | "질문 본문이 비어 있다" | 9.7초 |
+| OpenCode | 같은 에이전트, 실제 `opencode.exe`로 | webfetch 2번 | 1.99.1 | 22.8초 |
+| OpenCode | 권한 `{"*": "deny", "webfetch": "allow", "websearch": "allow"}` | websearch 또는 webfetch | 1.99.1 | 8.4~25.6초 |
+
+- **Claude:** `-p`에서는 WebSearch·WebFetch도 허용 규칙이 없으면 묻지 않고 거절된다(`--restricted`도 같다). 그래서 이 두 도구만 `--allowedTools`로 허용한다. `--tools`가 이 둘만 남기므로 파일·명령 도구는 아예 없다(웹을 켠 채 쓰기 시험 FAILED). WebSearch를 쓰면 도구 규칙 때문에 답 끝에 'Sources:' 목록이 붙는다. 앱은 이걸 출처로 보여 주고, 판정(P2-3)은 답 문장에서 뺀다.
+- **Codex:** `--ignore-user-config`여도 웹 검색(캐시된 결과)이 기본으로 켜져 있다. `--search`(실시간)는 `exec` 앞에 붙이는 최상위 옵션이다. 읽기 전용은 그대로라 `--search`를 켠 쓰기 시험은 "blocked by policy"로 막혔다.
+- **OpenCode는 실제 exe로 부른다.** npm이 만든 `opencode.cmd`를 거치면 cmd.exe가 줄바꿈 뒤를 버려 머리말 뒤의 질문이 사라졌다. cmd.exe는 질문 글 속 `%`·`"`·`&`도 해석할 수 있어 위험하다. 에이전트는 `.cmd`·`.bat`을 부르지 않고 실제 exe(`%APPDATA%\npm\node_modules\@opencode\cli\bin\opencode.exe`)를 찾아 부른다. Codex는 이미 exe다.
+- **OpenCode P0-2 구멍:** 편집·셸만 막은 묻기 에이전트가 하위 에이전트(`subagent`, general)를 불러 파일을 썼다(바로 지움). 하위 에이전트는 전역 AGENTS.md도 읽어 '다음에 쓸 문장'까지 붙였다. 도구를 하나씩 막으니(`task` 포함) 세션·worktree 도구가 남았다. 권한을 `"*": "deny"`로 다 막고 webfetch·websearch만 허용하자 도구가 skill·webfetch·websearch만 남았고 쓰기 시험 4번 모두 FAILED.
+- **웹 요청이 가는 곳:** OpenCode websearch는 검색 제공자를 골라 쓴다(이번엔 Firecrawl). 질문이 그 회사로 간다. OpenCode webfetch와 Claude WebFetch는 이 PC에서 그 주소로 직접 접속한다. Claude WebSearch와 Codex `web_search`는 각 회사 서버에서 검색한다. `docs/privacy.md`에 적었다.
+- **최종 명령 셋을 동시에(웹 켬):** 웹이 필요 없는 질문(HTTP·HTTPS 차이)은 셋 다 도구를 쓰지 않고 9.9초(Claude 9.9, Codex 5.8, OpenCode 8.8). Rust 질문은 셋 다 1.99.1, 19.8초(Claude 19.8 WebFetch, Codex 9.7, OpenCode 14.0 webfetch+websearch).
+
+**사용자 결정(2026-10-30, 추천대로):**
+
+- Claude `--allowedTools "WebSearch,WebFetch"`는 '권한을 푸는 옵션 금지'에 걸리지 않는다. 권한 검사를 끄는 옵션(`--dangerously-skip-permissions`, `bypassPermissions`)이 아니라 웹 도구 둘에만 거는 허용 규칙이고, 다른 도구는 아예 없다. 제품 방향 문서 원칙 항목(rev 81)과 CLAUDE.md에 적었다.
+- OpenCode는 websearch(외부 검색 제공자)와 webfetch를 켠다. `docs/privacy.md`에 묻기 항목으로 적었다.
+- Codex는 실시간 검색(`--search`)을 쓴다(캐시와 시간 차이가 없고 정보가 최신).
 
 ### Phase 3 대비: Codex·OpenCode도 같은 구조가 되는가 (2026-10-29 확인)
 
@@ -235,16 +266,17 @@ Phase 3에서는 Codex·OpenCode 세션도 Claude처럼 목록·시작·재개·
 
 **결론:** Phase 4는 Phase 2(묻기)·Phase 3(다른 AI 세션, 승인 통로) 위에 쌓는 구조라 지금 순서로 갈 수 있다. 시작 전에 정할 것은 N1 다듬기, 알림 방식, git worktree 허용, `workspace-write` 해석 네 가지다.
 
-### 정리: AI별 묻기 명령 (P0-2·P0-8·P0-9 반영)
+### 정리: AI별 묻기 명령 (P0-2·P0-7·P0-8·P0-9 반영)
 
 | AI | 첫 질문 | 후속 질문 | 막는 것 |
 | --- | --- | --- | --- |
-| Claude | `claude -p <머리말+질문> --output-format json --model M --effort E --tools ""` | `+ --resume <session_id>` | 도구 끔, 중립 폴더(CLAUDE.md 없음) |
-| Codex | `codex exec -s read-only --ignore-user-config --skip-git-repo-check --json -m M -c model_reasoning_effort="E" <머리말+질문>` | `codex exec resume <thread_id> ...` | 읽기 전용 + 사용자 설정(자동 승인) 뺌, 머리말(전역 AGENTS.md) |
-| OpenCode | `opencode run --standalone --format json --agent asksemble-ask -m M <질문>`, 환경 `PWD`=묻기 폴더, `OPENCODE_CONFIG_CONTENT`=묻기 에이전트 | `+ --session <sessionID>` | 묻기 에이전트(편집·셸 금지, 짧은 지시) |
+| Claude | `claude -p <머리말+질문> --output-format json --model M --effort E --tools "WebSearch,WebFetch" --allowedTools "WebSearch,WebFetch"` | `+ --resume <session_id>` | 웹 도구 둘만 있고 둘만 허용, 중립 폴더(CLAUDE.md 없음) |
+| Codex | `codex --search exec -s read-only --ignore-user-config --skip-git-repo-check --json -m M -c model_reasoning_effort="E" <머리말+질문>` | `codex exec resume <thread_id> ...`(`--search` 위치는 P2-1에서 시험) | 읽기 전용 + 사용자 설정(자동 승인) 뺌, 머리말(전역 AGENTS.md) |
+| OpenCode | `opencode.exe run --standalone --format json --agent asksemble-ask -m M <질문>`(npm `.cmd`가 아닌 실제 exe), 환경 `PWD`=묻기 폴더, `OPENCODE_CONFIG_CONTENT`=묻기 에이전트 | `+ --session <sessionID>` | 묻기 에이전트(권한 `"*": "deny"`에 webfetch·websearch만 allow, 짧은 지시) |
 
 - 셋 모두 셸 없이 인자 배열로, 묻기 폴더에서 실행한다. 머리말은 셋에 똑같이 붙여도 된다(OpenCode에는 없어도 됨).
 - Codex `exec resume`에 옵션을 붙이는 위치와 OpenCode `--standalone`에서의 `--session` 이어 가기는 P2-1을 만들며 시험으로 고정한다.
+- Windows에서는 `.cmd`·`.bat`을 거치지 않고 실제 exe를 부른다(P0-7: 줄바꿈 뒤가 잘리고, cmd.exe가 질문 글을 명령으로 해석할 위험).
 
 ### 후속 질문 시간과 `--bg` 비교 (2026-10-29, P0-8 일부)
 
@@ -274,7 +306,7 @@ Phase 3에서는 Codex·OpenCode 세션도 Claude처럼 목록·시작·재개·
 
 | 단계 | 할 일 |
 | --- | --- |
-| P2-1 | 에이전트 `core.Asker`와 AI별 ask 어댑터(claude·codex·opencode, 4절 '정리'의 명령), `POST /v1/ask`(작업 id, 여러 AI 동시), capability `ask`, 묻기 세션 `ask` 배지와 묻기 폴더를 기록 폴더에서 빼기 |
+| P2-1 | 에이전트 `core.Asker`와 AI별 ask 어댑터(claude·codex·opencode, 4절 '정리'의 명령), `POST /v1/runs`(mode `ask`, 작업 id, 여러 AI 동시. 2절 결정), capability `ask`, 묻기 세션 `ask` 배지와 묻기 폴더를 기록 폴더에서 빼기 |
 | P2-2 | 앱 '한 번에 묻기' 탭(원칙 9의 숨긴 자리를 켬): 질문 입력, 빠르게·기본·깊게와 AI 고르기, 답 카드, 'Claude 앱에서 이어서 하기'. Phase 1 목록의 '묻기 대화' 칩 |
 | P2-3 | 비교 판정: 같은 말·다른 말·한 AI만 한 말·확인 필요. 기본은 구독 AI(PC), Jev는 옵션 |
 | P2-4 | 공식 앱으로 넘기기: 답은 복사 → 붙여 넣기(2026-10-30 결정). 질문은 안: ChatGPT 주소, Claude·Gemini 공유(4절 P0-4) |

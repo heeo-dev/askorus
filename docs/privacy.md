@@ -9,6 +9,7 @@ Asksemble은 사용자의 폰에서 사용자의 PC에 있는 코딩 AI 세션�
 - **PC에 보내는 정보**: 짝 맺을 때 사용자가 정한 폰 이름, 그리고 사용자가 누른 동작(목록 보기, 열기, 새 세션, 멈추기, 지우기, 폴더 열어 두기). 통신은 사용자의 Tailscale 망 안에서 사용자의 PC와만 한다.
 - **카메라**: PC 화면의 짝 맺기 QR을 읽을 때만 쓴다. 사진을 저장하거나 보내지 않는다.
 - **다른 앱으로 넘기기**: 세션을 열면 Claude 앱이나 브라우저로 넘긴다. 그다음은 그 서비스의 방침을 따른다. Asksemble은 어떤 AI의 로그인 정보도 읽거나 옮기지 않는다.
+- **한 번에 묻기**(Phase 2에서 더할 기능): 질문은 사용자의 PC에서 사용자가 로그인해 둔 AI 프로그램(Claude Code, Codex, OpenCode)이 각 회사로 보낸다. AI가 웹을 검색하면 검색어가 그 회사의 검색(Anthropic, OpenAI)이나 OpenCode가 고른 검색 제공자(예: Firecrawl)로 간다. 웹 페이지 읽기는 사용자의 PC에서 그 주소로 직접 접속한다. 개발자의 서버는 거치지 않는다.
 - **어린이**: 어린이를 대상으로 하지 않는다.
 - **문의**: (공개 전에 연락처를 적는다)
 
@@ -27,6 +28,7 @@ Asksemble lets you see and start the coding AI sessions on your own PC from your
 - **Data sent to your PC**: the phone name you choose when pairing, and the actions you take (list, open, new session, stop, remove, keep folder open). Traffic goes only to your own PC inside your Tailscale network.
 - **Camera**: used only to scan the pairing QR code on your PC screen. No pictures are saved or sent.
 - **Handing off to other apps**: opening a session hands you off to the Claude app or your browser, whose own policies then apply. Asksemble never reads or moves the sign-in data of any AI.
+- **Ask all at once** (a Phase 2 feature): your question is sent from your PC to each AI company by the AI programs you signed in to there (Claude Code, Codex, OpenCode). When an AI searches the web, the search terms go to that company's search (Anthropic, OpenAI) or to a search provider OpenCode picks (for example Firecrawl). Reading a web page connects from your PC straight to that address. Nothing passes through a developer server.
 - **Children**: the app is not directed at children.
 - **Contact**: (add before publishing)
 
