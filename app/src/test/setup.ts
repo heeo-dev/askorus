@@ -23,6 +23,15 @@ jest.mock('expo-camera', () => ({
   useCameraPermissions: () => [{ granted: false, canAskAgain: true }, jest.fn()],
 }));
 
+// Display math (MathBlock) draws in a WebView: a plain View stands in and
+// keeps its props, so tests can read source.html and call onMessage.
+jest.mock('react-native-webview', () => {
+  const { createElement } = require('react');
+  const { View } = require('react-native');
+  const WebView = (props: Record<string, unknown>) => createElement(View, { ...props, testID: 'math-webview' });
+  return { __esModule: true, default: WebView, WebView };
+});
+
 setLang('en');
 
 beforeEach(() => mockSecure.clear());

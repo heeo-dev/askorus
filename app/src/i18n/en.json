@@ -229,5 +229,7 @@
   "ask.error.workspace_not_trusted": "To carry this on in the Claude app, trust the ask folder on the PC once: in a PC terminal, go to {folder}, run claude and allow trust.",
   "sessions.askChats": "Ask chats",
   "settings.askTier": "Default ask tier",
-  "settings.askTierHint": "The tier you pick on the ask screen also becomes the default for the next question."
+  "settings.askTierHint": "The tier you pick on the ask screen also becomes the default for the next question.",
+  "markdown.details": "Details",
+  "markdown.footnotes": "Footnotes"
 }

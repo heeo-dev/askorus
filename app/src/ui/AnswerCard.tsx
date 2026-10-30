@@ -1,5 +1,6 @@
 // One AI's answer in an ask (P2-2): its name, the model and time it took,
-// the answer (selectable), and what can be done with it.
+// the answer drawn from its Markdown (selectable), and what can be done
+// with it. Copy still copies the Markdown as written.
 
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -7,6 +8,7 @@ import { agentName } from '@/api/agents';
 import type { RunPart } from '@/api/types';
 import { has, type MessageKey, t } from '@/i18n';
 
+import { Markdown } from './Markdown';
 import { type Theme, useTheme } from './theme';
 
 /** partError explains why an AI gave no answer; the AI's own message follows. */
@@ -58,9 +60,7 @@ export function AnswerCard({
       {part.status === 'running' ? (
         <ActivityIndicator color={th.accent} style={s.spinner} />
       ) : done ? (
-        <Text style={s.answer} selectable>
-          {part.answer}
-        </Text>
+        <Markdown text={part.answer ?? ''} />
       ) : (
         <Text style={s.error}>{partError(part.error ?? { code: 'internal' })}</Text>
       )}
@@ -99,7 +99,6 @@ const styles = (th: Theme) =>
     name: { color: th.text, fontSize: 16, fontWeight: '700' },
     meta: { flex: 1, color: th.muted, fontSize: 12, textAlign: 'right' },
     spinner: { alignSelf: 'flex-start' },
-    answer: { color: th.text, fontSize: 15, lineHeight: 22 },
     error: { color: th.danger, fontSize: 14, lineHeight: 20 },
     note: { color: th.muted, fontSize: 13, lineHeight: 19 },
     actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 16, marginTop: 2 },

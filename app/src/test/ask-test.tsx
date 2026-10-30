@@ -128,6 +128,20 @@ test('follow-ups carry each AI on its own conversation; "Only this AI" asks just
   expect(agent.runRequests()[3].agents).toEqual([{ agent: 'claude' }, { agent: 'codex' }, { agent: 'opencode' }]);
 });
 
+test('answers are drawn from their Markdown; copy keeps the Markdown', async () => {
+  agent.askReplies.claude = '수도는 **서울**입니다.\n\n- 인구: 약 930만';
+  const user = userEvent.setup();
+  await pairedPC();
+  await renderRouter(appDir, { initialUrl: '/ask' });
+  await ask(user, 'q');
+  await screen.findByText('opencode says: q');
+  expect(screen.queryByText(/\*\*/)).toBeNull();
+  expect(screen.getByText('서울')).toHaveStyle({ fontWeight: '700' });
+  expect(screen.getByText('인구: 약 930만')).toBeTruthy();
+  await user.press(screen.getAllByText('Copy')[0]);
+  expect(Clipboard.setStringAsync).toHaveBeenCalledWith('수도는 **서울**입니다.\n\n- 인구: 약 930만');
+});
+
 test('an AI that fails says why while the others answer', async () => {
   agent.askReplies.codex = { code: 'ask_failed', message: 'usage limit reached' };
   agent.askReplies.opencode = { code: 'ask_timeout' };
