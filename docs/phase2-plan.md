@@ -266,17 +266,65 @@ Phase 3에서는 Codex·OpenCode 세션도 Claude처럼 목록·시작·재개·
 
 **결론:** Phase 4는 Phase 2(묻기)·Phase 3(다른 AI 세션, 승인 통로) 위에 쌓는 구조라 지금 순서로 갈 수 있다. 시작 전에 정할 것은 N1 다듬기, 알림 방식, git worktree 허용, `workspace-write` 해석 네 가지다.
 
-### 정리: AI별 묻기 명령 (P0-2·P0-7·P0-8·P0-9 반영)
+### 정리: AI별 묻기 명령 (P0-2·P0-7·P0-8·P0-9, P2-1 시험 반영)
+
+질문(머리말 + 빈 줄 + 질문)은 셋 다 **stdin**으로 넘기고 인자에 넣지 않는다(P2-1). 그래서 질문이 `-`로 시작해도 옵션으로 읽히지 않고, 줄바꿈·`%`·`"`·`&`도 그대로 가며, 명령 줄 길이 제한도 없다.
 
 | AI | 첫 질문 | 후속 질문 | 막는 것 |
 | --- | --- | --- | --- |
-| Claude | `claude -p <머리말+질문> --output-format json --model M --effort E --tools "WebSearch,WebFetch" --allowedTools "WebSearch,WebFetch"` | `+ --resume <session_id>` | 웹 도구 둘만 있고 둘만 허용, 중립 폴더(CLAUDE.md 없음) |
-| Codex | `codex --search exec -s read-only --ignore-user-config --skip-git-repo-check --json -m M -c model_reasoning_effort="E" <머리말+질문>` | `codex exec resume <thread_id> ...`(`--search` 위치는 P2-1에서 시험) | 읽기 전용 + 사용자 설정(자동 승인) 뺌, 머리말(전역 AGENTS.md) |
-| OpenCode | `opencode.exe run --standalone --format json --agent asksemble-ask -m M <질문>`(npm `.cmd`가 아닌 실제 exe), 환경 `PWD`=묻기 폴더, `OPENCODE_CONFIG_CONTENT`=묻기 에이전트 | `+ --session <sessionID>` | 묻기 에이전트(권한 `"*": "deny"`에 webfetch·websearch만 allow, 짧은 지시) |
+| Claude | `claude -p --output-format json --model M --effort E --tools "WebSearch,WebFetch" --allowedTools "WebSearch,WebFetch" --strict-mcp-config` | `+ --resume <session_id>` | 웹 도구 둘만 있고 둘만 허용, **MCP 서버를 싣지 않음**(claude.ai 커넥터 포함), 중립 폴더(CLAUDE.md 없음) |
+| Codex | `codex --search exec -s read-only --ignore-user-config --skip-git-repo-check --json -m M -c model_reasoning_effort="E" -` | `codex --search exec -s read-only resume --ignore-user-config --skip-git-repo-check --json -m M -c model_reasoning_effort="E" -c sandbox_mode="read-only" <thread_id> -` | 읽기 전용 + 사용자 설정(자동 승인·MCP) 뺌, 머리말(전역 AGENTS.md) |
+| OpenCode | `opencode.exe run --standalone --format json --agent asksemble-ask -m M#변형`(npm `.cmd`가 아닌 실제 exe), 환경 `PWD`=묻기 폴더, `OPENCODE_CONFIG_CONTENT`=묻기 에이전트 | 먼저 `session list --format json --standalone`(같은 환경)로 묻기 폴더의 세션인지 확인, 그다음 `+ --session <sessionID>` | 묻기 에이전트(권한 `"*": "deny"`에 webfetch·websearch만 allow, 짧은 지시) |
 
-- 셋 모두 셸 없이 인자 배열로, 묻기 폴더에서 실행한다. 머리말은 셋에 똑같이 붙여도 된다(OpenCode에는 없어도 됨).
-- Codex `exec resume`에 옵션을 붙이는 위치와 OpenCode `--standalone`에서의 `--session` 이어 가기는 P2-1을 만들며 시험으로 고정한다.
-- Windows에서는 `.cmd`·`.bat`을 거치지 않고 실제 exe를 부른다(P0-7: 줄바꿈 뒤가 잘리고, cmd.exe가 질문 글을 명령으로 해석할 위험).
+- 셋 모두 셸 없이 인자 배열로, 묻기 폴더에서 실행한다. 머리말은 셋에 똑같이 붙인다.
+- 에이전트는 만든 인자를 한 번 더 검사해, 위 모양과 조금이라도 다르면(다른 옵션, 다른 도구, 질문 인자) 실행하지 않는다(어댑터마다 `checkAskArgs`·`checkArgs`).
+- Windows에서는 `.cmd`·`.bat`을 거치지 않고 실제 exe를 부른다(P0-7: 줄바꿈 뒤가 잘리고, cmd.exe가 질문 글을 명령으로 해석할 위험). PATH에서 `이름.exe`를 찾고, npm `.cmd`만 있으면 그 옆 `node_modules` 안의 exe를 찾는다(`codexPath`·`opencodePath` 설정으로 바꿈).
+
+### P2-1 만든 것 (2026-10-30)
+
+**API.** `POST /v1/runs`는 바로 202와 `runId`를 주고, 폰은 `GET /v1/runs/{runId}`로 묻는다(작업 id와 같은 방식, 1초 간격). AI마다 답이 끝나는 대로 보이므로 느린 AI가 다른 답을 막지 않는다.
+
+```
+POST /v1/runs
+{"mode": "ask", "prompt": "질문", "tier": "quick|standard|deep",
+ "agents": [{"agent": "claude"}, {"agent": "codex", "model": "...", "effort": "high"},
+            {"agent": "opencode", "session": "opencode:ses_…"}],
+ "clientRunId": "폰이 정한 id(선택)"}
+→ 202 / 200 {"runId", "mode", "tier", "status": "running|done|failed", "startedAt", "finishedAt",
+             "pollAfterMs", "parts": [{"agent", "status", "session": "<agent>:<id>", "model",
+             "answer", "ms", "inputTokens", "outputTokens", "error": {"code", "message"}}]}
+```
+
+- `agents`를 비우면 이 PC에서 물을 수 있는 AI 모두. `session`이 있으면 그 대화를 이어 간다(후속 질문 A안). 같은 AI는 한 번만.
+- `mode`가 `work`·`code`면 501 `mode_not_available`(자리만, `/v1`은 더하기만). 질문은 32KB까지, 한 번에 4개 묻기까지(429 `too_many_runs`), AI 하나에 3분, 끝난 묻기는 30분 동안 읽을 수 있다. 같은 `clientRunId`를 다시 보내면 새로 묻지 않고 처음 것을 준다(요청이 끊겨 폰이 다시 보낼 때).
+- 오류 코드: `ask_failed`(AI가 낸 오류, `message`는 그 AI의 글), `ask_timeout`, `ask_empty`, `bad_model`, `session_not_found`(이어 갈 세션이 없음), `session_busy`(그 대화가 아직 답하는 중이거나 원격 세션으로 열려 있음: 요청 전체는 409, Claude 어댑터 안에서는 그 AI의 부분 오류), `agent_unavailable`.
+- 한 세션에는 후속 질문이 하나씩만 돈다. 두 개가 동시에 이어 쓰면 대화가 갈라진다(Phase 1의 '돌고 있는 세션은 재개하지 않는다'와 같은 규칙). Claude는 폰에서 열기·멈추기 중이거나 원격·터미널 세션으로 떠 있어도 묻기 후속을 하지 않는다.
+- 질문과 답은 로그에 남기지 않는다. 로그에는 모드·단계·AI 이름과 AI별 상태·시간·오류 코드만.
+- `/v1/info`의 `agents`에 Codex·OpenCode가 더해졌다(capability `ask`만, 세션 목록은 Phase 3). 묻기가 되는 AI에는 `ask.tiers`(단계별 모델)가 붙는다(P2-2 칩 시트에 씀).
+- 묻기 세션은 목록에서 `ask` 배지, 묻기 폴더는 '기록 폴더'(새 세션 폴더)에 나오지 않는다.
+
+**에이전트 구조.** `core.Asker`(AI 하나에 한 번 묻기), `internal/runs`(여러 AI 동시, 부분 결과, 시간 제한, 에이전트가 멈추면 묻기도 정리), `internal/proc`(셸 없이 exe 실행, 질문은 stdin, Windows에서는 job object로 묶어 시간 초과·종료 때 하위 프로세스까지 끔), 어댑터 `claude/ask.go`, `internal/adapter/codex`, `internal/adapter/opencode`. 설정(`agent.json`)에 `ask.folder`(기본 `%LOCALAPPDATA%\Asksemble\ask`), `ask.tiers`(AI·단계별 모델 바꾸기), `codexPath`, `opencodePath`. PC에서 바로 시험하는 `asksemble-agent ask [-agents …] [-tier …] [-follow ID,…] 질문`, `info`는 세 AI를 모두 보이고 `check`도 Codex·OpenCode를 본다.
+
+**앱.** 연결 진단이 AI마다 이름을 쓴다(Claude Code·Codex·OpenCode). 묻기만 하는 AI가 PC에 없으면 실패(✗)가 아닌 안내(·)로 보이고, 세션 목록 위에는 세션 목록을 가진 AI의 알림만 나온다. `ask` 배지 이름(묻기·Ask). 묻기 탭 자체는 P2-2. 묻기만 하는 AI가 있어도 동작하지 않으면(npm 스크립트뿐, 버전 확인 실패) 그 까닭을 안내로 보인다. 폰에 깔린 예전 APK는 진단에서 셋 모두를 'Claude Code x.y.z'로 적고, PC에 없는 AI는 실패(✗)로, 그 알림 코드는 세션 목록 위에 코드 그대로 보인다. 이 PC는 셋 다 있어 이름만 틀리고, 새로 빌드하면 고쳐진다.
+
+**시험으로 새로 안 것(2026-10-30, 중립 시험 폴더, 권한 푸는 옵션 없이).**
+
+| AI | 알게 된 것 | 반영 |
+| --- | --- | --- |
+| 셋 다 | 질문을 stdin으로 받는다(머리말의 줄바꿈·한국어 그대로) | 인자에 질문을 넣지 않음 |
+| Claude | `--strict-mcp-config` 없이는 claude.ai 커넥터의 MCP 도구(Claude Docs 만들기·고치기·지우기 등 8개)가 묻기에 들어온다. 지금은 허용 규칙이 없어 막히지만 사용자가 규칙을 더하면 열린다 | `--strict-mcp-config`(MCP를 싣지 않음, 도구를 줄이는 옵션)를 더함. 도구는 WebFetch·WebSearch 둘만 남음을 확인 |
+| Claude | 사용자 설정의 훅(Orca)이 묻기마다 모든 이벤트(PermissionRequest 포함)에서 돈다 | 도구가 둘뿐이라 훅이 승인해도 쓸 도구가 없다. 개인정보 문서에 '설정한 확장에도 전해질 수 있음'을 적음 |
+| Claude | 오류여도 `subtype`은 `success`다. `is_error`·`api_error_status`·stderr의 `[claude-code:unrecognized_model]`로 가른다. 이어 간 세션의 `total_cost_usd`·`modelUsage`는 세션 누적이다 | 이번 실행의 `usage`만 씀. 모델 이름은 `modelUsage` 키(`claude-sonnet-5-5`) |
+| Codex | `--search`는 `exec` 앞에만, `-s`는 `exec` 뒤·`resume` 앞에만 된다. `resume` 뒤에는 `-c sandbox_mode="read-only"`로 한 번 더 | 후속 명령 고정 |
+| Codex | 한 턴에 `agent_message`가 여럿일 수 있고 앞의 것은 "확인하겠습니다" 같은 머리글이다. `item.type: error`는 경고일 뿐이다. 실패는 `turn.failed`이고 메시지 안에 JSON이 한 번 더 들었다. 없는 thread는 stderr에 `no rollout found`. 모델 이름은 출력에 없다 | 마지막 `agent_message`가 답, 넘긴 모델 이름을 씀 |
+| OpenCode | `--session`에 없는 id를 주면 실패하지 않고 **그 id로 빈 세션을 새로 만들어** 앞 대화가 조용히 사라진다 | 후속 질문 전에 묻기 폴더의 세션 목록에서 확인(2~3초 더 걸림). 다른 폴더의 세션도 이어 가지 않는다 |
+| OpenCode | 마지막 `step_finish`가 안 나올 때가 있다. 모델 이름은 출력에 없다. 오류는 stdout의 `type: error`(모르는 모델은 `provider.no-route`) | 프로세스가 끝나면 답이 끝난 것으로 봄. 마지막 단계의 글이 답 |
+| OpenCode | `"*": "deny"`여도 `skill` 도구는 목록에 남는다. `"skill": "deny"`, 에이전트 `tools: {skill: false}`로도 안 빠졌다 | 그대로 둔다. 스킬 글을 읽기만 하는 도구이고 호출은 `"*": "deny"` 아래에 있다 |
+
+- 시간(이 PC, '빠르게', 셋 동시): `ask` 명령 첫 질문 12.5초·후속 13.5초, LT-05 첫 질문 10.7초·후속 13.7초. OpenCode 후속은 세션 확인 몫이 더해져 11~13초.
+- 시험 흔적: 실제 묻기 폴더 `ask`에 `ask` 명령 시험 세션이 AI마다 하나씩, LT-05는 이제 `ask\live`에 남긴다(묻기 폴더 안이라 `ask` 배지가 붙고 새 세션 폴더에 안 나옴). 그 밖의 시험 폴더 `%LOCALAPPDATA%\Asksemble\ask-probe`(P2-1 시험, Claude 8·Codex 3·OpenCode 6 세션), `ask-live`(LT-05 첫 실행), `ask-test`(10-29 시험 18개)는 묻기 폴더가 아니어서 배지가 없고, Claude 세션이 있는 폴더라 '기록 폴더'로 새 세션 화면에 보일 수 있다. 숨기려면 `agent.json`의 `hiddenFolders`에 넣는다(사용자가 정함).
+- 검토(10-30, 세 갈래 검토 + 찾은 것마다 반박 두 번): 24건 중 11건을 고쳤다. 버전 확인이 끊긴 요청을 실패로 기억함(R-19), 출력 상한이 동작하지 않음(R-18, Phase 1 실행도), 같은 세션에 후속 질문 둘(R-20), `proc` 테스트 없음, 앱 진단의 '있지만 동작 안 함', OpenCode 세션 확인 테스트, `ask` 명령이 답이 없을 때 0으로 끝남, 그리고 반박됐지만 맞았던 것(요청 크기 여유, 묻기 폴더를 못 정하면 에이전트 전체가 안 뜸, LT-05 폴더, `test-live.ps1`이 영구 환경 변수까지 지움, 예전 APK 설명, Codex npm 대상 CPU).
+- 남은 것: 머리말이 한국어라 영어 질문의 답 언어가 괜찮은지(해외용, P0-6 때 같이 본다), 묻기 멈추기(필요하면 P2-2에서 `/v1/runs/{id}` 쪽에 더함), Codex·OpenCode 세션 목록(Phase 3).
 
 ### 후속 질문 시간과 `--bg` 비교 (2026-10-29, P0-8 일부)
 
@@ -306,7 +354,7 @@ Phase 3에서는 Codex·OpenCode 세션도 Claude처럼 목록·시작·재개·
 
 | 단계 | 할 일 |
 | --- | --- |
-| P2-1 | 에이전트 `core.Asker`와 AI별 ask 어댑터(claude·codex·opencode, 4절 '정리'의 명령), `POST /v1/runs`(mode `ask`, 작업 id, 여러 AI 동시. 2절 결정), capability `ask`, 묻기 세션 `ask` 배지와 묻기 폴더를 기록 폴더에서 빼기 |
+| P2-1 | 에이전트 `core.Asker`와 AI별 ask 어댑터(claude·codex·opencode, 4절 '정리'의 명령), `POST /v1/runs`(mode `ask`, 작업 id, 여러 AI 동시. 2절 결정), capability `ask`, 묻기 세션 `ask` 배지와 묻기 폴더를 기록 폴더에서 빼기. **끝(2026-10-30), 4절 'P2-1 만든 것'** |
 | P2-2 | 앱 '한 번에 묻기' 탭(원칙 9의 숨긴 자리를 켬): 질문 입력, 빠르게·기본·깊게와 AI 고르기, 답 카드, 'Claude 앱에서 이어서 하기'. Phase 1 목록의 '묻기 대화' 칩 |
 | P2-3 | 비교 판정: 같은 말·다른 말·한 AI만 한 말·확인 필요. 기본은 구독 AI(PC), Jev는 옵션 |
 | P2-4 | 공식 앱으로 넘기기: 답은 복사 → 붙여 넣기(2026-10-30 결정). 질문은 안: ChatGPT 주소, Claude·Gemini 공유(4절 P0-4) |

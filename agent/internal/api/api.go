@@ -20,6 +20,7 @@ import (
 	"github.com/asksemble/asksemble/agent/internal/devices"
 	"github.com/asksemble/asksemble/agent/internal/jobs"
 	"github.com/asksemble/asksemble/agent/internal/pairing"
+	"github.com/asksemble/asksemble/agent/internal/runs"
 )
 
 // APIVersion is the major API version in the URL path.
@@ -88,6 +89,10 @@ type Options struct {
 	// allowed list, for keeping it open.
 	HistoryFolders func() bool
 	AddFolder      func(path string) (config.Folder, error)
+	// AskFolder is where asks run (mode ask, P0-9): an empty folder
+	// outside every project. Sessions there get the ask badge and it is
+	// never offered for new sessions. Empty turns asks off.
+	AskFolder string
 }
 
 // Server serves /v1.
@@ -96,6 +101,7 @@ type Server struct {
 	hosts   map[string]bool
 	limiter *limiter
 	jobs    *jobs.Manager
+	runs    *runs.Manager
 }
 
 // New builds a server.
@@ -105,6 +111,17 @@ func New(o Options) *Server {
 		hosts:   map[string]bool{"127.0.0.1": true, "localhost": true, "::1": true},
 		limiter: newLimiter(),
 		jobs:    jobs.NewManager(),
+		runs:    runs.NewManager(),
+	}
+	s.runs.OnPart = func(mode string, p runs.Part) {
+		if o.Logger == nil {
+			return
+		}
+		code := ""
+		if p.Error != nil {
+			code = p.Error.Code // the message is the AI's text and is not logged
+		}
+		o.Logger.Info("run part", "mode", mode, "agent", p.Agent, "status", string(p.Status), "ms", p.Ms, "code", code)
 	}
 	for _, h := range o.ServeHosts {
 		s.hosts[strings.ToLower(h)] = true
@@ -139,6 +156,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("DELETE /v1/sessions/{id}", s.removeSession)
 	route("GET", "/v1/sessions/{id}/preview", s.previewSession)
 	route("GET", "/v1/jobs/{jobId}", s.jobStatus)
+	route("POST", "/v1/runs", s.startRun)
+	route("GET", "/v1/runs/{runId}", s.getRun)
 	route("GET", "/v1/folders", s.folders)
 	route("PUT", "/v1/folders/{id}/server", s.setFolderServer)
 	route("DELETE", "/v1/devices/self", s.forgetSelf)
@@ -280,6 +299,9 @@ func (s *Server) info(w http.ResponseWriter, r *http.Request) {
 	}
 	for _, a := range s.o.Adapters {
 		ai := a.Info(r.Context())
+		if asker, ok := a.(core.Asker); ok && slices.Contains(ai.Capabilities, core.CapAsk) {
+			ai.Ask = &core.AskInfo{Tiers: asker.AskTiers()}
+		}
 		resp.Agents = append(resp.Agents, ai)
 		for _, c := range ai.Capabilities {
 			if !slices.Contains(resp.Capabilities, c) {
@@ -345,6 +367,7 @@ func (s *Server) sessions(w http.ResponseWriter, r *http.Request) {
 	if s.o.Hidden != nil {
 		f.HiddenIDs = s.o.Hidden.Set()
 	}
+	s.markAskSessions(all)
 	resp.Sessions = append(resp.Sessions, f.Apply(all)...)
 	writeJSON(w, http.StatusOK, resp)
 }
@@ -384,6 +407,10 @@ func (w *statusWriter) WriteHeader(code int) {
 	w.status = code
 	w.ResponseWriter.WriteHeader(code)
 }
+
+// Close ends the work the server still runs in the background (asks), for
+// agent shutdown.
+func (s *Server) Close() { s.runs.Close() }
 
 // Listen opens 127.0.0.1:port. The agent never listens on other addresses.
 func Listen(port int) (net.Listener, error) {

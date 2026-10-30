@@ -1,7 +1,7 @@
 // A pretend PC agent for screen tests. It answers the /v1 routes the app
 // uses, keeps a little state, and records what it was asked.
 
-import type { Folder, Preview, Session } from '@/api/types';
+import type { AdapterInfo, Folder, Preview, Session } from '@/api/types';
 
 export const HOST = 'desktop-test.tail0.ts.net';
 export const PORT = 8790;
@@ -33,6 +33,8 @@ export class FakeAgent {
   remoteUrl = 'https://claude.ai/code/session_test';
   /** Codes /v1/info reports for Claude, such as claude_service_elevated. */
   notices: string[] = [];
+  /** AIs beside Claude that /v1/info lists, such as Codex that only asks (Phase 2). */
+  askAgents: AdapterInfo[] = [];
   /** What /v1/info announces; drop 'preview' to act like an older agent. */
   capabilities = ['list', 'preview', 'start', 'resume', 'stop', 'remove', 'open_official', 'serve'];
   /** Previews by session id (F8); 'fail' answers 500, a missing id 404. */
@@ -96,7 +98,10 @@ export class FakeAgent {
         apiVersion: 1,
         hostname: 'DESKTOP-TEST',
         os: 'windows',
-        agents: [{ agent: 'claude', version: '2.1.310', available: true, capabilities: [], notices: this.notices }],
+        agents: [
+          { agent: 'claude', version: '2.1.310', available: true, capabilities: this.capabilities, notices: this.notices },
+          ...this.askAgents,
+        ],
         capabilities: this.capabilities,
         reserved: [],
       });

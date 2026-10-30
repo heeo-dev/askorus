@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/asksemble/asksemble/agent/internal/core"
 )
 
 func abs(t *testing.T, parts ...string) string {
@@ -112,5 +114,40 @@ func TestDirEnvOverride(t *testing.T) {
 	t.Setenv("ASKSEMBLE_AGENT_DIR", `X:\somewhere`)
 	if d, _ := Dir(); d != `X:\somewhere` {
 		t.Errorf("Dir = %q", d)
+	}
+}
+
+func TestAskSettings(t *testing.T) {
+	c := Default()
+	dir, err := c.AskFolder()
+	if err != nil || !filepath.IsAbs(dir) || filepath.Base(dir) != "ask" || filepath.Base(filepath.Dir(dir)) != "Asksemble" {
+		t.Fatalf("default ask folder = %q, %v", dir, err)
+	}
+	c.Ask.Folder = abs(t, "asks")
+	c.Ask.Tiers = map[string]map[string]core.AskModel{"opencode": {"deep": {Model: "opencode-go/kimi-k3.1-pro#high"}}}
+	c.CodexPath = abs(t, "codex.exe")
+	if err := c.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := c.AskFolder(); got != c.Ask.Folder {
+		t.Errorf("ask folder = %q", got)
+	}
+	tiers := func(agent, tier string, m core.AskModel) map[string]map[string]core.AskModel {
+		return map[string]map[string]core.AskModel{agent: {tier: m}}
+	}
+	for name, mutate := range map[string]func(*Config){
+		"relative folder": func(c *Config) { c.Ask.Folder = "asks" },
+		"relative codex":  func(c *Config) { c.CodexPath = "codex.exe" },
+		"relative oc":     func(c *Config) { c.OpenCodePath = "opencode.exe" },
+		"bad tier":        func(c *Config) { c.Ask.Tiers = tiers("codex", "max", core.AskModel{Model: "x"}) },
+		"flag model":      func(c *Config) { c.Ask.Tiers = tiers("codex", "deep", core.AskModel{Model: "--yolo"}) },
+		"bad effort":      func(c *Config) { c.Ask.Tiers = tiers("codex", "deep", core.AskModel{Effort: "HIGH"}) },
+		"bad AI name":     func(c *Config) { c.Ask.Tiers = tiers("Codex!", "deep", core.AskModel{}) },
+	} {
+		bad := c
+		mutate(&bad)
+		if err := bad.Validate(); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
 	}
 }

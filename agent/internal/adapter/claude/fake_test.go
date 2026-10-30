@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -36,14 +37,20 @@ func TestMain(m *testing.M) {
 }
 
 type fakeCall struct {
-	Args []string `json:"args"`
-	Cwd  string   `json:"cwd"`
+	Args  []string `json:"args"`
+	Cwd   string   `json:"cwd"`
+	Stdin string   `json:"stdin,omitempty"`
 }
 
 func fakeClaude(args []string) int {
+	stdin := ""
+	if len(args) > 0 && args[0] == "-p" {
+		b, _ := io.ReadAll(os.Stdin)
+		stdin = string(b)
+	}
 	if p := os.Getenv("ASKSEMBLE_FAKE_ARGS"); p != "" {
 		cwd, _ := os.Getwd()
-		b, _ := json.Marshal(fakeCall{Args: args, Cwd: cwd})
+		b, _ := json.Marshal(fakeCall{Args: args, Cwd: cwd, Stdin: stdin})
 		f, err := os.OpenFile(p, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 		if err == nil {
 			f.Write(append(b, '\n'))
@@ -68,6 +75,8 @@ func fakeClaude(args []string) int {
 			}
 		}
 		fmt.Print(out)
+	case len(args) > 0 && args[0] == "-p":
+		return fakeAsk(args, stdin)
 	case len(args) > 0 && args[0] == "--bg":
 		return fakeBackground(args)
 	case len(args) > 0 && args[0] == "remote-control":
@@ -126,6 +135,58 @@ func fakeBackground(args []string) int {
 	}
 	fmt.Printf("backgrounded · %s · %s (idle — send a prompt to start)\n", e.ID, e.Name)
 	return 0
+}
+
+// fakeAsk acts like `claude -p --output-format json` with the prompt on
+// stdin: one result object, and a transcript in ASKSEMBLE_FAKE_PROJECTS.
+//
+//	ASKSEMBLE_FAKE_ASK "badmodel": an unknown model, "noresume": the
+//	                   resumed session does not exist, "garbage": no JSON
+func fakeAsk(args []string, prompt string) int {
+	cwd, _ := os.Getwd()
+	id := fakeFlag(args, "--resume")
+	switch os.Getenv("ASKSEMBLE_FAKE_ASK") {
+	case "noresume":
+		fmt.Fprintf(os.Stderr, "No conversation found with session ID: %s\n", id)
+		return 1
+	case "garbage":
+		fmt.Println("not json")
+		return 0
+	}
+	if id == "" {
+		raw := make([]byte, 16)
+		rand.Read(raw)
+		h := hex.EncodeToString(raw)
+		id = h[:8] + "-" + h[8:12] + "-4" + h[13:16] + "-8" + h[17:20] + "-" + h[20:32]
+	}
+	model := "claude-" + fakeFlag(args, "--model") + "-5-5"
+	lines := strings.Split(strings.TrimSpace(prompt), "\n")
+	out := map[string]any{
+		"type": "result", "subtype": "success", "is_error": false, "session_id": id,
+		"result":     "fake answer: " + lines[len(lines)-1],
+		"usage":      map[string]int{"input_tokens": 2, "cache_read_input_tokens": 10, "output_tokens": 7},
+		"modelUsage": map[string]any{model: map[string]float64{"costUSD": 0.01}},
+	}
+	code := 0
+	if os.Getenv("ASKSEMBLE_FAKE_ASK") == "badmodel" {
+		fmt.Fprintf(os.Stderr, "[claude-code:unrecognized_model] {\"model\":%q}\n", fakeFlag(args, "--model"))
+		out["is_error"], out["result"], out["modelUsage"] = true, "There's an issue with the selected model.", map[string]any{}
+		out["api_error_status"], code = 404, 1
+	}
+	if root := os.Getenv("ASKSEMBLE_FAKE_PROJECTS"); root != "" {
+		dir := filepath.Join(root, "ask")
+		os.MkdirAll(dir, 0o700)
+		u, _ := json.Marshal(map[string]any{"type": "user", "message": map[string]string{"content": prompt},
+			"timestamp": time.Now().UTC().Format("2006-01-02T15:04:05.000Z"), "cwd": cwd, "sessionId": id, "entrypoint": "sdk-cli"})
+		f, err := os.OpenFile(filepath.Join(dir, id+".jsonl"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+		if err == nil {
+			f.Write(append(u, '\n'))
+			f.Close()
+		}
+	}
+	b, _ := json.Marshal(out)
+	fmt.Println(string(b))
+	return code
 }
 
 // fakeRemoteControl acts like `claude remote-control` in a terminal: it

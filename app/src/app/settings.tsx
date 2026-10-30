@@ -87,8 +87,8 @@ export default function Settings() {
             {ch === 'running' ? <ActivityIndicator color={th.accent} /> : null}
             {Array.isArray(ch)
               ? ch.map((x, i) => (
-                  <Text key={i} style={x.ok ? s.ok : s.bad}>
-                    {x.ok ? '✓ ' : '✗ '}
+                  <Text key={i} style={x.note ? s.muted : x.ok ? s.ok : s.bad}>
+                    {x.note ? '· ' : x.ok ? '✓ ' : '✗ '}
                     {x.text}
                   </Text>
                 ))

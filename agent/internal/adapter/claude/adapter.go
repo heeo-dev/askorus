@@ -46,6 +46,8 @@ type Options struct {
 	// Empty leaves Claude Code's own defaults.
 	DefaultModel  string
 	DefaultEffort string
+	// AskTiers overrides the ask tier models (settings ask.tiers.claude).
+	AskTiers map[string]core.AskModel
 }
 
 // Adapter implements core.Adapter for Claude Code.
@@ -67,6 +69,7 @@ type Adapter struct {
 	refreshing bool
 
 	defaultModel, defaultEffort string
+	askTiers                    map[string]core.AskModel
 
 	opMu sync.Mutex
 	busy map[string]bool // sessions with an action in progress
@@ -110,6 +113,7 @@ func New(opts Options) *Adapter {
 		transcripts:   NewTranscripts(projects),
 		defaultModel:  opts.DefaultModel,
 		defaultEffort: opts.DefaultEffort,
+		askTiers:      opts.AskTiers,
 	}
 	a.srv = &servers{
 		exe: func() (string, error) {
@@ -155,7 +159,7 @@ func (a *Adapter) Agent() string { return Name }
 func (a *Adapter) capabilities() []core.Capability {
 	caps := []core.Capability{core.CapList, core.CapPreview} // preview only reads transcripts
 	if a.runner != nil {
-		caps = append(caps, core.CapStart, core.CapResume, core.CapStop, core.CapRemove, core.CapOpenOfficial)
+		caps = append(caps, core.CapStart, core.CapResume, core.CapStop, core.CapRemove, core.CapOpenOfficial, core.CapAsk)
 		if ptySupported() {
 			caps = append(caps, core.CapServe)
 		}
@@ -188,7 +192,9 @@ func (a *Adapter) cachedVersion(ctx context.Context) (string, error) {
 	if !a.verAt.IsZero() && time.Since(a.verAt) < versionTTL {
 		return a.version, a.verErr
 	}
-	a.version, a.verErr = a.runner.Version(ctx)
+	// Not cancelled with the phone's request: that would be cached as a
+	// broken claude for versionTTL (and asks check it). Run has its own limit.
+	a.version, a.verErr = a.runner.Version(context.WithoutCancel(ctx))
 	a.verAt = time.Now()
 	return a.version, a.verErr
 }

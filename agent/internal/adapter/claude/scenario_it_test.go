@@ -8,11 +8,13 @@ package claude
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -39,6 +41,7 @@ type phone struct {
 	token  string
 	login  string // Tailscale-User-Login the phone's requests carry
 	others string // a second existing folder with past sessions
+	ask    string // the ask folder (P2-1)
 }
 
 // newPhone starts the whole agent around a fake claude and returns a
@@ -62,6 +65,7 @@ func newPhone(t *testing.T, entries []agentEntry) *phone {
 	os.WriteFile(filepath.Join(env.projects, "blog", "77777777-7777-4777-8777-777777777777.jsonl"),
 		[]byte(`{"type":"user","message":{"content":"x"},"timestamp":"2026-10-21T00:00:00.000Z","cwd":`+jsonString(others)+`,"sessionId":"77777777-7777-4777-8777-777777777777"}`+"\n"), 0o600)
 
+	ask := filepath.Join(filepath.Dir(env.folder), "Asksemble", "ask") // made by the first ask
 	allowed := []config.Folder{{ID: "work", Path: env.folder, Server: config.FolderServer{Spawn: config.SpawnSameDir, Capacity: 4}}}
 	h := api.New(api.Options{
 		Version: "it", Hostname: "PC", Adapters: []core.Adapter{env.a}, Devices: store,
@@ -78,10 +82,29 @@ func newPhone(t *testing.T, entries []agentEntry) *phone {
 			allowed = c.Folders
 			return f, nil
 		},
+		AskFolder: ask,
 	}).Handler()
 	srv := httptest.NewServer(h)
 	t.Cleanup(srv.Close)
-	return &phone{t: t, env: env, srv: srv, dir: dir, login: itOwner, others: others}
+	return &phone{t: t, env: env, srv: srv, dir: dir, login: itOwner, others: others, ask: ask}
+}
+
+// run sends a question and asks for the answers like the phone does.
+func (p *phone) run(body any) map[string]any {
+	p.t.Helper()
+	st, r := p.call("POST", "/v1/runs", body)
+	if st != 202 || r["status"] != "running" {
+		p.t.Fatalf("POST /v1/runs = %d %v", st, r)
+	}
+	for i := 0; i < 2000; i++ {
+		_, run := p.call("GET", "/v1/runs/"+r["runId"].(string), nil)
+		if run["status"] != "running" {
+			return run
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	p.t.Fatal("run still running")
+	return nil
 }
 
 // call sends one request as tailscale serve forwards it from the phone.
@@ -381,5 +404,64 @@ func TestIT10Preview(t *testing.T) {
 	}
 	if st, _ := p.call("GET", "/v1/sessions/claude:99999999-9999-4999-8999-999999999999/preview", nil); st != 404 {
 		t.Errorf("unknown session = %d, want 404", st)
+	}
+}
+
+// IT-11 Ask (P2-1): a question to Claude in the ask folder with the prompt
+// on stdin, a follow-up on the same session, the ask badge in the session
+// list, and the ask folder never offered for new sessions.
+func TestIT11Ask(t *testing.T) {
+	p := newPhone(t, nil)
+	body := map[string]any{"mode": "ask", "prompt": "대한민국의 수도는?", "tier": "quick", "agents": []map[string]string{{"agent": "claude"}}}
+	if st, _ := p.call("POST", "/v1/runs", body); st != 401 {
+		t.Fatalf("before pairing = %d, want 401", st)
+	}
+	p.pair()
+	_, info := p.call("GET", "/v1/info", nil)
+	agents := info["agents"].([]any)
+	ask, _ := agents[0].(map[string]any)["ask"].(map[string]any)
+	if caps, _ := json.Marshal(info["capabilities"]); !strings.Contains(string(caps), `"ask"`) || ask == nil {
+		t.Fatalf("info = %v", info)
+	}
+	if quick := ask["tiers"].(map[string]any)["quick"].(map[string]any); quick["model"] != "haiku" {
+		t.Errorf("quick tier = %v", quick)
+	}
+
+	run := p.run(body)
+	part := run["parts"].([]any)[0].(map[string]any)
+	session, _ := part["session"].(string)
+	if run["status"] != "done" || part["answer"] != "fake answer: 대한민국의 수도는?" || !strings.HasPrefix(session, "claude:") || part["model"] != "claude-haiku-5-5" {
+		t.Fatalf("run = %v", run)
+	}
+	calls := askCalls(t, p.env.argsFile)
+	last := calls[len(calls)-1]
+	if !sameFolder(last.Cwd, p.ask) || last.Stdin != core.AskPrompt("대한민국의 수도는?") || slices.Contains(last.Args, "대한민국의 수도는?") {
+		t.Errorf("ask call = %+v", last)
+	}
+
+	body["prompt"] = "인구는?"
+	body["agents"] = []map[string]string{{"agent": "claude", "session": session}}
+	run = p.run(body)
+	part = run["parts"].([]any)[0].(map[string]any)
+	if part["session"] != session || part["answer"] != "fake answer: 인구는?" {
+		t.Fatalf("follow-up = %v", run)
+	}
+	calls = askCalls(t, p.env.argsFile)
+	if args := calls[len(calls)-1].Args; !slices.Contains(args, "--resume") || args[len(args)-1] != strings.TrimPrefix(session, "claude:") {
+		t.Errorf("follow-up args = %q", args)
+	}
+
+	s, ok := p.sessions("")[session]
+	if !ok || !strings.Contains(fmt.Sprint(s["badges"]), "ask") {
+		t.Errorf("ask session in the list = %v", s)
+	}
+	_, folders := p.call("GET", "/v1/folders", nil)
+	for _, f := range folders["folders"].([]any) {
+		if path := f.(map[string]any)["path"].(string); sameFolder(path, p.ask) {
+			t.Errorf("the ask folder is offered for new sessions: %v", f)
+		}
+	}
+	if st, r := p.call("POST", "/v1/runs", map[string]any{"mode": "code", "prompt": "x"}); st != 501 {
+		t.Errorf("mode code = %d %v", st, r)
 	}
 }

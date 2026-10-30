@@ -57,7 +57,7 @@ func (s *Server) historyFolders(ctx context.Context) []historyFolder {
 		}
 		for _, r := range recent {
 			id := historyID(r.Path)
-			if seen[id] || isAllowed(r.Path, allowed) || isHidden(r.Path, s.o.HiddenFolders) {
+			if seen[id] || isAllowed(r.Path, allowed) || isHidden(r.Path, s.o.HiddenFolders) || s.isAskFolder(r.Path) {
 				continue
 			}
 			seen[id] = true
@@ -87,6 +87,12 @@ func historyInfo(h historyFolder) FolderInfo {
 		fi.LastActive = &at
 	}
 	return fi
+}
+
+// isAskFolder reports whether path is the ask folder or inside it: it
+// holds no code, so a new coding session there makes no sense (P0-8).
+func (s *Server) isAskFolder(path string) bool {
+	return s.o.AskFolder != "" && core.InFolder(path, s.o.AskFolder)
 }
 
 func isAllowed(path string, allowed []config.Folder) bool {

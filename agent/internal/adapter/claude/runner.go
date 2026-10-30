@@ -197,19 +197,23 @@ func (r *Runner) Agents(ctx context.Context) ([]agentEntry, error) {
 	return parseAgents(res.Stdout)
 }
 
-// capBuffer keeps the first max bytes and drops the rest.
+// capBuffer keeps the first max bytes and drops the rest. The buffer is a
+// field, not embedded: an embedded bytes.Buffer brings its ReadFrom along,
+// and io.Copy (which exec uses) would call that and skip the cap (R-18).
 type capBuffer struct {
-	bytes.Buffer
+	buf bytes.Buffer
 	max int
 }
 
 func (b *capBuffer) Write(p []byte) (int, error) {
-	if room := b.max - b.Len(); room > 0 {
+	if room := b.max - b.buf.Len(); room > 0 {
 		if len(p) > room {
-			b.Buffer.Write(p[:room])
+			b.buf.Write(p[:room])
 		} else {
-			b.Buffer.Write(p)
+			b.buf.Write(p)
 		}
 	}
 	return len(p), nil
 }
+
+func (b *capBuffer) Bytes() []byte { return b.buf.Bytes() }

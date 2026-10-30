@@ -11,7 +11,13 @@ const checkKey: Record<string, MessageKey> = {
   agent_down: 'reach.check.agent',
 };
 
-export type Check = { ok: boolean; text: string };
+/** note: nothing is wrong, but something is missing (an optional AI). */
+export type Check = { ok: boolean; text: string; note?: boolean };
+
+// Display names of the AIs the agent may report. Claude Code runs the
+// remote sessions; the others only answer questions for now (Phase 2), so
+// a missing one is a note, not a failure.
+const agentNames: Record<string, string> = { claude: 'Claude Code', codex: 'Codex', opencode: 'OpenCode' };
 
 // The API version this app speaks; a PC on an older one may lack features.
 const apiVersion = 1;
@@ -45,11 +51,27 @@ export async function diagnose(client: AgentClient): Promise<Check[]> {
       : { ok: false, text: t('diag.agentOld', { version: info.version }) },
   ];
   for (const a of info.agents) {
-    out.push(
-      a.available
-        ? { ok: true, text: t('diag.claude', { version: a.version ?? '?' }) }
-        : { ok: false, text: t('error.agent_unavailable') },
-    );
+    const name = agentNames[a.agent] ?? a.agent;
+    if (a.agent === 'claude') {
+      out.push(
+        a.available
+          ? { ok: true, text: t('diag.claude', { version: a.version ?? '?' }) }
+          : { ok: false, text: t('error.agent_unavailable') },
+      );
+    } else if (a.available) {
+      out.push({ ok: true, text: t('diag.askAgent', { name, version: a.version ?? '?' }) });
+    } else {
+      // Not installed, or there but not working (only an npm script, or
+      // its version check failed): a note either way, with the reason.
+      const notices = a.notices ?? [];
+      const missing = notices.every((n) => n === `${a.agent}_not_found`);
+      out.push({ ok: true, note: true, text: t(missing ? 'diag.askAgentMissing' : 'diag.askAgentBroken', { name }) });
+      for (const n of missing ? [] : notices) {
+        const key = `notice.${n}`;
+        out.push({ ok: true, note: true, text: has(key) ? t(key) : n });
+      }
+      continue;
+    }
     for (const n of a.notices ?? []) {
       const key = `notice.${n}`;
       out.push({ ok: false, text: has(key) ? t(key) : n });
