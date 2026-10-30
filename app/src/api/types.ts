@@ -147,3 +147,44 @@ export type Paired = {
   deviceName: string;
   apiVersion: number;
 };
+
+/** Ask tiers: 빠르게 · 기본 · 깊게 (Phase 2). */
+export const tiers = ['quick', 'standard', 'deep'] as const;
+export type Tier = (typeof tiers)[number];
+
+/** One AI of a run. `session` ("<agent>:<id>") carries an earlier answer on. */
+export type RunTarget = { agent: string; model?: string; effort?: string; session?: string };
+
+/** POST /v1/runs (mode ask, P2-1). */
+export type RunRequest = {
+  mode: 'ask';
+  prompt: string;
+  tier?: Tier;
+  agents?: RunTarget[];
+  /** The phone's own id for the run, so a retried request does not ask twice. */
+  clientRunId?: string;
+};
+
+/** One AI's share of a run; it shows as soon as that AI is done. */
+export type RunPart = {
+  agent: string;
+  status: 'running' | 'done' | 'failed' | (string & {});
+  session?: string;
+  model?: string;
+  answer?: string;
+  ms?: number;
+  inputTokens?: number;
+  outputTokens?: number;
+  error?: { code: string; message?: string };
+};
+
+export type Run = {
+  runId: string;
+  mode: string;
+  tier?: string;
+  status: 'running' | 'done' | 'failed' | (string & {});
+  startedAt: string;
+  finishedAt?: string;
+  parts: RunPart[];
+  pollAfterMs?: number;
+};

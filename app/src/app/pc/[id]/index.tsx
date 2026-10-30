@@ -29,8 +29,12 @@ import { type Theme, useTheme } from '@/ui/theme';
 
 const store = new ConnectionStore();
 
-const filters = ['', 'running', 'stopped', 'terminal', 'history'] as const;
+// 'ask' shows only the sessions of asks (badge ask, P0-8); every other
+// chip leaves them out, so coding sessions are not buried under asks.
+const filters = ['', 'running', 'stopped', 'terminal', 'history', 'ask'] as const;
 type Filter = (typeof filters)[number];
+
+const isAsk = (x: Session) => x.badges?.includes('ask') ?? false;
 
 type Load = { state: 'loading' } | { state: 'ok' } | { state: 'error'; cause: Cause; text: string };
 
@@ -78,9 +82,10 @@ export default function PCSessions() {
     if (!pc) return;
     const mine = ++seq.current;
     try {
-      const r = await pc.client.sessions({ q, state: filter || undefined });
+      const state = filter === 'ask' ? undefined : filter || undefined;
+      const r = await pc.client.sessions({ q, state });
       if (mine !== seq.current) return; // a newer search answered first
-      setSessions(r.sessions);
+      setSessions(r.sessions.filter((x) => (filter === 'ask' ? isAsk(x) : !isAsk(x))));
       setWarnings(r.warnings ?? []);
       setLoad({ state: 'ok' });
     } catch (e) {
@@ -163,7 +168,7 @@ export default function PCSessions() {
               accessibilityState={{ selected: filter === f }}
             >
               <Text style={[s.filterText, filter === f && s.filterTextOn]}>
-                {f ? label('state', f) : t('sessions.all')}
+                {f === 'ask' ? t('sessions.askChats') : f ? label('state', f) : t('sessions.all')}
               </Text>
             </Pressable>
           ))}

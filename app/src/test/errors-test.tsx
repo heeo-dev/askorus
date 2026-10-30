@@ -64,7 +64,9 @@ test('a missing AI that only asks says nothing above the session list (P2-1)', a
   agent.askAgents = [{ agent: 'opencode', available: false, capabilities: [], notices: ['opencode_not_found'] }];
   agent.sessions = [session({ id: 'claude:5', title: 'Asked about HTTPS', state: 'history', badges: ['ask'] })];
   const c = await pairedPC();
+  const user = userEvent.setup();
   await renderRouter(appDir, { initialUrl: `/pc/${c.id}` });
+  await user.press(await screen.findByText('Ask chats')); // asks are left out of the other chips (P2-2)
   expect(await screen.findByText('Asked about HTTPS')).toBeTruthy();
   expect(screen.getByText('Ask')).toBeTruthy(); // the ask badge in words
   expect(screen.queryByText(/opencode_not_found/)).toBeNull();
@@ -101,11 +103,11 @@ test('two PCs stay apart: each card opens its own PC with its own token (F7)', a
   expect(screen.queryByText('Fix the login bug')).toBeNull();
 });
 
-test('the "ask all" entrance has its place but stays hidden', async () => {
+test('two entrances as tabs: the app opens on My PCs, All at once is beside it (P2-2)', async () => {
+  const user = userEvent.setup();
   await renderRouter(appDir, { initialUrl: '/' });
-  await screen.findByText('Settings');
-  expect(screen.queryByText('Ask all')).toBeNull();
-  // The screen itself exists for Phase 2.
-  await renderRouter(appDir, { initialUrl: '/ask' });
-  expect(await screen.findByText(/comes in the next phase/)).toBeTruthy();
+  expect(await screen.findByText('No PC is paired yet.')).toBeTruthy();
+  expect(screen.getAllByText('My PCs')).toHaveLength(2); // the screen title and its tab
+  await user.press(screen.getByText('All at once'));
+  expect(await screen.findByText("Your PC's AIs answer the questions.")).toBeTruthy();
 });

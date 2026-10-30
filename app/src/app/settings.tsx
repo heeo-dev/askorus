@@ -1,5 +1,5 @@
 // Settings: paired PCs (check the connection, unpair), what new sessions
-// start with, and about the app.
+// start with, the default ask tier, and about the app.
 
 import Constants from 'expo-constants';
 import { useFocusEffect } from 'expo-router';
@@ -7,6 +7,8 @@ import { useCallback, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { AgentError } from '@/api/client';
+import { tiers } from '@/api/types';
+import { type AskPrefs, defaultAskPrefs, loadAskPrefs, saveAskPrefs } from '@/ask/prefs';
 import { type Check, diagnose } from '@/connections/diagnose';
 import { connect } from '@/connections/open';
 import { type Prefs, efforts, loadPrefs, models, savePrefs } from '@/connections/prefs';
@@ -25,11 +27,13 @@ export default function Settings() {
   const [checks, setChecks] = useState<Record<string, Check[] | 'running'>>({});
   const [note, setNote] = useState('');
   const [prefs, setPrefs] = useState<Prefs>({ model: '', effort: '' });
+  const [ask, setAsk] = useState<AskPrefs>(defaultAskPrefs);
 
   useFocusEffect(
     useCallback(() => {
       store.list().then(setConns);
       loadPrefs().then(setPrefs);
+      loadAskPrefs().then(setAsk);
     }, []),
   );
 
@@ -116,6 +120,19 @@ export default function Settings() {
         onChange={(effort) => change({ ...prefs, effort })}
         labelOf={(e) => e || t('new.default')}
       />
+
+      <Text style={s.heading}>{t('settings.askTier')}</Text>
+      <Choices
+        options={tiers}
+        value={ask.tier}
+        onChange={(tier) => {
+          const next = { ...ask, tier };
+          setAsk(next);
+          saveAskPrefs(next);
+        }}
+        labelOf={(x) => t(`ask.tier.${x}`)}
+      />
+      <Text style={s.muted}>{t('settings.askTierHint')}</Text>
 
       <Text style={s.heading}>{t('settings.about')}</Text>
       <Text style={s.muted}>

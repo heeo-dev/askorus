@@ -11,6 +11,8 @@ import type {
   PairStatus,
   Preview,
   Paired,
+  Run,
+  RunRequest,
   Session,
   SessionFilter,
   SessionList,
@@ -196,6 +198,47 @@ export class AgentClient {
   /** The last question and answer of a session, read only (F8). Shown, never stored. */
   preview(id: string, signal?: AbortSignal) {
     return this.request<Preview>('GET', `sessions/${encodeURIComponent(id)}/preview`, undefined, signal);
+  }
+
+  /**
+   * Asks the PC's AIs (POST /v1/runs, mode ask). A dropped request is sent
+   * again with the same clientRunId, so the PC does not ask twice.
+   */
+  async startRun(req: RunRequest, signal?: AbortSignal): Promise<Run> {
+    for (let tries = 0; ; tries++) {
+      try {
+        return await this.request<Run>('POST', 'runs', req, signal);
+      } catch (e) {
+        if (!(e instanceof NetworkError) || !req.clientRunId || tries >= 2) throw e;
+        await this.sleep(1000, signal);
+      }
+    }
+  }
+
+  run(runId: string, signal?: AbortSignal) {
+    return this.request<Run>('GET', `runs/${encodeURIComponent(runId)}`, undefined, signal);
+  }
+
+  /**
+   * Asks for a run until every AI has answered, handing each new state to
+   * onUpdate so answers show as they come. Dropped requests are retried
+   * like waitJob.
+   */
+  async waitRun(started: Run, wait: WaitOptions & { onUpdate?: (r: Run) => void } = {}): Promise<Run> {
+    let cur = started;
+    let misses = 0;
+    while (cur.status === 'running') {
+      await this.sleep(cur.pollAfterMs || 1000, wait.signal);
+      try {
+        cur = await this.run(started.runId, wait.signal);
+      } catch (e) {
+        if (e instanceof NetworkError && misses++ < maxMisses) continue;
+        throw e;
+      }
+      misses = 0;
+      wait.onUpdate?.(cur);
+    }
+    return cur;
   }
 
   /** Unpairs this phone on the PC, so its token stops working there. */

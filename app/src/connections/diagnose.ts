@@ -1,6 +1,7 @@
 // Connection checks for one PC, in the order things break: can the phone
 // reach the PC, does the PC still know this phone, is Claude Code there.
 
+import { agentName } from '../api/agents';
 import type { AgentClient } from '../api/client';
 import { errorText, has, type MessageKey, t } from '../i18n';
 import { cause, causesToCheck } from './reach';
@@ -14,10 +15,8 @@ const checkKey: Record<string, MessageKey> = {
 /** note: nothing is wrong, but something is missing (an optional AI). */
 export type Check = { ok: boolean; text: string; note?: boolean };
 
-// Display names of the AIs the agent may report. Claude Code runs the
-// remote sessions; the others only answer questions for now (Phase 2), so
-// a missing one is a note, not a failure.
-const agentNames: Record<string, string> = { claude: 'Claude Code', codex: 'Codex', opencode: 'OpenCode' };
+// Claude Code runs the remote sessions; the other AIs only answer
+// questions for now (Phase 2), so a missing one is a note, not a failure.
 
 // The API version this app speaks; a PC on an older one may lack features.
 const apiVersion = 1;
@@ -51,7 +50,7 @@ export async function diagnose(client: AgentClient): Promise<Check[]> {
       : { ok: false, text: t('diag.agentOld', { version: info.version }) },
   ];
   for (const a of info.agents) {
-    const name = agentNames[a.agent] ?? a.agent;
+    const name = agentName(a.agent);
     if (a.agent === 'claude') {
       out.push(
         a.available
