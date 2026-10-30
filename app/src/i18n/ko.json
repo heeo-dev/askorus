@@ -229,5 +229,7 @@
   "ask.error.workspace_not_trusted": "Claude 앱으로 넘기려면 PC에서 묻기 폴더를 한 번 신뢰해야 합니다. PC 터미널에서 {folder} 폴더로 가 claude를 실행하고 신뢰를 허용하세요.",
   "sessions.askChats": "묻기 대화",
   "settings.askTier": "묻기 기본 단계",
-  "settings.askTierHint": "묻기 화면에서 고른 단계도 다음 질문의 기본이 됩니다."
+  "settings.askTierHint": "묻기 화면에서 고른 단계도 다음 질문의 기본이 됩니다.",
+  "markdown.details": "자세히",
+  "markdown.footnotes": "각주"
 }
