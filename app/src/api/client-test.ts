@@ -172,3 +172,42 @@ test('stop and remove wait longer than ordinary requests', async () => {
   await expect(c.removeSession('claude:x')).resolves.toEqual({ id: 'claude:x', hidden: true });
   await expect(c.stopSession('claude:x')).resolves.toBeTruthy();
 });
+
+// P2-2: asks.
+const run = (status: string, parts: unknown[]) => ({ runId: 'r1', mode: 'ask', status, startedAt: 'x', parts, pollAfterMs: 1 });
+
+test('a dropped ask is sent again with the same clientRunId, then followed to the end', async () => {
+  const f = fakeFetch([
+    dropped(),
+    json(202, run('running', [{ agent: 'claude', status: 'running' }])),
+    dropped(),
+    json(200, run('running', [{ agent: 'claude', status: 'running' }])),
+    json(200, { ...run('done', [{ agent: 'claude', status: 'done', answer: '서울' }]), pollAfterMs: undefined }),
+  ]);
+  const c = new AgentClient(base, { token: 'tok', fetch: f.fn, sleep: noSleep });
+  const req = { mode: 'ask' as const, prompt: 'q', clientRunId: 'k1' };
+  const started = await c.startRun(req);
+  const seen: string[] = [];
+  const done = await c.waitRun(started, { onUpdate: (r) => seen.push(r.status) });
+  expect(done.parts[0].answer).toBe('서울');
+  expect(seen).toEqual(['running', 'done']);
+  expect(f.calls.map((x) => `${x.method} ${x.url.replace(base, '')}`)).toEqual([
+    'POST /v1/runs',
+    'POST /v1/runs',
+    'GET /v1/runs/r1',
+    'GET /v1/runs/r1',
+    'GET /v1/runs/r1',
+  ]);
+  expect((f.calls[1].body as { clientRunId: string }).clientRunId).toBe('k1');
+});
+
+test('an ask without a clientRunId is not sent twice, and agent errors keep their code', async () => {
+  const f = fakeFetch([dropped()]);
+  const c = new AgentClient(base, { token: 'tok', fetch: f.fn, sleep: noSleep });
+  await expect(c.startRun({ mode: 'ask', prompt: 'q' })).rejects.toBeInstanceOf(NetworkError);
+  expect(f.calls).toHaveLength(1);
+  const g = fakeFetch([json(429, { error: { code: 'too_many_runs', message: 'busy' } })]);
+  const d = new AgentClient(base, { token: 'tok', fetch: g.fn, sleep: noSleep });
+  await expect(d.startRun({ mode: 'ask', prompt: 'q', clientRunId: 'k' })).rejects.toMatchObject({ code: 'too_many_runs' });
+  expect(g.calls).toHaveLength(1);
+});

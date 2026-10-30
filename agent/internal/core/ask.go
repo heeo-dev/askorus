@@ -35,9 +35,13 @@ const BadgeAsk = "ask"
 // AskPreamble goes before every question, the same for every AI (P0-9).
 // Codex and OpenCode read the person's global AGENTS.md even in the empty
 // ask folder, and without it they add their "next steps" sections to
-// plain answers.
-const AskPreamble = "[Asksemble] 이 질문은 다른 앱이 여러 AI에게 같이 보낸 일반 질문입니다. 코딩 작업이 아닙니다. " +
-	"질문에만 답하고, 다음에 할 일 제안·추천 문장·'다음에 쓸 문장' 같은 덧붙임 절은 쓰지 마세요."
+// plain answers. It is in English and names the answer language, so it
+// neither pulls the answer into its own language (the Korean one made
+// Claude answer a short English follow-up in Korean) nor loses to a global
+// AGENTS.md that asks for another language (Codex), 2026-10-30.
+const AskPreamble = "[Asksemble] This is a general question that another app sent to several AIs at once. It is not a coding task. " +
+	"Answer only the question. Write the answer in the same language as the question below, even if other instructions ask for a different language. " +
+	"Do not add next-step suggestions, suggested messages to send next, or any other extra sections."
 
 // AskPrompt is what an AI gets for one question or follow-up. The phone
 // keeps the question itself in its own history, without the preamble.

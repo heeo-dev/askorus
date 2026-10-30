@@ -45,6 +45,15 @@ export class FakeAgent {
    */
   serverLag = true;
   private settle: Array<() => void> = [];
+  /** Asks (P2-1/P2-2): what each AI answers; an object makes that AI fail. */
+  askReplies: Record<string, string | { code: string; message?: string }> = {};
+  /** At most this many AIs of a run have answered; raise it to let the rest finish. */
+  runLimit = Infinity;
+  /** Opening a session fails with this, as its job's error (for example workspace_not_trusted). */
+  openError: { code: string; message: string } | null = null;
+  /** POST /v1/runs answers this error instead (for example too_many_runs). */
+  runError: { status: number; code: string } | null = null;
+  private runs = new Map<string, { id: string; tier: string; prompt: string; parts: any[]; key?: string }>();
   /** How the PC can be reached: fine, agent stopped behind serve, or not at all. */
   reach: 'ok' | 'agent_down' | 'offline' = 'ok';
   private jobs = new Map<string, any>();
@@ -69,6 +78,53 @@ export class FakeAgent {
 
   callsTo(method: string, path: string) {
     return this.calls.filter((c) => c.method === method && c.path === path);
+  }
+
+  /** enableAsk makes this a PC whose Claude, Codex and OpenCode answer questions. */
+  enableAsk() {
+    if (!this.capabilities.includes('ask')) this.capabilities = [...this.capabilities, 'ask'];
+    const tiers = (a: string) => ({
+      quick: { model: `${a}-quick`, effort: 'medium' },
+      standard: { model: `${a}-std`, effort: 'medium' },
+      deep: { model: `${a}-deep`, effort: 'medium' },
+    });
+    this.askAgents = [
+      { agent: 'codex', version: '0.164.0', available: true, capabilities: ['ask'], ask: { tiers: tiers('codex') } },
+      { agent: 'opencode', version: '2.2.1', available: true, capabilities: ['ask'], ask: { tiers: tiers('opencode') } },
+    ];
+  }
+
+  /** The bodies of every POST /v1/runs, in order. */
+  runRequests(): any[] {
+    return this.callsTo('POST', '/v1/runs').map((c) => c.body);
+  }
+
+  private claudeInfo() {
+    const ask = this.capabilities.includes('ask')
+      ? { ask: { tiers: { quick: { model: 'haiku' }, standard: { model: 'sonnet' }, deep: { model: 'opus' } } } }
+      : {};
+    return { agent: 'claude', version: '2.1.310', available: true, capabilities: this.capabilities, notices: this.notices, ...ask };
+  }
+
+  private runState(r: { id: string; tier: string; parts: any[] }) {
+    // Each look lets the next AI finish, up to runLimit.
+    const done = r.parts.filter((p) => p.status !== 'running').length;
+    const next = r.parts.find((p) => p.status === 'running');
+    if (next && done < this.runLimit) {
+      const reply = this.askReplies[next.agent];
+      Object.assign(next, typeof reply === 'object' ? { status: 'failed', error: reply } : { status: 'done', answer: reply ?? `${next.agent} says: ${next.prompt}` });
+    }
+    const left = r.parts.some((p) => p.status === 'running');
+    const parts = r.parts.map(({ prompt: _p, ...p }) => p);
+    return {
+      runId: r.id,
+      mode: 'ask',
+      tier: r.tier,
+      status: left ? 'running' : parts.some((p) => p.status === 'done') ? 'done' : 'failed',
+      startedAt: '2026-10-30T00:00:00Z',
+      parts,
+      ...(left ? { pollAfterMs: 1 } : {}),
+    };
   }
 
   private route(c: Call): Response {
@@ -98,10 +154,7 @@ export class FakeAgent {
         apiVersion: 1,
         hostname: 'DESKTOP-TEST',
         os: 'windows',
-        agents: [
-          { agent: 'claude', version: '2.1.310', available: true, capabilities: this.capabilities, notices: this.notices },
-          ...this.askAgents,
-        ],
+        agents: [this.claudeInfo(), ...this.askAgents],
         capabilities: this.capabilities,
         reserved: [],
       });
@@ -182,6 +235,10 @@ export class FakeAgent {
       if (!s) return err(404, 'session_not_found');
       if (c.method === 'POST' && m[2] === 'open') {
         const jobId = `job-${++this.n}`;
+        if (this.openError) {
+          this.jobs.set(jobId, { failed: this.openError });
+          return json(202, { jobId, kind: 'open', status: 'running', pollAfterMs: 1 });
+        }
         const running = { ...s, state: 'running' as const, remoteUrl: this.remoteUrl };
         this.jobs.set(jobId, { action: 'resumed', remoteUrl: this.remoteUrl, session: running });
         this.sessions = this.sessions.map((x) => (x.id === id ? running : x));
@@ -197,10 +254,42 @@ export class FakeAgent {
         return json(200, { id, hidden: true });
       }
     }
+    if (key === 'POST /v1/runs') {
+      if (this.runError) return err(this.runError.status, this.runError.code);
+      const known = [...this.runs.values()].find((r) => c.body?.clientRunId && r.key === c.body.clientRunId);
+      if (known) return json(200, this.runState(known));
+      const id = `run-${++this.n}`;
+      const parts = (c.body.agents ?? []).map((t: any) => {
+        const sessionId = t.session ?? `${t.agent}:s-${this.n}`;
+        // Claude's asks are Claude sessions too; they show under Ask chats.
+        if (t.agent === 'claude' && !this.sessions.some((x) => x.id === sessionId)) {
+          this.sessions = [session({ id: sessionId, title: c.body.prompt, state: 'history', badges: ['ask'] }), ...this.sessions];
+        }
+        return { agent: t.agent, status: 'running', session: sessionId, model: t.model ?? `${t.agent}-${c.body.tier}`, ms: 1234, prompt: c.body.prompt };
+      });
+      const r = { id, tier: c.body.tier ?? 'standard', prompt: c.body.prompt, parts, key: c.body.clientRunId };
+      this.runs.set(id, r);
+      // Like the agent, the first answer has every AI still running.
+      return json(202, {
+        runId: id,
+        mode: 'ask',
+        tier: r.tier,
+        status: 'running',
+        startedAt: '2026-10-30T00:00:00Z',
+        parts: parts.map(({ prompt: _p, ...p }: any) => p),
+        pollAfterMs: 1,
+      });
+    }
+    const rn = c.path.match(/^\/v1\/runs\/(.+)$/);
+    if (rn && c.method === 'GET') {
+      const r = this.runs.get(rn[1]);
+      return r ? json(200, this.runState(r)) : err(404, 'run_not_found');
+    }
     const j = c.path.match(/^\/v1\/jobs\/(.+)$/);
     if (j && c.method === 'GET') {
       const result = this.jobs.get(j[1]);
       if (!result) return err(404, 'job_not_found');
+      if (result.failed) return json(200, { jobId: j[1], kind: 'open', status: 'failed', error: result.failed });
       return json(200, { jobId: j[1], kind: 'open', status: 'done', result });
     }
     return err(404, 'not_found');
