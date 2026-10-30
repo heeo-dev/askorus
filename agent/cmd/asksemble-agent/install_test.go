@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/asksemble/asksemble/agent/internal/config"
 	"github.com/asksemble/asksemble/agent/internal/devices"
 )
 
@@ -55,5 +56,26 @@ func TestCheckerCounts(t *testing.T) {
 	c.line("bad", m("c", "다"))
 	if c.bad != 1 || c.warn != 1 || !strings.Contains(out.String(), "[X]") || !strings.Contains(out.String(), "다") {
 		t.Errorf("checker = %+v %q", c, out.String())
+	}
+}
+
+// check tells how to trust the ask folder, with its path, so an ask can go
+// on in the Claude app (P2-2: it needs a trusted folder).
+func TestSetupTipsTrustTheAskFolder(t *testing.T) {
+	cfg := config.Default()
+	cfg.Ask.Folder = filepath.Join(t.TempDir(), "my asks")
+	tips := setupTips(cfg)
+	var trust msg
+	for _, tip := range tips {
+		if strings.Contains(tip.en, "trust the ask folder") {
+			trust = tip
+		}
+	}
+	want := `cd "` + cfg.Ask.Folder + `"`
+	if !strings.Contains(trust.en, want) || !strings.Contains(trust.ko, want) || !strings.Contains(trust.ko, "신뢰") {
+		t.Errorf("trust tip = %+v, want %s in both languages", trust, want)
+	}
+	if len(tips) != 3 || !strings.Contains(tips[0].en, "claude --rc") {
+		t.Errorf("tips = %+v", tips)
 	}
 }

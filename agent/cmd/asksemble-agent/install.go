@@ -200,6 +200,24 @@ func (c *checker) line(level string, x msg) {
 	fmt.Fprintf(c.out, "%s%s\n      %s\n", mark, x.en, x.ko)
 }
 
+// setupTips are the once-per-PC steps check cannot see from here, so it
+// always shows them. Trusting the ask folder lets an ask go on in the
+// Claude app: opening it there is `claude --bg`, which only runs in a
+// trusted folder (P2-2). Whether it is trusted is in Claude Code's own
+// settings file, which also holds account details, so it is not read
+// (N10); and the trust prompt is the person's to accept (R-10).
+func setupTips(cfg config.Config) []msg {
+	tips := []msg{
+		m("once per PC, run `claude --rc` in a terminal and accept the Remote Control prompt", "PC마다 한 번, 터미널에서 `claude --rc`를 실행해 Remote Control 동의를 하세요"),
+	}
+	if folder, err := cfg.AskFolder(); err == nil {
+		tips = append(tips, m("to continue asks in the Claude app, trust the ask folder once: in a terminal run cd \"%s\", then claude, accept the trust prompt and exit",
+			"묻기를 Claude 앱에서 이어 가려면 묻기 폴더를 한 번 신뢰하세요: 터미널에서 cd \"%s\" 후 claude를 실행하고 신뢰를 허용한 뒤 나오면 됩니다", folder))
+	}
+	return append(tips, m("to get pushes on the phone, turn on \"Push when actions required\" and \"Push when Claude decides\" in Claude Code /config",
+		"폰으로 알림을 받으려면 Claude Code /config에서 \"Push when actions required\"와 \"Push when Claude decides\"를 켜세요"))
+}
+
 // checkCmd looks at everything the agent needs (design: PC 설치 흐름).
 // It only reads; the fixes it prints are for the person to run.
 func checkCmd(dir string, out io.Writer) error {
@@ -329,9 +347,9 @@ func checkCmd(dir string, out io.Writer) error {
 		c.line("ok", m("the PC sleeps after %d minutes idle, but the agent keeps it awake while sessions run", "PC가 %d분 뒤 잠들지만, 세션이 도는 동안은 에이전트가 깨워 둡니다", s/60))
 	}
 
-	c.line("info", m("once per PC, run `claude --rc` in a terminal and accept the Remote Control prompt", "PC마다 한 번, 터미널에서 `claude --rc`를 실행해 Remote Control 동의를 하세요"))
-	c.line("info", m("to get pushes on the phone, turn on \"Push when actions required\" and \"Push when Claude decides\" in Claude Code /config",
-		"폰으로 알림을 받으려면 Claude Code /config에서 \"Push when actions required\"와 \"Push when Claude decides\"를 켜세요"))
+	for _, tip := range setupTips(cfg) {
+		c.line("info", tip)
+	}
 
 	fmt.Fprintln(out)
 	if c.bad > 0 {
