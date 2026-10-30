@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -24,6 +25,8 @@ import (
 	"unicode/utf8"
 
 	"github.com/asksemble/asksemble/agent/internal/adapter/claude"
+	"github.com/asksemble/asksemble/agent/internal/adapter/codex"
+	"github.com/asksemble/asksemble/agent/internal/adapter/opencode"
 	"github.com/asksemble/asksemble/agent/internal/api"
 	"github.com/asksemble/asksemble/agent/internal/config"
 	"github.com/asksemble/asksemble/agent/internal/core"
@@ -73,6 +76,9 @@ Usage / 사용법:
   asksemble-agent new -folder ID [-name N] [-model M] [-effort E]
       start a new remote session
       새 원격 세션을 시작합니다
+  asksemble-agent ask [-agents claude,codex,opencode] [-tier quick|standard|deep] [-follow ID,ID] QUESTION
+      ask several AIs at once, answer only (web search on, no file writes)
+      여러 AI에게 한 번에 묻습니다 (답만, 웹 검색 켬, 파일 쓰기 없음)
   asksemble-agent stop SESSION_ID
       stop a background session
       백그라운드 세션을 멈춥니다
@@ -139,6 +145,8 @@ func run(args []string, in io.Reader, out io.Writer) error {
 		return openCmd(dir, args[1:], out)
 	case "new":
 		return newCmd(dir, args[1:], out)
+	case "ask":
+		return askCmd(dir, args[1:], out)
 	case "stop":
 		return stopCmd(dir, args[1:], out)
 	case "rm":
@@ -171,7 +179,17 @@ func newAdapter(cfg config.Config) (*claude.Adapter, error) {
 	return claude.New(claude.Options{
 		ClaudeDir: claudeDir, ClaudePath: cfg.ClaudePath,
 		DefaultModel: cfg.DefaultModel, DefaultEffort: cfg.DefaultEffort,
+		AskTiers: cfg.Ask.Tiers[claude.Name],
 	}), nil
+}
+
+// askOnlyAdapters are the AIs that only answer questions for now (Phase 2;
+// their sessions come in Phase 3). A missing one is reported, not an error.
+func askOnlyAdapters(cfg config.Config) []core.Adapter {
+	return []core.Adapter{
+		codex.New(codex.Options{Path: cfg.CodexPath, Tiers: cfg.Ask.Tiers[codex.Name]}),
+		opencode.New(opencode.Options{Path: cfg.OpenCodePath, Tiers: cfg.Ask.Tiers[opencode.Name]}),
+	}
 }
 
 // foldersFrom rereads the allowed folders from the settings file, so
@@ -300,10 +318,17 @@ func serve(dir string, args []string) error {
 	adapter.OnServerState(func(folder string, st core.ServeStatus) {
 		logger.Info("folder server", "folder", folder, "state", st.State, "restarts", st.Restarts, "err", st.Error)
 	})
-	srv := api.HTTPServer(api.New(api.Options{
+	// Without an ask folder asks are off; remote sessions still work.
+	askFolder, err := cfg.AskFolder()
+	if err != nil {
+		logger.Error("no ask folder; asks are off", "err", err.Error())
+		askFolder = ""
+	}
+	askOnly := askOnlyAdapters(cfg)
+	apiSrv := api.New(api.Options{
 		Version:         version,
 		Hostname:        host,
-		Adapters:        []core.Adapter{adapter},
+		Adapters:        append([]core.Adapter{adapter}, askOnly...),
 		Devices:         store,
 		Pairer:          &pairing.Pairer{Dir: dir, Devices: store},
 		Logger:          logger,
@@ -317,7 +342,9 @@ func serve(dir string, args []string) error {
 		ApplyFolders:    rec.trigger,
 		HistoryFolders:  historyFoldersOn(dir),
 		AddFolder:       addFolder(dir),
-	}).Handler())
+		AskFolder:       askFolder,
+	})
+	srv := api.HTTPServer(apiSrv.Handler())
 	ln, err := api.Listen(cfg.Port)
 	if err != nil {
 		return fail("cannot listen on 127.0.0.1:%d (%v)", "127.0.0.1:%d를 열 수 없습니다 (%v)", cfg.Port, err)
@@ -337,6 +364,9 @@ func serve(dir string, args []string) error {
 	}
 
 	go adapter.Warm(ctx)
+	for _, a := range askOnly {
+		go a.Info(ctx) // reads each version once, so the first phone request is fast
+	}
 	recCtx, stopRec := context.WithCancel(ctx)
 	go rec.run(recCtx)
 	exposed := make(chan struct{})
@@ -363,6 +393,7 @@ func serve(dir string, args []string) error {
 	defer cancel()
 	logger.Info("stopping")
 	err = srv.Shutdown(shutdown)
+	apiSrv.Close() // ends asks still running, with their AI processes
 	// Folder servers end with the agent; Ctrl+C lets each clean up.
 	stopRec()
 	<-rec.done
@@ -660,9 +691,17 @@ func info(dir string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
+	infos := []core.AdapterInfo{}
+	for _, a := range append([]core.Adapter{adapter}, askOnlyAdapters(cfg)...) {
+		ai := a.Info(context.Background())
+		if asker, ok := a.(core.Asker); ok && slices.Contains(ai.Capabilities, core.CapAsk) {
+			ai.Ask = &core.AskInfo{Tiers: asker.AskTiers()}
+		}
+		infos = append(infos, ai)
+	}
 	enc := json.NewEncoder(out)
 	enc.SetIndent("", "  ")
-	return enc.Encode(adapter.Info(context.Background()))
+	return enc.Encode(infos)
 }
 
 func devicesCmd(dir string, args []string, out io.Writer) error {

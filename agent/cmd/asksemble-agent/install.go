@@ -238,6 +238,20 @@ func checkCmd(dir string, out io.Writer) error {
 		}
 	}
 
+	// The AIs that only answer questions are optional: a missing one is
+	// left out of asks.
+	for _, a := range askOnlyAdapters(cfg) {
+		if ai := a.Info(ctx); ai.Available {
+			c.line("ok", m("%s %s found (asks)", "%s %s 찾음 (묻기)", a.Agent(), ai.Version))
+		} else {
+			c.line("warn", m("%s not found or not working (%s); asks leave it out",
+				"%s를 찾지 못했거나 동작하지 않습니다 (%s). 묻기에서 빠집니다", a.Agent(), strings.Join(ai.Notices, ", ")))
+		}
+	}
+	if folder, err := cfg.AskFolder(); err == nil {
+		c.line("ok", m("asks run in %s", "묻기는 %s에서 돕니다", folder))
+	}
+
 	ti := lookTailnet(ctx, cfg.Port)
 	var be biError
 	if errors.As(ti.problem, &be) {

@@ -1,0 +1,314 @@
+// Package runs carries out POST /v1/runs: one prompt sent to several AIs
+// at once (mode ask, Phase 2). Like jobs, the phone gets a run id at once
+// and then asks for it; each AI's answer shows as soon as that AI is done,
+// so a slow AI does not hold back the others. Runs live in memory only:
+// the phone keeps the history (P2-5).
+package runs
+
+import (
+	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"errors"
+	"sync"
+	"time"
+
+	"github.com/asksemble/asksemble/agent/internal/core"
+)
+
+// State is where a run or one of its parts is.
+type State string
+
+const (
+	Running State = "running"
+	Done    State = "done"
+	Failed  State = "failed"
+)
+
+const (
+	// PartLimit caps one AI's answer. Asks with web search took up to 45 s
+	// in P0-7; deep tiers on long questions take longer.
+	PartLimit = 3 * time.Minute
+	// KeepFor is how long a finished run can still be read. Longer than
+	// jobs: a person may switch apps while three AIs answer.
+	KeepFor = 30 * time.Minute
+	// MaxRunning bounds the AI processes the PC runs for the phone.
+	MaxRunning = 4
+	// maxRuns bounds memory; the oldest finished runs go first.
+	maxRuns = 100
+)
+
+// ErrTooMany is returned when MaxRunning runs are still running.
+var ErrTooMany = errors.New("too many runs at once")
+
+// ErrSessionBusy is returned when a task carries on a session that a part
+// of another run still answers in: two follow-ups at once would split the
+// conversation (Phase 1 rule: never resume a session that still runs).
+var ErrSessionBusy = errors.New("that conversation is still answering")
+
+// Error is a failed part's code and message. The message is the AI's own
+// error text, for the person; it is never logged.
+type Error struct {
+	Code    string `json:"code"`
+	Message string `json:"message,omitempty"`
+}
+
+// Part is one AI's share of a run. Fields may be added inside /v1, never
+// removed (principle 4).
+type Part struct {
+	Agent  string `json:"agent"`
+	Status State  `json:"status"`
+	// Session is "<agent>:<id>"; a follow-up names it to carry the
+	// conversation on (follow-up method A).
+	Session      string `json:"session,omitempty"`
+	Model        string `json:"model,omitempty"`
+	Answer       string `json:"answer,omitempty"`
+	Ms           int64  `json:"ms,omitempty"`
+	InputTokens  int    `json:"inputTokens,omitempty"`
+	OutputTokens int    `json:"outputTokens,omitempty"`
+	Error        *Error `json:"error,omitempty"`
+}
+
+// Run is a snapshot of one run.
+type Run struct {
+	ID   string `json:"runId"`
+	Mode string `json:"mode"`
+	Tier string `json:"tier,omitempty"` // ask tier
+	// Status is running until every part has ended, then done, or failed
+	// when no part has an answer.
+	Status     State     `json:"status"`
+	StartedAt  time.Time `json:"startedAt"`
+	FinishedAt time.Time `json:"finishedAt,omitzero"`
+	Parts      []Part    `json:"parts"`
+
+	owner, key string
+	left       int // parts still running
+}
+
+// Spec describes a new run. Key is the phone's own id for the run: the
+// same owner and key again returns the first run instead of asking the
+// AIs twice (a retried request).
+type Spec struct {
+	Owner, Key string
+	Mode, Tier string
+	Tasks      []Task
+}
+
+// Task is the work of one part. Session is the "<agent>:<id>" it carries
+// on, or "" for a new conversation.
+type Task struct {
+	Agent   string
+	Session string
+	Ask     func(ctx context.Context) (core.AskResult, error)
+}
+
+// Manager keeps runs in memory. Runs do not survive an agent restart.
+type Manager struct {
+	Now       func() time.Time
+	PartLimit time.Duration // PartLimit when zero; tests shorten it
+	// OnPart is told when a part ends, for the agent log. It gets no
+	// prompt or answer text.
+	OnPart func(mode string, p Part)
+
+	base   context.Context
+	cancel context.CancelFunc
+
+	mu    sync.Mutex
+	runs  map[string]*Run
+	inUse map[string]bool // sessions a running part carries on
+}
+
+// NewManager returns an empty manager.
+func NewManager() *Manager {
+	ctx, cancel := context.WithCancel(context.Background())
+	return &Manager{base: ctx, cancel: cancel, runs: map[string]*Run{}, inUse: map[string]bool{}}
+}
+
+func (m *Manager) now() time.Time {
+	if m.Now != nil {
+		return m.Now()
+	}
+	return time.Now()
+}
+
+// Start runs every task at the same time and returns the run.
+func (m *Manager) Start(sp Spec) (Run, error) {
+	owner, key, tasks := sp.Owner, sp.Key, sp.Tasks
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.prune()
+	if key != "" {
+		for _, r := range m.runs {
+			if r.owner == owner && r.key == key {
+				return r.snapshot(), nil
+			}
+		}
+	}
+	running := 0
+	for _, r := range m.runs {
+		if r.Status == Running {
+			running++
+		}
+	}
+	if running >= MaxRunning {
+		return Run{}, ErrTooMany
+	}
+	for _, t := range tasks {
+		if t.Session != "" && m.inUse[t.Session] {
+			return Run{}, ErrSessionBusy
+		}
+	}
+	for _, t := range tasks {
+		if t.Session != "" {
+			m.inUse[t.Session] = true
+		}
+	}
+	raw := make([]byte, 16)
+	_, _ = rand.Read(raw)
+	r := &Run{
+		ID: hex.EncodeToString(raw), Mode: sp.Mode, Tier: sp.Tier, Status: Running, StartedAt: m.now().UTC(),
+		Parts: make([]Part, len(tasks)), owner: owner, key: key, left: len(tasks),
+	}
+	for i, t := range tasks {
+		r.Parts[i] = Part{Agent: t.Agent, Status: Running}
+	}
+	if len(tasks) == 0 {
+		r.finish(m.now())
+	}
+	m.runs[r.ID] = r
+	for i, t := range tasks {
+		go m.runPart(r, i, t)
+	}
+	return r.snapshot(), nil
+}
+
+func (m *Manager) runPart(r *Run, i int, t Task) {
+	limit := m.PartLimit
+	if limit == 0 {
+		limit = PartLimit
+	}
+	ctx, cancel := context.WithTimeout(m.base, limit)
+	defer cancel()
+	start := m.now()
+	res, err := safeAsk(ctx, t.Ask)
+	p := Part{Agent: t.Agent, Ms: m.now().Sub(start).Milliseconds()}
+	switch {
+	case err == nil && res.Answer == "":
+		p.Status, p.Error = Failed, &Error{Code: core.ErrCodeAskEmpty}
+	case err == nil:
+		p.Status, p.Answer, p.Model = Done, res.Answer, res.Model
+		p.InputTokens, p.OutputTokens = res.InputTokens, res.OutputTokens
+	case ctx.Err() == context.DeadlineExceeded:
+		p.Status, p.Error = Failed, &Error{Code: core.ErrCodeAskTimeout}
+	default:
+		p.Status, p.Error = Failed, partError(err)
+	}
+	if res.SessionID != "" {
+		// Kept on failure too: the conversation may hold a partial answer.
+		p.Session = core.MakeID(t.Agent, res.SessionID)
+	}
+	if p.Model == "" {
+		p.Model = res.Model
+	}
+	m.mu.Lock()
+	if t.Session != "" {
+		delete(m.inUse, t.Session)
+	}
+	r.Parts[i] = p
+	r.left--
+	if r.left == 0 {
+		r.finish(m.now())
+	}
+	m.mu.Unlock()
+	if m.OnPart != nil {
+		m.OnPart(r.Mode, p)
+	}
+}
+
+// safeAsk keeps a panicking adapter from taking the agent down.
+func safeAsk(ctx context.Context, ask func(context.Context) (core.AskResult, error)) (res core.AskResult, err error) {
+	defer func() {
+		if v := recover(); v != nil {
+			res, err = core.AskResult{}, errors.New("internal error")
+		}
+	}()
+	return ask(ctx)
+}
+
+func partError(err error) *Error {
+	var ae *core.ActionError
+	if errors.As(err, &ae) {
+		return &Error{Code: ae.Code, Message: ae.Detail}
+	}
+	return &Error{Code: "internal"}
+}
+
+// finish marks the run ended. Callers hold mu.
+func (r *Run) finish(now time.Time) {
+	r.FinishedAt = now.UTC()
+	r.Status = Failed
+	for _, p := range r.Parts {
+		if p.Status == Done {
+			r.Status = Done
+		}
+	}
+}
+
+func (r *Run) snapshot() Run {
+	c := *r
+	c.Parts = append([]Part(nil), r.Parts...)
+	return c
+}
+
+// Get returns the run if it exists and belongs to owner.
+func (m *Manager) Get(owner, id string) (Run, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.prune()
+	r, ok := m.runs[id]
+	if !ok || r.owner != owner {
+		return Run{}, false
+	}
+	return r.snapshot(), true
+}
+
+// Wait blocks until the run has ended or ctx ends, for tests and the CLI.
+func (m *Manager) Wait(ctx context.Context, owner, id string) (Run, bool) {
+	for {
+		r, ok := m.Get(owner, id)
+		if !ok || r.Status != Running {
+			return r, ok
+		}
+		select {
+		case <-ctx.Done():
+			return r, true
+		case <-time.After(20 * time.Millisecond):
+		}
+	}
+}
+
+// Close stops every running part (their AI processes are ended) and
+// refuses nothing afterwards; it is for agent shutdown.
+func (m *Manager) Close() { m.cancel() }
+
+// prune drops old finished runs. Callers hold mu.
+func (m *Manager) prune() {
+	now := m.now()
+	for id, r := range m.runs {
+		if r.Status != Running && now.Sub(r.FinishedAt) > KeepFor {
+			delete(m.runs, id)
+		}
+	}
+	for len(m.runs) > maxRuns {
+		var oldest *Run
+		for _, r := range m.runs {
+			if r.Status != Running && (oldest == nil || r.FinishedAt.Before(oldest.FinishedAt)) {
+				oldest = r
+			}
+		}
+		if oldest == nil {
+			return
+		}
+		delete(m.runs, oldest.ID)
+	}
+}

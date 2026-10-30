@@ -140,6 +140,35 @@ describe('settings', () => {
     expect(screen.getByText(/Claude Code 2\.1\.310/)).toBeTruthy();
   });
 
+  test('the check names each AI; one that only asks is optional (P2-1)', async () => {
+    agent.askAgents = [
+      { agent: 'codex', version: '0.164.0', available: true, capabilities: ['ask'] },
+      { agent: 'opencode', available: false, capabilities: [], notices: ['opencode_not_found'] },
+    ];
+    const user = userEvent.setup();
+    await pairedPC();
+    await renderRouter(appDir, { initialUrl: '/settings' });
+    await user.press(await screen.findByText('Check connection'));
+    expect(await screen.findByText(/Claude Code 2\.1\.310/)).toBeTruthy();
+    expect(screen.getByText(/✓ Codex 0\.164\.0 \(asks\)/)).toBeTruthy();
+    expect(screen.getByText(/· OpenCode: not on this PC \(left out of asks\)/)).toBeTruthy();
+    expect(screen.queryByText(/✗/)).toBeNull();
+    expect(screen.queryByText(/opencode_not_found/)).toBeNull();
+  });
+
+  test('an AI that is there but broken says why, still as a note', async () => {
+    agent.askAgents = [{ agent: 'codex', available: false, capabilities: [], notices: ['codex_script_only'] }];
+    const user = userEvent.setup();
+    await pairedPC();
+    await renderRouter(appDir, { initialUrl: '/settings' });
+    await user.press(await screen.findByText('Check connection'));
+    expect(await screen.findByText(/· Codex: on the PC but not working/)).toBeTruthy();
+    expect(screen.getByText(/Set codexPath in agent\.json/)).toBeTruthy();
+    expect(screen.queryByText(/not on this PC/)).toBeNull();
+    expect(screen.queryByText(/✗/)).toBeNull();
+    expect(screen.queryByText(/codex_script_only/)).toBeNull();
+  });
+
   test('the check shows what the PC reports wrong', async () => {
     agent.notices = ['claude_service_elevated'];
     const user = userEvent.setup();

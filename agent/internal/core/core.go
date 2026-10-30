@@ -89,6 +89,12 @@ type AdapterInfo struct {
 	Available    bool         `json:"available"`
 	Capabilities []Capability `json:"capabilities"`
 	Notices      []string     `json:"notices,omitempty"` // codes the app turns into text
+	Ask          *AskInfo     `json:"ask,omitempty"`     // set with the ask capability
+}
+
+// AskInfo tells the app which model each ask tier uses (P2-2).
+type AskInfo struct {
+	Tiers map[string]AskModel `json:"tiers"`
 }
 
 // ListResult is what an adapter returns for the session list.

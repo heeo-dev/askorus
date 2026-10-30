@@ -61,7 +61,9 @@ export default function PCSessions() {
       .info()
       .then((i) => {
         setCaps(i.capabilities);
-        setNotices(i.agents.flatMap((a) => a.notices ?? []));
+        // Only the AIs whose sessions this list shows; one that only
+        // answers questions is reported in the connection check.
+        setNotices(i.agents.filter((a) => a.capabilities.includes('list')).flatMap((a) => a.notices ?? []));
       })
       .catch(() => setCaps([]));
   }, [pc]);

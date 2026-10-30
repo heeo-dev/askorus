@@ -54,6 +54,8 @@ export type AdapterInfo = {
   available: boolean;
   capabilities: string[];
   notices?: string[];
+  /** Set for AIs that can ask (Phase 2): the model of each tier. */
+  ask?: { tiers: Record<string, { model: string; effort?: string }> };
 };
 
 export type Info = {

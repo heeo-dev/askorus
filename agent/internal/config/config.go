@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/asksemble/asksemble/agent/internal/core"
 )
 
 // FileName is the settings file inside the agent directory.
@@ -44,12 +46,41 @@ type Config struct {
 	TailscaleOwner string `json:"tailscaleOwner,omitempty"`
 	// ClaudePath overrides where the claude executable is looked up.
 	ClaudePath string `json:"claudePath,omitempty"`
+	// CodexPath and OpenCodePath do the same for the AIs that only answer
+	// questions (Phase 2). They must be real executables, never .cmd.
+	CodexPath    string `json:"codexPath,omitempty"`
+	OpenCodePath string `json:"opencodePath,omitempty"`
+	// Ask configures mode ask (Phase 2).
+	Ask AskConfig `json:"ask,omitzero"`
 	// KeepAwake stops the PC from sleeping while a background session or a
 	// folder server runs (design: 절전). Off by default.
 	KeepAwake bool `json:"keepAwake,omitempty"`
 	// HistoryFolders lets the phone also start sessions in folders that
 	// already have conversations (2026-10-27). On unless set to false.
 	HistoryFolders *bool `json:"historyFolders,omitempty"`
+}
+
+// AskConfig is the ask settings. Everything has a default.
+type AskConfig struct {
+	// Folder is where asks run: an empty folder outside every project, so
+	// no CLAUDE.md or AGENTS.md reaches the answers (P0-9). Default
+	// <user cache dir>/Asksemble/ask, %LOCALAPPDATA%\Asksemble\ask on Windows.
+	Folder string `json:"folder,omitempty"`
+	// Tiers overrides the model of a tier for one AI, e.g.
+	// {"codex": {"deep": {"model": "gpt-6.1-sol", "effort": "high"}}}.
+	Tiers map[string]map[string]core.AskModel `json:"tiers,omitempty"`
+}
+
+// AskFolder returns the ask folder from the settings or the default.
+func (c Config) AskFolder() (string, error) {
+	if c.Ask.Folder != "" {
+		return filepath.Clean(c.Ask.Folder), nil
+	}
+	base, err := os.UserCacheDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(base, "Asksemble", "ask"), nil
 }
 
 // HistoryFoldersOn reports whether folders with conversations may be used.
@@ -234,8 +265,28 @@ func (c Config) Validate() error {
 			return fmt.Errorf("serve host %q must be a lowercase host name", h)
 		}
 	}
-	if c.ClaudePath != "" && !filepath.IsAbs(c.ClaudePath) {
-		return fmt.Errorf("claudePath must be absolute")
+	for name, p := range map[string]string{"claudePath": c.ClaudePath, "codexPath": c.CodexPath, "opencodePath": c.OpenCodePath} {
+		if p != "" && !filepath.IsAbs(p) {
+			return fmt.Errorf("%s must be absolute", name)
+		}
+	}
+	if c.Ask.Folder != "" && !filepath.IsAbs(c.Ask.Folder) {
+		return fmt.Errorf("ask.folder must be absolute")
+	}
+	for agent, tiers := range c.Ask.Tiers {
+		if !idRe.MatchString(agent) {
+			return fmt.Errorf("ask.tiers: %q is not an AI name", agent)
+		}
+		for tier, m := range tiers {
+			switch {
+			case !core.ValidTier(tier):
+				return fmt.Errorf("ask.tiers.%s: tier %q must be quick, standard or deep", agent, tier)
+			case m.Model != "" && !core.ValidAskModel(m.Model):
+				return fmt.Errorf("ask.tiers.%s.%s: %q is not a model name", agent, tier, m.Model)
+			case m.Effort != "" && !core.ValidAskEffort(m.Effort):
+				return fmt.Errorf("ask.tiers.%s.%s: %q is not an effort level", agent, tier, m.Effort)
+			}
+		}
 	}
 	return nil
 }

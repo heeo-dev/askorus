@@ -60,6 +60,16 @@ test('what the PC reports about Claude shows above the list', async () => {
   expect(await screen.findByText('An environment variable on the PC turns Remote Control off.')).toBeTruthy();
 });
 
+test('a missing AI that only asks says nothing above the session list (P2-1)', async () => {
+  agent.askAgents = [{ agent: 'opencode', available: false, capabilities: [], notices: ['opencode_not_found'] }];
+  agent.sessions = [session({ id: 'claude:5', title: 'Asked about HTTPS', state: 'history', badges: ['ask'] })];
+  const c = await pairedPC();
+  await renderRouter(appDir, { initialUrl: `/pc/${c.id}` });
+  expect(await screen.findByText('Asked about HTTPS')).toBeTruthy();
+  expect(screen.getByText('Ask')).toBeTruthy(); // the ask badge in words
+  expect(screen.queryByText(/opencode_not_found/)).toBeNull();
+});
+
 test('two PCs stay apart: each card opens its own PC with its own token (F7)', async () => {
   const other = new FakeAgent();
   other.sessions = [session({ id: 'claude:9', title: 'Laptop work', state: 'stopped' })];

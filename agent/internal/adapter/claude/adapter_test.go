@@ -94,8 +94,12 @@ func TestInfo(t *testing.T) {
 	a := testAdapter(t)
 	t.Setenv("CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "")
 	t.Setenv("DISABLE_GROWTHBOOK", "")
+	// A phone request that went away first is not cached as a broken claude.
+	gone, cancel := context.WithCancel(context.Background())
+	cancel()
+	a.Info(gone)
 	info := a.Info(context.Background())
-	wantCaps := []core.Capability{core.CapList, core.CapPreview, core.CapStart, core.CapResume, core.CapStop, core.CapRemove, core.CapOpenOfficial}
+	wantCaps := []core.Capability{core.CapList, core.CapPreview, core.CapStart, core.CapResume, core.CapStop, core.CapRemove, core.CapOpenOfficial, core.CapAsk}
 	if ptySupported() {
 		wantCaps = append(wantCaps, core.CapServe)
 	}

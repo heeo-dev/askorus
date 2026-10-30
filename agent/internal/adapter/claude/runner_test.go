@@ -3,11 +3,22 @@ package claude
 import (
 	"context"
 	"errors"
+	"io"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 )
+
+// R-18: exec copies output with io.Copy, which used an embedded
+// bytes.Buffer's ReadFrom and skipped the cap.
+func TestCapBufferHoldsThroughCopy(t *testing.T) {
+	b := &capBuffer{max: 10}
+	n, err := io.Copy(b, strings.NewReader(strings.Repeat("x", 25)))
+	if err != nil || n != 25 || len(b.Bytes()) != 10 {
+		t.Errorf("copied %d (%v), kept %d bytes", n, err, len(b.Bytes()))
+	}
+}
 
 func TestRunnerVersionAndAgents(t *testing.T) {
 	r, argsFile := fakeRunner(t)
