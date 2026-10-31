@@ -113,9 +113,10 @@ ol { margin: 0; padding-left: 1.2em; display: grid; gap: 8px; max-width: 120ch; 
         <div class="menu"><div class="node all"><b>질문 입력</b> <span class="en">Ask a question</span></div>
           <div class="choices"><span class="chip">빠르게 <span class="en">Quick</span></span><span class="chip">기본 <span class="en">Standard</span></span><span class="chip">깊게 <span class="en">Deep</span></span><span class="dash">·</span><span class="chip">Claude</span><span class="chip">Codex</span><span class="chip">OpenCode</span><span class="dash">길게 눌러 모델 고르기 · Long-press to pick a model</span></div></div>
         <div class="menu"><div class="node all"><b>답 카드</b> <span class="en">Answers</span></div>
-          <div class="choices"><span class="dash">AI별 카드, 모델 이름과 걸린 시간</span></div></div>
+          <div class="choices"><span class="dash">AI 탭에(둘 이상이면 정리 탭이 먼저), 모델 이름과 걸린 시간</span></div></div>
         <div class="menu"><div class="node all"><b>비교</b> <span class="en">Compare</span></div>
-          <div class="choices"><span class="chip">같은 말 <span class="en">Agree</span></span><span class="chip">다른 말 <span class="en">Differ</span></span><span class="chip">한 AI만 <span class="en">Only one</span></span><span class="chip">확인 필요 <span class="en">Check this</span></span></div></div>
+          <div class="choices"><span class="dash">정리 탭 · Summary · 답이 모이면 PC가 자동으로</span><span class="chip">다른 말 <span class="en">Differ</span></span><span class="chip">확인 필요 <span class="en">Check this</span></span><span class="chip">같은 말 <span class="en">Agree</span></span><span class="chip">한 AI만 <span class="en">Only one</span></span></div>
+          <div class="choices"><span class="chip">두 문장 나란히 보기 <span class="en">See both sentences</span></span><span class="chip">판정한 AI <span class="en">Judged by</span></span><span class="chip">비교하기 · 다시 비교 <span class="en">Compare · Compare again</span></span></div></div>
         <div class="menu"><div class="node all"><b>이어서 묻기</b> <span class="en">Follow up</span></div>
           <div class="choices"><span class="chip">모두에게 <span class="en">Everyone</span></span><span class="chip">이 AI에게만 <span class="en">Only this AI</span></span><span class="chip">더 따져 보기 <span class="en">Cross-check</span></span></div></div>
         <div class="menu"><div class="node all"><b>Claude 앱에서 이어서 하기</b> <span class="en">Continue in the Claude app</span></div>
@@ -177,7 +178,7 @@ ol { margin: 0; padding-left: 1.2em; display: grid; gap: 8px; max-width: 120ch; 
 
       <div class="node ent base"><span class="who" style="color:var(--muted)">공통 · Shared</span><b>설정</b><span class="en">Settings</span> <span class="ph p1">P1</span></div>
       <div class="node base" style="grid-column: 2 / 5; align-self: center">
-        <div class="sub" style="color:var(--ink)">PC 목록과 끊기 · 연결 진단 · 새 세션 기본값 · AI 연결(내 PC · 공식 앱으로 넘기기) <span class="ph p2">P2</span> · 묻기 기본 단계 <span class="ph p2">P2</span> · 공식 제품 아님</div>
+        <div class="sub" style="color:var(--ink)">PC 목록과 끊기 · 연결 진단 · 새 세션 기본값 · AI 연결(내 PC · 공식 앱으로 넘기기) <span class="ph p2">P2</span> · 묻기 기본 단계 <span class="ph p2">P2</span> · 비교: 답이 모이면 자동으로 비교 <span class="en">Compare answers automatically</span> <span class="ph p2">P2</span> · 공식 제품 아님</div>
       </div>
     </div>
   </section>
@@ -194,7 +195,9 @@ ol { margin: 0; padding-left: 1.2em; display: grid; gap: 8px; max-width: 120ch; 
           <tr><td class="where">work</td><td class="pick">일 맡기기</td><td class="alt">일하기 · 만들기 · 맡기기</td><td class="en2">Work</td><td>AI가 일하고 사람은 맡긴다. 설계의 Phase 4 이름 '일 나눠 맡기기'와 이어진다. 기능 이름은 '한 번에 맡기기'.</td></tr>
           <tr><td class="where">code</td><td class="pick">코딩하기</td><td class="alt">코드 맡기기 · 코드 고치기</td><td class="en2">Code</td><td>개발자에게 바로 읽힌다. 개발자 입구에만 있다.</td></tr>
           <tr><td class="where">묻기 단계</td><td class="pick">빠르게 · 기본 · 깊게</td><td class="alt">가볍게 · 보통 · 꼼꼼히</td><td class="en2">Quick · Standard · Deep</td><td>지금 정한 이름. 영어 'Default'는 설정값처럼 읽혀 'Standard'로.</td></tr>
-          <tr><td class="where">비교 결과</td><td class="pick">같은 말 · 다른 말 · 한 AI만 · 확인 필요</td><td class="alt">일치 · 차이 · 단독 · 검토 필요</td><td class="en2">Agree · Differ · Only one · Check this</td><td>설계의 쉬운 말 원칙대로 한자어(일치·단독)를 피했다.</td></tr>
+          <tr><td class="where">비교 결과</td><td class="pick">다른 말 · 확인 필요 · 같은 말 · 한 AI만</td><td class="alt">일치 · 차이 · 단독 · 검토 필요</td><td class="en2">Differ · Check this · Agree · Only one</td><td>설계의 쉬운 말 원칙대로 한자어(일치·단독)를 피했다. 카드도 이 순서다(직접 확인할 곳부터, 2026-10-31).</td></tr>
+          <tr><td class="where">비교 탭</td><td class="pick">정리</td><td class="alt">—</td><td class="en2">Summary</td><td>AI 탭들 맨 앞에 둔다. 카드는 AI 원문 문장만 보여 준다.</td></tr>
+          <tr><td class="where">판정 표시</td><td class="pick">판정한 AI</td><td class="alt">—</td><td class="en2">Judged by</td><td>어느 AI가 비교했는지 정리 탭 바닥글과 AI 탭에 적는다.</td></tr>
           <tr><td class="where">후속 질문</td><td class="pick">이어서 묻기</td><td class="alt">더 묻기 · 후속 질문</td><td class="en2">Follow up</td><td>'후속'보다 쉬운 말.</td></tr>
           <tr><td class="where">서로 검토</td><td class="pick">더 따져 보기</td><td class="alt">서로 검토 · 교차 확인</td><td class="en2">Cross-check</td><td>설계에 이미 쓴 이름.</td></tr>
           <tr><td class="where">목록 칩</td><td class="pick">묻기 대화</td><td class="alt">묻기 기록 · 한 번에 묻기</td><td class="en2">Ask chats</td><td>Phase 1 목록 안에서 세션이 아니라 대화로 읽히게.</td></tr>
@@ -210,6 +213,7 @@ ol { margin: 0; padding-left: 1.2em; display: grid; gap: 8px; max-width: 120ch; 
       <li><b>work를 '일 맡기기'로 할지 '일하기'로 할지:</b> '일 맡기기'로 확정. 영어는 Work.</li>
       <li><b>영어 'All at once'가 탭 이름으로 긴지:</b> 'All at once'로 확정.</li>
       <li><b>묻기와 내 PC의 연결:</b> 묻기의 'Claude 앱에서 이어서 하기'는 내 PC의 세션 시트와 같은 Claude 대화를 엽니다.</li>
+      <li><b>비교 카드 순서:</b> 다른 말 → 확인 필요 → 같은 말 → 한 AI만(2026-10-31). 확인 필요는 판정이 확실하지 않은 문장을 모은 카드입니다.</li>
     </ol>
     <p class="note" style="margin-top:12px">휴대폰용: menu-mobile.html</p>
   </section>
