@@ -3,6 +3,8 @@ package core
 import (
 	"context"
 	"encoding/json"
+	"path/filepath"
+	"time"
 )
 
 // Comparison judging (비교 판정, P2-3): when two or more AIs answer one
@@ -20,6 +22,18 @@ type Judger interface {
 	// Judge runs one judge request to its end and returns the judge's
 	// output unchecked; internal/judge validates it. CLI engines send
 	// req.Prompt on stdin, API engines build their call from req.Task.
+	//
+	// Judge applies JudgeTimeout itself (context.WithTimeout on ctx), timed
+	// from the call, which the caller makes once the request has its slot;
+	// a shorter deadline of ctx still wins. It returns the JudgeResult it
+	// has, Model, tokens and Cleanup, together with any error, and the
+	// caller collects Cleanup whatever the error: an OpenCode conversation
+	// of a judge that failed or reached for a tool is still deleted. An
+	// error is an *ActionError with code judge_failed (Detail is the AI's
+	// own words, at most JudgeMessageChars characters, never the judge's
+	// JSON), judge_timeout, judge_bad_output, judge_used_tool (Output is
+	// then empty), bad_model, agent_unavailable or internal. Adapters never
+	// log: the caller logs the code only.
 	Judge(ctx context.Context, req JudgeRequest) (JudgeResult, error)
 	// JudgeDefault is the model and effort the AI judges with when the
 	// settings name none. Stage 1 of 판정 검증 sets it.
@@ -79,6 +93,8 @@ type JudgeRequest struct {
 }
 
 // JudgeResult is one judge's output. Output is untrusted and never logged.
+// Judge returns it with its error too (see Judger.Judge): Model, the tokens
+// and Cleanup as far as the run got.
 type JudgeResult struct {
 	// Output is the judge's JSON as the AI gave it: Claude's
 	// structured_output, Codex's last agent_message, or OpenCode's last
@@ -96,8 +112,8 @@ type JudgeResult struct {
 // Judge error codes, on one request (requests[].error) or on a whole
 // comparison (error). Adapters return judge_failed, judge_timeout,
 // judge_bad_output and judge_used_tool as ActionError codes, and
-// ErrCodeBadModel and ErrCodeAgentUnavailable as asks do; internal/judge
-// and the comparisons give the rest. An ActionError's Error() carries its
+// ErrCodeBadModel, ErrCodeAgentUnavailable and ErrCodeInternal as asks
+// and the API do; internal/judge and the comparisons give the rest. An ActionError's Error() carries its
 // Detail, and judge_failed's Detail is the judging AI's own words, which
 // may quote the answers: the comparison turns an adapter's Judge error
 // into a judge.Error (Code, and Detail as Message) at once, and logs only
@@ -110,7 +126,35 @@ const (
 	ErrCodeNoJudge            = "no_judge"             // no AI may judge the pair: the others wrote an answer, work for an answer's company or cannot judge
 	ErrCodeNeedTwoAnswers     = "need_two_answers"     // fewer than two answers to compare
 	ErrCodeTooManyComparisons = "too_many_comparisons" // 8 comparisons are still unfinished
+	// ErrCodeInternal is the agent's own fault, never the AI's: an empty
+	// prompt, or a judge schema file that changed after the agent wrote
+	// it. It is api.CodeInternal.
+	ErrCodeInternal = "internal"
 )
+
+// Judge limits and the judge folder (spec part 8).
+const (
+	// JudgeTimeout bounds one judge run, timed from when it got its slot.
+	// Every adapter's Judge applies it itself.
+	JudgeTimeout = 2 * time.Minute
+	// JudgeCleanupTimeout bounds one OpenCode session list or delete.
+	JudgeCleanupTimeout = 30 * time.Second
+	// JudgeMessageChars bounds judge_failed's Detail, in characters.
+	JudgeMessageChars = 300
+	// JudgeFolderName is the judge folder inside the ask folder.
+	JudgeFolderName = "judge"
+)
+
+// JudgeFolder is where judges run: <ask folder>\judge, an empty folder
+// outside every project like the ask folder. Its sessions are hidden from
+// GET /v1/sessions and the CLI sessions command, and an ask never carries
+// a conversation of it on. It is "" when askFolder is "".
+func JudgeFolder(askFolder string) string {
+	if askFolder == "" {
+		return ""
+	}
+	return filepath.Join(filepath.Clean(askFolder), JudgeFolderName)
+}
 
 // JudgeSchemaV1 is the JSON schema of a judge's output with labels v1.
 // It is written by hand: Go sorts map keys, which would put label before

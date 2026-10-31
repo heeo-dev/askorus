@@ -619,6 +619,19 @@ func groupCode(code string) string {
 	return strings.Join(append(parts, code), "-")
 }
 
+// sessionFilter is the CLI sessions filter: the settings' hidden folders
+// and, like GET /v1/sessions, the judge folder inside the ask folder
+// (P2-3), where only judges run. The settings' list is never appended to.
+func sessionFilter(cfg config.Config, q, folder string) core.Filter {
+	f := core.Filter{Query: q, Folder: folder, Hidden: cfg.HiddenFolders}
+	if ask, err := cfg.AskFolder(); err == nil {
+		if jf := core.JudgeFolder(ask); jf != "" {
+			f.Hidden = slices.Concat(cfg.HiddenFolders, []string{jf})
+		}
+	}
+	return f
+}
+
 func sessions(dir string, args []string, out io.Writer) error {
 	fs := flag.NewFlagSet("sessions", flag.ContinueOnError)
 	state := fs.String("state", "", "comma-separated states: running,stopped,terminal,history,unknown")
@@ -636,7 +649,7 @@ func sessions(dir string, args []string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	f := core.Filter{Query: *q, Folder: *folder, Hidden: cfg.HiddenFolders}
+	f := sessionFilter(cfg, *q, *folder)
 	if hid, err := hidden.Open(dir); err == nil {
 		f.HiddenIDs = hid.Set()
 	}

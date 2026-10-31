@@ -13,14 +13,19 @@ import (
 	"testing"
 
 	"github.com/asksemble/asksemble/agent/internal/core"
+	"github.com/asksemble/asksemble/agent/internal/fakecli"
 	"github.com/asksemble/asksemble/agent/internal/proc"
 )
 
-// The test binary doubles as a fake codex: with ASKSEMBLE_FAKE_CODEX=1 it
-// records {args, cwd, stdin} to ASKSEMBLE_FAKE_ARGS and prints what
-// `codex exec --json` prints. ASKSEMBLE_FAKE_MODE: "badmodel", "noresume",
-// "nothing" (exit 0, no turn).
+// The test binary doubles as a fake codex. The judge tests use the shared
+// fake (internal/fakecli). The ask tests keep their own: with
+// ASKSEMBLE_FAKE_CODEX=1 it records {args, cwd, stdin} to
+// ASKSEMBLE_FAKE_ARGS and prints what `codex exec --json` prints.
+// ASKSEMBLE_FAKE_MODE: "badmodel", "noresume", "nothing" (exit 0, no turn).
 func TestMain(m *testing.M) {
+	if fakecli.Active() {
+		os.Exit(fakecli.Main(os.Args[1:]))
+	}
 	if os.Getenv("ASKSEMBLE_FAKE_CODEX") == "1" {
 		os.Exit(fakeCodex(os.Args[1:]))
 	}

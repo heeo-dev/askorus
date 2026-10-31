@@ -13,6 +13,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/asksemble/asksemble/agent/internal/fakecli"
 )
 
 // The test binary doubles as a fake claude executable: when
@@ -29,7 +31,13 @@ import (
 //	ASKSEMBLE_FAKE_RM_BUSY    file: while it exists, rm fails once (and deletes it)
 //	ASKSEMBLE_FAKE_EXIT       exit code
 //	ASKSEMBLE_FAKE_SLEEP      duration to sleep first
+//
+// Judges (judge_test.go) use the shared fake of internal/fakecli instead,
+// which takes over when ASKSEMBLE_FAKECLI is set (fakecli.Use).
 func TestMain(m *testing.M) {
+	if fakecli.Active() {
+		os.Exit(fakecli.Main(os.Args[1:]))
+	}
 	if os.Getenv("ASKSEMBLE_FAKE_CLAUDE") == "1" {
 		os.Exit(fakeClaude(os.Args[1:]))
 	}

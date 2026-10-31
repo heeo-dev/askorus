@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/asksemble/asksemble/agent/internal/core"
+	"github.com/asksemble/asksemble/agent/internal/fakecli"
 )
 
 // The test binary doubles as a fake opencode: with ASKSEMBLE_FAKE_OPENCODE=1
@@ -20,7 +21,11 @@ import (
 // prints what `opencode run --format json` prints. Sessions it makes are
 // kept in ASKSEMBLE_FAKE_SESSIONS for `session list`.
 // ASKSEMBLE_FAKE_MODE: "badmodel", "exit" (exit 1, nothing printed).
+// The judge tests use internal/fakecli instead.
 func TestMain(m *testing.M) {
+	if fakecli.Active() {
+		os.Exit(fakecli.Main(os.Args[1:]))
+	}
 	if os.Getenv("ASKSEMBLE_FAKE_OPENCODE") == "1" {
 		os.Exit(fakeOpenCode(os.Args[1:]))
 	}

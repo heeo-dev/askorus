@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -199,4 +200,52 @@ func InFolder(path, dir string) bool {
 		d += string(filepath.Separator)
 	}
 	return strings.HasPrefix(p, d)
+}
+
+// VersionAtLeast reports whether version have is min or newer. Both are
+// dotted numbers such as "2.1.314"; a missing part counts as 0, so "2.1"
+// is "2.1.0". It is false when have or min is not dotted numbers ("",
+// "v2", "2.1.0-beta"): a version the agent cannot read never passes a
+// version gate.
+func VersionAtLeast(have, min string) bool {
+	h, ok := versionParts(have)
+	if !ok {
+		return false
+	}
+	m, ok := versionParts(min)
+	if !ok {
+		return false
+	}
+	for i := 0; i < max(len(h), len(m)); i++ {
+		var a, b int
+		if i < len(h) {
+			a = h[i]
+		}
+		if i < len(m) {
+			b = m[i]
+		}
+		if a != b {
+			return a > b
+		}
+	}
+	return true
+}
+
+// versionParts reads "2.1.314" as [2 1 314]: digits only, no part empty.
+func versionParts(v string) ([]int, bool) {
+	if v == "" {
+		return nil, false
+	}
+	var out []int
+	for _, p := range strings.Split(v, ".") {
+		if p == "" || len(p) > 9 || strings.Trim(p, "0123456789") != "" {
+			return nil, false
+		}
+		n, err := strconv.Atoi(p)
+		if err != nil {
+			return nil, false
+		}
+		out = append(out, n)
+	}
+	return out, true
 }

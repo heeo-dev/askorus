@@ -91,7 +91,8 @@ type Options struct {
 	AddFolder      func(path string) (config.Folder, error)
 	// AskFolder is where asks run (mode ask, P0-9): an empty folder
 	// outside every project. Sessions there get the ask badge and it is
-	// never offered for new sessions. Empty turns asks off.
+	// never offered for new sessions. Empty turns asks off. Sessions in
+	// its judge folder (core.JudgeFolder) are left out of the list.
 	AskFolder string
 }
 
@@ -332,6 +333,11 @@ func (s *Server) sessions(w http.ResponseWriter, r *http.Request) {
 		Folder: q.Get("folder"),
 		Agent:  q.Get("agent"),
 		Hidden: s.o.HiddenFolders,
+	}
+	if s.o.AskFolder != "" {
+		// Judges run in <ask folder>\judge (P2-3). Concat makes a new slice,
+		// so the settings' list is never appended to.
+		f.Hidden = slices.Concat(s.o.HiddenFolders, []string{core.JudgeFolder(s.o.AskFolder)})
 	}
 	if len(f.Query) > maxQuery || len(f.Folder) > 1024 {
 		writeError(w, http.StatusBadRequest, CodeBadRequest, "query too long")

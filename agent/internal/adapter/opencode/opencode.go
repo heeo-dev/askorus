@@ -1,8 +1,9 @@
-// Package opencode is the OpenCode adapter. Phase 2 uses it for asks only:
+// Package opencode is the OpenCode adapter. Phase 2 uses it for asks,
 // `opencode run --standalone` with a one-run agent that may only search
-// and read the web (P0-2, P0-7). It is the only package that runs
-// opencode or knows its formats (principle 2), and it never reads
-// OpenCode login files (N10). Session listing comes in Phase 3.
+// and read the web (P0-2, P0-7), and for comparison judging (P2-3,
+// judge.go), with a one-run agent that may use no tool. It is the only
+// package that runs opencode or knows its formats (principle 2), and it
+// never reads OpenCode login files (N10). Session listing comes in Phase 3.
 package opencode
 
 import (
@@ -296,26 +297,72 @@ func runError(err error) error {
 }
 
 // checkSession looks for id among the ask folder's sessions (read only,
-// no AI call, about 2-3 s).
+// no AI call, about 2-3 s). A judge conversation, in the judge folder
+// inside the ask folder, is never carried on as an ask.
 func (a *Adapter) checkSession(ctx context.Context, folder, id string) error {
-	res, err := proc.Run(ctx, proc.Cmd{Exe: a.exe, Dir: folder, Env: env(folder),
-		Args: []string{"session", "list", "--format", "json", "--standalone"}})
+	list, err := a.listSessions(ctx, folder, env(folder))
+	if errors.Is(err, errNoList) {
+		return core.Fail(core.ErrCodeAskFailed, "opencode could not list its sessions")
+	}
 	if err := runError(err); err != nil {
 		return err
 	}
-	var list []struct {
-		ID        string `json:"id"`
-		Directory string `json:"directory"`
-	}
-	if res.ExitCode != 0 || json.Unmarshal(bytes.TrimSpace(res.Stdout), &list) != nil {
-		return core.Fail(core.ErrCodeAskFailed, "opencode could not list its sessions")
-	}
+	judgeFolder := core.JudgeFolder(folder)
 	for _, s := range list {
-		if s.ID == id && core.InFolder(s.Directory, folder) {
+		if s.ID == id && core.InFolder(s.Directory, folder) && !core.InFolder(s.Directory, judgeFolder) {
 			return nil
 		}
 	}
 	return core.Fail(core.ErrCodeNotFound, "")
+}
+
+// sessionInfo is one item of `opencode session list --format json`.
+type sessionInfo struct {
+	ID        string `json:"id"`
+	Title     string `json:"title"`
+	Directory string `json:"directory"`
+	Updated   millis `json:"updated"`
+}
+
+// millis is a time in Unix milliseconds as session list prints it.
+// Anything but a number reads as 0, unknown, so a change of format does
+// not stop follow-up asks.
+type millis int64
+
+func (m *millis) UnmarshalJSON(b []byte) error {
+	var f float64
+	if json.Unmarshal(b, &f) != nil {
+		f = 0
+	}
+	*m = millis(f)
+	return nil
+}
+
+// stale reports whether m is known and over judgeStale before now.
+func (m millis) stale(now time.Time) bool {
+	return m > 0 && now.Sub(time.UnixMilli(int64(m))) > judgeStale
+}
+
+// errNoList is listSessions' error when opencode ran but printed no list.
+var errNoList = errors.New("opencode printed no session list")
+
+// listSessions runs `session list` in folder with env and returns every
+// session it prints, of any folder: the caller picks its own. Its error
+// is errNoList or proc.Run's.
+func (a *Adapter) listSessions(ctx context.Context, folder string, env map[string]string) ([]sessionInfo, error) {
+	args := listArgs()
+	if err := checkSessionArgs(args); err != nil {
+		return nil, err
+	}
+	res, err := proc.Run(ctx, proc.Cmd{Exe: a.exe, Dir: folder, Env: env, Args: args})
+	if err != nil {
+		return nil, err
+	}
+	var list []sessionInfo
+	if res.ExitCode != 0 || json.Unmarshal(bytes.TrimSpace(res.Stdout), &list) != nil {
+		return nil, errNoList
+	}
+	return list, nil
 }
 
 // event is one JSON line of `opencode run --format json`.
@@ -333,10 +380,13 @@ type event struct {
 			} `json:"cache"`
 		} `json:"tokens"`
 	} `json:"part"`
-	Error *struct {
-		Type    string `json:"type"`
-		Message string `json:"message"`
-	} `json:"error"`
+	Error *eventError `json:"error"`
+}
+
+// eventError is the error of an "error" event.
+type eventError struct {
+	Type    string `json:"type"`
+	Message string `json:"message"`
 }
 
 // parseOutput reads the events. Each text part comes whole. The answer is
@@ -346,10 +396,7 @@ type event struct {
 func parseOutput(res proc.Result, model string) (core.AskResult, error) {
 	r := core.AskResult{Model: model}
 	var steps [][]string
-	var errEvent *struct {
-		Type    string `json:"type"`
-		Message string `json:"message"`
-	}
+	var errEvent *eventError
 	for _, line := range bytes.Split(res.Stdout, []byte("\n")) {
 		line = bytes.TrimSpace(line) // lines end with \r\n on Windows
 		var e event

@@ -3,8 +3,15 @@ package main
 import (
 	"bytes"
 	"net/url"
+	"path/filepath"
+	"runtime"
+	"slices"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/asksemble/asksemble/agent/internal/config"
+	"github.com/asksemble/asksemble/agent/internal/core"
 )
 
 func TestPairURL(t *testing.T) {
@@ -75,5 +82,55 @@ func TestPrintQR(t *testing.T) {
 	}
 	if png, err := qrPNG("x"); err != nil || !bytes.HasPrefix(png, []byte("\x89PNG")) {
 		t.Errorf("png = %v", err)
+	}
+}
+
+// The CLI sessions list hides the judge folder like GET /v1/sessions does
+// (P2-3), with the settings' hidden folders, and never appends to them.
+func TestSessionFilterHidesJudgeFolder(t *testing.T) {
+	root := t.TempDir()
+	ask := filepath.Join(root, "ask")
+	secret := filepath.Join(root, "secret")
+	hiddenFolders := make([]string, 1, 8)
+	hiddenFolders[0] = secret
+	cfg := config.Default()
+	cfg.Ask.Folder = ask
+	cfg.HiddenFolders = hiddenFolders
+	judgeDir := core.JudgeFolder(ask)
+	evalDir := filepath.Join(judgeDir, "eval")
+	if runtime.GOOS == "windows" {
+		evalDir = strings.ToUpper(evalDir)
+	}
+	now := time.Now()
+	in := []core.Session{
+		{ID: "claude:ask", Folder: ask, LastActive: now},
+		{ID: "claude:judge", Folder: judgeDir, LastActive: now.Add(-time.Minute)},
+		{ID: "claude:eval", Folder: evalDir, LastActive: now.Add(-2 * time.Minute)},
+		{ID: "claude:judge-x", Folder: judgeDir + "-x", LastActive: now.Add(-3 * time.Minute)},
+		{ID: "claude:work", Folder: filepath.Join(root, "work"), LastActive: now.Add(-4 * time.Minute), Title: "work"},
+		{ID: "claude:secret", Folder: filepath.Join(secret, "sub"), LastActive: now.Add(-5 * time.Minute)},
+	}
+	ids := func(ss []core.Session) (out []string) {
+		for _, s := range ss {
+			out = append(out, s.ID)
+		}
+		return out
+	}
+	for _, c := range []struct {
+		q, folder string
+		want      []string
+	}{
+		{"", "", []string{"claude:ask", "claude:judge-x", "claude:work"}},
+		{"", ask, []string{"claude:ask", "claude:judge-x"}},
+		{"", judgeDir, nil},
+		{"work", "", []string{"claude:work"}},
+	} {
+		f := sessionFilter(cfg, c.q, c.folder)
+		if got := ids(f.Apply(in)); !slices.Equal(got, c.want) {
+			t.Errorf("q=%q folder=%q: %v, want %v", c.q, c.folder, got, c.want)
+		}
+	}
+	if extra := hiddenFolders[:cap(hiddenFolders)][1:]; slices.ContainsFunc(extra, func(s string) bool { return s != "" }) {
+		t.Errorf("the settings' hidden folders were appended to: %q", extra)
 	}
 }
