@@ -3,10 +3,13 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/asksemble/asksemble/agent/internal/core"
+	"github.com/asksemble/asksemble/agent/internal/judge"
 )
 
 func abs(t *testing.T, parts ...string) string {
@@ -149,5 +152,152 @@ func TestAskSettings(t *testing.T) {
 		if err := bad.Validate(); err == nil {
 			t.Errorf("%s: accepted", name)
 		}
+	}
+}
+
+func TestJudgeDefaultsWithoutBlock(t *testing.T) {
+	dir := t.TempDir()
+	// An agent.json from before P2-3 S3: no judge block.
+	old := `{"port": 8790, "folders": [], "ask": {"tiers": {"codex": {"deep": {"model": "gpt-6.1-sol"}}}}}`
+	if err := os.WriteFile(filepath.Join(dir, FileName), []byte(old), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	c, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	j := c.Judge
+	if j.Off || j.PerAIOrDefault() != 2 || j.MaxUnitsOrDefault() != 40 || !slices.Equal(j.ChecksOrDefault(), []string{"unsure"}) {
+		t.Errorf("defaults = off %v, perAI %d, maxUnits %d, checks %v", j.Off, j.PerAIOrDefault(), j.MaxUnitsOrDefault(), j.ChecksOrDefault())
+	}
+	if DefaultJudgePerAI != 2 || judge.MaxUnits != 40 {
+		t.Errorf("default constants changed: %d %d", DefaultJudgePerAI, judge.MaxUnits)
+	}
+	// ChecksOrDefault is a copy: changing it changes neither the defaults
+	// nor the settings.
+	got := j.ChecksOrDefault()
+	got[0] = "x"
+	if judge.DefaultChecks[0] != judge.CheckUnsure {
+		t.Fatalf("ChecksOrDefault shares judge.DefaultChecks")
+	}
+	j.Checks = []string{judge.CheckNoEvidence}
+	got = j.ChecksOrDefault()
+	got[0] = "x"
+	if j.Checks[0] != judge.CheckNoEvidence {
+		t.Errorf("ChecksOrDefault shares Checks")
+	}
+}
+
+func TestJudgeSaveLoad(t *testing.T) {
+	dir := t.TempDir()
+	// A zero block is not written.
+	if err := Save(dir, Default()); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(filepath.Join(dir, FileName))
+	if strings.Contains(string(b), "judge") {
+		t.Errorf("zero judge block written: %s", b)
+	}
+	in := Default()
+	in.Judge = JudgeConfig{
+		Off:      true,
+		Models:   map[string]core.AskModel{"codex": {Model: "gpt-6-luna", Effort: "low"}, "claude": {Effort: "high"}},
+		PerAI:    1,
+		Checks:   []string{judge.CheckUnsure, judge.CheckNumberMismatch},
+		MaxUnits: 20,
+	}
+	if err := Save(dir, in); err != nil {
+		t.Fatal(err)
+	}
+	b, _ = os.ReadFile(filepath.Join(dir, FileName))
+	for _, key := range []string{`"judge"`, `"off": true`, `"models"`, `"perAI": 1`, `"checks"`, `"maxUnits": 20`} {
+		if !strings.Contains(string(b), key) {
+			t.Errorf("saved file lacks %s: %s", key, b)
+		}
+	}
+	out, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(out.Judge, in.Judge) {
+		t.Errorf("judge block = %+v, want %+v", out.Judge, in.Judge)
+	}
+	if out.Judge.PerAIOrDefault() != 1 || out.Judge.MaxUnitsOrDefault() != 20 || !slices.Equal(out.Judge.ChecksOrDefault(), in.Judge.Checks) {
+		t.Errorf("accessors = %d %d %v", out.Judge.PerAIOrDefault(), out.Judge.MaxUnitsOrDefault(), out.Judge.ChecksOrDefault())
+	}
+}
+
+func TestJudgeValidate(t *testing.T) {
+	good := Default()
+	good.Judge = JudgeConfig{
+		Models:   map[string]core.AskModel{"opencode": {Model: "opencode-go/kimi-k3.1-pro#high"}, "codex": {Effort: "low"}},
+		PerAI:    4,
+		Checks:   slices.Clone(judge.AllChecks),
+		MaxUnits: 40,
+	}
+	if err := good.Validate(); err != nil {
+		t.Fatalf("good judge block refused: %v", err)
+	}
+	good.Judge.PerAI, good.Judge.MaxUnits = 1, 1
+	if err := good.Validate(); err != nil {
+		t.Fatalf("perAI 1, maxUnits 1 refused: %v", err)
+	}
+	cases := map[string]struct {
+		j    JudgeConfig
+		want string
+	}{
+		"AI name":     {JudgeConfig{Models: map[string]core.AskModel{"Codex!": {}}}, `judge.models: "Codex!"`},
+		"flag model":  {JudgeConfig{Models: map[string]core.AskModel{"codex": {Model: "--yolo"}}}, "judge.models.codex: "},
+		"space model": {JudgeConfig{Models: map[string]core.AskModel{"codex": {Model: "gpt 6"}}}, "judge.models.codex: "},
+		"effort":      {JudgeConfig{Models: map[string]core.AskModel{"claude": {Effort: "HIGH"}}}, "judge.models.claude: "},
+		"perAI 5":     {JudgeConfig{PerAI: 5}, "judge.perAI"},
+		"perAI -1":    {JudgeConfig{PerAI: -1}, "judge.perAI"},
+		"maxUnits 41": {JudgeConfig{MaxUnits: 41}, "judge.maxUnits"},
+		"maxUnits -1": {JudgeConfig{MaxUnits: -1}, "judge.maxUnits"},
+		"check":       {JudgeConfig{Checks: []string{"unsure", "vibes"}}, `judge.checks: "vibes"`},
+		"check case":  {JudgeConfig{Checks: []string{"Unsure"}}, `judge.checks: "Unsure"`},
+		"check twice": {JudgeConfig{Checks: []string{"unsure", "noEvidence", "unsure"}}, `judge.checks: "unsure" is listed twice`},
+	}
+	for name, tc := range cases {
+		c := Default()
+		c.Judge = tc.j
+		err := c.Validate()
+		if err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: err = %v, want %q", name, err, tc.want)
+		}
+	}
+	// Load refuses a file with a bad judge block.
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, FileName), []byte(`{"judge": {"perAI": 9}}`), 0o600)
+	if _, err := Load(dir); err == nil || !strings.Contains(err.Error(), "judge.perAI") {
+		t.Errorf("Load err = %v", err)
+	}
+}
+
+func TestJudgeModelFor(t *testing.T) {
+	def := core.AskModel{Model: "haiku", Effort: "medium"}
+	j := JudgeConfig{Models: map[string]core.AskModel{
+		"claude":   {Model: "sonnet"},
+		"codex":    {Effort: "low"},
+		"opencode": {Model: "opencode-go/glm-5", Effort: "max"},
+		"other":    {},
+	}}
+	cases := []struct {
+		agent string
+		want  core.AskModel
+	}{
+		{"none", def}, // no override
+		{"claude", core.AskModel{Model: "sonnet"}}, // a model: its own effort, empty, and the adapter decides
+		{"codex", core.AskModel{Model: "haiku", Effort: "low"}},
+		{"opencode", core.AskModel{Model: "opencode-go/glm-5", Effort: "max"}},
+		{"other", def},
+	}
+	for _, c := range cases {
+		if got := j.ModelFor(c.agent, def); got != c.want {
+			t.Errorf("ModelFor(%s) = %+v, want %+v", c.agent, got, c.want)
+		}
+	}
+	if got := (JudgeConfig{}).ModelFor("claude", def); got != def {
+		t.Errorf("zero settings: %+v", got)
 	}
 }

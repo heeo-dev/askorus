@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -49,12 +50,16 @@ const (
 	CapAsk          Capability = "ask"
 	CapTUI          Capability = "tui"
 	CapChat         Capability = "chat"
+	// CapJudge: the AI judges comparisons (P2-3). It is announced only for
+	// an AI whose CLI is at least the version the judge command was tested
+	// with, when judging is on and the judge folder exists.
+	CapJudge Capability = "judge"
 )
 
 // AllCapabilities lists every name the API knows, implemented or not.
 var AllCapabilities = []Capability{
 	CapList, CapStart, CapResume, CapStop, CapRemove,
-	CapOpenOfficial, CapServe, CapPreview, CapAsk, CapTUI, CapChat,
+	CapOpenOfficial, CapServe, CapPreview, CapAsk, CapTUI, CapChat, CapJudge,
 }
 
 // OpenModeOfficial opens a session in the AI's official app (principle 6).
@@ -90,11 +95,20 @@ type AdapterInfo struct {
 	Capabilities []Capability `json:"capabilities"`
 	Notices      []string     `json:"notices,omitempty"` // codes the app turns into text
 	Ask          *AskInfo     `json:"ask,omitempty"`     // set with the ask capability
+	Judge        *JudgeInfo   `json:"judge,omitempty"`   // set with the judge capability
 }
 
 // AskInfo tells the app which model each ask tier uses (P2-2).
 type AskInfo struct {
 	Tiers map[string]AskModel `json:"tiers"`
+}
+
+// JudgeInfo tells the app which model an AI judges comparisons with and
+// that model's company (P2-3). Effort is empty when the AI decides.
+type JudgeInfo struct {
+	Model  string `json:"model"`
+	Effort string `json:"effort,omitempty"`
+	Family string `json:"family"`
 }
 
 // ListResult is what an adapter returns for the session list.
@@ -199,4 +213,52 @@ func InFolder(path, dir string) bool {
 		d += string(filepath.Separator)
 	}
 	return strings.HasPrefix(p, d)
+}
+
+// VersionAtLeast reports whether version have is min or newer. Both are
+// dotted numbers such as "2.1.314"; a missing part counts as 0, so "2.1"
+// is "2.1.0". It is false when have or min is not dotted numbers ("",
+// "v2", "2.1.0-beta"): a version the agent cannot read never passes a
+// version gate.
+func VersionAtLeast(have, min string) bool {
+	h, ok := versionParts(have)
+	if !ok {
+		return false
+	}
+	m, ok := versionParts(min)
+	if !ok {
+		return false
+	}
+	for i := 0; i < max(len(h), len(m)); i++ {
+		var a, b int
+		if i < len(h) {
+			a = h[i]
+		}
+		if i < len(m) {
+			b = m[i]
+		}
+		if a != b {
+			return a > b
+		}
+	}
+	return true
+}
+
+// versionParts reads "2.1.314" as [2 1 314]: digits only, no part empty.
+func versionParts(v string) ([]int, bool) {
+	if v == "" {
+		return nil, false
+	}
+	var out []int
+	for _, p := range strings.Split(v, ".") {
+		if p == "" || len(p) > 9 || strings.Trim(p, "0123456789") != "" {
+			return nil, false
+		}
+		n, err := strconv.Atoi(p)
+		if err != nil {
+			return nil, false
+		}
+		out = append(out, n)
+	}
+	return out, true
 }

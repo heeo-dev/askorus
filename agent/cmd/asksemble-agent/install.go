@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/asksemble/asksemble/agent/internal/adapter/claude"
+	"github.com/asksemble/asksemble/agent/internal/adapter/opencode"
 	"github.com/asksemble/asksemble/agent/internal/config"
 	"github.com/asksemble/asksemble/agent/internal/core"
 	"github.com/asksemble/asksemble/agent/internal/devices"
@@ -182,7 +183,8 @@ func autostartCmd(args []string, out io.Writer) error {
 	return nil
 }
 
-// checkLine prints one check: ok, warn or bad.
+// checker prints check's lines: ok, warn, bad or info. It counts the
+// problems (bad) and the warnings.
 type checker struct {
 	out  io.Writer
 	bad  int
@@ -258,7 +260,8 @@ func checkCmd(dir string, out io.Writer) error {
 
 	// The AIs that only answer questions are optional: a missing one is
 	// left out of asks.
-	for _, a := range askOnlyAdapters(cfg) {
+	askOnly := askOnlyAdapters(cfg)
+	for _, a := range askOnly {
 		if ai := a.Info(ctx); ai.Available {
 			c.line("ok", m("%s %s found (asks)", "%s %s 찾음 (묻기)", a.Agent(), ai.Version))
 		} else {
@@ -268,6 +271,11 @@ func checkCmd(dir string, out io.Writer) error {
 	}
 	if folder, err := cfg.AskFolder(); err == nil {
 		c.line("ok", m("asks run in %s", "묻기는 %s에서 돕니다", folder))
+	}
+	// Comparison judging (P2-3): who judges, and where the answers go.
+	st := judgeStatuses(ctx, append([]core.Adapter{adapter}, askOnly...), judgeGate(cfg))
+	for _, l := range judgeLines(st, cfg.Judge.Off) {
+		c.line(l.level, l.text)
 	}
 
 	ti := lookTailnet(ctx, cfg.Port)
@@ -379,12 +387,35 @@ func suggestServePort(ctx context.Context, localPort int) int {
 	return localPort
 }
 
-// uninstallAutostart and uninstallPath are replaced in tests so they never
-// touch the real logon entry or PATH.
+// uninstallAutostart, uninstallPath and uninstallJudgeCleanup are
+// replaced in tests so they never touch the real logon entry or PATH, or
+// run the real opencode against the real judge folder.
 var (
-	uninstallAutostart = autostartRemove
-	uninstallPath      = userPathRemove
+	uninstallAutostart    = autostartRemove
+	uninstallPath         = userPathRemove
+	uninstallJudgeCleanup = cleanupJudgeFolder
 )
+
+// cleanupJudgeTimeout bounds uninstall's cleanup of the judge folder.
+const cleanupJudgeTimeout = 5 * time.Minute
+
+// cleanupJudgeFolder deletes the judge conversations OpenCode left in the
+// judge folder, as a comparison does after its OpenCode requests. With no
+// refs, CleanupJudge deletes only those unchanged for over 10 minutes, so
+// one from the last minutes before uninstall can stay (S3 decision 5). A
+// missing folder or a missing opencode leaves nothing to delete.
+func cleanupJudgeFolder(ctx context.Context, cfg config.Config, folder string) error {
+	if st, err := os.Stat(folder); err != nil || !st.IsDir() {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(ctx, cleanupJudgeTimeout)
+	defer cancel()
+	err := opencode.New(opencode.Options{Path: cfg.OpenCodePath}).CleanupJudge(ctx, folder, nil)
+	if core.ErrorCode(err) == core.ErrCodeAgentUnavailable {
+		return nil // no opencode here: it left no conversation
+	}
+	return err
+}
 
 // uninstallCmd undoes what installing set up: the background agent, the
 // logon entry, the agent's own tailscale serve port and the device token
@@ -415,6 +446,13 @@ func uninstallCmd(dir string, args []string, in io.Reader, out io.Writer) error 
 	if ti.served {
 		plan = append(plan, m("turn off tailscale serve on https://%s:%d (only this port)", "tailscale serve의 https://%s:%d만 끔 (이 포트만)", ti.serve.Host, ti.serve.HTTPSPort))
 	}
+	judgeFolder := ""
+	if ask, err := cfg.AskFolder(); err == nil {
+		judgeFolder = core.JudgeFolder(ask)
+		plan = append(plan, m("delete OpenCode's leftover judge conversations in the judge folder", "판정 폴더에 남은 OpenCode 판정 대화를 지움"))
+	}
+	schemaFile := filepath.Join(dir, core.JudgeSchemaFile)
+	plan = append(plan, m("delete %s", "%s 삭제", schemaFile))
 	if *all {
 		plan = append(plan, m("delete %s", "%s 삭제", dir))
 	}
@@ -446,6 +484,16 @@ func uninstallCmd(dir string, args []string, in io.Reader, out io.Writer) error 
 	for _, f := range []string{devices.FileName, "pairing.json", "pairing-request.json", "pairing-decision.json", "pairing-result.json", "pairing-qr.png"} {
 		os.Remove(filepath.Join(dir, f))
 	}
+	// The agent is stopped, so none of its judges runs. Without refs,
+	// CleanupJudge leaves the conversations of the last 10 minutes, such
+	// as those of a CLI compare that still runs.
+	if judgeFolder != "" {
+		if err := uninstallJudgeCleanup(ctx, cfg, judgeFolder); err != nil {
+			say(out, m("could not delete every OpenCode judge conversation (%s); they stay in %s, which only the agent uses",
+				"OpenCode 판정 대화를 다 지우지 못했습니다 (%s). 에이전트만 쓰는 %s에 남아 있습니다", errCode(err), judgeFolder))
+		}
+	}
+	os.Remove(schemaFile)
 	if ti.served {
 		if c, err := tailnet.New(); err == nil {
 			if err := c.ServeOff(ctx, ti.serve.HTTPSPort); err != nil {
@@ -461,6 +509,15 @@ func uninstallCmd(dir string, args []string, in io.Reader, out io.Writer) error 
 	}
 	say(out, m("uninstalled; delete asksemble-agent.exe yourself", "지웠습니다. asksemble-agent.exe 파일은 직접 지우세요"))
 	return nil
+}
+
+// errCode is the code of an adapter's error, or "internal"; its Detail is
+// never printed.
+func errCode(err error) string {
+	if c := core.ErrorCode(err); c != "" {
+		return c
+	}
+	return core.ErrCodeInternal
 }
 
 // funnelWatch ends serve when tailscale funnel opens the agent port to

@@ -1,9 +1,14 @@
-// Package codex is the Codex CLI adapter. Phase 2 uses it for asks only:
-// `codex exec` in the ask folder, read-only, with the person's config.toml
-// left out (P0-2: its approvals_reviewer = "auto_review" approved a write
-// under read-only) and live web search on (P0-7). It is the only package
-// that runs codex or knows its formats (principle 2), and it never reads
-// Codex login files (N10). Session listing comes in Phase 3.
+// Package codex is the Codex CLI adapter. Phase 2 uses it for asks and
+// comparison judging: `codex exec` in the ask folder, read-only, with the
+// person's config.toml left out (P0-2: its approvals_reviewer =
+// "auto_review" approved a write under read-only) and live web search on
+// (P0-7); a judge (judge.go) runs in the judge folder with web search off
+// and keeps no session file. Both turn off the features in featuresOff
+// (features.go): even with the person's config left out, an exec saw their
+// ChatGPT app tools such as Gmail, plugins and hooks (P2-3 S2 decision 4).
+// It is the only package that runs codex or knows its formats (principle
+// 2), and it never reads Codex login files (N10). Session listing comes in
+// Phase 3.
 package codex
 
 import (
@@ -55,9 +60,13 @@ var threadRe = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]
 type Options struct {
 	Path  string                   // empty: codex.exe on PATH
 	Tiers map[string]core.AskModel // settings ask.tiers.codex
+	// SchemaDir holds the judge schema file judge-schema-v1.json, which
+	// codex reads for --output-schema. Empty: the agent folder,
+	// config.Dir() (%APPDATA%\Asksemble). Tests give a temporary folder.
+	SchemaDir string
 }
 
-// Adapter implements core.Adapter and core.Asker for Codex CLI.
+// Adapter implements core.Adapter, core.Asker and core.Judger for Codex CLI.
 type Adapter struct {
 	exe    string
 	exeErr error
@@ -67,12 +76,29 @@ type Adapter struct {
 	version string
 	verErr  error
 	verAt   time.Time
+
+	// The judge schema file (judge.go): schemaDir is absolute, or "" when
+	// there is no agent folder. schemaMu guards schemaReady, set once this
+	// process wrote the file or found it right so later judges only read
+	// and compare, and schemaWrites, the writes (for tests).
+	schemaDir    string
+	schemaMu     sync.Mutex
+	schemaReady  bool
+	schemaWrites int
 }
 
 // New finds codex. A missing codex is not an error: /v1/info reports it.
 func New(o Options) *Adapter {
-	a := &Adapter{tiers: o.Tiers}
+	a := &Adapter{tiers: o.Tiers, schemaDir: o.SchemaDir}
 	a.exe, a.exeErr = findExe(o.Path)
+	if a.schemaDir == "" {
+		a.schemaDir, _ = config.Dir() // none: a judge fails as internal
+	}
+	if a.schemaDir != "" {
+		if abs, err := filepath.Abs(a.schemaDir); err == nil {
+			a.schemaDir = abs
+		}
+	}
 	return a
 }
 
@@ -181,9 +207,17 @@ func (a *Adapter) AskTiers() map[string]core.AskModel {
 }
 
 // askArgs builds one ask. --search is a top-level option and goes before
-// exec; -s goes after exec and before resume, which does not take it, so
-// a follow-up also sets sandbox_mode after resume (P2-1 probe). "-" reads
-// the prompt from stdin.
+// exec, and turns on the native web search; -s goes after exec and before
+// resume, which does not take it, so a follow-up also sets sandbox_mode
+// after resume (P2-1 probe). The featuresOff features are turned off
+// after the -c options (disableArgs; P2-3 S2 decision 4: app tools such as
+// Gmail were visible to an exec with the person's config left out), on a
+// new question and on resume alike, which takes --disable among its
+// options before the thread id. The thread id stays second to last and
+// "-", which reads the prompt from stdin, last:
+//
+//	--search exec -s read-only --ignore-user-config --skip-git-repo-check --json -m M [-c effort] --disable f… -
+//	--search exec -s read-only resume --ignore-user-config --skip-git-repo-check --json -m M [-c effort] -c sandbox_mode="read-only" --disable f… <thread> -
 func askArgs(model, effort, resume string) []string {
 	args := []string{"--search", "exec", "-s", "read-only"}
 	if resume != "" {
@@ -194,14 +228,22 @@ func askArgs(model, effort, resume string) []string {
 		args = append(args, "-c", `model_reasoning_effort="`+effort+`"`)
 	}
 	if resume != "" {
-		args = append(args, "-c", `sandbox_mode="read-only"`, resume)
+		args = append(args, "-c", `sandbox_mode="read-only"`)
+	}
+	args = append(args, disableArgs()...)
+	if resume != "" {
+		args = append(args, resume)
 	}
 	return append(args, "-")
 }
 
 // checkArgs accepts exactly what askArgs makes from valid values, so no
-// other option (a sandbox or approval change, a profile, a config key)
-// reaches codex through an ask.
+// other option (a sandbox or approval change, a profile, a config key, a
+// feature left on or turned on with --enable, the judge's
+// web_search="disabled" or --ephemeral) reaches codex through an ask. It
+// reads the model, the effort and the thread (second to last after
+// resume) and compares the whole list with askArgs of those values, so
+// every flag, its place and the order of the disabled features must match.
 func checkArgs(args []string) error {
 	model, effort, resume := "", "", ""
 	for i := 0; i+1 < len(args); i++ {

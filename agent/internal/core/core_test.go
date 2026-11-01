@@ -1,8 +1,11 @@
 package core
 
 import (
+	"encoding/json"
 	"path/filepath"
 	"runtime"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 )
@@ -82,5 +85,83 @@ func TestInFolderCase(t *testing.T) {
 	}
 	if InFolder(`D:\ClaudeHomeX`, `D:\ClaudeHome`) {
 		t.Error("sibling with same prefix must not match")
+	}
+}
+
+func TestJudgeFolder(t *testing.T) {
+	if got := JudgeFolder(""); got != "" {
+		t.Errorf("JudgeFolder(\"\") = %q, want \"\"", got)
+	}
+	ask := filepath.Join(t.TempDir(), "ask")
+	jf := JudgeFolder(ask + string(filepath.Separator))
+	if jf != filepath.Join(ask, JudgeFolderName) {
+		t.Errorf("JudgeFolder = %q", jf)
+	}
+	if !InFolder(jf, ask) || InFolder(ask, jf) {
+		t.Errorf("the judge folder %q must be inside the ask folder %q", jf, ask)
+	}
+	if !InFolder(filepath.Join(jf, "eval"), jf) || InFolder(jf+"-x", jf) {
+		t.Error("judge folder subfolders and siblings")
+	}
+	if runtime.GOOS == "windows" {
+		if !InFolder(strings.ToUpper(filepath.Join(jf, "eval")), JudgeFolder(strings.ToLower(ask))) {
+			t.Error("want case-insensitive judge folder on Windows")
+		}
+	}
+}
+
+func TestVersionAtLeast(t *testing.T) {
+	cases := []struct {
+		have, min string
+		want      bool
+	}{
+		{"2.1.316", "2.1.314", true},
+		{"2.1.314", "2.1.314", true},
+		{"2.1.313", "2.1.314", false},
+		{"0.164.0", "0.164.0", true},
+		{"0.163.9", "0.164.0", false},
+		{"0.165.0", "0.164.0", true},
+		{"2.2.1", "2.10.0", false},
+		{"2.10.0", "2.2.1", true},
+		{"3.0.0", "2.10.0", true},
+		{"2.1", "2.1.0", true},
+		{"2.1", "2.1.1", false},
+		{"2.1.0.1", "2.1.0", true},
+		{"", "2.1.314", false},
+		{"x", "2.1.314", false},
+		{"v2", "1.0.0", false},
+		{"2.1.314 (Claude Code)", "2.1.314", false},
+		{"2.1.314-beta", "2.1.314", false},
+		{"2..1", "2.0.0", false},
+		{"2.1.", "2.0.0", false},
+		{"99999999999999999999.0", "1.0", false},
+		{"2.1.314", "", false},
+		{"2.1.314", "v2", false},
+	}
+	for _, c := range cases {
+		if got := VersionAtLeast(c.have, c.min); got != c.want {
+			t.Errorf("VersionAtLeast(%q, %q) = %v, want %v", c.have, c.min, got, c.want)
+		}
+	}
+}
+
+func TestJudgeCapabilityAndInfo(t *testing.T) {
+	if !slices.Contains(AllCapabilities, CapJudge) || CapJudge != "judge" {
+		t.Errorf("AllCapabilities = %v, want judge in it", AllCapabilities)
+	}
+	b, _ := json.Marshal(AdapterInfo{Agent: "codex", Capabilities: []Capability{}})
+	if strings.Contains(string(b), "judge") {
+		t.Errorf("an AI that does not judge shows judge: %s", b)
+	}
+	b, _ = json.Marshal(AdapterInfo{Agent: "claude", Capabilities: []Capability{CapJudge}, Judge: &JudgeInfo{Model: "sonnet", Family: "anthropic"}})
+	if want := `"judge":{"model":"sonnet","family":"anthropic"}`; !strings.Contains(string(b), want) {
+		t.Errorf("judge info = %s, want %s (effort left out when empty)", b, want)
+	}
+	b, _ = json.Marshal(JudgeInfo{Model: "haiku", Effort: "medium", Family: "anthropic"})
+	if string(b) != `{"model":"haiku","effort":"medium","family":"anthropic"}` {
+		t.Errorf("JudgeInfo = %s", b)
+	}
+	if JudgeSchemaFile != "judge-schema-v1.json" || ErrCodeCancelled != "cancelled" {
+		t.Errorf("JudgeSchemaFile %q, ErrCodeCancelled %q", JudgeSchemaFile, ErrCodeCancelled)
 	}
 }

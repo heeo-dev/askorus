@@ -1,0 +1,1418 @@
+{
+ "about": "Numbers on P0-6 pairs (docs/judge/pairs-2026-10-30.json). Each row is a gold pair: the claim, and the sentence of the other answer a judge would cite as evidence (for an opposite, the one that contradicts the claim; for a same, the one that matches it). numeric marks the opposites whose contradiction is about a number. mismatch is Mismatch(Numbers(claim), Numbers(other)) and unmatched whether Unmatched finds a number on either side, as measured, not as wished; numbers_test.go checks them.",
+ "pairs": [
+  {
+   "id": "2-claude3-opencode",
+   "label": "opposite",
+   "numeric": true,
+   "claim": "근일점(1월경)에는 약 8분 10초, 원일점(7월경)에는 약 8분 27초 정도입니다.",
+   "other": "지구 공전 궤도가 타원이어서 실제로는 약 8분 3초(근일점) ~ 8분 27초(원일점) 사이에서 달라집니다.",
+   "mismatch": false,
+   "unmatched": true
+  },
+  {
+   "id": "2-opencode3-claude",
+   "label": "opposite",
+   "numeric": true,
+   "claim": "지구 공전 궤도가 타원이어서 실제로는 약 8분 3초(근일점) ~ 8분 27초(원일점) 사이에서 달라집니다.",
+   "other": "근일점(1월경)에는 약 8분 10초, 원일점(7월경)에는 약 8분 27초 정도입니다.",
+   "mismatch": false,
+   "unmatched": true
+  },
+  {
+   "id": "5-claude3-opencode",
+   "label": "opposite",
+   "numeric": true,
+   "claim": "Viruses are typically about 20–300 nanometers, which is 10 to 100 times smaller.",
+   "other": "Bacteria are living cells, typically 1–5 µm — thousands of times larger than viruses.",
+   "mismatch": true,
+   "unmatched": true
+  },
+  {
+   "id": "5-opencode1-claude",
+   "label": "opposite",
+   "numeric": true,
+   "claim": "Bacteria are living cells, typically 1–5 µm — thousands of times larger than viruses.",
+   "other": "Viruses are typically about 20–300 nanometers, which is 10 to 100 times smaller.",
+   "mismatch": true,
+   "unmatched": true
+  },
+  {
+   "id": "8-claude3-opencode",
+   "label": "opposite",
+   "numeric": true,
+   "claim": "외국인 등록 인구를 포함하면 약 970만 명 안팎입니다.",
+   "other": "여기에 장기체류 등록외국인(약 27만 명)을 더한 서울시의 '등록인구' 개념으로는 약 956만 명(2026년 2분기 기준 9,560,471명)입니다.",
+   "mismatch": true,
+   "unmatched": true
+  },
+  {
+   "id": "8-opencode2-claude",
+   "label": "opposite",
+   "numeric": true,
+   "claim": "여기에 장기체류 등록외국인(약 27만 명)을 더한 서울시의 '등록인구' 개념으로는 약 956만 명(2026년 2분기 기준 9,560,471명)입니다.",
+   "other": "외국인 등록 인구를 포함하면 약 970만 명 안팎입니다.",
+   "mismatch": true,
+   "unmatched": true
+  },
+  {
+   "id": "12-claude1-codex",
+   "label": "opposite",
+   "numeric": false,
+   "claim": "2026년 10월 30일 기준으로 가장 최신 아이폰은 iPhone 18 Pro와 iPhone 18 Pro Max입니다.",
+   "other": "2026년 10월 30일 기준 가장 최근에 출시된 아이폰은 아이폰 듀오(iPhone Duo)입니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "12-claude1-opencode",
+   "label": "opposite",
+   "numeric": false,
+   "claim": "2026년 10월 30일 기준으로 가장 최신 아이폰은 iPhone 18 Pro와 iPhone 18 Pro Max입니다.",
+   "other": "가장 최신 아이폰은 '아이폰 듀오(iPhone Duo)' 입니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "12-claude3-codex",
+   "label": "opposite",
+   "numeric": true,
+   "claim": "출시: 2026년 9월 18일. 다른 20개 국가와 지역에는 9월 25일부터 출시됐습니다.",
+   "other": "2026년 9월 9일 공개됐고, 10월 23일 출시됐습니다.",
+   "mismatch": true,
+   "unmatched": true
+  },
+  {
+   "id": "12-codex1-claude",
+   "label": "opposite",
+   "numeric": false,
+   "claim": "2026년 10월 30일 기준 가장 최근에 출시된 아이폰은 아이폰 듀오(iPhone Duo)입니다.",
+   "other": "2026년 10월 30일 기준으로 가장 최신 아이폰은 iPhone 18 Pro와 iPhone 18 Pro Max입니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "12-codex2-claude",
+   "label": "opposite",
+   "numeric": true,
+   "claim": "2026년 9월 9일 공개됐고, 10월 23일 출시됐습니다.",
+   "other": "출시: 2026년 9월 18일.",
+   "mismatch": true,
+   "unmatched": true
+  },
+  {
+   "id": "12-opencode1-claude",
+   "label": "opposite",
+   "numeric": false,
+   "claim": "가장 최신 아이폰은 '아이폰 듀오(iPhone Duo)' 입니다.",
+   "other": "2026년 10월 30일 기준으로 가장 최신 아이폰은 iPhone 18 Pro와 iPhone 18 Pro Max입니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "12-opencode2-claude",
+   "label": "opposite",
+   "numeric": true,
+   "claim": "애플의 첫 폴더블 아이폰으로, 2026년 9월 9일 공개됐고 2026년 10월 23일 출시됐습니다(한국도 같은 날 1차 출시국으로 판매 시작).",
+   "other": "출시: 2026년 9월 18일.",
+   "mismatch": true,
+   "unmatched": true
+  },
+  {
+   "id": "15-claude3-codex",
+   "label": "opposite",
+   "numeric": true,
+   "claim": "임신·수유 중: 200~300mg/일 이하, 약 1~2잔",
+   "other": "임신 중에는 하루 카페인 200mg 미만이 권고되며, 질환이 있거나 약을 복용 중이라면 적정량을 의료진과 상담하세요.",
+   "mismatch": true,
+   "unmatched": true
+  },
+  {
+   "id": "15-opencode3-codex",
+   "label": "opposite",
+   "numeric": true,
+   "claim": "임신 중 | 200~300mg/일 (2잔 이내)",
+   "other": "임신 중에는 하루 카페인 200mg 미만이 권고되며, 질환이 있거나 약을 복용 중이라면 적정량을 의료진과 상담하세요.",
+   "mismatch": true,
+   "unmatched": true
+  },
+  {
+   "id": "16-claude4-opencode",
+   "label": "opposite",
+   "numeric": true,
+   "claim": "Overall lifetime result: Most studies, including those from the ICCT, the IEA, and MIT, find lifecycle emissions 60–70% lower in Europe, about 60–68% lower in the US, and about 30–50% lower in countries with coal-heavy grids such as India or parts of China.",
+   "other": "India (coal-heavy grid): roughly 20–35% lower",
+   "mismatch": false,
+   "unmatched": true
+  },
+  {
+   "id": "16-opencode2-claude",
+   "label": "opposite",
+   "numeric": true,
+   "claim": "India (coal-heavy grid): roughly 20–35% lower",
+   "other": "Overall lifetime result: Most studies, including those from the ICCT, the IEA, and MIT, find lifecycle emissions 60–70% lower in Europe, about 60–68% lower in the US, and about 30–50% lower in countries with coal-heavy grids such as India or parts of China.",
+   "mismatch": false,
+   "unmatched": true
+  },
+  {
+   "id": "16-opencode3-claude",
+   "label": "opposite",
+   "numeric": true,
+   "claim": "Manufacturing: building a BEV emits more upfront — roughly 1.5–2× a gasoline car, largely from the battery.",
+   "other": "The difference is typically about 30–60% higher, or a few extra tonnes of CO2.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "16-opencode4-claude",
+   "label": "opposite",
+   "numeric": false,
+   "claim": "Edge cases: in the worst combination — very coal-heavy electricity, a very large battery, low annual mileage, and a short ownership period — a BEV can be roughly on par with or slightly worse than an efficient gasoline car.",
+   "other": "Even there, EVs generally still come out ahead over a full lifespan.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "27-opencode3-claude",
+   "label": "opposite",
+   "numeric": false,
+   "claim": "두 조건이 비슷하다면 최근 3년간 실제로 가장 많이 쓴 기능(카메라, 게임, 업무 문서, 통화 녹음)을 기준으로 고르는 게 후회가 적습니다.",
+   "other": "특별한 선호가 없다면 현재 쓰는 기기와 주변 사람들이 쓰는 기종을 따르는 것이 가장 후회가 적습니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "27-opencode3-codex",
+   "label": "opposite",
+   "numeric": false,
+   "claim": "두 조건이 비슷하다면 최근 3년간 실제로 가장 많이 쓴 기능(카메라, 게임, 업무 문서, 통화 녹음)을 기준으로 고르는 게 후회가 적습니다.",
+   "other": "특별히 선호하는 쪽이 없다면 지금 쓰는 휴대폰과 같은 쪽을 추천합니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "1-claude1-codex",
+   "label": "same",
+   "claim": "한글은 조선의 4대 임금 세종대왕이 집현전 학자들의 도움을 받아 만들었습니다.",
+   "other": "한글은 조선의 세종대왕이 1443년에 창제했습니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "1-claude2-codex",
+   "label": "same",
+   "claim": "1443년(세종 25년) 음력 12월에 창제했다고 전해지며, 1446년(세종 28년) 음력 9월에 반포했습니다.",
+   "other": "한글은 조선의 세종대왕이 1443년에 창제했습니다.",
+   "mismatch": false,
+   "unmatched": true
+  },
+  {
+   "id": "1-claude2-opencode",
+   "label": "same",
+   "claim": "1443년(세종 25년) 음력 12월에 창제했다고 전해지며, 1446년(세종 28년) 음력 9월에 반포했습니다.",
+   "other": "한글은 세종대왕이 1443년에 창제하고, 1446년(세종 28년)에 반포했습니다.",
+   "mismatch": false,
+   "unmatched": true
+  },
+  {
+   "id": "1-codex1-claude",
+   "label": "same",
+   "claim": "한글은 조선의 세종대왕이 1443년에 창제했습니다.",
+   "other": "1443년(세종 25년) 음력 12월에 창제했다고 전해지며, 1446년(세종 28년) 음력 9월에 반포했습니다.",
+   "mismatch": false,
+   "unmatched": true
+  },
+  {
+   "id": "1-codex1-opencode",
+   "label": "same",
+   "claim": "한글은 조선의 세종대왕이 1443년에 창제했습니다.",
+   "other": "한글은 세종대왕이 1443년에 창제하고, 1446년(세종 28년)에 반포했습니다.",
+   "mismatch": false,
+   "unmatched": true
+  },
+  {
+   "id": "1-codex2-claude",
+   "label": "same",
+   "claim": "1446년에 반포할 때의 이름은 훈민정음(訓民正音)이었습니다.",
+   "other": "1443년(세종 25년) 음력 12월에 창제했다고 전해지며, 1446년(세종 28년) 음력 9월에 반포했습니다.",
+   "mismatch": false,
+   "unmatched": true
+  },
+  {
+   "id": "1-codex2-opencode",
+   "label": "same",
+   "claim": "1446년에 반포할 때의 이름은 훈민정음(訓民正音)이었습니다.",
+   "other": "반포 시기: 1446년 음력 9월, 현행 한글날(10월 9일)의 근거",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "1-opencode1-claude",
+   "label": "same",
+   "claim": "한글은 세종대왕이 1443년에 창제하고, 1446년(세종 28년)에 반포했습니다.",
+   "other": "1443년(세종 25년) 음력 12월에 창제했다고 전해지며, 1446년(세종 28년) 음력 9월에 반포했습니다.",
+   "mismatch": false,
+   "unmatched": true
+  },
+  {
+   "id": "1-opencode1-codex",
+   "label": "same",
+   "claim": "한글은 세종대왕이 1443년에 창제하고, 1446년(세종 28년)에 반포했습니다.",
+   "other": "한글은 조선의 세종대왕이 1443년에 창제했습니다.",
+   "mismatch": false,
+   "unmatched": true
+  },
+  {
+   "id": "2-claude1-codex",
+   "label": "same",
+   "claim": "빛이 태양에서 지구까지 도달하는 데는 평균 약 8분 20초(약 499초)가 걸립니다.",
+   "other": "태양빛이 지구에 도달하는 데 평균 약 8분 20초 걸립니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "2-claude1-opencode",
+   "label": "same",
+   "claim": "빛이 태양에서 지구까지 도달하는 데는 평균 약 8분 20초(약 499초)가 걸립니다.",
+   "other": "태양 표면에서 지구까지 빛이 도달하는 데는 평균 약 8분 20초(499초)가 걸립니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "2-claude4-opencode",
+   "label": "same",
+   "claim": "평균 거리: 약 1억 4,960만 km (1 AU)",
+   "other": "평균 거리 약 1억 4,960만 km를 광속(초속 약 30만 km)으로 나눈 값입니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "2-codex1-claude",
+   "label": "same",
+   "claim": "태양빛이 지구에 도달하는 데 평균 약 8분 20초 걸립니다.",
+   "other": "빛이 태양에서 지구까지 도달하는 데는 평균 약 8분 20초(약 499초)가 걸립니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "2-codex1-opencode",
+   "label": "same",
+   "claim": "태양빛이 지구에 도달하는 데 평균 약 8분 20초 걸립니다.",
+   "other": "태양 표면에서 지구까지 빛이 도달하는 데는 평균 약 8분 20초(499초)가 걸립니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "2-opencode1-claude",
+   "label": "same",
+   "claim": "태양 표면에서 지구까지 빛이 도달하는 데는 평균 약 8분 20초(499초)가 걸립니다.",
+   "other": "빛이 태양에서 지구까지 도달하는 데는 평균 약 8분 20초(약 499초)가 걸립니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "2-opencode1-codex",
+   "label": "same",
+   "claim": "태양 표면에서 지구까지 빛이 도달하는 데는 평균 약 8분 20초(499초)가 걸립니다.",
+   "other": "태양빛이 지구에 도달하는 데 평균 약 8분 20초 걸립니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "2-opencode2-claude",
+   "label": "same",
+   "claim": "평균 거리 약 1억 4,960만 km를 광속(초속 약 30만 km)으로 나눈 값입니다.",
+   "other": "평균 거리: 약 1억 4,960만 km (1 AU)",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "3-claude2-opencode",
+   "label": "same",
+   "claim": "기본 포트 | 80 | 443",
+   "other": "HTTP: 기본 80번 포트, http://",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "3-claude4-opencode",
+   "label": "same",
+   "claim": "속도 | 핸드셰이크가 없어 초기 연결이 가벼움 | TLS 핸드셰이크로 약간의 오버헤드 (HTTP/2, HTTP/3와 TLS 1.3으로 거의 차이 없음)",
+   "other": "과거에는 암호화 연산과 인증서 비용 때문에 느리고 비쌌지만, 지금은 TLS 1.3, 세션 재사용, Let's Encrypt 같은 무료 인증서 덕분에 차이가 거의 없습니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "3-opencode4-claude",
+   "label": "same",
+   "claim": "과거에는 암호화 연산과 인증서 비용 때문에 느리고 비쌌지만, 지금은 TLS 1.3, 세션 재사용, Let's Encrypt 같은 무료 인증서 덕분에 차이가 거의 없습니다.",
+   "other": "속도 | 핸드셰이크가 없어 초기 연결이 가벼움 | TLS 핸드셰이크로 약간의 오버헤드 (HTTP/2, HTTP/3와 TLS 1.3으로 거의 차이 없음)",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "4-claude3-opencode",
+   "label": "same",
+   "claim": "젖산이 쌓이면 김치의 pH가 담근 직후 약 6~6.5에서 숙성되면서 4.0~4.5 정도로 떨어집니다.",
+   "other": "김치가 익는다는 건 바로 이 젖산이 쌓이는 과정이고, 산이 늘어날수록 pH가 떨어져(초기 5.5~6 → 잘 익으면 4.2 전후) 혀가 느끼는 신맛이 강해집니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "4-opencode3-claude",
+   "label": "same",
+   "claim": "김치가 익는다는 건 바로 이 젖산이 쌓이는 과정이고, 산이 늘어날수록 pH가 떨어져(초기 5.5~6 → 잘 익으면 4.2 전후) 혀가 느끼는 신맛이 강해집니다.",
+   "other": "젖산이 쌓이면 김치의 pH가 담근 직후 약 6~6.5에서 숙성되면서 4.0~4.5 정도로 떨어집니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "6-claude1-codex",
+   "label": "same",
+   "claim": "지구에 계절이 생기는 가장 큰 이유는 지구의 자전축이 공전 궤도면에 대해 약 23.5° 기울어져 있기 때문입니다.",
+   "other": "지구에 계절이 생기는 주된 이유는 지구의 자전축이 공전 궤도면에 수직인 방향에서 약 23.5도 기울어진 채 태양 주위를 공전하기 때문입니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "6-claude1-opencode",
+   "label": "same",
+   "claim": "지구에 계절이 생기는 가장 큰 이유는 지구의 자전축이 공전 궤도면에 대해 약 23.5° 기울어져 있기 때문입니다.",
+   "other": "지구에 계절이 생기는 근본 원인은 자전축이 약 23.5도 기울어진 상태로 태양 주위를 공전하기 때문입니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "6-codex1-claude",
+   "label": "same",
+   "claim": "지구에 계절이 생기는 주된 이유는 지구의 자전축이 공전 궤도면에 수직인 방향에서 약 23.5도 기울어진 채 태양 주위를 공전하기 때문입니다.",
+   "other": "지구에 계절이 생기는 가장 큰 이유는 지구의 자전축이 공전 궤도면에 대해 약 23.5° 기울어져 있기 때문입니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "6-codex1-opencode",
+   "label": "same",
+   "claim": "지구에 계절이 생기는 주된 이유는 지구의 자전축이 공전 궤도면에 수직인 방향에서 약 23.5도 기울어진 채 태양 주위를 공전하기 때문입니다.",
+   "other": "지구에 계절이 생기는 근본 원인은 자전축이 약 23.5도 기울어진 상태로 태양 주위를 공전하기 때문입니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "6-opencode1-claude",
+   "label": "same",
+   "claim": "지구에 계절이 생기는 근본 원인은 자전축이 약 23.5도 기울어진 상태로 태양 주위를 공전하기 때문입니다.",
+   "other": "지구에 계절이 생기는 가장 큰 이유는 지구의 자전축이 공전 궤도면에 대해 약 23.5° 기울어져 있기 때문입니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "6-opencode1-codex",
+   "label": "same",
+   "claim": "지구에 계절이 생기는 근본 원인은 자전축이 약 23.5도 기울어진 상태로 태양 주위를 공전하기 때문입니다.",
+   "other": "지구에 계절이 생기는 주된 이유는 지구의 자전축이 공전 궤도면에 수직인 방향에서 약 23.5도 기울어진 채 태양 주위를 공전하기 때문입니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "6-opencode4-claude",
+   "label": "same",
+   "claim": "실제로 지구는 1월 초에 태양에 가장 가까운데, 그때 북반구는 겨울입니다.",
+   "other": "지구는 1월 초에 태양과 가장 가깝지만(근일점), 이때 북반구는 겨울입니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "7-claude1-codex",
+   "label": "same",
+   "claim": "2026년 대한민국 최저임금은 시간당 10,320원입니다.",
+   "other": "2026년 대한민국 최저임금은 시간당 10,320원입니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "7-claude1-opencode",
+   "label": "same",
+   "claim": "2026년 대한민국 최저임금은 시간당 10,320원입니다.",
+   "other": "2026년 대한민국 최저임금은 시간당 10,320원입니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "7-claude2-opencode",
+   "label": "same",
+   "claim": "2025년(10,030원)보다 290원(약 2.9%) 인상된 금액입니다.",
+   "other": "2025년(10,030원)보다 290원(2.9%) 인상된 금액으로, 2025년 7월 10일 최저임금위원회 의결 후 8월 5일 고시되었습니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "7-claude3-opencode",
+   "label": "same",
+   "claim": "이 금액으로 주 40시간(주휴 포함 209시간) 기준 월급을 계산하면 약 2,156,880원입니다.",
+   "other": "월급 환산(주 40시간, 월 209시간 기준): 2,156,880원",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "7-codex1-claude",
+   "label": "same",
+   "claim": "2026년 대한민국 최저임금은 시간당 10,320원입니다.",
+   "other": "2026년 대한민국 최저임금은 시간당 10,320원입니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "7-codex1-opencode",
+   "label": "same",
+   "claim": "2026년 대한민국 최저임금은 시간당 10,320원입니다.",
+   "other": "2026년 대한민국 최저임금은 시간당 10,320원입니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "7-opencode1-claude",
+   "label": "same",
+   "claim": "2026년 대한민국 최저임금은 시간당 10,320원입니다.",
+   "other": "2026년 대한민국 최저임금은 시간당 10,320원입니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "7-opencode1-codex",
+   "label": "same",
+   "claim": "2026년 대한민국 최저임금은 시간당 10,320원입니다.",
+   "other": "2026년 대한민국 최저임금은 시간당 10,320원입니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "7-opencode2-claude",
+   "label": "same",
+   "claim": "2025년(10,030원)보다 290원(2.9%) 인상된 금액으로, 2025년 7월 10일 최저임금위원회 의결 후 8월 5일 고시되었습니다.",
+   "other": "2025년(10,030원)보다 290원(약 2.9%) 인상된 금액입니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "7-opencode4-claude",
+   "label": "same",
+   "claim": "월급 환산(주 40시간, 월 209시간 기준): 2,156,880원",
+   "other": "이 금액으로 주 40시간(주휴 포함 209시간) 기준 월급을 계산하면 약 2,156,880원입니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "8-claude1-codex",
+   "label": "same",
+   "claim": "서울의 주민등록 인구는 약 930만 명입니다.",
+   "other": "2026년 9월 말 기준 서울의 주민등록인구는 9,279,861명, 약 928만 명입니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "8-claude1-opencode",
+   "label": "same",
+   "claim": "서울의 주민등록 인구는 약 930만 명입니다.",
+   "other": "약 928만 명입니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "8-claude2-opencode",
+   "label": "same",
+   "claim": "2024년 말 기준으로 약 933만 명이었고, 감소세가 이어지고 있어 지금은 이보다 조금 적을 수 있습니다.",
+   "other": "참고로 서울 인구는 2025년 말에 930만 명 선이 깨진 뒤 완만한 감소세를 이어가고 있으며, 통계청 장래인구추계로는 2026년을 정점으로 감소가 본격화될 것으로 전망됩니다.",
+   "mismatch": true,
+   "unmatched": true
+  },
+  {
+   "id": "8-codex1-claude",
+   "label": "same",
+   "claim": "2026년 9월 말 기준 서울의 주민등록인구는 9,279,861명, 약 928만 명입니다.",
+   "other": "서울의 주민등록 인구는 약 930만 명입니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "8-codex1-opencode",
+   "label": "same",
+   "claim": "2026년 9월 말 기준 서울의 주민등록인구는 9,279,861명, 약 928만 명입니다.",
+   "other": "행정안전부 주민등록인구통계 기준, 2026년 9월 말 서울특별시 인구는 9,279,861명(남 4,464,956명, 여 4,814,905명, 4,524,905세대)입니다.",
+   "mismatch": false,
+   "unmatched": true
+  },
+  {
+   "id": "8-opencode1-claude",
+   "label": "same",
+   "claim": "행정안전부 주민등록인구통계 기준, 2026년 9월 말 서울특별시 인구는 9,279,861명(남 4,464,956명, 여 4,814,905명, 4,524,905세대)입니다.",
+   "other": "서울의 주민등록 인구는 약 930만 명입니다.",
+   "mismatch": false,
+   "unmatched": true
+  },
+  {
+   "id": "8-opencode1-codex",
+   "label": "same",
+   "claim": "행정안전부 주민등록인구통계 기준, 2026년 9월 말 서울특별시 인구는 9,279,861명(남 4,464,956명, 여 4,814,905명, 4,524,905세대)입니다.",
+   "other": "2026년 9월 말 기준 서울의 주민등록인구는 9,279,861명, 약 928만 명입니다.",
+   "mismatch": false,
+   "unmatched": true
+  },
+  {
+   "id": "9-claude1-codex",
+   "label": "same",
+   "claim": "The latest stable version of Python is 3.15.2, released on October 25, 2026, according to python.org.",
+   "other": "The latest stable version is Python 3.15.2, released on October 25, 2026.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "9-claude1-opencode",
+   "label": "same",
+   "claim": "The latest stable version of Python is 3.15.2, released on October 25, 2026, according to python.org.",
+   "other": "Python 3.15.2, released October 25, 2026, is the latest stable version (per python.org/downloads).",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "9-codex1-claude",
+   "label": "same",
+   "claim": "The latest stable version is Python 3.15.2, released on October 25, 2026.",
+   "other": "The latest stable version of Python is 3.15.2, released on October 25, 2026, according to python.org.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "9-codex1-opencode",
+   "label": "same",
+   "claim": "The latest stable version is Python 3.15.2, released on October 25, 2026.",
+   "other": "Python 3.15.2, released October 25, 2026, is the latest stable version (per python.org/downloads).",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "9-opencode1-claude",
+   "label": "same",
+   "claim": "Python 3.15.2, released October 25, 2026, is the latest stable version (per python.org/downloads).",
+   "other": "The latest stable version of Python is 3.15.2, released on October 25, 2026, according to python.org.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "9-opencode1-codex",
+   "label": "same",
+   "claim": "Python 3.15.2, released October 25, 2026, is the latest stable version (per python.org/downloads).",
+   "other": "The latest stable version is Python 3.15.2, released on October 25, 2026.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "10-claude1-codex",
+   "label": "same",
+   "claim": "현재 미국 연준 기준금리(연방기금금리 목표 범위)는 3.75%~4.00%입니다.",
+   "other": "2026년 10월 30일 기준 미국 연준의 기준금리 목표 범위는 연 3.75~4.00%입니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "10-claude1-opencode",
+   "label": "same",
+   "claim": "현재 미국 연준 기준금리(연방기금금리 목표 범위)는 3.75%~4.00%입니다.",
+   "other": "미국 연준의 기준금리(연방기금금리 목표 범위)는 연 3.75~4.00%입니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "10-claude2-opencode",
+   "label": "same",
+   "claim": "연준은 2026년 10월 28일 FOMC에서 이 범위를 동결했습니다.",
+   "other": "2026년 10월 27~28일 FOMC에서 동결을 결정했고(찬성 10표, 인상 주장 반대 2표), 실효 연방기금금리(EFFR)는 약 3.88% 수준입니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "10-claude3-opencode",
+   "label": "same",
+   "claim": "직전인 9월 16일 회의에서 0.25%p 인상해 이 수준이 됐고, 인상은 2023년 이후 처음입니다.",
+   "other": "지난 9월 0.25%p 인상 이후 첫 회의에서 동결로 전환한 것이며, 다음 회의는 12월 8~9일입니다.",
+   "mismatch": false,
+   "unmatched": true
+  },
+  {
+   "id": "10-claude4-opencode",
+   "label": "same",
+   "claim": "10월 14일 기준 실효 연방기금금리는 약 3.88%였습니다.",
+   "other": "2026년 10월 27~28일 FOMC에서 동결을 결정했고(찬성 10표, 인상 주장 반대 2표), 실효 연방기금금리(EFFR)는 약 3.88% 수준입니다.",
+   "mismatch": true,
+   "unmatched": true
+  },
+  {
+   "id": "10-codex1-claude",
+   "label": "same",
+   "claim": "2026년 10월 30일 기준 미국 연준의 기준금리 목표 범위는 연 3.75~4.00%입니다.",
+   "other": "현재 미국 연준 기준금리(연방기금금리 목표 범위)는 3.75%~4.00%입니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "10-codex1-opencode",
+   "label": "same",
+   "claim": "2026년 10월 30일 기준 미국 연준의 기준금리 목표 범위는 연 3.75~4.00%입니다.",
+   "other": "미국 연준의 기준금리(연방기금금리 목표 범위)는 연 3.75~4.00%입니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "10-opencode1-claude",
+   "label": "same",
+   "claim": "미국 연준의 기준금리(연방기금금리 목표 범위)는 연 3.75~4.00%입니다.",
+   "other": "현재 미국 연준 기준금리(연방기금금리 목표 범위)는 3.75%~4.00%입니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "10-opencode1-codex",
+   "label": "same",
+   "claim": "미국 연준의 기준금리(연방기금금리 목표 범위)는 연 3.75~4.00%입니다.",
+   "other": "2026년 10월 30일 기준 미국 연준의 기준금리 목표 범위는 연 3.75~4.00%입니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "10-opencode2-claude",
+   "label": "same",
+   "claim": "2026년 10월 27~28일 FOMC에서 동결을 결정했고(찬성 10표, 인상 주장 반대 2표), 실효 연방기금금리(EFFR)는 약 3.88% 수준입니다.",
+   "other": "연준은 2026년 10월 28일 FOMC에서 이 범위를 동결했습니다(연준 발표).",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "10-opencode3-claude",
+   "label": "same",
+   "claim": "지난 9월 0.25%p 인상 이후 첫 회의에서 동결로 전환한 것이며, 다음 회의는 12월 8~9일입니다.",
+   "other": "직전인 9월 16일 회의에서 0.25%p 인상해 이 수준이 됐고, 인상은 2023년 이후 처음입니다(simianx.ai).",
+   "mismatch": false,
+   "unmatched": true
+  },
+  {
+   "id": "11-claude2-codex",
+   "label": "same",
+   "claim": "It is 828 meters (2,717 feet) tall and has 163 floors.",
+   "other": "The Burj Khalifa in Dubai is the world’s tallest building, at 828 meters (2,717 feet).",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "11-claude2-opencode",
+   "label": "same",
+   "claim": "It is 828 meters (2,717 feet) tall and has 163 floors.",
+   "other": "It stands 828 meters (2,717 feet) tall, with 163 floors.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "11-claude3-opencode",
+   "label": "same",
+   "claim": "It opened in 2010 and has held the record since then.",
+   "other": "It has held the title since its completion in 2010.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "11-codex1-claude",
+   "label": "same",
+   "claim": "The Burj Khalifa in Dubai is the world’s tallest building, at 828 meters (2,717 feet).",
+   "other": "It is 828 meters (2,717 feet) tall and has 163 floors.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "11-codex1-opencode",
+   "label": "same",
+   "claim": "The Burj Khalifa in Dubai is the world’s tallest building, at 828 meters (2,717 feet).",
+   "other": "It stands 828 meters (2,717 feet) tall, with 163 floors.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "11-opencode2-claude",
+   "label": "same",
+   "claim": "It stands 828 meters (2,717 feet) tall, with 163 floors.",
+   "other": "It is 828 meters (2,717 feet) tall and has 163 floors.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "11-opencode2-codex",
+   "label": "same",
+   "claim": "It stands 828 meters (2,717 feet) tall, with 163 floors.",
+   "other": "The Burj Khalifa in Dubai is the world’s tallest building, at 828 meters (2,717 feet).",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "11-opencode3-claude",
+   "label": "same",
+   "claim": "It has held the title since its completion in 2010.",
+   "other": "It opened in 2010 and has held the record since then.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "12-claude2-codex",
+   "label": "same",
+   "claim": "발표: 2026년 9월 9일",
+   "other": "2026년 9월 9일 공개됐고, 10월 23일 출시됐습니다.",
+   "mismatch": false,
+   "unmatched": true
+  },
+  {
+   "id": "12-claude2-opencode",
+   "label": "same",
+   "claim": "발표: 2026년 9월 9일",
+   "other": "아이폰 18 프로 / 18 프로 맥스: 2026년 9월 9일 공개, 9월 18일 출시.",
+   "mismatch": false,
+   "unmatched": true
+  },
+  {
+   "id": "12-claude3-opencode",
+   "label": "same",
+   "claim": "출시: 2026년 9월 18일. 다른 20개 국가와 지역에는 9월 25일부터 출시됐습니다.",
+   "other": "아이폰 18 프로 / 18 프로 맥스: 2026년 9월 9일 공개, 9월 18일 출시.",
+   "mismatch": false,
+   "unmatched": true
+  },
+  {
+   "id": "12-claude4-opencode",
+   "label": "same",
+   "claim": "일반 iPhone 18은 이번 가을에 나오지 않았습니다.",
+   "other": "일반형 아이폰 18 / 18e / 에어 2: 이번 가을 라인업에서 빠졌고, 2027년 봄 출시가 예상됩니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "12-codex1-opencode",
+   "label": "same",
+   "claim": "2026년 10월 30일 기준 가장 최근에 출시된 아이폰은 아이폰 듀오(iPhone Duo)입니다.",
+   "other": "정리하면 \"현재 시점의 최신 모델\"은 10월 23일 나온 아이폰 듀오이고, 가장 최근에 대중적으로 풀린 주력 모델은 9월 18일 출시된 아이폰 18 프로 시리즈입니다.",
+   "mismatch": true,
+   "unmatched": true
+  },
+  {
+   "id": "12-codex2-opencode",
+   "label": "same",
+   "claim": "2026년 9월 9일 공개됐고, 10월 23일 출시됐습니다.",
+   "other": "애플의 첫 폴더블 아이폰으로, 2026년 9월 9일 공개됐고 2026년 10월 23일 출시됐습니다(한국도 같은 날 1차 출시국으로 판매 시작).",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "12-opencode2-codex",
+   "label": "same",
+   "claim": "애플의 첫 폴더블 아이폰으로, 2026년 9월 9일 공개됐고 2026년 10월 23일 출시됐습니다(한국도 같은 날 1차 출시국으로 판매 시작).",
+   "other": "2026년 9월 9일 공개됐고, 10월 23일 출시됐습니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "12-opencode3-claude",
+   "label": "same",
+   "claim": "아이폰 18 프로 / 18 프로 맥스: 2026년 9월 9일 공개, 9월 18일 출시. A20 프로 칩, 아이폰 최초 가변 조리개 카메라 탑재. 국내 출고가는 프로 199만 원, 프로 맥스 219만 원부터.",
+   "other": "출시: 2026년 9월 18일.",
+   "mismatch": false,
+   "unmatched": true
+  },
+  {
+   "id": "12-opencode4-claude",
+   "label": "same",
+   "claim": "일반형 아이폰 18 / 18e / 에어 2: 이번 가을 라인업에서 빠졌고, 2027년 봄 출시가 예상됩니다.",
+   "other": "MacRumors에 따르면 2027년 봄에 출시될 예정입니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "14-claude1-codex",
+   "label": "same",
+   "claim": "아니요, 꼭 2리터를 마셔야 하는 것은 아닙니다.",
+   "other": "모든 사람이 매일 물만 2리터씩 꼭 마실 필요는 없습니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "14-claude1-opencode",
+   "label": "same",
+   "claim": "아니요, 꼭 2리터를 마셔야 하는 것은 아닙니다.",
+   "other": "정리하면, '무조건 2리터'가 아니라 목이 마를 때 마시고, 활동량·날씨·소변 색을 보며 조절하는 것이 합리적입니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "14-claude2-opencode",
+   "label": "same",
+   "claim": "하루 총 수분 섭취 권장량은 성인 남성 약 2.5리터, 여성 약 2리터 정도입니다.",
+   "other": "예를 들어 미국 국립의학원은 성인 남성 약 3.7L, 여성 약 2.7L(음료+음식 포함)을 제시하고, 한국 영양소 섭취기준도 성인 남성 약 2.6L, 여성 약 2.1L 정도를 총 수분으로 잡습니다.",
+   "mismatch": false,
+   "unmatched": true
+  },
+  {
+   "id": "14-codex1-claude",
+   "label": "same",
+   "claim": "모든 사람이 매일 물만 2리터씩 꼭 마실 필요는 없습니다.",
+   "other": "아니요, 꼭 2리터를 마셔야 하는 것은 아닙니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "14-codex1-opencode",
+   "label": "same",
+   "claim": "모든 사람이 매일 물만 2리터씩 꼭 마실 필요는 없습니다.",
+   "other": "정리하면, '무조건 2리터'가 아니라 목이 마를 때 마시고, 활동량·날씨·소변 색을 보며 조절하는 것이 합리적입니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "14-opencode2-claude",
+   "label": "same",
+   "claim": "'하루 2리터'는 엄밀한 의학적 기준이라기보다 편하게 기억하기 위한 대략적인 숫자입니다.",
+   "other": "\"하루 2리터\"는 정확한 과학적 기준이 아닙니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "14-opencode2-codex",
+   "label": "same",
+   "claim": "'하루 2리터'는 엄밀한 의학적 기준이라기보다 편하게 기억하기 위한 대략적인 숫자입니다.",
+   "other": "모든 사람이 매일 물만 2리터씩 꼭 마실 필요는 없습니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "14-opencode3-claude",
+   "label": "same",
+   "claim": "예를 들어 미국 국립의학원은 성인 남성 약 3.7L, 여성 약 2.7L(음료+음식 포함)을 제시하고, 한국 영양소 섭취기준도 성인 남성 약 2.6L, 여성 약 2.1L 정도를 총 수분으로 잡습니다.",
+   "other": "하루 총 수분 섭취 권장량은 성인 남성 약 2.5리터, 여성 약 2리터 정도입니다.",
+   "mismatch": false,
+   "unmatched": true
+  },
+  {
+   "id": "14-opencode4-claude",
+   "label": "same",
+   "claim": "정리하면, '무조건 2리터'가 아니라 목이 마를 때 마시고, 활동량·날씨·소변 색을 보며 조절하는 것이 합리적입니다.",
+   "other": "억지로 2리터를 채우려 하기보다 하루 동안 나눠서 목마를 때 마시는 것이 좋습니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "14-opencode4-codex",
+   "label": "same",
+   "claim": "정리하면, '무조건 2리터'가 아니라 목이 마를 때 마시고, 활동량·날씨·소변 색을 보며 조절하는 것이 합리적입니다.",
+   "other": "모든 사람이 매일 물만 2리터씩 꼭 마실 필요는 없습니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "15-claude2-codex",
+   "label": "same",
+   "claim": "하루 3~4잔(카페인 400mg 이하)까지가 일반적인 안전 상한입니다.",
+   "other": "대부분의 성인은 하루 카페인 400mg 이하가 일반적으로 괜찮은 범위입니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "15-claude2-opencode",
+   "label": "same",
+   "claim": "하루 3~4잔(카페인 400mg 이하)까지가 일반적인 안전 상한입니다.",
+   "other": "일반 성인 기준 카페인 400mg 이하, 즉 아메리카노 3~4잔 정도가 국제기준(FDA·EFSA)입니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "15-claude3-opencode",
+   "label": "same",
+   "claim": "임신·수유 중: 200~300mg/일 이하, 약 1~2잔",
+   "other": "임신 중 | 200~300mg/일 (2잔 이내)",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "15-claude4-codex",
+   "label": "same",
+   "claim": "제2형 당뇨병, 파킨슨병, 일부 간질환(지방간, 간경변), 간암 위험 감소와 연관",
+   "other": "커피를 적당히 마시는 사람에게서 심혈관 질환과 제2형 당뇨병 위험이 낮게 나타난 연구도 있습니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "15-claude4-opencode",
+   "label": "same",
+   "claim": "제2형 당뇨병, 파킨슨병, 일부 간질환(지방간, 간경변), 간암 위험 감소와 연관",
+   "other": "관찰연구에서 커피 섭취가 많은 사람은 2형 당뇨, 간경변·간암, 파킨슨병, 일부 심혈관 질환 위험이 낮게 나옵니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "15-codex3-claude",
+   "label": "same",
+   "claim": "대부분의 성인은 하루 카페인 400mg 이하가 일반적으로 괜찮은 범위입니다.",
+   "other": "하루 3~4잔(카페인 400mg 이하)까지가 일반적인 안전 상한입니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "15-codex3-opencode",
+   "label": "same",
+   "claim": "대부분의 성인은 하루 카페인 400mg 이하가 일반적으로 괜찮은 범위입니다.",
+   "other": "일반 성인 기준 카페인 400mg 이하, 즉 아메리카노 3~4잔 정도가 국제기준(FDA·EFSA)입니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "15-codex4-claude",
+   "label": "same",
+   "claim": "커피로는 대략 2~4잔 정도지만, 잔 크기와 원두, 추출 방식에 따라 카페인 함량이 크게 달라집니다.",
+   "other": "건강한 성인: 카페인 400mg/일 이하, 아메리카노(톨~그란데) 기준 약 3~4잔",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "15-codex4-opencode",
+   "label": "same",
+   "claim": "커피로는 대략 2~4잔 정도지만, 잔 크기와 원두, 추출 방식에 따라 카페인 함량이 크게 달라집니다.",
+   "other": "일반 성인 기준 카페인 400mg 이하, 즉 아메리카노 3~4잔 정도가 국제기준(FDA·EFSA)입니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "15-opencode2-claude",
+   "label": "same",
+   "claim": "일반 성인 기준 카페인 400mg 이하, 즉 아메리카노 3~4잔 정도가 국제기준(FDA·EFSA)입니다.",
+   "other": "건강한 성인: 카페인 400mg/일 이하, 아메리카노(톨~그란데) 기준 약 3~4잔",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "15-opencode2-codex",
+   "label": "same",
+   "claim": "일반 성인 기준 카페인 400mg 이하, 즉 아메리카노 3~4잔 정도가 국제기준(FDA·EFSA)입니다.",
+   "other": "대부분의 성인은 하루 카페인 400mg 이하가 일반적으로 괜찮은 범위입니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "15-opencode3-claude",
+   "label": "same",
+   "claim": "임신 중 | 200~300mg/일 (2잔 이내)",
+   "other": "임신·수유 중: 200~300mg/일 이하, 약 1~2잔",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "16-claude1-codex",
+   "label": "same",
+   "claim": "Over their whole lifetime, electric cars emit less CO2 than comparable gasoline cars, though the size of the advantage depends on how the electricity is generated.",
+   "other": "The International Energy Agency estimates that a medium-sized electric car sold in 2023 produces about half the lifetime greenhouse gas emissions of a comparable gasoline car, on a global average.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "16-claude1-opencode",
+   "label": "same",
+   "claim": "Over their whole lifetime, electric cars emit less CO2 than comparable gasoline cars, though the size of the advantage depends on how the electricity is generated.",
+   "other": "Yes — over a full lifetime, EVs emit substantially less CO₂ than gasoline cars in essentially every major market studied, typically 40–70% less, provided the car is driven a normal amount.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "16-claude3-opencode",
+   "label": "same",
+   "claim": "Break-even point: The extra manufacturing emissions are usually paid back after roughly 1–2 years of driving, or about 15,000–50,000 km.",
+   "other": "Payback distance: on a clean grid, that debt is repaid after roughly 15,000–30,000 km (about 1–2 years of typical European driving).",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "16-codex4-opencode",
+   "label": "same",
+   "claim": "The International Energy Agency estimates that a medium-sized electric car sold in 2023 produces about half the lifetime greenhouse gas emissions of a comparable gasoline car, on a global average.",
+   "other": "Yes — over a full lifetime, EVs emit substantially less CO₂ than gasoline cars in essentially every major market studied, typically 40–70% less, provided the car is driven a normal amount.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "17-claude2-opencode",
+   "label": "same",
+   "claim": "Rate above ~6–7%: lean toward paying down the mortgage.",
+   "other": "Mortgage rate above roughly 6–7%: paying down is often the better risk‑adjusted choice.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "17-claude3-opencode",
+   "label": "same",
+   "claim": "Rate below ~4%: lean toward investing.",
+   "other": "Rate below ~4% (fixed): investing usually wins on expected value, and paying early is often a poor use of capital.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "17-claude4-opencode",
+   "label": "same",
+   "claim": "Before either, make sure you have an emergency fund of 3–6 months of expenses, no higher-interest debt (credit cards, car loans), and you are capturing any employer match.",
+   "other": "Build an emergency fund (3–6 months, more if income is variable).",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "17-opencode2-claude",
+   "label": "same",
+   "claim": "Mortgage rate above roughly 6–7%: paying down is often the better risk‑adjusted choice.",
+   "other": "Rate above ~6–7%: lean toward paying down the mortgage.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "17-opencode3-claude",
+   "label": "same",
+   "claim": "Rate around 4–5%: roughly a toss‑up; liquidity and psychology decide.",
+   "other": "If your mortgage rate is low (under about 4–5%), investing has usually come out ahead over long periods.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "17-opencode4-claude",
+   "label": "same",
+   "claim": "Rate below ~4% (fixed): investing usually wins on expected value, and paying early is often a poor use of capital.",
+   "other": "Rate below ~4%: lean toward investing.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "21-claude1-opencode",
+   "label": "same",
+   "claim": "Keep the bedroom cool (about 16–19°C / 60–67°F), dark, and quiet.",
+   "other": "Cool room (~17–19 °C / 63–66 °F), dark, and quiet.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "21-claude2-opencode",
+   "label": "same",
+   "claim": "Stop caffeine 8–10 hours before bedtime.",
+   "other": "Caffeine has a half-life of ~5–6 hours; for many people the last cup should be before noon-ish.",
+   "mismatch": true,
+   "unmatched": true
+  },
+  {
+   "id": "21-claude3-opencode",
+   "label": "same",
+   "claim": "If you can't sleep after about 20 minutes, get up, do something quiet in dim light, and return when sleepy.",
+   "other": "If you're awake and frustrated for 20+ minutes, get up, do something calm in dim light, and return when sleepy — this rebuilds the bed–sleep association.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "21-opencode2-claude",
+   "label": "same",
+   "claim": "Caffeine has a half-life of ~5–6 hours; for many people the last cup should be before noon-ish.",
+   "other": "Stop caffeine 8–10 hours before bedtime.",
+   "mismatch": true,
+   "unmatched": true
+  },
+  {
+   "id": "23-claude1-codex",
+   "label": "same",
+   "claim": "전화기는 에디슨이 아니라 알렉산더 그레이엄 벨이 발명했으며, 특허를 받은 해는 1876년입니다.",
+   "other": "전화기의 발명가로 알려진 알렉산더 그레이엄 벨은 1876년에 전화기 특허를 받았습니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "23-claude1-opencode",
+   "label": "same",
+   "claim": "전화기는 에디슨이 아니라 알렉산더 그레이엄 벨이 발명했으며, 특허를 받은 해는 1876년입니다.",
+   "other": "전화기를 발명하고 1876년에 특허를 받은 사람은 알렉산더 그레이엄 벨입니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "23-claude2-opencode",
+   "label": "same",
+   "claim": "에디슨은 1877년경 탄소 송화기를 개발해 전화기의 음질과 통화 거리를 크게 개선했습니다.",
+   "other": "에디슨이 전화기와 관련해 기여한 것은 1877년경 개발한 탄소 송화기(카본 마이크) 로, 이것이 통화 음질과 통화 거리를 크게 개선해 전화기 보급에 중요한 역할을 했습니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "23-codex2-claude",
+   "label": "same",
+   "claim": "전화기의 발명가로 알려진 알렉산더 그레이엄 벨은 1876년에 전화기 특허를 받았습니다.",
+   "other": "전화기는 에디슨이 아니라 알렉산더 그레이엄 벨이 발명했으며, 특허를 받은 해는 1876년입니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "23-codex2-opencode",
+   "label": "same",
+   "claim": "전화기의 발명가로 알려진 알렉산더 그레이엄 벨은 1876년에 전화기 특허를 받았습니다.",
+   "other": "전화기를 발명하고 1876년에 특허를 받은 사람은 알렉산더 그레이엄 벨입니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "23-opencode2-claude",
+   "label": "same",
+   "claim": "전화기를 발명하고 1876년에 특허를 받은 사람은 알렉산더 그레이엄 벨입니다.",
+   "other": "전화기는 에디슨이 아니라 알렉산더 그레이엄 벨이 발명했으며, 특허를 받은 해는 1876년입니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "23-opencode2-codex",
+   "label": "same",
+   "claim": "전화기를 발명하고 1876년에 특허를 받은 사람은 알렉산더 그레이엄 벨입니다.",
+   "other": "전화기의 발명가로 알려진 알렉산더 그레이엄 벨은 1876년에 전화기 특허를 받았습니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "23-opencode3-claude",
+   "label": "same",
+   "claim": "에디슨이 전화기와 관련해 기여한 것은 1877년경 개발한 탄소 송화기(카본 마이크) 로, 이것이 통화 음질과 통화 거리를 크게 개선해 전화기 보급에 중요한 역할을 했습니다.",
+   "other": "에디슨은 1877년경 탄소 송화기를 개발해 전화기의 음질과 통화 거리를 크게 개선했습니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "24-claude1-codex",
+   "label": "same",
+   "claim": "2026년 10월 30일부터 2027년 3월 1일까지 계산하면 122일입니다.",
+   "other": "2026년 10월 30일부터 2027년 3월 1일까지는 122일입니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "24-claude1-opencode",
+   "label": "same",
+   "claim": "2026년 10월 30일부터 2027년 3월 1일까지 계산하면 122일입니다.",
+   "other": "2026년 10월 30일부터 2027년 3월 1일까지는 122일입니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "24-claude3-opencode",
+   "label": "same",
+   "claim": "2월: 28일 (2027년은 평년)",
+   "other": "계산: 10월 31일(1일) + 11월 30일 + 12월 31일 + 1월 31일 + 2월 28일(2027년은 평년) + 3월 1일(1일) = 122일.",
+   "mismatch": true,
+   "unmatched": true
+  },
+  {
+   "id": "24-claude4-opencode",
+   "label": "same",
+   "claim": "시작일까지 포함해서 세면 123일입니다.",
+   "other": "양 끝 날짜를 모두 포함해서 세면 123일이 됩니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "24-codex1-claude",
+   "label": "same",
+   "claim": "2026년 10월 30일부터 2027년 3월 1일까지는 122일입니다.",
+   "other": "2026년 10월 30일부터 2027년 3월 1일까지 계산하면 122일입니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "24-codex1-opencode",
+   "label": "same",
+   "claim": "2026년 10월 30일부터 2027년 3월 1일까지는 122일입니다.",
+   "other": "2026년 10월 30일부터 2027년 3월 1일까지는 122일입니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "24-opencode1-claude",
+   "label": "same",
+   "claim": "2026년 10월 30일부터 2027년 3월 1일까지는 122일입니다.",
+   "other": "2026년 10월 30일부터 2027년 3월 1일까지 계산하면 122일입니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "24-opencode1-codex",
+   "label": "same",
+   "claim": "2026년 10월 30일부터 2027년 3월 1일까지는 122일입니다.",
+   "other": "2026년 10월 30일부터 2027년 3월 1일까지는 122일입니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "24-opencode2-claude",
+   "label": "same",
+   "claim": "양 끝 날짜를 모두 포함해서 세면 123일이 됩니다.",
+   "other": "시작일까지 포함해서 세면 123일입니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "25-claude1-codex",
+   "label": "same",
+   "claim": "The ball costs $0.05.",
+   "other": "The ball costs $0.05.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "25-claude1-opencode",
+   "label": "same",
+   "claim": "The ball costs $0.05.",
+   "other": "The ball costs $0.05 (5 cents).",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "25-claude2-codex",
+   "label": "same",
+   "claim": "If the ball is $0.05, the bat is $1.05 (which is $1.00 more).",
+   "other": "The bat costs $1.05, making the total $1.10.",
+   "mismatch": false,
+   "unmatched": true
+  },
+  {
+   "id": "25-claude2-opencode",
+   "label": "same",
+   "claim": "If the ball is $0.05, the bat is $1.05 (which is $1.00 more).",
+   "other": "The bat then costs $1.05, which is $1.00 more than the ball, and together they total $1.10.",
+   "mismatch": false,
+   "unmatched": true
+  },
+  {
+   "id": "25-codex1-claude",
+   "label": "same",
+   "claim": "The ball costs $0.05.",
+   "other": "The ball costs $0.05.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "25-codex1-opencode",
+   "label": "same",
+   "claim": "The ball costs $0.05.",
+   "other": "The ball costs $0.05 (5 cents).",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "25-codex2-claude",
+   "label": "same",
+   "claim": "The bat costs $1.05, making the total $1.10.",
+   "other": "If the ball is $0.05, the bat is $1.05 (which is $1.00 more).",
+   "mismatch": false,
+   "unmatched": true
+  },
+  {
+   "id": "25-codex2-opencode",
+   "label": "same",
+   "claim": "The bat costs $1.05, making the total $1.10.",
+   "other": "The bat then costs $1.05, which is $1.00 more than the ball, and together they total $1.10.",
+   "mismatch": false,
+   "unmatched": true
+  },
+  {
+   "id": "25-opencode1-claude",
+   "label": "same",
+   "claim": "The ball costs $0.05 (5 cents).",
+   "other": "The ball costs $0.05.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "25-opencode1-codex",
+   "label": "same",
+   "claim": "The ball costs $0.05 (5 cents).",
+   "other": "The ball costs $0.05.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "25-opencode2-claude",
+   "label": "same",
+   "claim": "The bat then costs $1.05, which is $1.00 more than the ball, and together they total $1.10.",
+   "other": "If the ball is $0.05, the bat is $1.05 (which is $1.00 more).",
+   "mismatch": false,
+   "unmatched": true
+  },
+  {
+   "id": "25-opencode2-codex",
+   "label": "same",
+   "claim": "The bat then costs $1.05, which is $1.00 more than the ball, and together they total $1.10.",
+   "other": "The bat costs $1.05, making the total $1.10.",
+   "mismatch": false,
+   "unmatched": true
+  },
+  {
+   "id": "26-claude2-opencode",
+   "label": "same",
+   "claim": "너비가 좁습니다. 만리장성의 폭은 대부분 약 5~9m입니다. 지구 저궤도(약 400km 상공)에서 이 정도 폭은 사람 눈의 해상도로 구분하기 어렵습니다.",
+   "other": "만리장성의 평균 폭은 6~7m 정도로, 고속도로보다 좁습니다.",
+   "mismatch": false,
+   "unmatched": true
+  },
+  {
+   "id": "26-opencode2-claude",
+   "label": "same",
+   "claim": "폭이 너무 좁습니다. 만리장성의 평균 폭은 6~7m 정도로, 고속도로보다 좁습니다. 국제우주정거장(약 400km 상공)에서 맨눈으로 구분할 수 있는 한계는 보통 10~20m 이상의 고대비 물체입니다.",
+   "other": "만리장성의 폭은 대부분 약 5~9m입니다.",
+   "mismatch": false,
+   "unmatched": true
+  },
+  {
+   "id": "29-claude2-opencode",
+   "label": "same",
+   "claim": "스탠퍼드대 니컬러스 블룸 교수의 중국 콜센터 실험에서는 재택 직원의 성과가 약 13% 높았습니다.",
+   "other": "스탠퍼드의 콜센터 실험(Ctrip, 2015)에서는 재택이 생산성을 약 13% 높였는데, 통근이 사라져 근무 시간이 늘고(9%) 단위시간당 처리량도 늘었기(4%) 때문입니다.",
+   "mismatch": false,
+   "unmatched": true
+  },
+  {
+   "id": "29-claude3-codex",
+   "label": "same",
+   "claim": "블룸 교수가 중국 기업 트립닷컴에서 수행한 대규모 실험에서는 주 2~3일 재택하는 하이브리드가 생산성과 승진 속도에 부정적 영향을 주지 않았고, 퇴사율은 약 3분의 1 줄었습니다.",
+   "other": "중국의 한 기술기업 직원 1,612명을 대상으로 한 무작위 실험에서는 주 2일 재택근무를 하는 하이브리드 방식이 업무 성과를 떨어뜨리지 않으면서 이직률을 낮췄습니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "29-claude3-opencode",
+   "label": "same",
+   "claim": "블룸 교수가 중국 기업 트립닷컴에서 수행한 대규모 실험에서는 주 2~3일 재택하는 하이브리드가 생산성과 승진 속도에 부정적 영향을 주지 않았고, 퇴사율은 약 3분의 1 줄었습니다.",
+   "other": "Trip.com 무작위 대조실험(Bloom et al., Nature 2024)에서 주 3일 사무실 하이브리드는 성과 평가에 손실이 없으면서 이직률을 약 3분의 1 낮췄고, 특히 여성과 비관리자에게 효과가 컸습니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "29-codex2-claude",
+   "label": "same",
+   "claim": "중국의 한 기술기업 직원 1,612명을 대상으로 한 무작위 실험에서는 주 2일 재택근무를 하는 하이브리드 방식이 업무 성과를 떨어뜨리지 않으면서 이직률을 낮췄습니다.",
+   "other": "블룸 교수가 중국 기업 트립닷컴에서 수행한 대규모 실험에서는 주 2~3일 재택하는 하이브리드가 생산성과 승진 속도에 부정적 영향을 주지 않았고, 퇴사율은 약 3분의 1 줄었습니다.",
+   "mismatch": false,
+   "unmatched": false
+  },
+  {
+   "id": "29-codex2-opencode",
+   "label": "same",
+   "claim": "중국의 한 기술기업 직원 1,612명을 대상으로 한 무작위 실험에서는 주 2일 재택근무를 하는 하이브리드 방식이 업무 성과를 떨어뜨리지 않으면서 이직률을 낮췄습니다.",
+   "other": "Trip.com 무작위 대조실험(Bloom et al., Nature 2024)에서 주 3일 사무실 하이브리드는 성과 평가에 손실이 없으면서 이직률을 약 3분의 1 낮췄고, 특히 여성과 비관리자에게 효과가 컸습니다.",
+   "mismatch": true,
+   "unmatched": true
+  },
+  {
+   "id": "29-opencode4-claude",
+   "label": "same",
+   "claim": "그러나 조직 전체의 협업·학습·혁신·장기 인재 유지까지 포함하면 완전재택은 손실이 있고, 주 2~3일 대면을 섞은 하이브리드가 현재 증거상 가장 방어 가능한 선택입니다.",
+   "other": "블룸 교수가 중국 기업 트립닷컴에서 수행한 대규모 실험에서는 주 2~3일 재택하는 하이브리드가 생산성과 승진 속도에 부정적 영향을 주지 않았고, 퇴사율은 약 3분의 1 줄었습니다.",
+   "mismatch": false,
+   "unmatched": false
+  }
+ ]
+}

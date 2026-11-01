@@ -2,19 +2,72 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/asksemble/asksemble/agent/internal/config"
+	"github.com/asksemble/asksemble/agent/internal/core"
 	"github.com/asksemble/asksemble/agent/internal/devices"
 )
 
-// Tests never touch the real logon entry or PATH in the registry.
+// Tests never touch the real logon entry or PATH in the registry, and
+// never run the real opencode against the real judge folder.
 func init() {
 	uninstallAutostart = func() error { return nil }
 	uninstallPath = func(string) (bool, error) { return false, nil }
+	uninstallJudgeCleanup = judgeCleanups.record
+}
+
+// judgeCleanups records uninstall's judge folder cleanups.
+var judgeCleanups cleanupRecorder
+
+type cleanupRecorder struct {
+	mu      sync.Mutex
+	folders []string
+	err     error // what the next cleanups return
+}
+
+func (r *cleanupRecorder) record(_ context.Context, _ config.Config, folder string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.folders = append(r.folders, folder)
+	return r.err
+}
+
+// reset forgets the cleanups so far and makes the next ones return err.
+func (r *cleanupRecorder) reset(err error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.folders, r.err = nil, err
+}
+
+func (r *cleanupRecorder) calls() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return slices.Clone(r.folders)
+}
+
+// uninstallDir is an agent folder whose settings name an ask folder, with
+// the judge schema file codex judges read.
+func uninstallDir(t *testing.T) (dir, ask string) {
+	t.Helper()
+	dir = filepath.Join(t.TempDir(), "agent")
+	ask = filepath.Join(t.TempDir(), "my asks")
+	cfg := config.Default()
+	cfg.Port = 8799
+	cfg.Ask.Folder = ask
+	if err := config.Save(dir, cfg); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, core.JudgeSchemaFile), []byte(core.JudgeSchemaV1), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return dir, ask
 }
 
 // Saying no to uninstall changes nothing.
@@ -31,6 +84,101 @@ func TestUninstallDeclined(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "아무것도 바꾸지 않았습니다") {
 		t.Errorf("output = %q", out.String())
+	}
+}
+
+// Saying no keeps the judge schema file and cleans no judge folder.
+func TestUninstallDeclinedKeepsJudgeFiles(t *testing.T) {
+	judgeCleanups.reset(nil)
+	dir, _ := uninstallDir(t)
+	var out bytes.Buffer
+	if err := uninstallCmd(dir, nil, strings.NewReader("n\n"), &out); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, core.JudgeSchemaFile)); err != nil {
+		t.Error("declined uninstall deleted the judge schema file")
+	}
+	if calls := judgeCleanups.calls(); len(calls) != 0 {
+		t.Errorf("declined uninstall cleaned %v", calls)
+	}
+	for _, want := range []string{
+		"delete OpenCode's leftover judge conversations in the judge folder / 판정 폴더에 남은 OpenCode 판정 대화를 지움",
+		"delete " + filepath.Join(dir, core.JudgeSchemaFile) + " / " + filepath.Join(dir, core.JudgeSchemaFile) + " 삭제",
+	} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("the plan lacks %q:\n%s", want, out.String())
+		}
+	}
+}
+
+// Uninstall without -all removes the judge schema file and cleans the
+// judge folder of the configured ask folder once, after the agent is
+// stopped.
+func TestUninstallRemovesJudgeFiles(t *testing.T) {
+	judgeCleanups.reset(nil)
+	dir, ask := uninstallDir(t)
+	var out bytes.Buffer
+	if err := uninstallCmd(dir, []string{"-yes"}, strings.NewReader(""), &out); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, core.JudgeSchemaFile)); !os.IsNotExist(err) {
+		t.Errorf("the judge schema file stayed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, config.FileName)); err != nil {
+		t.Error("uninstall without -all deleted the settings")
+	}
+	if calls := judgeCleanups.calls(); !slices.Equal(calls, []string{core.JudgeFolder(ask)}) {
+		t.Errorf("cleanups = %v, want [%s]", calls, core.JudgeFolder(ask))
+	}
+	if strings.Contains(out.String(), "could not delete every OpenCode") {
+		t.Errorf("output = %s", out.String())
+	}
+}
+
+// A failed cleanup is a note with its code only, never its detail, and
+// uninstall goes on.
+func TestUninstallJudgeCleanupFails(t *testing.T) {
+	judgeCleanups.reset(core.Fail(core.ErrCodeJudgeFailed, "SECRET-DETAIL"))
+	t.Cleanup(func() { judgeCleanups.reset(nil) })
+	dir, ask := uninstallDir(t)
+	var out bytes.Buffer
+	if err := uninstallCmd(dir, []string{"-yes"}, strings.NewReader(""), &out); err != nil {
+		t.Fatal(err)
+	}
+	got := out.String()
+	if !strings.Contains(got, "could not delete every OpenCode judge conversation (judge_failed); they stay in "+core.JudgeFolder(ask)) ||
+		!strings.Contains(got, "OpenCode 판정 대화를 다 지우지 못했습니다 (judge_failed)") || strings.Contains(got, "SECRET") {
+		t.Errorf("output = %s", got)
+	}
+	if !strings.Contains(got, "uninstalled") {
+		t.Errorf("uninstall stopped: %s", got)
+	}
+	if _, err := os.Stat(filepath.Join(dir, core.JudgeSchemaFile)); !os.IsNotExist(err) {
+		t.Errorf("the judge schema file stayed: %v", err)
+	}
+}
+
+// The default cleanup runs nothing for a missing judge folder or a
+// missing opencode (the path below is no file). It never runs the real
+// opencode in a test: the path is set.
+func TestCleanupJudgeFolderWithoutOpenCode(t *testing.T) {
+	cfg := config.Default()
+	cfg.OpenCodePath = filepath.Join(t.TempDir(), "no-opencode.exe")
+	folder := filepath.Join(t.TempDir(), "judge")
+	if err := cleanupJudgeFolder(context.Background(), cfg, folder); err != nil {
+		t.Errorf("missing folder: %v", err)
+	}
+	if err := os.MkdirAll(folder, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := cleanupJudgeFolder(context.Background(), cfg, folder); err != nil {
+		t.Errorf("missing opencode: %v", err)
+	}
+}
+
+func TestErrCode(t *testing.T) {
+	if errCode(core.Fail(core.ErrCodeJudgeFailed, "x")) != core.ErrCodeJudgeFailed || errCode(os.ErrNotExist) != core.ErrCodeInternal {
+		t.Error("errCode")
 	}
 }
 

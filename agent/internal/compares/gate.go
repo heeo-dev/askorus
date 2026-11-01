@@ -1,0 +1,158 @@
+package compares
+
+import (
+	"context"
+	"path/filepath"
+	"slices"
+
+	"github.com/asksemble/asksemble/agent/internal/config"
+	"github.com/asksemble/asksemble/agent/internal/core"
+	"github.com/asksemble/asksemble/agent/internal/judge"
+)
+
+// Why an AI does not judge, as Gate.Engine gives it, in the order Engine
+// checks them. The CLI's check turns them into text.
+const (
+	WhyOff         = "off"             // agent.json judge.off
+	WhyNoFolder    = "no_folder"       // no ask folder, so no judge folder
+	WhyCannot      = "cannot_judge"    // the adapter is no core.Judger
+	WhyUnavailable = "unavailable"     // the AI program is not found or does not run
+	WhyOld         = "old_version"     // older than the version the judge command was tested with, or unreadable
+	WhyNoFamily    = "unknown_company" // the company of its judge model is unknown
+)
+
+// EngineName is InfoResponse.judging.engine and Comparison.engine: the AI
+// programs on this PC judge, as an answer's via "pc" says they answered. A
+// later API engine gets a name of its own (S3 decision 1).
+const EngineName = "pc"
+
+// Gate decides which AIs judge. The API's /v1/info, the CLI's info and
+// check and the comparisons all ask it, so they cannot disagree.
+type Gate struct {
+	Settings config.JudgeConfig
+	// MinVersions maps an AI to the oldest version of its CLI the judge
+	// command was tested with (its adapter's JudgeMinVersion). An AI not
+	// listed never judges.
+	MinVersions map[string]string
+	// Folder is the judge folder, core.JudgeFolder(the ask folder): ""
+	// when there is no ask folder, and then no AI judges.
+	Folder string
+}
+
+// Engine is an AI that judges, with the model and effort it judges with
+// and that model's company.
+type Engine struct {
+	Agent   string
+	Judger  core.Judger
+	Cleaner core.JudgeCleaner // nil when judging leaves nothing behind
+	Model   string
+	Effort  string // "" when the AI decides
+	Family  string
+}
+
+// Info is the engine as AdapterInfo.judge shows it.
+func (e Engine) Info() core.JudgeInfo {
+	return core.JudgeInfo{Model: e.Model, Effort: e.Effort, Family: e.Family}
+}
+
+// Engine reports whether adapter a, whose Info is info, judges. The
+// reason is "" when it does, else the first of WhyOff, WhyNoFolder,
+// WhyCannot, WhyUnavailable, WhyOld and WhyNoFamily that holds. The model
+// is the settings' (judge.models) or the adapter's JudgeDefault, and its
+// company must be one the adapter can tell: a settings override that names
+// another company's model judges nothing (fail closed).
+//
+// With a reason, Engine has no Judger and no Cleaner, so it cannot judge
+// by mistake: it holds only the Agent and, once a is a Judger, Model and
+// Effort, for the CLI's check lines.
+func (g Gate) Engine(a core.Adapter, info core.AdapterInfo) (Engine, string) {
+	e := Engine{Agent: a.Agent()}
+	if g.Settings.Off {
+		return e, WhyOff
+	}
+	if g.Folder == "" || !filepath.IsAbs(g.Folder) {
+		return e, WhyNoFolder
+	}
+	j, ok := a.(core.Judger)
+	if !ok {
+		return e, WhyCannot
+	}
+	m := g.Settings.ModelFor(e.Agent, j.JudgeDefault())
+	e.Model, e.Effort = m.Model, m.Effort
+	if !info.Available {
+		return e, WhyUnavailable
+	}
+	if min, ok := g.MinVersions[e.Agent]; !ok || !core.VersionAtLeast(info.Version, min) {
+		return e, WhyOld
+	}
+	family := ""
+	if e.Model != "" {
+		family = j.Family(e.Model)
+	}
+	if family == "" {
+		return e, WhyNoFamily
+	}
+	e.Judger, e.Family = j, family
+	e.Cleaner, _ = a.(core.JudgeCleaner)
+	return e, ""
+}
+
+// Verified is how the judge rules were verified (판정 검증). S6 fills it;
+// until then InfoResponse.judging has none.
+type Verified struct {
+	Date     string            `json:"date"`               // "2026-11-08"
+	Versions map[string]string `json:"versions,omitempty"` // AI → the CLI version it was verified with
+}
+
+// JudgingInfo is InfoResponse.judging: how comparisons are judged on this
+// PC. Fields may be added inside /v1, never removed (principle 4).
+type JudgingInfo struct {
+	Engine    string    `json:"engine"` // EngineName
+	Shape     string    `json:"shape"`  // judge.ShapeDirected
+	Labels    string    `json:"labels"` // judge.LabelsV1
+	Rules     string    `json:"rules"`  // judge.Rules
+	Checks    []string  `json:"checks"` // the enabled checks
+	Verified  *Verified `json:"verified,omitempty"`
+	TypicalMs int       `json:"typicalMs,omitempty"`
+}
+
+// Judging is the judging info of these settings.
+func (g Gate) Judging() JudgingInfo {
+	return JudgingInfo{
+		Engine: EngineName, Shape: judge.ShapeDirected, Labels: judge.LabelsV1, Rules: judge.Rules,
+		Checks: g.Settings.ChecksOrDefault(),
+	}
+}
+
+// Announce returns every adapter's Info, in the adapters' order, as
+// /v1/info and the CLI's info show it, and the engines of the AIs that
+// judge. An AI with the capability ask gets its ask tiers. An AI that
+// judges gets the capability judge, on a copy of its capability list (the
+// adapter's own slice stays as it is), and its JudgeInfo; any other has
+// neither, even when its adapter named judge itself: only the gate
+// announces it. infos[i] is adapters[i]'s, so the CLI's check can ask
+// Gate.Engine for the reasons.
+func Announce(ctx context.Context, adapters []core.Adapter, g Gate) ([]core.AdapterInfo, []Engine) {
+	infos := make([]core.AdapterInfo, 0, len(adapters))
+	engines := []Engine{}
+	for _, a := range adapters {
+		info := a.Info(ctx)
+		if asker, ok := a.(core.Asker); ok && slices.Contains(info.Capabilities, core.CapAsk) {
+			info.Ask = &core.AskInfo{Tiers: asker.AskTiers()}
+		}
+		caps := slices.DeleteFunc(slices.Clone(info.Capabilities), func(c core.Capability) bool { return c == core.CapJudge })
+		if caps == nil {
+			caps = []core.Capability{}
+		}
+		info.Judge = nil
+		if e, why := g.Engine(a, info); why == "" {
+			caps = append(caps, core.CapJudge)
+			ji := e.Info()
+			info.Judge = &ji
+			engines = append(engines, e)
+		}
+		info.Capabilities = caps
+		infos = append(infos, info)
+	}
+	return infos, engines
+}

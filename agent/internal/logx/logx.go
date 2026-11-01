@@ -12,9 +12,16 @@ import (
 // Redacted replaces the value of a sensitive attribute.
 const Redacted = "[redacted]"
 
+// sensitive are matched as parts of a key, in any case: "inputTokens" and
+// "answers" are redacted too, so keys that carry counts must not contain
+// them (comparisons log "ais", not "answers"). The words of P2-3 cover
+// what a comparison holds: answers, questions and earlier questions, their
+// sentences and claims, and a judge's evidence and reasons.
 var sensitive = []string{
 	"token", "authorization", "bearer", "secret", "password", "credential",
 	"cookie", "pair_code", "paircode", "prompt", "content", "message_text",
+	"answer", "question", "sentence", "claim", "evidence", "reason", "earlier",
+	"apikey", "api_key",
 }
 
 // IsSensitive reports whether an attribute key must not be logged.
