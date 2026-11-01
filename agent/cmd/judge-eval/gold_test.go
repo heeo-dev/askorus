@@ -31,7 +31,7 @@ func goldReport(t *testing.T, name string, extra ...string) (*universe, []viewRe
 	cov := u.coverageOf()
 	var reps []viewReport
 	for _, vs := range u.views() {
-		reps = append(reps, makeViewReport(u, u.view(vs, judge.DefaultChecks), cov, 100, 1))
+		reps = append(reps, makeViewReport(u, u.view(vs, handChecks), cov, 100, 1))
 	}
 	if len(reps) != 2 || reps[0].Name != engineGold || reps[1].Name != "product" || reps[1].StandIn != engineGold {
 		t.Fatalf("views %v", reps)
@@ -71,6 +71,24 @@ func TestGoldReplay(t *testing.T) {
 	// Engine view rules apply to real engines only.
 	if len(reps[0].Rules) != 0 {
 		t.Error("rules on the gold engine")
+	}
+	// With the default checks (S6) the gold still shows every opposite on
+	// 다른 말, but the number checks, without evidence against the whole
+	// other answer, send 25 gold claims to 확인 필요: 22 of 같은 말 and 3 of
+	// 한 AI만 (the library's claim-unit replay has 23).
+	cov := u.coverageOf()
+	for _, vs := range u.views() {
+		vr := makeViewReport(u, u.view(vs, judge.DefaultChecks), cov, 0, 1)
+		n, c := vr.Natural, vr.Cards
+		if n.Differ != 21 || n.Check != 0 || n.Missed != 0 {
+			t.Errorf("%s, default checks: differ %d check %d missed %d", vr.Name, n.Differ, n.Check, n.Missed)
+		}
+		want := map[string]int{judge.CardDiffer: 19, judge.CardCheck: 25, judge.CardAgree: 251, judge.CardOnlyOne: 12}
+		for k, w := range want {
+			if c.States[k] != w {
+				t.Errorf("%s, default checks: %s %d, want %d (%v)", vr.Name, k, c.States[k], w, c.States)
+			}
+		}
 	}
 }
 
@@ -119,3 +137,10 @@ func TestGoldPerturb(t *testing.T) {
 }
 
 func keys[V any](m map[string]V) []string { return slices.Sorted(maps.Keys(m)) }
+
+// handChecks are the checks the gold replay and the hand-made cases count
+// their cards with: unsure alone, DefaultChecks before S6. The gold labels
+// are never unsure, so the gold cards come from the labels only; the
+// number checks of DefaultChecks would fire on gold sames and absents that
+// carry no evidence (TestGoldReplay counts how many).
+var handChecks = []string{judge.CheckUnsure}

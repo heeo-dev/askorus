@@ -23,11 +23,13 @@ package judge
 //     unless its answer already stands on another side (C2-5: P0-6 Q12
 //     reads [claude] against [codex, opencode]). Only units of the group
 //     draw others in, so joining does not chain.
-//  2. 확인 필요: a shown unit with an enabled check on a judgment, so a
-//     doubtful same never sits under 같은 말 (결정 2). An unsure absent
-//     counts too, as product design and part 5 have it (11-01 user
-//     decision): a judge unsure that the other answer is silent sends the
-//     unit to 확인 필요, not 한 AI만.
+//  2. 확인 필요: a shown unit with an enabled check that counts on a
+//     judgment (결정 2). Since S6 (11-01 user decision 2) the unsure mark
+//     counts on an opposite (P3) or unclear judgment only: an unsure same
+//     counts as same (P1) and an unsure absent as absent (P2, back to 한
+//     AI만), unless that judgment's number check fires (numberMismatch on a
+//     same, numbersAbsent on an absent). The number check is then the reason
+//     when it is enabled; when it is not, the unsure mark stands in for it.
 //  3. 같은 말: in reading order, a shown unit with a same judgment stands for
 //     an item, and only units linked to it directly join (no chaining): the
 //     first evidence unit of each of its same judgments, and units whose
@@ -60,8 +62,10 @@ import (
 // numberMismatch, same while the numbers of u and of its evidence units
 // (of the whole other answer when there is none) Mismatch; numbersAbsent,
 // absent while u and the whole other answer Mismatch. Only the checks in
-// in.Checks put a unit on the 확인 필요 card or into Item.Check, the unsure
-// mark of an absent judgment as well.
+// in.Checks that count put a unit on the 확인 필요 card or into Item.Check:
+// an unsure mark counts on an opposite or unclear judgment, and on a same
+// or absent one only when its number check (numberMismatch, numbersAbsent)
+// fired and is not enabled itself (S6, see counts).
 //
 // A unit is shown when any judge called it core or it is in an opposite
 // judgment, as the judged unit or as evidence. The cards do not overlap
@@ -73,13 +77,14 @@ import (
 //     AI is on no other side (P0-6 Q12: [claude] against [codex,
 //     opencode]). Mismatch between the sides sets NumbersDiffer, and
 //     Unmatched against the other sides gives each side's NumberSpans.
-//   - check: no opposite, but an enabled check fired on a judgment of the
-//     unit (결정 2), so a doubtful same never hides under 같은 말.
+//   - check: no opposite, but an enabled check that counts fired on a
+//     judgment of the unit (결정 2), so a same whose numbers do not fit
+//     never hides under 같은 말.
 //   - agree: a unit with a same judgment represents an item, and only the
 //     units linked to it directly join it, with no chaining: two or more
 //     AIs, none against.
-//   - onlyOne: every usable judgment is absent (or unclear, when unsure is
-//     not enabled).
+//   - onlyOne: every usable judgment is absent, unsure ones too unless
+//     numbersAbsent fired (or unclear, when unsure is not enabled).
 //
 // Items come in CardOrder: differ items by their first unit, agree items
 // with more AIs first, the others in reading order. A side lists its
@@ -100,8 +105,10 @@ import (
 // in.Prev of its kind when that is its own key, or else the first such key
 // whose item shared a unit with it, so keys stay while items grow or merge
 // (in.Prev must hold the last items of every card, see AggregateInput).
-// With the P0-6 gold labels as judgments (all core, no evidence) the
-// claims come out 19 differ, 273 agree and 15 onlyOne.
+// With the P0-6 gold labels as judgments (all core, no evidence) and the
+// unsure check alone the claims come out 19 differ, 273 agree and 15
+// onlyOne; with DefaultChecks the number checks, against the whole other
+// answer, send 23 of them to check (19, 23, 253, 12).
 func Aggregate(in AggregateInput) Summary {
 	a := aggNew(in)
 	a.judgments()
@@ -332,9 +339,31 @@ func (a *aggState) crossDirection(k int) bool {
 }
 
 // counts reports whether flag f of judgment k may put its unit on the 확인
-// 필요 card: f is enabled. Every label counts, an unsure absent too.
+// 필요 card and into Item.Check: f is enabled, and for the unsure mark the
+// rule of S6 (11-01 user decision 2). On an opposite (P3) or unclear
+// judgment it counts. On a same (P1) or absent (P2) one it counts only when
+// that judgment's number check fired (numberMismatch on a same,
+// numbersAbsent on an absent), and then only while that check is not
+// enabled: an enabled number check counts itself and is the reason the
+// phone shows, not 'unsure'. Either way the unit lands on the same card.
 func (a *aggState) counts(k int, f string) bool {
-	return a.enabled[f]
+	if !a.enabled[f] {
+		return false
+	}
+	if f != CheckUnsure {
+		return true
+	}
+	j := &a.js[k]
+	var number string
+	switch j.Label {
+	case LabelSame:
+		number = CheckNumberMismatch
+	case LabelAbsent:
+		number = CheckNumbersAbsent
+	default:
+		return true
+	}
+	return slices.Contains(j.Flags, number) && !a.enabled[number]
 }
 
 // unitNums are the quantities in unit u's text.
@@ -806,7 +835,8 @@ func (a *aggState) single(kind, prefix string, u int) aggItem {
 	return it
 }
 
-// check makes the 확인 필요 items: shown units with an enabled check.
+// check makes the 확인 필요 items: shown units with an enabled check that
+// counts.
 func (a *aggState) check() {
 	for u := range a.units {
 		if !a.taken[u] && a.core(u) && a.isTagged(u) {
@@ -863,7 +893,7 @@ func (a *aggState) agree() {
 }
 
 // onlyOne makes the 한 AI만 items: the shown units left, whose judgments
-// all say absent.
+// all say absent (an unsure absent too, unless numbersAbsent fired).
 func (a *aggState) onlyOne() {
 	for u := range a.units {
 		if !a.taken[u] && a.core(u) {

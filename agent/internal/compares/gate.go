@@ -2,6 +2,7 @@ package compares
 
 import (
 	"context"
+	"maps"
 	"path/filepath"
 	"slices"
 
@@ -149,12 +150,29 @@ func (g Gate) Writer(a core.Adapter, info core.AdapterInfo, tier string) (Writer
 	return w, ""
 }
 
-// Verified is how the judge rules were verified (판정 검증). S6 fills it;
-// until then InfoResponse.judging has none.
+// Verified is how the judge rules were verified (판정 검증): the day and
+// each AI's CLI version. InfoResponse.judging carries JudgingVerified.
 type Verified struct {
-	Date     string            `json:"date"`               // "2026-11-08"
+	Date     string            `json:"date"`               // "2026-11-01"
 	Versions map[string]string `json:"versions,omitempty"` // AI → the CLI version it was verified with
 }
+
+// JudgingVerified is stage 1 of 판정 검증 (S6, 11-01 user decision 4): the
+// day the judge rules and the quick judge models were measured, and the
+// CLI version of each AI (by its adapter name) they were measured with.
+// Judging gives a copy; the CLI's check names it when this PC's CLI is
+// another version. Only change it after measuring again.
+var JudgingVerified = Verified{Date: "2026-11-01", Versions: map[string]string{
+	"claude":   "2.1.316",
+	"codex":    "0.164.0",
+	"opencode": "2.2.1",
+}}
+
+// TypicalMs is how long a comparison of three answers usually takes, in ms:
+// the median wall time of the S6 product-view comparisons at the quick tier
+// (30 questions, the slowest of their six requests). The phone shows it
+// while comparing ('보통 {s}초쯤 걸립니다').
+const TypicalMs = 40444
 
 // JudgingInfo is InfoResponse.judging: how comparisons are judged on this
 // PC. Fields may be added inside /v1, never removed (principle 4).
@@ -168,12 +186,22 @@ type JudgingInfo struct {
 	TypicalMs int       `json:"typicalMs,omitempty"`
 }
 
-// Judging is the judging info of these settings.
+// Judging is the judging info of these settings. The verification (a copy
+// of JudgingVerified) and TypicalMs come only with what S6 measured: the
+// adapters' own judge models (no judge.models in agent.json) and the
+// default checks, in any order (S6R-3). With other models or checks the
+// phone keeps its 'not measured yet' footer and shows no time. judge.off,
+// perAI and maxUnits (at most the 40 measured) keep them.
 func (g Gate) Judging() JudgingInfo {
-	return JudgingInfo{
+	ji := JudgingInfo{
 		Engine: EngineName, Shape: judge.ShapeDirected, Labels: judge.LabelsV1, Rules: judge.Rules,
 		Checks: g.Settings.ChecksOrDefault(),
 	}
+	if len(g.Settings.Models) == 0 && slices.Equal(slices.Sorted(slices.Values(ji.Checks)), slices.Sorted(slices.Values(judge.DefaultChecks))) {
+		ji.Verified = &Verified{Date: JudgingVerified.Date, Versions: maps.Clone(JudgingVerified.Versions)}
+		ji.TypicalMs = TypicalMs
+	}
+	return ji
 }
 
 // Announce returns every adapter's Info, in the adapters' order, as

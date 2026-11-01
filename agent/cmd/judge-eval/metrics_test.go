@@ -125,7 +125,7 @@ func TestMetricsByHand(t *testing.T) {
 	if len(views) != 1 || views[0].name != "claude" {
 		t.Fatalf("views %+v: one engine, no product view", views)
 	}
-	view := u.view(views[0], judge.DefaultChecks)
+	view := u.view(views[0], handChecks)
 	vr := makeViewReport(u, view, cov, 200, 20261101)
 	n := vr.Natural
 
@@ -155,7 +155,11 @@ func TestMetricsByHand(t *testing.T) {
 	if n.Opposites != 2 || n.OppositeLabel != 0 || n.OppositeOrUnsure != 1 || !near(n.OrUnsureRecall, 0.5) {
 		t.Errorf("opposite recall %+v", n)
 	}
-	// Cards: claude2 is on check, codex2 is hidden: missed.
+	// Cards: claude2 is on check, codex2 is hidden: missed. claude2's same
+	// is unsure and its numbers clash with its evidence (605㎢ against
+	// 700㎢), so numberMismatch fires; with handChecks it is not enabled
+	// and the unsure mark stands in for it (S6, P1). The split read no
+	// number in "605㎢" before S6R-1, and claude2 then passed as 같은 말.
 	if n.Differ != 0 || n.Check != 1 || n.Missed != 1 || n.Strict != 0 ||
 		!slices.Equal(n.MissedIDs, []string{"1-codex2-claude"}) || !slices.Equal(n.CheckIDs, []string{"1-claude2-codex"}) {
 		t.Errorf("shown: differ %d check %d missed %d strict %d %v %v", n.Differ, n.Check, n.Missed, n.Strict, n.MissedIDs, n.CheckIDs)
@@ -175,7 +179,7 @@ func TestMetricsByHand(t *testing.T) {
 		t.Errorf("core %d/%d", c.CoreOR, c.CoreAND)
 	}
 	// Items: differ opencode:1 against codex:1, check claude:2 (unsure
-	// only), agree claude:1.
+	// only, as numberMismatch is not enabled), agree claude:1.
 	if c.Items != 3 || c.CheckItems != 1 || c.UnsureOnly != 1 || !near(c.CheckRate, 1.0/3) || !near(c.UnsureOnlyShare, 1.0/3) {
 		t.Errorf("items %d, check %d, unsure only %d", c.Items, c.CheckItems, c.UnsureOnly)
 	}
@@ -282,6 +286,24 @@ func TestMetricsByHand(t *testing.T) {
 	// Clear claims: claude1 is on check now, opencode1 is not.
 	if c2.ClearCheck != 1 || !near(c2.ClearCheckShare, 0.5) {
 		t.Errorf("with noEvidence: clear on check %d", c2.ClearCheck)
+	}
+
+	// With the product's checks (S6R-1) claude2 is on check for
+	// numberMismatch itself, so the item is no unsure-only one and 1g is 0.
+	vr3 := makeViewReport(u, u.view(views[0], judge.DefaultChecks), cov, 0, 1)
+	n3, c3 := vr3.Natural, vr3.Cards
+	if n3.Check != 1 || n3.Missed != 1 || !slices.Equal(n3.CheckIDs, []string{"1-claude2-codex"}) || !slices.Equal(n3.MissedIDs, []string{"1-codex2-claude"}) ||
+		c3.CheckItems != 1 || c3.UnsureOnly != 0 {
+		t.Errorf("with DefaultChecks: check %v missed %v, check items %d, unsure only %d", n3.CheckIDs, n3.MissedIDs, c3.CheckItems, c3.UnsureOnly)
+	}
+	var reasons [][]string
+	for _, it := range u.view(views[0], judge.DefaultChecks).comps[0].items {
+		if it.Kind == judge.CardCheck {
+			reasons = append(reasons, it.Check)
+		}
+	}
+	if !reflect.DeepEqual(reasons, [][]string{{judge.CheckNumberMismatch}}) {
+		t.Errorf("with DefaultChecks: check reasons %v, want [[numberMismatch]]", reasons)
 	}
 }
 

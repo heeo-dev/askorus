@@ -15,8 +15,9 @@ import (
 // What check says about comparison judging (P2-3, spec part 8: check).
 
 // judgeTestedOn is the day the judge commands were tested with each CLI's
-// JudgeMinVersion. Stage 1 of 판정 검증 (S6) replaces the tested-version
-// line with the verification's date and versions (S3 decision 12).
+// JudgeMinVersion. Since stage 1 of 판정 검증 (S6) check names the
+// verification instead (compares.JudgingVerified); the tested-version line
+// stays only for an AI the verification did not cover.
 const judgeTestedOn = "2026-10-31"
 
 // displayNames are the AI programs' names on the PC's terminal.
@@ -41,7 +42,10 @@ type judgeStatus struct {
 	name    string // displayName(agent)
 	version string // the CLI's version, as Info read it
 	min     string // its adapter's JudgeMinVersion; "" when none is listed
-	why     string // "" when it judges, else a compares.Why* reason
+	// verified is the CLI version the judging was verified with
+	// (compares.JudgingVerified); "" for an AI the verification did not cover.
+	verified string
+	why      string // "" when it judges, else a compares.Why* reason
 	// info is the model it judges with: set when it judges, and for
 	// unknown_company the model whose company is unknown.
 	info *core.JudgeInfo
@@ -67,7 +71,7 @@ func judgeStatuses(ctx context.Context, adapters []core.Adapter, g compares.Gate
 			continue
 		}
 		st := judgeStatus{agent: a.Agent(), name: displayName(a.Agent()), version: info.Version, min: g.MinVersions[a.Agent()],
-			writes: slices.Contains(info.Capabilities, core.CapSynthesize)}
+			verified: compares.JudgingVerified.Versions[a.Agent()], writes: slices.Contains(info.Capabilities, core.CapSynthesize)}
 		e, why := g.Engine(a, info)
 		st.why = why
 		switch {
@@ -84,11 +88,12 @@ func judgeStatuses(ctx context.Context, adapters []core.Adapter, g compares.Gate
 
 // judgeLines are check's lines about comparison judging, in English and
 // Korean: off; or which AI judges with which model, the CLIs too old to
-// judge, judge models of a company the agent cannot tell, the version the
-// judge command was tested with when this PC's differs, which AIs write
-// combined answers, and where the question and the answers go. The last
-// line, that the agent itself sends nothing outside this PC, is always
-// there.
+// judge, judge models of a company the agent cannot tell, the day and the
+// version the judging was verified with when this PC's version differs (for
+// an AI the verification did not cover, the version its judge command was
+// tested with), which AIs write combined answers, and where the question
+// and the answers go. The last line, that the agent itself sends nothing
+// outside this PC, is always there.
 func judgeLines(st []judgeStatus, off bool) []checkLine {
 	var lines []checkLine
 	add := func(level string, x msg) { lines = append(lines, checkLine{level, x}) }
@@ -132,7 +137,14 @@ func judgeLines(st []judgeStatus, off bool) []checkLine {
 			}
 		}
 		for _, s := range st {
-			if s.why == "" && s.info != nil && s.min != "" && !sameVersion(s.version, s.min) {
+			switch {
+			case s.why != "" || s.info == nil:
+			case s.verified != "":
+				if !sameVersion(s.version, s.verified) {
+					add("info", m("the judging was verified on %s with %s %s; this PC has %s",
+						"%[1]s에 %[2]s %[3]s 판으로 판정을 검증했습니다. 이 PC는 %[4]s입니다", compares.JudgingVerified.Date, s.name, s.verified, s.version))
+				}
+			case s.min != "" && !sameVersion(s.version, s.min):
 				add("info", m("the judge command was tested on %s with %s %s; this PC has %s",
 					"%[1]s에 %[2]s %[3]s 판으로 판정 명령을 시험했습니다. 이 PC는 %[4]s입니다", judgeTestedOn, s.name, s.min, s.version))
 			}

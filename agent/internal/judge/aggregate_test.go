@@ -349,32 +349,34 @@ func TestAggregateCards(t *testing.T) {
 			want: []string{"a:claude:2 [claude codex opencode: claude:2 codex:2 opencode:2]", "a:claude:1 [claude codex: claude:1 codex:1]"},
 		},
 		{
-			name:    "an unsure same goes to 확인 필요",
+			// S6 (11-01 user decision 2, P1): an unsure same counts as same;
+			// TestAggregateUnsureRule has the exceptions.
+			name:    "an unsure same counts as same",
 			answers: duo,
 			judgments: []Judgment{
 				aggUnsure(aggJ("claude:1", "codex", LabelSame, "codex:1")),
 				aggJ("codex:1", "claude", LabelSame, "claude:1"),
 			},
-			want: []string{"c:claude:1 [claude: claude:1] check=unsure", "a:codex:1 [claude codex: codex:1]"},
+			want: []string{"a:claude:1 [claude codex: claude:1 codex:1]"},
 		},
 		{
-			// part 5 and product design: an unsure judgment, absent too, goes
-			// to 확인 필요 (11-01 user decision)
-			name:    "an unsure absent goes to 확인 필요",
+			// S6 (P2): an unsure absent counts as absent, back to 한 AI만
+			// (undoing S1 review decision 7).
+			name:    "an unsure absent counts as absent",
 			answers: duo,
 			judgments: []Judgment{
 				aggUnsure(aggJ("claude:1", "codex", LabelAbsent)),
 			},
-			want: []string{"c:claude:1 [claude: claude:1] check=unsure"},
+			want: []string{"o:claude:1 [claude: claude:1]"},
 		},
 		{
-			name:    "an unsure absent keeps a sure same off 같은 말",
+			name:    "an unsure absent leaves a sure same on 같은 말",
 			answers: trio,
 			judgments: []Judgment{
 				aggJ("claude:1", "codex", LabelSame, "codex:1"),
 				aggUnsure(aggJ("claude:1", "opencode", LabelAbsent)),
 			},
-			want: []string{"c:claude:1 [claude: claude:1] check=unsure"},
+			want: []string{"a:claude:1 [claude codex: claude:1 codex:1]"},
 		},
 		{
 			name:    "unclear counts as unsure",
@@ -579,6 +581,134 @@ func TestAggregateCards(t *testing.T) {
 	}
 }
 
+// The unsure rule of S6 (11-01 user decision 2), with the default checks
+// unless a pass names others. P1: an unsure same counts as same unless
+// numberMismatch fires on it; P2: an unsure absent counts as absent unless
+// numbersAbsent fires on it; P3: an unsure opposite is as before. The
+// number check that fired is the reason (Item.Check), not unsure; with that
+// check off, unsure stands in for it. Every case fails on the rule before
+// S6, where any unsure mark counted.
+func TestAggregateUnsureRule(t *testing.T) {
+	population := []Answer{aggAns("claude", "서울 인구는 약 970만 명 안팎입니다."), aggAns("codex", "서울 인구는 약 956만 명입니다.")}
+	coffee := []Answer{aggAns("claude", "커피는 하루 3잔이면 충분합니다."), aggAns("codex", "Plain.", "커피는 하루 5잔까지 마셔도 됩니다.")}
+	sameNumbers := []Answer{aggAns("claude", "서울 인구는 약 950만 명입니다."), aggAns("codex", "서울 인구는 약 950만 명입니다.")}
+	duo := aggPlain(3, "claude", "codex")
+	type pass struct {
+		checks []string // DefaultChecks when nil
+		want   []string
+	}
+	for _, c := range []struct {
+		name      string
+		answers   []Answer
+		judgments []Judgment
+		passes    []pass
+	}{
+		{
+			name:      "P1: an unsure same whose numbers fit is 같은 말",
+			answers:   sameNumbers,
+			judgments: []Judgment{aggUnsure(aggJ("claude:1", "codex", LabelSame, "codex:1")), aggUnsure(aggJ("codex:1", "claude", LabelSame, "claude:1"))},
+			passes: []pass{
+				{nil, []string{"a:claude:1 [claude codex: claude:1 codex:1]"}},
+				{[]string{CheckUnsure}, []string{"a:claude:1 [claude codex: claude:1 codex:1]"}},
+			},
+		},
+		{
+			name:      "P1 exception: an unsure same with numberMismatch is 확인 필요 for the numbers",
+			answers:   population,
+			judgments: []Judgment{aggUnsure(aggJ("claude:1", "codex", LabelSame, "codex:1"))},
+			passes: []pass{
+				{nil, []string{"c:claude:1 [claude: claude:1] check=numberMismatch"}},
+				// numberMismatch off: the unsure mark stands in for it.
+				{[]string{CheckUnsure}, []string{"c:claude:1 [claude: claude:1] check=unsure"}},
+				{[]string{CheckUnsure, CheckNumbersAbsent}, []string{"c:claude:1 [claude: claude:1] check=unsure"}},
+			},
+		},
+		{
+			name:      "P1 exception without evidence: the whole other answer's numbers",
+			answers:   population,
+			judgments: []Judgment{aggUnsure(aggJ("claude:1", "codex", LabelSame))},
+			passes: []pass{
+				{nil, []string{"c:claude:1 [claude: claude:1] check=numberMismatch"}},
+				{[]string{CheckUnsure, CheckNoEvidence, CheckNumberMismatch}, []string{"c:claude:1 [claude: claude:1] check=noEvidence,numberMismatch"}},
+			},
+		},
+		{
+			// S6R-1: the numbers are written with one-glyph units, which
+			// Numbers once could not read, so the pair passed as 같은 말.
+			name:    "P1 exception with one-glyph units (㎢, ㎏)",
+			answers: []Answer{aggAns("claude", "서울 면적은 605㎢입니다.", "쌀 한 포대는 2㎏입니다."), aggAns("codex", "서울 면적은 700㎢입니다.", "쌀 한 포대는 5㎏입니다.")},
+			judgments: []Judgment{
+				aggUnsure(aggJ("claude:1", "codex", LabelSame, "codex:1")),
+				aggUnsure(aggJ("claude:2", "codex", LabelSame)),
+			},
+			passes: []pass{
+				{nil, []string{"c:claude:1 [claude: claude:1] check=numberMismatch", "c:claude:2 [claude: claude:2] check=numberMismatch"}},
+				{[]string{CheckUnsure}, []string{"c:claude:1 [claude: claude:1] check=unsure", "c:claude:2 [claude: claude:2] check=unsure"}},
+			},
+		},
+		{
+			name:      "P2: an unsure absent with no other numbers is 한 AI만",
+			answers:   duo,
+			judgments: []Judgment{aggUnsure(aggJ("claude:1", "codex", LabelAbsent)), aggUnsure(aggJ("codex:1", "claude", LabelAbsent))},
+			passes: []pass{
+				{nil, []string{"o:claude:1 [claude: claude:1]", "o:codex:1 [codex: codex:1]"}},
+				{[]string{CheckUnsure}, []string{"o:claude:1 [claude: claude:1]", "o:codex:1 [codex: codex:1]"}},
+			},
+		},
+		{
+			name:      "P2 exception: an unsure absent with numbersAbsent is 확인 필요 for the numbers",
+			answers:   coffee,
+			judgments: []Judgment{aggUnsure(aggJ("claude:1", "codex", LabelAbsent))},
+			passes: []pass{
+				{nil, []string{"c:claude:1 [claude: claude:1] check=numbersAbsent"}},
+				{[]string{CheckUnsure}, []string{"c:claude:1 [claude: claude:1] check=unsure"}},
+			},
+		},
+		{
+			// A sure same of the same unit does not help: the absent's
+			// number check still counts.
+			name:    "P2 exception beside a sure same",
+			answers: append(slices.Clone(coffee), aggAns("opencode", "커피는 하루 3잔이면 충분합니다.")),
+			judgments: []Judgment{
+				aggJ("claude:1", "opencode", LabelSame, "opencode:1"),
+				aggUnsure(aggJ("claude:1", "codex", LabelAbsent)),
+			},
+			passes: []pass{{nil, []string{"c:claude:1 [claude: claude:1] check=numbersAbsent"}}},
+		},
+		{
+			// P3: an unsure opposite marks its 다른 말 item as before; an
+			// unsure same on a unit of an item does not.
+			name:    "P3: only an unsure opposite marks 다른 말",
+			answers: duo,
+			judgments: []Judgment{
+				aggJ("claude:1", "codex", LabelOpposite, "codex:1"),
+				aggUnsure(aggJ("codex:1", "claude", LabelSame, "claude:3")),
+				aggUnsure(aggJ("claude:2", "codex", LabelOpposite, "codex:2")),
+			},
+			passes: []pass{
+				{nil, []string{"d:claude:1~codex:1 [claude: claude:1] <> [codex: codex:1]", "d:claude:2~codex:2 [claude: claude:2] <> [codex: codex:2] check=unsure"}},
+				{[]string{CheckUnsure}, []string{"d:claude:1~codex:1 [claude: claude:1] <> [codex: codex:1]", "d:claude:2~codex:2 [claude: claude:2] <> [codex: codex:2] check=unsure"}},
+			},
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			for _, p := range c.passes {
+				checks := p.checks
+				if checks == nil {
+					checks = DefaultChecks
+				}
+				in := AggregateInput{Answers: c.answers, Requests: aggRequests(c.answers, RequestDone), Judgments: c.judgments, Checks: checks, Ended: true}
+				if got := aggDump(aggRun(t, in)); !slices.Equal(got, p.want) {
+					t.Errorf("checks %v:\n got %q\nwant %q", checks, got, p.want)
+				}
+			}
+		})
+	}
+	if !slices.Equal(DefaultChecks, []string{CheckUnsure, CheckNumberMismatch, CheckNumbersAbsent}) {
+		t.Errorf("DefaultChecks = %v", DefaultChecks)
+	}
+}
+
 func TestAggregateFlags(t *testing.T) {
 	answers := []Answer{
 		aggAns("claude", "서울 인구는 약 970만 명 안팎입니다.", "커피는 하루 3잔이면 충분합니다.", "Plain words.", "Other words.", "More words."),
@@ -715,6 +845,12 @@ func aggP06Input(t testing.TB, q int, evidence map[string][]string) AggregateInp
 	return in
 }
 
+// aggGoldChecks are the checks the gold replay counts its cards with: the
+// unsure check alone. The gold labels are never unsure, so the cards come
+// from the labels only. The number checks of DefaultChecks would fire on
+// gold sames and absents that carry no evidence (TestAggregateGoldReplay).
+var aggGoldChecks = []string{CheckUnsure}
+
 func TestAggregateGoldReplay(t *testing.T) {
 	// Claim level (C2-9): each claim's state, with no evidence. judge-data
 	// derives the same numbers: any opposite is 다른 말, else any same 같은
@@ -722,8 +858,14 @@ func TestAggregateGoldReplay(t *testing.T) {
 	total := map[string]int{}
 	byGroup := map[string]map[string]int{}
 	var counts Counts
+	withDefaults := map[string]int{}
 	for _, q := range p06Questions(t) {
-		s := aggRun(t, aggP06Input(t, q.ID, nil))
+		in := aggP06Input(t, q.ID, nil)
+		for _, u := range aggRun(t, in).Units {
+			withDefaults[u.State]++
+		}
+		in.Checks = aggGoldChecks
+		s := aggRun(t, in)
 		if byGroup[q.Group] == nil {
 			byGroup[q.Group] = map[string]int{}
 		}
@@ -738,6 +880,12 @@ func TestAggregateGoldReplay(t *testing.T) {
 	}
 	if want := map[string]int{CardDiffer: 19, CardAgree: 273, CardOnlyOne: 15}; !reflect.DeepEqual(total, want) {
 		t.Errorf("claims = %v, want %v", total, want)
+	}
+	// With the default checks (S6) the number checks, without evidence
+	// against the whole other answer, send 23 gold claims to 확인 필요: 20 of
+	// 같은 말 and 3 of 한 AI만. 다른 말 stays 19.
+	if want := map[string]int{CardDiffer: 19, CardCheck: 23, CardAgree: 253, CardOnlyOne: 12}; !reflect.DeepEqual(withDefaults, want) {
+		t.Errorf("claims with the default checks = %v, want %v", withDefaults, want)
 	}
 	// Without evidence each claim is an item of its own.
 	if want := (Counts{Differ: 19, Agree: 273, OnlyOne: 15}); counts != want {
@@ -754,6 +902,7 @@ func TestAggregateGoldReplay(t *testing.T) {
 	waiting := map[string]int{}
 	for _, q := range p06Questions(t) {
 		in := aggP06Input(t, q.ID, nil)
+		in.Checks = aggGoldChecks
 		in.Ended = false
 		for _, u := range aggRun(t, in).Units {
 			waiting[u.State]++
@@ -782,7 +931,7 @@ func TestAggregateQ12Sides(t *testing.T) {
 }
 
 func TestAggregateNumbers(t *testing.T) {
-	t.Run("numberMismatch adds 확인 필요 when enabled", func(t *testing.T) {
+	t.Run("numberMismatch adds 확인 필요, on by default", func(t *testing.T) {
 		answers := []Answer{aggAns("claude", "서울 인구는 약 970만 명 안팎입니다."), aggAns("codex", "서울 인구는 약 956만 명입니다.")}
 		in := AggregateInput{
 			Answers:  answers,
@@ -791,28 +940,34 @@ func TestAggregateNumbers(t *testing.T) {
 				aggJ("claude:1", "codex", LabelSame, "codex:1"),
 				aggJ("codex:1", "claude", LabelSame, "claude:1"),
 			},
-			Checks: DefaultChecks,
+			Checks: []string{CheckUnsure},
 			Ended:  true,
 		}
 		if got := aggDump(aggRun(t, in)); !slices.Equal(got, []string{"a:claude:1 [claude codex: claude:1 codex:1]"}) {
-			t.Errorf("default checks: %q", got)
+			t.Errorf("unsure only: %q", got)
 		}
-		in.Checks = []string{CheckUnsure, CheckNumberMismatch}
 		want := []string{"c:claude:1 [claude: claude:1] check=numberMismatch", "c:codex:1 [codex: codex:1] check=numberMismatch"}
-		if got := aggDump(aggRun(t, in)); !slices.Equal(got, want) {
-			t.Errorf("with numberMismatch: %q, want %q", got, want)
+		for _, checks := range [][]string{{CheckUnsure, CheckNumberMismatch}, DefaultChecks} {
+			in.Checks = checks
+			if got := aggDump(aggRun(t, in)); !slices.Equal(got, want) {
+				t.Errorf("checks %v: %q, want %q", checks, got, want)
+			}
 		}
 	})
-	t.Run("numbersAbsent adds 확인 필요 when enabled", func(t *testing.T) {
+	t.Run("numbersAbsent adds 확인 필요, on by default", func(t *testing.T) {
 		answers := []Answer{aggAns("claude", "커피는 하루 3잔이면 충분합니다."), aggAns("codex", "Plain.", "커피는 하루 5잔까지 마셔도 됩니다.")}
 		in := AggregateInput{
 			Answers:   answers,
 			Requests:  aggRequests(answers, RequestDone),
 			Judgments: []Judgment{aggJ("claude:1", "codex", LabelAbsent)},
-			Checks:    DefaultChecks,
+			Checks:    []string{CheckUnsure},
 			Ended:     true,
 		}
 		if got := aggDump(aggRun(t, in)); !slices.Equal(got, []string{"o:claude:1 [claude: claude:1]"}) {
+			t.Errorf("unsure only: %q", got)
+		}
+		in.Checks = DefaultChecks
+		if got := aggDump(aggRun(t, in)); !slices.Equal(got, []string{"c:claude:1 [claude: claude:1] check=numbersAbsent"}) {
 			t.Errorf("default checks: %q", got)
 		}
 		in.Checks = AllChecks

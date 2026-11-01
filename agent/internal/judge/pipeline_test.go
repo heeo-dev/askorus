@@ -53,7 +53,9 @@ func pipeComparison(t *testing.T, q int, gold map[string]string) AggregateInput 
 	if err != nil || len(reqs) != 6 {
 		t.Fatalf("Q%d: %d requests, %v", q, len(reqs), err)
 	}
-	in := AggregateInput{Answers: s.Answers, Checks: DefaultChecks, Ended: true}
+	// The gold replay's checks: the cards come from the labels alone, as
+	// card() below counts them (aggGoldChecks).
+	in := AggregateInput{Answers: s.Answers, Checks: aggGoldChecks, Ended: true}
 	for _, r := range reqs {
 		task := BuildTask(s, r)
 		if Prompt(task, Nonce(task)) == "" {

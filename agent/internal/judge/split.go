@@ -39,7 +39,8 @@ const (
 // (UnitRow), list items (UnitItem), block quotes (UnitQuote) and
 // paragraphs (UnitSentence), the last three cut into sentences. Ids are
 // "<answerID>:<n>" with n from 1. Units after the first maxUnits
-// (MaxUnits when maxUnits <= 0) have Judged false.
+// (MaxUnits, the most, when maxUnits <= 0) have Judged false; the agent
+// passes agent.json judge.maxUnits or DefaultMaxUnits.
 //
 // It reads the first MaxAnswerBytes of text in one pass and never rewrites
 // it: "\r\n" is a line break where it stands and a leading BOM is skipped,

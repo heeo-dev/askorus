@@ -135,6 +135,8 @@ func TestNumbersRead(t *testing.T) {
 		{"1.5–2× a gasoline car; 2배 이상; 약 3분의 1", []string{"ratio 1.5–2×", "ratio 2배 이상", "ratio 약 3분의 1"}},
 		{"3 times a week", []string{"count 3 times"}},
 		{"in the 1990s, $1.5B and 1200 calories", []string{"year 1990s", "money $1.5B", "measure 1200 calories"}},
+		// One-glyph units of the CJK compatibility block (S6R-1).
+		{"서울 면적은 605㎢입니다. 쌀 2㎏, 3㎞ 거리, 500㎖ 두 병", []string{"measure 605㎢", "measure 2㎏", "measure 3㎞", "measure 500㎖"}},
 		// Not quantities: model names, words with digits, links, bare
 		// small numbers, other words that start like a unit.
 		{"iPhone 18 Pro, A20 칩, 18e, 에어 2, CO2, HTTP/2, TLS 1.3, COVID-19, 5G, 1st, x86", nil},
@@ -284,6 +286,13 @@ func TestNumbersCompatible(t *testing.T) {
 		{"3잔", "3명", false},
 		{"약 930만", "약 930만 명", true},
 		{"23.5°", "23.5도", true},
+		// One-glyph units read as their letters (S6R-1).
+		{"서울 면적은 605㎢입니다", "605 km²", true},
+		{"서울 면적은 605㎢입니다", "서울 면적은 700㎢입니다", false},
+		{"2㎏", "5㎏", false},
+		{"2㎏", "2,000 g", true},
+		{"3㎞", "3 km", true},
+		{"5 ㎢", "5 ㎏", false},
 		// Dates and years.
 		{"9월 18일", "2026년 9월 18일", true},
 		{"9월", "2026년 9월 18일", true},
@@ -429,6 +438,50 @@ func TestNumbersCompatible(t *testing.T) {
 			}
 			if Compatible(a, b) != Compatible(b, a) {
 				t.Errorf("Compatible is not symmetric")
+			}
+		})
+	}
+}
+
+// S6R-1: the one-glyph units of the CJK compatibility block read as the
+// units they stand for. Before, only ㎡ did, so "605㎢" against "700㎢" had
+// no numbers, and since S6 an unsure same of such a pair passed as 같은 말
+// (TestAggregateUnsureRule). Each glyph reads as one measure of its class
+// at its scale, fits the unit in letters where the table has one, and
+// does not fit another value of itself.
+func TestNumbersUnitGlyphs(t *testing.T) {
+	for _, c := range []struct {
+		glyph, class string
+		scale        float64 // to the class's base unit
+		letters      string  // the same unit in letters; "" when the table has none
+	}{
+		{"㎚", numLength, 1e-9, "nm"}, {"㎛", numLength, 1e-6, "µm"}, {"㎜", numLength, 1e-3, "mm"},
+		{"㎝", numLength, 1e-2, "cm"}, {"㎞", numLength, 1e3, "km"},
+		{"㎟", numArea, 1e-6, ""}, {"㎠", numArea, 1e-4, ""}, {"㎡", numArea, 1, "m²"},
+		{"㎢", numArea, 1e6, "km²"}, {"㏊", numArea, 1e4, "ha"},
+		{"㎕", numVolume, 1e-6, ""}, {"㎖", numVolume, 1e-3, "mL"}, {"㎗", numVolume, 0.1, "dL"},
+		{"㎘", numVolume, 1e3, ""}, {"㏄", numVolume, 1e-3, "cc"}, {"㎣", numVolume, 1e-6, ""},
+		{"㎤", numVolume, 1e-3, ""}, {"㎥", numVolume, 1e3, ""}, {"㎦", numVolume, 1e12, ""},
+		{"㎍", numMass, 1e-6, "µg"}, {"㎎", numMass, 1e-3, "mg"}, {"㎏", numMass, 1e3, "kg"},
+		{"㎧", numSpeed, 1, "m/s"},
+		{"㎅", numData, 1e3, "KB"}, {"㎆", numData, 1e6, "MB"}, {"㎇", numData, 1e9, "GB"},
+		{"㎉", numEnergy, 4184, "kcal"},
+		{"㎾", numPower, 1e3, "kW"}, {"㎿", numPower, 1e6, "MW"},
+		{"㎐", numFreq, 1, "Hz"}, {"㎑", numFreq, 1e3, "kHz"}, {"㎒", numFreq, 1e6, "MHz"}, {"㎓", numFreq, 1e9, "GHz"},
+		{"㏈", numSound, 1, "dB"},
+	} {
+		t.Run(c.glyph, func(t *testing.T) {
+			q := numOne(t, "값은 7"+c.glyph+"입니다.")
+			if q.Kind != NumMeasure || q.Text != "7"+c.glyph || q.num.class != c.class || math.Abs(q.num.nomLo/(7*c.scale)-1) > 1e-9 {
+				t.Errorf("7%s = %s, want measure %s at %g", c.glyph, numDump([]Quantity{q}), c.class, 7*c.scale)
+			}
+			if other := numOne(t, "값은 9"+c.glyph+"입니다."); Compatible(q, other) {
+				t.Errorf("7%s fits 9%s", c.glyph, c.glyph)
+			}
+			if c.letters != "" {
+				if w := numOne(t, "값은 7 "+c.letters+"입니다."); !Compatible(q, w) {
+					t.Errorf("7%s does not fit 7 %s\n %s\n %s", c.glyph, c.letters, numDump([]Quantity{q}), numDump([]Quantity{w}))
+				}
 			}
 		})
 	}

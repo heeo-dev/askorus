@@ -224,7 +224,7 @@ var numUnits = []numUnit{
 	{"km/h", NumMeasure, numSpeed, 1 / 3.6, 0}, {"km/s", NumMeasure, numSpeed, 1000, 0},
 	{"kph", NumMeasure, numSpeed, 1 / 3.6, 0}, {"m/s", NumMeasure, numSpeed, 1, 0},
 	{"mph", NumMeasure, numSpeed, 0.44704, 0},
-	{"km²", NumMeasure, numArea, 1e6, 0}, {"m²", NumMeasure, numArea, 1, 0}, {"㎡", NumMeasure, numArea, 1, 0},
+	{"km²", NumMeasure, numArea, 1e6, 0}, {"m²", NumMeasure, numArea, 1, 0},
 	{"제곱미터", NumMeasure, numArea, 1, 0}, {"평", NumMeasure, numArea, 3.305785, 0},
 	{"ha", NumMeasure, numArea, 1e4, 0}, {"헥타르", NumMeasure, numArea, 1e4, 0},
 	{"acres", NumMeasure, numArea, 4046.86, 0},
@@ -302,6 +302,31 @@ var numUnits = []numUnit{
 	{"kHz", NumMeasure, numFreq, 1e3, 0}, {"Hz", NumMeasure, numFreq, 1, 0},
 	{"헤르츠", NumMeasure, numFreq, 1, 0},
 	{"dB", NumMeasure, numSound, 1, 0}, {"데시벨", NumMeasure, numSound, 1, 0},
+
+	// One-glyph units of the CJK compatibility block, as Korean text often
+	// writes them ("605㎢", "2㎏"), at the scales of the units in letters
+	// (S6R-1: without them "605㎢" and "700㎢" had no numbers to clash).
+	{"㎚", NumMeasure, numLength, 1e-9, 0}, {"㎛", NumMeasure, numLength, 1e-6, 0},
+	{"㎜", NumMeasure, numLength, 1e-3, 0}, {"㎝", NumMeasure, numLength, 1e-2, 0},
+	{"㎞", NumMeasure, numLength, 1e3, 0},
+	{"㎟", NumMeasure, numArea, 1e-6, 0}, {"㎠", NumMeasure, numArea, 1e-4, 0},
+	{"㎡", NumMeasure, numArea, 1, 0}, {"㎢", NumMeasure, numArea, 1e6, 0},
+	{"㏊", NumMeasure, numArea, 1e4, 0},
+	{"㎕", NumMeasure, numVolume, 1e-6, 0}, {"㎖", NumMeasure, numVolume, 1e-3, 0},
+	{"㎗", NumMeasure, numVolume, 0.1, 0}, {"㎘", NumMeasure, numVolume, 1e3, 0},
+	{"㏄", NumMeasure, numVolume, 1e-3, 0}, {"㎣", NumMeasure, numVolume, 1e-6, 0},
+	{"㎤", NumMeasure, numVolume, 1e-3, 0}, {"㎥", NumMeasure, numVolume, 1e3, 0},
+	{"㎦", NumMeasure, numVolume, 1e12, 0},
+	{"㎍", NumMeasure, numMass, 1e-6, 0}, {"㎎", NumMeasure, numMass, 1e-3, 0},
+	{"㎏", NumMeasure, numMass, 1e3, 0},
+	{"㎧", NumMeasure, numSpeed, 1, 0},
+	{"㎅", NumMeasure, numData, 1e3, 0}, {"㎆", NumMeasure, numData, 1e6, 0},
+	{"㎇", NumMeasure, numData, 1e9, 0},
+	{"㎉", NumMeasure, numEnergy, 4184, 0},
+	{"㎾", NumMeasure, numPower, 1e3, 0}, {"㎿", NumMeasure, numPower, 1e6, 0},
+	{"㎐", NumMeasure, numFreq, 1, 0}, {"㎑", NumMeasure, numFreq, 1e3, 0},
+	{"㎒", NumMeasure, numFreq, 1e6, 0}, {"㎓", NumMeasure, numFreq, 1e9, 0},
+	{"㏈", NumMeasure, numSound, 1, 0},
 }
 
 // numUnitIndex lists numUnits by first byte, longest word first, so the

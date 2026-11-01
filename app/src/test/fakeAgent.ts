@@ -202,8 +202,11 @@ export class FakeAgent {
         ? { ...a, capabilities: [...new Set([...a.capabilities, 'judge'])], judge: judgeInfos[a.agent] }
         : a,
     );
-    this.judging = { engine: 'pc', shape: 'directed', labels: 'v1', rules: 'judge-v1', checks: ['unsure'] };
-    if (o.verified) this.judging.verified = { date: '2026-11-08' };
+    // The agent's defaults since S6 (11-01): unsure and the two number checks.
+    const checks = ['unsure', 'numberMismatch', 'numbersAbsent'];
+    this.judging = { engine: 'pc', shape: 'directed', labels: 'v1', rules: 'judge-v1', checks };
+    const versions = { claude: '2.1.316', codex: '0.164.0', opencode: '2.2.1' };
+    if (o.verified) this.judging.verified = { date: '2026-11-01', versions };
     if (o.typicalMs) this.judging.typicalMs = o.typicalMs;
   }
 

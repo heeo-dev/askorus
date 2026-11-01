@@ -185,7 +185,8 @@ export function aggregate(
   }
 
   if (ended) {
-    // Check this: a judge was not sure (the only check the agent turns on before S6).
+    // Check this: a judge was not sure. A stand-in for the screens: since S6 the agent sends an unsure
+    // same or absent here only when its number check fires, and names that check as the reason.
     for (const id of order) {
       if (placed.has(id) || !shown(id) || !of(id).some((j) => j.unsure)) continue;
       items.push({ key: `c:${id}`, kind: 'check', positions: [{ agents: [answerOf(id)], units: [id] }], check: ['unsure'], missing: [] });

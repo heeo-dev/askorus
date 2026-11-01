@@ -3,9 +3,7 @@
 package main
 
 import (
-	"encoding/json"
 	"slices"
-	"strings"
 	"testing"
 
 	"github.com/asksemble/asksemble/agent/internal/judge"
@@ -68,7 +66,7 @@ func TestMultiUnitClaims(t *testing.T) {
 		{"codex", "opencode", nil, []v{hSame("a1", "b1"), hAbsent("a2", true)}},
 		{"opencode", "codex", nil, []v{hSame("a1", "b1"), hAbsent("a2", true)}},
 	})
-	u, v := handView(t, data, out, "multi", judge.DefaultChecks, map[string][]string{
+	u, v := handView(t, data, out, "multi", handChecks, map[string][]string{
 		claimKey(1, "claude", 2):   {"claude:1", "claude:2"},
 		claimKey(1, "opencode", 1): {"opencode:1", "opencode:2"},
 	})
@@ -111,7 +109,7 @@ func TestStrictNeedsTheOtherAnswer(t *testing.T) {
 		{"codex", "opencode", nil, []v{hSame("a1", "b1"), hOpposite("a2", "b2")}},
 		{"opencode", "codex", nil, []v{hSame("a1", "b1"), hAbsent("a2", true)}},
 	})
-	u, v := handView(t, data, out, "strict", judge.DefaultChecks, nil)
+	u, v := handView(t, data, out, "strict", handChecks, nil)
 	if po := pairOf(t, v, "1-codex2-claude"); po.state != judge.CardDiffer || po.strict {
 		t.Errorf("1-codex2-claude: state %s strict %v, want differ, not strict", po.state, po.strict)
 	}
@@ -128,30 +126,13 @@ func TestStrictNeedsTheOtherAnswer(t *testing.T) {
 	}
 }
 
-// kmData is the mini set with ㎢ written km², which judge.Numbers reads:
-// codex:2 (700 km²) absent against claude (605 km²) raises numbersAbsent.
-func kmData(t *testing.T) string {
-	t.Helper()
-	return writeMini(t, func(files map[string]map[string]any) {
-		for name, f := range files {
-			b, err := json.Marshal(f)
-			if err != nil {
-				t.Fatal(err)
-			}
-			var g map[string]any
-			if err := json.Unmarshal([]byte(strings.ReplaceAll(string(b), "㎢", "km²")), &g); err != nil {
-				t.Fatal(err)
-			}
-			files[name] = g
-		}
-	})
-}
-
 // COR-9: -sweep-checks adds each other check alone. The run is the hand
 // run with codex2 core against claude, so that a check can show it: with
-// unsure only it is onlyOne, missed.
+// unsure only it is onlyOne, missed. The mini set writes its areas with
+// the one glyph ㎢, which judge.Numbers reads since S6R-1 (the test once
+// rewrote them as km² to get around that).
 func TestSweepChecksByHand(t *testing.T) {
-	data, out := kmData(t), t.TempDir()
+	data, out := writeMini(t, nil), t.TempDir()
 	unsure := hSame("a2", "b2")
 	unsure.Unsure = true
 	writeRun(t, data, out, "sweep", []handRow{
@@ -162,7 +143,7 @@ func TestSweepChecksByHand(t *testing.T) {
 		{"codex", "opencode", nil, []v{hSame("a1"), hAbsent("a2", false)}},
 		{"opencode", "codex", nil, []v{hOpposite("a1", "b1"), hAbsent("a2", false)}},
 	})
-	u, v := handView(t, data, out, "sweep", judge.DefaultChecks, nil)
+	u, v := handView(t, data, out, "sweep", handChecks, nil)
 	if co := claimOf(t, v, "1-codex2"); co.state != judge.CardOnlyOne {
 		t.Fatalf("1-codex2 %s, want onlyOne", co.state)
 	}
@@ -172,10 +153,10 @@ func TestSweepChecksByHand(t *testing.T) {
 	//     goes to check: clear check share 0 → 1/2, +50 points. codex:2 is
 	//     absent: no flag.
 	//   - crossDirection: no same is answered by an opposite citing back.
-	//   - numberMismatch: only claude:2 (605 against 700 km²), already on
+	//   - numberMismatch: only claude:2 (605㎢ against 700㎢), already on
 	//     check; 940만 명 fits everywhere.
-	//   - numbersAbsent: codex:2 (700 km²) is absent against claude, whose
-	//     answer has 605 km²: codex2 goes to check, 1-codex2-claude is
+	//   - numbersAbsent: codex:2 (700㎢) is absent against claude, whose
+	//     answer has 605㎢: codex2 goes to check, 1-codex2-claude is
 	//     shown. claude:2 against opencode: opencode has no area.
 	want := []sweepRow{
 		{View: "claude", Check: judge.CheckNoEvidence, NewlyShownIDs: []string{}, Share: 0.5, DeltaPoints: 50},
@@ -183,7 +164,7 @@ func TestSweepChecksByHand(t *testing.T) {
 		{View: "claude", Check: judge.CheckNumberMismatch, NewlyShownIDs: []string{}},
 		{View: "claude", Check: judge.CheckNumbersAbsent, NewlyShown: 1, NewlyShownIDs: []string{"1-codex2-claude"}},
 	}
-	got := sweep(u, u.views(), judge.DefaultChecks)
+	got := sweep(u, u.views(), handChecks)
 	if len(got) != len(want) {
 		t.Fatalf("sweep %+v", got)
 	}

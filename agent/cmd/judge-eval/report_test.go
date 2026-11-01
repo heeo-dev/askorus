@@ -12,8 +12,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-
-	"github.com/asksemble/asksemble/agent/internal/judge"
 )
 
 // Reports over several runs, and runs that did not finish (S4 review
@@ -96,7 +94,7 @@ func claudeView(t *testing.T, data, out string, runs ...string) viewReport {
 	cov := u.coverageOf()
 	for _, vs := range u.views() {
 		if vs.engine == "claude" {
-			return makeViewReport(u, u.view(vs, judge.DefaultChecks), cov, 0, 1)
+			return makeViewReport(u, u.view(vs, handChecks), cov, 0, 1)
 		}
 	}
 	t.Fatalf("runs %v have no claude view", runs)

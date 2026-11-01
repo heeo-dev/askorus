@@ -63,8 +63,11 @@ const (
 // AllChecks lists every check, for checking the settings.
 var AllChecks = []string{CheckUnsure, CheckNoEvidence, CheckCrossDirection, CheckNumberMismatch, CheckNumbersAbsent}
 
-// DefaultChecks are the checks enabled until stage 1 of 판정 검증 adds more.
-var DefaultChecks = []string{CheckUnsure}
+// DefaultChecks are the checks enabled unless agent.json judge.checks names
+// others: unsure and the two number checks (S6, 11-01 user decision 2).
+// With them an unsure same or absent goes to 확인 필요 only when its number
+// check fires (see Aggregate).
+var DefaultChecks = []string{CheckUnsure, CheckNumberMismatch, CheckNumbersAbsent}
 
 // Request statuses.
 const (
@@ -90,7 +93,7 @@ const (
 const (
 	StateHidden      = "hidden"      // compared, but no judge called it core and it is in no opposite
 	StateNotCompared = "notCompared" // no usable judgment, because its requests failed
-	StateNotJudged   = "notJudged"   // after the first MaxUnits units of its answer
+	StateNotJudged   = "notJudged"   // after the first maxUnits units of its answer (agent.json judge.maxUnits)
 	StateWaiting     = "waiting"     // its card waits until every request has ended
 )
 
@@ -110,7 +113,8 @@ const (
 
 // Limits.
 const (
-	MaxUnits        = 40       // units judged per answer; the rest are only evidence (agent.json judge.maxUnits)
+	MaxUnits        = 40       // most units judged per answer that agent.json judge.maxUnits accepts; the rest are only evidence
+	DefaultMaxUnits = 30       // units judged per answer when judge.maxUnits is not set (S6 rule 4: p90 request over 30 s)
 	MaxAnswerBytes  = 64 << 10 // of an answer that are split
 	MaxUnitChars    = 600      // characters of a unit before it is cut at "; " or ", "
 	MaxEvidence     = 3        // evidence ids kept per judgment
@@ -133,7 +137,7 @@ type Unit struct {
 	Context string `json:"context,omitempty"` // a row's table header (first 300 characters), a nested item's parent's Text (first 120)
 	Start   int    `json:"start"`             // UTF-16 offsets of the raw span in the answer text
 	End     int    `json:"end"`
-	Judged  bool   `json:"judged"` // false after the first MaxUnits units: then it is only evidence
+	Judged  bool   `json:"judged"` // false after the first maxUnits units: then it is only evidence
 	// Math are the places in Text that the answer drew as math, in order:
 	// the inline math the splitter read in the raw span. The phone draws
 	// math there only and never looks for "$" in Text itself, where code
@@ -154,7 +158,7 @@ type Answer struct {
 	Family string `json:"family"` // its company: the adapter's Family(model), or HandoffFamily(Agent)
 	Model  string `json:"model,omitempty"`
 	Status string `json:"status"` // AnswerReady or AnswerMissing
-	// NotJudged counts the units after the first MaxUnits, so the phone can
+	// NotJudged counts the units after the first maxUnits, so the phone can
 	// say only the first ones were compared.
 	NotJudged int    `json:"notJudged"`
 	Units     []Unit `json:"units"`
@@ -304,7 +308,7 @@ type Counts struct {
 	Agree       int `json:"agree"`
 	OnlyOne     int `json:"onlyOne"`
 	NotCompared int `json:"notCompared"` // units no judge compared, as their requests failed
-	NotJudged   int `json:"notJudged"`   // units after the first MaxUnits of their answer
+	NotJudged   int `json:"notJudged"`   // units after the first maxUnits of their answer
 }
 
 // AggregateInput is what Aggregate makes the cards from.

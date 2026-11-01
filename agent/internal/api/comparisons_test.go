@@ -259,24 +259,47 @@ func TestInfoAnnouncesJudge(t *testing.T) {
 	if resp.Judging == nil {
 		t.Fatal("no judging")
 	}
-	if j := *resp.Judging; j.Engine != "pc" || j.Shape != judge.ShapeDirected || j.Labels != judge.LabelsV1 || j.Rules != judge.Rules || !slices.Equal(j.Checks, []string{judge.CheckUnsure}) {
-		t.Errorf("judging = %+v", j)
+	// judge.models of agent.json names a model S6 did not measure, so
+	// judging carries no verified and no typicalMs (S6R-3).
+	if j := *resp.Judging; j.Engine != "pc" || j.Shape != judge.ShapeDirected || j.Labels != judge.LabelsV1 || j.Rules != judge.Rules ||
+		!slices.Equal(j.Checks, []string{judge.CheckUnsure, judge.CheckNumberMismatch, judge.CheckNumbersAbsent}) || j.Verified != nil || j.TypicalMs != 0 {
+		t.Errorf("judging = %+v %+v", j, j.Verified)
 	}
-	var raw struct {
-		Judging      map[string]json.RawMessage `json:"judging"`
-		Integrations json.RawMessage            `json:"integrations"`
+	judgingKeys := func(w *httptest.ResponseRecorder) []string {
+		var raw struct {
+			Judging      map[string]json.RawMessage `json:"judging"`
+			Integrations json.RawMessage            `json:"integrations"`
+		}
+		json.Unmarshal(w.Body.Bytes(), &raw)
+		if string(raw.Integrations) != "[]" {
+			t.Errorf("integrations = %s, want [] (N1)", raw.Integrations)
+		}
+		var keys []string
+		for k := range raw.Judging {
+			keys = append(keys, k)
+		}
+		slices.Sort(keys)
+		return keys
 	}
-	json.Unmarshal(w.Body.Bytes(), &raw)
-	var keys []string
-	for k := range raw.Judging {
-		keys = append(keys, k)
+	if keys := judgingKeys(w); !slices.Equal(keys, []string{"checks", "engine", "labels", "rules", "shape"}) {
+		t.Errorf("judging keys with judge.models = %v", keys)
 	}
-	slices.Sort(keys)
-	if !slices.Equal(keys, []string{"checks", "engine", "labels", "rules", "shape"}) {
-		t.Errorf("judging keys = %v (verified and typicalMs come with S6)", keys)
+
+	// The adapters' own judge models and the default checks are what S6
+	// measured: judging carries the verification and typicalMs.
+	cl, cx, oc = threeJudges()
+	e, _ = judgeEnv(t, nil, cl, cx, oc)
+	w = e.do("GET", "/v1/info", nil)
+	if w.Code != 200 {
+		t.Fatalf("info = %d %s", w.Code, w.Body)
 	}
-	if string(raw.Integrations) != "[]" {
-		t.Errorf("integrations = %s, want [] (N1)", raw.Integrations)
+	resp = decodeBody[InfoResponse](t, w)
+	if j := resp.Judging; j == nil || !slices.Equal(j.Checks, judge.DefaultChecks) || j.Verified == nil || j.Verified.Date != "2026-11-01" ||
+		j.Verified.Versions["codex"] != "0.164.0" || j.TypicalMs != compares.TypicalMs {
+		t.Errorf("judging = %+v", resp.Judging)
+	}
+	if keys := judgingKeys(w); !slices.Equal(keys, []string{"checks", "engine", "labels", "rules", "shape", "typicalMs", "verified"}) {
+		t.Errorf("judging keys = %v (verified and typicalMs since S6)", keys)
 	}
 }
 

@@ -167,11 +167,18 @@ func TestJudgeDefaultsWithoutBlock(t *testing.T) {
 		t.Fatal(err)
 	}
 	j := c.Judge
-	if j.Off || j.PerAIOrDefault() != 2 || j.MaxUnitsOrDefault() != 40 || !slices.Equal(j.ChecksOrDefault(), []string{"unsure"}) {
+	// S6 (11-01 user decision 2 and 3): the number checks are on next to
+	// unsure, and 30 units are judged; the setting still accepts 40.
+	if j.Off || j.PerAIOrDefault() != 2 || j.MaxUnitsOrDefault() != 30 || !slices.Equal(j.ChecksOrDefault(), []string{"unsure", "numberMismatch", "numbersAbsent"}) {
 		t.Errorf("defaults = off %v, perAI %d, maxUnits %d, checks %v", j.Off, j.PerAIOrDefault(), j.MaxUnitsOrDefault(), j.ChecksOrDefault())
 	}
-	if DefaultJudgePerAI != 2 || judge.MaxUnits != 40 {
-		t.Errorf("default constants changed: %d %d", DefaultJudgePerAI, judge.MaxUnits)
+	if DefaultJudgePerAI != 2 || judge.MaxUnits != 40 || judge.DefaultMaxUnits != 30 {
+		t.Errorf("default constants changed: %d %d %d", DefaultJudgePerAI, judge.MaxUnits, judge.DefaultMaxUnits)
+	}
+	for _, n := range []int{1, 30, 40} {
+		if got := (JudgeConfig{MaxUnits: n}).MaxUnitsOrDefault(); got != n {
+			t.Errorf("maxUnits %d = %d", n, got)
+		}
 	}
 	// ChecksOrDefault is a copy: changing it changes neither the defaults
 	// nor the settings.

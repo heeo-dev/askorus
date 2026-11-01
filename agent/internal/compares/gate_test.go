@@ -124,12 +124,56 @@ func TestOverrideReachesJudge(t *testing.T) {
 func TestJudgingInfo(t *testing.T) {
 	g := Gate{}
 	ji := g.Judging()
-	if ji.Engine != "pc" || ji.Shape != judge.ShapeDirected || ji.Labels != judge.LabelsV1 || ji.Rules != judge.Rules || !slices.Equal(ji.Checks, []string{judge.CheckUnsure}) || ji.Verified != nil || ji.TypicalMs != 0 {
+	// S6 (11-01 user decision 4): verified on 2026-11-01 with these CLI
+	// versions, and the median wall time of a comparison at the quick tier.
+	if ji.Engine != "pc" || ji.Shape != judge.ShapeDirected || ji.Labels != judge.LabelsV1 || ji.Rules != judge.Rules ||
+		!slices.Equal(ji.Checks, []string{judge.CheckUnsure, judge.CheckNumberMismatch, judge.CheckNumbersAbsent}) || ji.Verified == nil || ji.TypicalMs != 40444 {
 		t.Errorf("Judging = %+v", ji)
 	}
 	b, _ := json.Marshal(ji)
-	if string(b) != `{"engine":"pc","shape":"directed","labels":"v1","rules":"judge-v1","checks":["unsure"]}` {
-		t.Errorf("JSON = %s", b)
+	want := `{"engine":"pc","shape":"directed","labels":"v1","rules":"judge-v1","checks":["unsure","numberMismatch","numbersAbsent"],` +
+		`"verified":{"date":"2026-11-01","versions":{"claude":"2.1.316","codex":"0.164.0","opencode":"2.2.1"}},"typicalMs":40444}`
+	if string(b) != want {
+		t.Errorf("JSON = %s\nwant %s", b, want)
+	}
+	// Each call gives its own copy: changing one changes neither the next
+	// nor JudgingVerified.
+	ji.Verified.Versions["claude"] = "x"
+	ji.Verified.Date = "x"
+	if again := g.Judging(); again.Verified.Versions["claude"] != "2.1.316" || again.Verified.Date != "2026-11-01" || JudgingVerified.Versions["claude"] != "2.1.316" {
+		t.Errorf("Judging shares JudgingVerified: %+v", again.Verified)
+	}
+	// The verification and typicalMs are only for what S6 measured
+	// (S6R-3): the adapters' own judge models and the default checks, in
+	// any order. judge.off, perAI and maxUnits (at most the 40 measured)
+	// keep them.
+	for _, s := range []config.JudgeConfig{
+		{Off: true, MaxUnits: 40, PerAI: 1},
+		{Checks: []string{judge.CheckNumbersAbsent, judge.CheckUnsure, judge.CheckNumberMismatch}},
+	} {
+		g.Settings = s
+		if ji := g.Judging(); ji.Verified == nil || ji.TypicalMs != TypicalMs {
+			t.Errorf("with %+v: %+v", s, ji)
+		}
+	}
+	// A judge model or a set of checks of agent.json was never measured:
+	// no verified and no typicalMs, so the phone keeps its 'not measured
+	// yet' footer and shows no time.
+	for _, s := range []config.JudgeConfig{
+		{Models: map[string]core.AskModel{"claude": {Model: "opus", Effort: "high"}}},
+		{Models: map[string]core.AskModel{"codex": {Effort: "low"}}},
+		{Checks: []string{judge.CheckUnsure}},
+		{Checks: []string{judge.CheckNoEvidence}},
+		{Checks: []string{judge.CheckUnsure, judge.CheckNumberMismatch, judge.CheckNumbersAbsent, judge.CheckNoEvidence}},
+	} {
+		g.Settings = s
+		ji := g.Judging()
+		if ji.Verified != nil || ji.TypicalMs != 0 || !slices.Equal(ji.Checks, s.ChecksOrDefault()) {
+			t.Errorf("with %+v: %+v", s, ji)
+		}
+		if b, _ := json.Marshal(ji); strings.Contains(string(b), "verified") || strings.Contains(string(b), "typicalMs") {
+			t.Errorf("with %+v: JSON %s", s, b)
+		}
 	}
 	g.Settings = config.JudgeConfig{Checks: []string{judge.CheckNoEvidence, judge.CheckNumberMismatch}}
 	if ji := g.Judging(); !slices.Equal(ji.Checks, g.Settings.Checks) {

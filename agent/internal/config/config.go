@@ -98,7 +98,7 @@ type JudgeConfig struct {
 	// the 확인 필요 card; empty means judge.DefaultChecks.
 	Checks []string `json:"checks,omitempty"`
 	// MaxUnits is how many units of an answer are judged, 1-40; 0 means
-	// judge.MaxUnits.
+	// judge.DefaultMaxUnits (30, S6 rule 4).
 	MaxUnits int `json:"maxUnits,omitempty"`
 }
 
@@ -119,10 +119,10 @@ func (j JudgeConfig) ChecksOrDefault() []string {
 	return slices.Clone(j.Checks)
 }
 
-// MaxUnitsOrDefault is MaxUnits, or judge.MaxUnits when it is 0.
+// MaxUnitsOrDefault is MaxUnits, or judge.DefaultMaxUnits when it is 0.
 func (j JudgeConfig) MaxUnitsOrDefault() int {
 	if j.MaxUnits == 0 {
-		return judge.MaxUnits
+		return judge.DefaultMaxUnits
 	}
 	return j.MaxUnits
 }
@@ -162,7 +162,7 @@ func (j JudgeConfig) validate() error {
 		return fmt.Errorf("judge.perAI: %d must be 1-%d, or 0 for %d", j.PerAI, MaxJudgePerAI, DefaultJudgePerAI)
 	}
 	if j.MaxUnits < 0 || j.MaxUnits > judge.MaxUnits {
-		return fmt.Errorf("judge.maxUnits: %d must be 1-%d, or 0 for %d", j.MaxUnits, judge.MaxUnits, judge.MaxUnits)
+		return fmt.Errorf("judge.maxUnits: %d must be 1-%d, or 0 for %d", j.MaxUnits, judge.MaxUnits, judge.DefaultMaxUnits)
 	}
 	seen := map[string]bool{}
 	for _, c := range j.Checks {
