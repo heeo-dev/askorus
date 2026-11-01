@@ -56,7 +56,29 @@ export type AdapterInfo = {
   notices?: string[];
   /** Set for AIs that can ask (Phase 2): the model of each tier. */
   ask?: { tiers: Record<string, { model: string; effort?: string }> };
+  /** Set only with the capability 'judge' (P2-3): the model this AI judges with. */
+  judge?: JudgeInfo;
 };
+
+/** A stable error code from the agent; message is English detail (or an AI's own words). */
+export type CodeError = { code: string; message?: string };
+
+/** The quick model an AI judges other AIs' answers with, and its company. */
+export type JudgeInfo = { model: string; effort?: string; family: string };
+
+/** How this PC compares answers (P2-3). verified and typicalMs come once the judging is measured. */
+export type JudgingInfo = {
+  engine: string;
+  shape: string;
+  labels: string;
+  rules: string;
+  checks: string[];
+  verified?: { date: string; versions?: Record<string, string> };
+  typicalMs?: number;
+};
+
+/** A place answers may go besides this PC's AIs (always [] for now). */
+export type Integration = { id: string; kind: string; destination: string };
 
 export type Info = {
   name: string;
@@ -67,6 +89,9 @@ export type Info = {
   agents: AdapterInfo[];
   capabilities: string[];
   reserved: string[];
+  /** Set when some AI on the PC can judge (P2-3). */
+  judging?: JudgingInfo;
+  integrations?: Integration[];
 };
 
 export type ServeStatus = {
@@ -163,7 +188,12 @@ export type RunRequest = {
   agents?: RunTarget[];
   /** The phone's own id for the run, so a retried request does not ask twice. */
   clientRunId?: string;
+  /** Compare the answers once they are in (P2-3). */
+  compare?: RunCompare;
 };
+
+/** earlier: questions the judges' companies already got (oldest first); judges: who may judge. */
+export type RunCompare = { earlier?: string[]; judges?: string[] };
 
 /** One AI's share of a run; it shows as soon as that AI is done. */
 export type RunPart = {
@@ -187,4 +217,110 @@ export type Run = {
   finishedAt?: string;
   parts: RunPart[];
   pollAfterMs?: number;
+  /** The comparison of this run's answers (P2-3), on the 202 and every GET. */
+  comparisonId?: string;
+  /** Why the run's compare was not taken (only on the POST's 202); the ask goes on. */
+  compareError?: CodeError;
+};
+
+// Answer comparison (P2-3): GET /v1/comparisons/{id}. Every offset is in
+// UTF-16 code units (JavaScript string indexes).
+
+/** Math in a unit's text, marks included: the only places the phone draws math. */
+export type UnitMath = { start: number; end: number; display: boolean };
+
+/** One sentence, list item, table row or quote of an answer. start/end are offsets in the answer. */
+export type Unit = {
+  id: string; // "claude:3"
+  n: number;
+  kind: 'sentence' | 'item' | 'row' | 'quote' | (string & {});
+  text: string;
+  context?: string;
+  start: number;
+  end: number;
+  judged: boolean;
+  math?: UnitMath[];
+};
+
+export type CompareAnswer = {
+  id: string;
+  agent: string;
+  via: 'pc' | 'handoff' | (string & {});
+  family: string;
+  model?: string;
+  status: 'ready' | 'missing' | (string & {});
+  notJudged: number;
+  units: Unit[];
+};
+
+/** One judge reading the units of answer `from` against answer `against`. judge '' is a no_judge record. */
+export type JudgeRequest = {
+  id: string;
+  from: string;
+  against: string;
+  judge: string;
+  judgeOnly: boolean;
+  model?: string;
+  status: 'queued' | 'running' | 'done' | 'failed' | (string & {});
+  attempt: number;
+  ms?: number;
+  inputTokens?: number;
+  outputTokens?: number;
+  error?: CodeError;
+};
+
+export type Judgment = {
+  unit: string;
+  against: string;
+  request: string;
+  judge: string;
+  core: boolean;
+  label: 'same' | 'opposite' | 'absent' | (string & {});
+  evidence: string[];
+  unsure: boolean;
+  flags: string[];
+};
+
+/** Digits to show bold: offsets into the unit's text. */
+export type NumberSpan = { unit: string; start: number; end: number };
+
+/** One side of a card item: the answers (ids) that say it, and their units (the first is shown). */
+export type Position = { agents: string[]; units: string[]; numberSpans?: NumberSpan[] };
+
+export type CardItem = {
+  key: string; // stays the same while the comparison runs
+  kind: 'differ' | 'check' | 'agree' | 'onlyOne' | (string & {});
+  positions: Position[];
+  numbersDiffer?: boolean;
+  check: string[];
+  missing: string[];
+};
+
+export type CardCounts = { differ: number; check: number; agree: number; onlyOne: number; notCompared: number; notJudged: number };
+
+export type Comparison = {
+  comparisonId: string;
+  status: 'waiting' | 'running' | 'done' | 'failed' | (string & {});
+  pollAfterMs?: number;
+  source: 'run' | 'direct' | (string & {});
+  runId?: string;
+  engine: string;
+  answers: CompareAnswer[];
+  requests: JudgeRequest[];
+  judgments: Judgment[];
+  items: CardItem[];
+  counts: CardCounts;
+  error?: CodeError;
+};
+
+/** An answer the phone sends for a direct comparison (POST /v1/comparisons). */
+export type ComparisonAnswer = { id: string; agent: string; via: 'pc' | 'handoff'; model?: string; text: string };
+
+export type ComparisonRequest = {
+  /** The phone's own id, so a retried request makes one comparison. */
+  clientComparisonId?: string;
+  question: string;
+  earlier?: string[];
+  answers: ComparisonAnswer[];
+  judges?: string[];
 };

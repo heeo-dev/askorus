@@ -1,7 +1,20 @@
-import type { Info } from '@/api/types';
+import { AgentClient, CancelledError } from '@/api/client';
+import type { AdapterInfo, Comparison, Info, Run } from '@/api/types';
 
-import { loadAskPrefs, saveAskPrefs } from './prefs';
-import { askers, lastSessions, parts, request, running, type Turn } from './thread';
+import { compareState } from './compare';
+import {
+  askers,
+  type FollowDeps,
+  followCompare,
+  followRun,
+  lastSessions,
+  newTurn,
+  parts,
+  request,
+  running,
+  stopAll,
+  type Turn,
+} from './thread';
 
 const turn = (over: Partial<Turn>): Turn => ({
   id: 't',
@@ -68,14 +81,337 @@ test('every asked AI has a card, running until the PC says otherwise', () => {
   expect(parts(lost).map((p) => p.status)).toEqual(['failed', 'failed']);
 });
 
-test('ask prefs survive a round trip and bad values fall back', async () => {
-  const mem = new Map<string, string>();
-  const kv = { get: async (k: string) => mem.get(k) ?? null, set: async (k: string, v: string) => void mem.set(k, v), remove: async () => {} };
-  expect(await loadAskPrefs(kv)).toEqual({ tier: 'standard', off: [], models: {}, pc: '' });
-  await saveAskPrefs({ tier: 'deep', off: ['codex'], models: { claude: 'opus' }, pc: 'pc-1' }, kv);
-  expect(await loadAskPrefs(kv)).toEqual({ tier: 'deep', off: ['codex'], models: { claude: 'opus' }, pc: 'pc-1' });
-  mem.set('ask.v1', JSON.stringify({ tier: 'max', off: 'x', models: { a: 3, b: '' }, pc: 7 }));
-  expect(await loadAskPrefs(kv)).toEqual({ tier: 'standard', off: [], models: {}, pc: '' });
-  mem.set('ask.v1', '{not json');
-  expect((await loadAskPrefs(kv)).tier).toBe('standard');
+// ---- P2-3: a turn's comparison ----
+
+const all = ['claude', 'codex', 'opencode'];
+const judge = (agent: string, family: string, caps = ['ask', 'judge']): AdapterInfo => ({
+  agent,
+  available: true,
+  capabilities: caps,
+  ...(caps.includes('judge') ? { judge: { model: `${agent}-quick`, family } } : {}),
+});
+const infoOf = (agents: AdapterInfo[]) =>
+  ({ name: 'asksemble-agent', version: '0.3.0', apiVersion: 1, hostname: 'pc', os: 'windows', agents, capabilities: ['ask'], reserved: [] }) as Info;
+const info3 = infoOf([judge('claude', 'anthropic'), judge('codex', 'openai'), judge('opencode', 'deepseek')]);
+const ask = (over: Partial<Parameters<typeof newTurn>[0]> = {}) =>
+  newTurn({ id: 't1', question: 'Capital?', tier: 'quick', to: 'all', on: all, turns: [], models: {}, info: info3, auto: true, at: 5, ...over });
+
+const answers = [
+  { agent: 'claude', status: 'done', answer: 'Seoul. 9.4 million.', model: 'claude-standard', session: 'claude:s1' },
+  { agent: 'codex', status: 'done', answer: 'Seoul. 9.7 million.', model: 'codex-standard', session: 'codex:s1' },
+  { agent: 'opencode', status: 'done', answer: 'Seoul. 9.7 million.', model: 'opencode-standard', session: 'opencode:s1' },
+];
+const runAt = (status: string, ps: unknown[], over: Partial<Run> = {}) => ({ ...runOf(status, ps as Run['parts']), runId: 'r1', pollAfterMs: 1, ...over });
+const snap = (id: string, status: string, over: Partial<Comparison> = {}): Comparison => ({
+  comparisonId: id,
+  status,
+  source: 'run',
+  engine: 'pc',
+  answers: [],
+  requests: [],
+  judgments: [],
+  items: [],
+  counts: { differ: 0, check: 0, agree: 0, onlyOne: 0, notCompared: 0, notJudged: 0 },
+  ...(status === 'waiting' || status === 'running' ? { pollAfterMs: 1 } : {}),
+  ...over,
+});
+const failedPair = { id: 'r1', from: 'claude', against: 'codex', judge: 'opencode', judgeOnly: false, status: 'failed', attempt: 1, error: { code: 'judge_failed', message: 'usage limit reached' } };
+
+type Call = { method: string; path: string; body?: Record<string, unknown> };
+type Reply = [status: number, body: unknown] | 'drop' | ((c: Call) => [number, unknown] | 'drop');
+
+// script plays a PC: each "METHOD path" answers from its own list in order
+// (the last answer repeats), and every call is recorded.
+function script(routes: Record<string, Reply[]>) {
+  const calls: Call[] = [];
+  const fetchFn = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const c: Call = {
+      method: init?.method ?? 'GET',
+      path: String(input).replace('https://pc.test/v1/', ''),
+      body: init?.body ? JSON.parse(String(init.body)) : undefined,
+    };
+    calls.push(c);
+    const list = routes[`${c.method} ${c.path}`];
+    let r: Reply | undefined = list && (list.length > 1 ? list.shift() : list[0]);
+    if (typeof r === 'function') r = r(c);
+    if (!r) r = [500, { error: { code: 'unexpected', message: `${c.method} ${c.path}` } }];
+    if (r === 'drop') throw new TypeError('Network request failed');
+    return new Response(JSON.stringify(r[1]), { status: r[0], headers: { 'Content-Type': 'application/json' } });
+  }) as typeof fetch;
+  // Like the real sleep, a stopped follow ends at its next wait.
+  const sleep = async (_ms: number, signal?: AbortSignal) => {
+    if (signal?.aborted) throw new CancelledError();
+  };
+  return { client: new AgentClient('https://pc.test', { fetch: fetchFn, sleep }), calls, routes };
+}
+const said = (calls: Call[]) => calls.map((c) => `${c.method} ${c.path}`);
+
+// harness keeps the turns like the screen does and records each patch.
+function harness(first: Turn) {
+  let turns = [first];
+  let ids = 0;
+  const seen: Turn[] = [];
+  const deps: FollowDeps = {
+    follows: new Map(),
+    update: (id, patch) => {
+      turns = turns.map((x) => (x.id === id ? { ...x, ...patch(x) } : x));
+      seen.push(turns[0]);
+    },
+    newId: () => `key-${++ids}`,
+    errorText: (e) => `words for ${(e as Error).name}`,
+  };
+  return { deps, seen, now: () => turns[0] };
+}
+
+test('newTurn with auto compare asks the PC to compare, with the judges and earlier questions', () => {
+  const t = ask();
+  expect(t.req).toEqual({
+    mode: 'ask',
+    prompt: 'Capital?',
+    tier: 'quick',
+    clientRunId: 't1',
+    agents: [{ agent: 'claude' }, { agent: 'codex' }, { agent: 'opencode' }],
+    compare: { earlier: [], judges: all },
+  });
+  expect(t).toMatchObject({ id: 't1', question: 'Capital?', agents: all, at: 5, compare: { start: 'auto', judges: all, earlier: [] } });
+
+  const first = { ...t, run: runAt('done', answers) };
+  const only = { ...ask({ id: 't2', to: { agent: 'codex' } }), question: 'only codex', run: runAt('done', [answers[1]]) };
+  const third = ask({ id: 't3', question: 'more', turns: [first, only] });
+  expect(third.req.compare).toEqual({ earlier: ['Capital?'], judges: all });
+  expect(third.req.agents?.map((a) => a.session)).toEqual(['claude:s1', 'codex:s1', 'opencode:s1']);
+});
+
+test('newTurn without auto compare, with two AIs, to one AI, or on an older agent', () => {
+  const manual = ask({ auto: false });
+  expect('compare' in manual.req).toBe(false);
+  expect(manual.compare).toEqual({ start: 'manual', judges: all, earlier: [] });
+
+  const two = ask({ on: ['claude', 'codex'] });
+  expect('compare' in two.req).toBe(false);
+  expect(two.compare).toEqual({ start: 'noJudgeOff', judges: [], earlier: [] });
+  const twoOnly = ask({ on: ['claude', 'codex'], info: infoOf([judge('claude', 'anthropic'), judge('codex', 'openai')]) });
+  expect(twoOnly.compare).toEqual({ start: 'noJudgeNone', judges: [], earlier: [] });
+
+  const one = ask({ to: { agent: 'codex' } });
+  expect(one.agents).toEqual(['codex']);
+  expect(one.compare).toBeUndefined();
+  expect('compare' in one.req).toBe(false);
+
+  const old = ask({ info: infoOf([judge('claude', 'anthropic', ['ask']), judge('codex', 'openai', ['ask']), judge('opencode', 'deepseek', ['ask'])]) });
+  expect(old.compare).toBeUndefined();
+  expect('compare' in old.req).toBe(false);
+});
+
+test('a run with a comparison is followed to the end of the comparison', async () => {
+  const pc = script({
+    'POST runs': [[202, runAt('running', [], { comparisonId: 'c1' })]],
+    'GET runs/r1': [
+      [200, runAt('running', [answers[0]], { comparisonId: 'c1' })],
+      [200, runAt('done', answers, { comparisonId: 'c1', pollAfterMs: undefined })],
+    ],
+    'GET comparisons/c1': [[200, snap('c1', 'waiting')], [200, snap('c1', 'running')], [200, snap('c1', 'done')]],
+  });
+  const h = harness(ask());
+  await followRun(pc.client, h.now(), h.deps);
+  expect(said(pc.calls)).toEqual(['POST runs', 'GET runs/r1', 'GET runs/r1', 'GET comparisons/c1', 'GET comparisons/c1', 'GET comparisons/c1']);
+  expect(pc.calls[0].body?.compare).toEqual({ earlier: [], judges: all });
+  expect(h.now().run?.status).toBe('done');
+  expect(h.now().compare?.id).toBe('c1');
+  expect(h.seen.map((t) => t.compare?.snap?.status).filter(Boolean)).toEqual(['waiting', 'running', 'done']);
+  expect(compareState(h.now())).toEqual({ kind: 'done', partial: false, retry: false });
+  expect(h.deps.follows.size).toBe(0);
+});
+
+test('a manual turn compares only when asked, and the run error stays words', async () => {
+  const pc = script({
+    'POST runs': [[202, runAt('done', answers, { pollAfterMs: undefined })]],
+  });
+  const h = harness(ask({ auto: false }));
+  await followRun(pc.client, h.now(), h.deps);
+  expect(said(pc.calls)).toEqual(['POST runs']);
+  expect(compareState(h.now())).toEqual({ kind: 'manual', cost: 6 });
+
+  const down = script({ 'POST runs': ['drop'] });
+  const g = harness(ask());
+  await followRun(down.client, g.now(), g.deps);
+  expect(g.now().error).toBe('words for NetworkError');
+  expect(said(down.calls)).toEqual(['POST runs', 'POST runs', 'POST runs']);
+});
+
+test('a lost comparison request is sent again with the same key, an answered one is not', async () => {
+  const pc = script({ 'POST comparisons': ['drop'] });
+  const h = harness({ ...ask({ auto: false }), run: runAt('done', answers) });
+  await followCompare(pc.client, h.now(), 'start', h.deps);
+  expect(h.now().compare).toMatchObject({ key: 'key-1', error: 'network' });
+  expect(compareState(h.now())).toEqual({ kind: 'lost', action: 'start' });
+
+  pc.routes['POST comparisons'] = ['drop', [202, snap('c7', 'waiting', { source: 'direct' })]];
+  pc.routes['GET comparisons/c7'] = [[200, snap('c7', 'done', { source: 'direct' })]];
+  await followCompare(pc.client, h.now(), 'start', h.deps);
+  expect(said(pc.calls)).toEqual([...Array(5).fill('POST comparisons'), 'GET comparisons/c7']);
+  expect(pc.calls.slice(0, 5).map((c) => c.body?.clientComparisonId)).toEqual(Array(5).fill('key-1'));
+  expect(pc.calls[0].body).toMatchObject({ question: 'Capital?', earlier: [], judges: all });
+  expect((pc.calls[0].body?.answers as unknown[]).length).toBe(3);
+  expect(h.now().compare).toMatchObject({ id: 'c7', key: undefined, error: undefined });
+  expect(compareState(h.now())).toEqual({ kind: 'done', partial: false, retry: false });
+
+  // An answer from the PC (here 429) ends that key: the next start makes a new one.
+  const busy = script({ 'POST comparisons': [[429, { error: { code: 'too_many_comparisons', message: 'busy' } }]] });
+  const g = harness({ ...ask({ auto: false }), run: runAt('done', answers) });
+  await followCompare(busy.client, g.now(), 'start', g.deps);
+  expect(g.now().compare).toMatchObject({ key: undefined, error: 'too_many_comparisons' });
+  expect(compareState(g.now())).toEqual({ kind: 'failed', code: 'too_many_comparisons', action: 'start' });
+  await followCompare(busy.client, g.now(), 'start', g.deps);
+  expect(busy.calls.map((c) => c.body?.clientComparisonId)).toEqual(['key-1', 'key-2']);
+});
+
+test('a comparison the PC lost shows as not found, and 다시 비교 makes a new one', async () => {
+  const pc = script({
+    'GET comparisons/c1': [[404, { error: { code: 'comparison_not_found', message: 'gone' } }]],
+    'POST comparisons': [[202, snap('c2', 'waiting', { source: 'direct' })]],
+    'GET comparisons/c2': [[200, snap('c2', 'running')], [200, snap('c2', 'done')]],
+  });
+  const t = ask();
+  const h = harness({ ...t, run: runAt('done', answers), compare: { ...t.compare!, id: 'c1', snap: snap('c1', 'running') } });
+  await followCompare(pc.client, h.now(), 'poll', h.deps);
+  expect(h.now().compare?.error).toBe('comparison_not_found');
+  expect(compareState(h.now())).toEqual({ kind: 'notFound' });
+  // stopAll leaves a comparison the PC no longer has alone.
+  stopAll(pc.client, [h.now()], h.deps.follows);
+  expect(said(pc.calls)).toEqual(['GET comparisons/c1']);
+
+  await followCompare(pc.client, h.now(), 'start', h.deps);
+  // While the new request was on its way, the old snapshot was gone.
+  expect(h.seen.some((x) => x.compare?.key === 'key-1' && !x.compare.snap && compareState(x)?.kind === 'comparing')).toBe(true);
+  expect(said(pc.calls)).toEqual(['GET comparisons/c1', 'POST comparisons', 'GET comparisons/c2', 'GET comparisons/c2']);
+  expect(h.now().compare).toMatchObject({ id: 'c2', key: undefined, error: undefined });
+  expect(compareState(h.now())?.kind).toBe('done');
+});
+
+test('다시 비교 asks the PC to judge again; a comparison still running is just followed', async () => {
+  const failed = snap('c1', 'done', { requests: [failedPair] });
+  const t = ask();
+  const pc = script({
+    'POST comparisons/c1/retry': [[409, { error: { code: 'comparison_running', message: 'running' } }], [202, snap('c1', 'running')]],
+    'GET comparisons/c1': [[200, snap('c1', 'running')], [200, snap('c1', 'done')]],
+  });
+  const h = harness({ ...t, run: runAt('done', answers), compare: { ...t.compare!, id: 'c1', snap: failed } });
+  expect(compareState(h.now())).toEqual({ kind: 'done', partial: true, retry: true });
+  await followCompare(pc.client, h.now(), 'retry', h.deps);
+  expect(said(pc.calls)).toEqual(['POST comparisons/c1/retry', 'GET comparisons/c1', 'GET comparisons/c1']);
+  expect(h.now().compare?.error).toBeUndefined();
+  expect(compareState(h.now())).toEqual({ kind: 'done', partial: false, retry: false });
+
+  pc.routes['GET comparisons/c1'] = [[200, snap('c1', 'done')]];
+  await followCompare(pc.client, h.now(), 'retry', h.deps);
+  expect(said(pc.calls).slice(3)).toEqual(['POST comparisons/c1/retry', 'GET comparisons/c1']);
+  expect(h.seen.some((x) => x.compare?.snap?.status === 'running')).toBe(true);
+});
+
+test('a follow that was replaced patches nothing more', async () => {
+  const t = ask();
+  const h = harness({ ...t, run: runAt('done', answers), compare: { ...t.compare!, id: 'c1' } });
+  const pc = script({
+    'GET comparisons/c1': [
+      () => {
+        // A newer follow (or 새 질문) takes over while this answer is on its way.
+        h.deps.follows.get('t1/compare')?.abort();
+        return [200, snap('c1', 'running')];
+      },
+    ],
+  });
+  await followCompare(pc.client, h.now(), 'poll', h.deps);
+  expect(h.now().compare?.snap).toBeUndefined();
+  expect(h.now().compare?.error).toBeUndefined();
+  expect(said(pc.calls)).toEqual(['GET comparisons/c1']);
+});
+
+test('stopAll stops following and asks the PC to stop what is not final', async () => {
+  const pc = script({ 'POST comparisons/c1/cancel': [[200, snap('c1', 'failed')]], 'POST comparisons/c4/cancel': ['drop'] });
+  const base = ask();
+  const withCompare = (id: string, over: Partial<NonNullable<Turn['compare']>> = {}): Turn => ({
+    ...base,
+    id,
+    compare: { ...base.compare!, id: `c${id}`, ...over },
+  });
+  const turns: Turn[] = [
+    withCompare('1', { snap: snap('c1', 'running') }),
+    withCompare('2', { snap: snap('c2', 'done') }),
+    withCompare('3', { error: 'comparison_not_found' }),
+    withCompare('4'),
+    withCompare('5', { snap: snap('c0', 'done') }), // the snapshot of an older comparison
+    { ...base, id: '6', compare: undefined },
+  ];
+  pc.routes['POST comparisons/c5/cancel'] = [[200, snap('c5', 'failed')]];
+  const follows = new Map([['1', new AbortController()], ['1/compare', new AbortController()]]);
+  const ctls = [...follows.values()];
+  stopAll(pc.client, turns, follows);
+  expect(follows.size).toBe(0);
+  expect(ctls.every((c) => c.signal.aborted)).toBe(true);
+  expect(said(pc.calls)).toEqual(['POST comparisons/c1/cancel', 'POST comparisons/c4/cancel', 'POST comparisons/c5/cancel']);
+  await new Promise((r) => setTimeout(r, 0)); // a failed cancel is let go
+
+  const again = new Map([['x', new AbortController()]]);
+  stopAll(undefined, turns, again);
+  expect(again.size).toBe(0);
+});
+
+// ---- Found in the S5 review (R-34) ----
+
+test("the 202's compareError reaches the turn while the AIs answer, and its words show after", async () => {
+  const pc = script({
+    'POST runs': [[202, runAt('running', [], { compareError: { code: 'too_many_comparisons', message: 'busy' } })]],
+    'GET runs/r1': [[200, runAt('done', answers, { pollAfterMs: undefined })]],
+  });
+  const h = harness(ask());
+  await followRun(pc.client, h.now(), h.deps);
+  expect(h.seen.some((x) => x.run?.status === 'running' && x.compare?.error === 'too_many_comparisons')).toBe(true);
+  expect(said(pc.calls)).toEqual(['POST runs', 'GET runs/r1']);
+  expect(compareState(h.now())).toEqual({ kind: 'failed', code: 'too_many_comparisons', action: 'start' });
+});
+
+test('새 질문 while the AIs still answer cancels the comparison the 202 named', async () => {
+  let h: ReturnType<typeof harness> | undefined;
+  const pc = script({
+    'POST runs': [[202, runAt('running', [], { comparisonId: 'c1' })]],
+    'GET runs/r1': [
+      () => {
+        // 새 질문 is pressed while the next look at the run is on its way.
+        stopAll(pc.client, [h!.now()], h!.deps.follows);
+        return [200, runAt('running', [answers[0]], { comparisonId: 'c1' })];
+      },
+    ],
+    'POST comparisons/c1/cancel': [[200, snap('c1', 'failed')]],
+  });
+  h = harness(ask());
+  await followRun(pc.client, h.now(), h.deps);
+  expect(said(pc.calls)).toEqual(['POST runs', 'GET runs/r1', 'POST comparisons/c1/cancel']);
+  expect(h.deps.follows.size).toBe(0);
+});
+
+test('newTurn sends only the asked AIs that judge, and earlier waits only for them', () => {
+  const info4 = infoOf([judge('claude', 'anthropic'), judge('codex', 'openai'), judge('opencode', 'deepseek'), judge('gemini', 'google', ['ask'])]);
+  const on = [...all, 'gemini'];
+  const first = { ...ask({ id: 't0', question: 'first', on, info: info4 }), run: runAt('done', [...answers, { agent: 'gemini', status: 'failed' }]) };
+  const t = ask({ id: 't1', on, turns: [first], info: info4 });
+  expect(t.agents).toEqual(on);
+  expect(t.compare).toEqual({ start: 'auto', judges: all, earlier: ['first'] });
+  expect(t.req.compare).toEqual({ earlier: ['first'], judges: all });
+});
+
+test('two presses of 비교하기 before the screen redraws send one comparison', async () => {
+  const pc = script({
+    'POST comparisons': [[202, snap('c1', 'waiting', { source: 'direct' })]],
+    'GET comparisons/c1': [[200, snap('c1', 'done', { source: 'direct' })]],
+  });
+  const h = harness({ ...ask({ auto: false }), run: runAt('done', answers) });
+  // The screen hands both presses the turn it last drew.
+  const drawn = h.now();
+  await Promise.all([followCompare(pc.client, drawn, 'start', h.deps), followCompare(pc.client, drawn, 'start', h.deps)]);
+  expect(said(pc.calls)).toEqual(['POST comparisons', 'GET comparisons/c1']);
+  expect(pc.calls[0].body?.clientComparisonId).toBe('key-1');
+  expect(h.now().compare).toMatchObject({ id: 'c1', key: undefined, error: undefined });
+  expect(compareState(h.now())).toEqual({ kind: 'done', partial: false, retry: false });
+  expect(h.deps.follows.size).toBe(0);
 });

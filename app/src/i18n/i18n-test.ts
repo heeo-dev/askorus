@@ -1,7 +1,41 @@
 import { AgentError, NetworkError } from '../api/client';
+import { cardKinds, checkNames, compareCodes, labels } from '../ask/compare';
 import en from './en.json';
-import { errorText, label, pickLang, setLang, t } from './index';
+import { errorText, has, label, pickLang, setLang, t } from './index';
 import ko from './ko.json';
+
+// P2-3: every code the comparison screens show has words in both languages.
+test('every card, check, label and comparison error has words', () => {
+  const keys = [
+    ...cardKinds.flatMap((k) => [`compare.kind.${k}`, `compare.meaning.${k}`]),
+    ...checkNames.map((c) => `compare.why.${c}`),
+    ...labels.map((l) => `compare.label.${l}`),
+    ...compareCodes.map((c) => `compare.error.${c}`),
+  ];
+  expect(keys.filter((k) => !has(k))).toEqual([]);
+});
+
+// Korean screen text is 합니다체, with -세요 for what the person does.
+test('Korean comparison sentences end in 니다 or 세요', () => {
+  const keys = (Object.keys(ko) as Array<keyof typeof ko>).filter((k) => k.startsWith('compare.') || k === 'ask.introCompare');
+  expect(keys.length).toBeGreaterThan(60);
+  const bad: string[] = [];
+  for (const k of keys) {
+    for (const sentence of ko[k].split(/(?<=\.)\s+|\n/)) {
+      if (sentence.endsWith('.') && !/(니다|세요)\.$/.test(sentence)) bad.push(`${k}: ${sentence}`);
+    }
+  }
+  expect(bad).toEqual([]);
+});
+
+// "{name}이" or "{name}가" is right for one name and wrong for another, so
+// no particle that changes with the word before it follows a name.
+test('no Korean particle that changes with the name follows a name', () => {
+  const after = /\{(name|names|judge|from|against|list)\}(이|가|을|를|은|는|와|과|으로|로)/;
+  expect((Object.keys(ko) as Array<keyof typeof ko>).filter((k) => after.test(ko[k]))).toEqual([]);
+  expect(after.test('{name}가 답했습니다')).toBe(true);
+  expect(after.test('{name}의 답')).toBe(false);
+});
 
 const placeholders = (s: string) => (s.match(/\{\w+\}/g) ?? []).sort();
 

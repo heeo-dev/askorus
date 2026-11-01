@@ -613,7 +613,7 @@ worktree `.claude/worktrees/p2-3-judge`(c4b43e9). 커밋·합치기는 요청할
 - **S2 CLI 판정**: 세 어댑터 `judge.go`, fakecli, 판정 폴더와 숨김, LT-06a. + test-live. 11-01 만들고 검토함(16절).
 - **S3 비교와 API**: compares, OnEnd, API, check, CLI, IT-12~14, LT-06b, LT-07. 14절 S2 결정 3번(판정한 모델의 회사 확인)과 4번(Codex 묻기도 기능 끄기, LT-05)도 한다. + test-live. 지나면 에이전트를 합치고 배포할지 묻는다(검증 전 기본값, 깔린 APK는 compare를 보내지 않아 달라지는 것 없음). 11-01 만들고 검토함(17절), 상시 지시에 따라 합치고 배포함(14절 S3 결정 2).
 - **S4 검증 도구와 데이터**: judge-eval, 데이터 파일, 시운전 36번(OK 뒤). 11-01 만들고 통합함(18절): 정답 재생 놓침 0·카드 19/273/15, perturb 손 확인, test-all ALL PASSED, 시운전 36번(상시 지시에 따라 돌리고 뒤에 알림).
-- **S5 앱**: 타입·클라이언트·화면·설정·문구, ST. 단위 글은 `math` 자리만 수식으로 그린다(2절). 8082로 S23에서 '검증 전'으로 보게 하고 합치기 전에 끈다. MT-11.
+- **S5 앱**: 타입·클라이언트·화면·설정·문구, ST. 단위 글은 `math` 자리만 수식으로 그린다(2절). 8082로 S23에서 '검증 전'으로 보게 하고 합치기 전에 끈다. MT-11. 11-01 만들고 통합함(19절): jest 713/713, test-all ALL PASSED, MT-11 테스트 폰 반은 봄(세 AI 실제 묻기 둘, 비교 6/6씩). MT-11의 S23 반은 사용자 몫.
 - **S6 검증 1단계**: 약 1,000번, 결과를 보이고 기본값에 넣음, 결과 파일과 이 문서. + test-live, 다시 배포.
 - **S7 문서**: privacy.md, testing.md, 'P2-3 만든 것', '정리: AI별 판정 명령'. CLAUDE.md '지킬 것' 한 줄은 제안만.
 - **S8 내기**: 앱 합치기(요청 시), E2E-08 선택, MT-12. **S9 Jev 재기**(선택). **나중**: P2-4, P2-5 더 따져 보기, P2-6 기록.
@@ -675,6 +675,7 @@ worktree `.claude/worktrees/p2-3-judge`(c4b43e9). 커밋·합치기는 요청할
   10. **근거 붙인 정답 재생.** `-gold-evidence`면 카드가 23/269/15다. 근거가 상대 답의 단위를 다른 말 항목으로 끌어와(Aggregate C2-5) 정답 카드가 같은 말인 주장 4개(8-codex2, 16-codex2, 27-claude4, 27-codex1)가 다른 말로 보인다. 그 단위가 반대 방향 쌍의 근거이고 주장 자신의 쌍은 same인, 방향에 따른 라벨 차이다. 그래서 19/273/15는 근거 없이만 확인한다.
   11. **스크립트(R-31).** `judge-eval.ps1`은 계획의 param 줄 대신 `$args`를 넘긴다(param이 있으면 `-out`이 PowerShell 공통 매개변수와 겹쳐 거절됨).
   12. **도구를 쓰려 한 판정에서 멈춤(검토 SEC-1, 내가 정함).** 판정 AI가 `judge_used_tool`이나 `bad_model`로 끝나면 그 요청은 실패로 기록하고 run 전체를 멈춘다(새 시도 없음, OpenCode 정리, stop.json `suspect`, 종료 코드 6, 스크립트가 'events.log를 본 뒤 -resume'을 찍음). 계획의 '시운전에서 보이면 멈추고 살핀다'를 사람이 지켜보지 않는 S6의 약 1,000번에도 코드로 지키게 했다. CLI가 바뀌어 판정이 도구를 쓰기 시작해도 1,000번을 다 돌지 않는다. 재현 테스트 `TestSuspectStops`.
+- **S5 결정(11-01, 상시 지시에 따라 추천대로 정함, 사용자에게 알림).** 계획이 고를 자리를 남긴 곳과 계획 글대로는 어색하던 곳 19개다(19절 'S5 결정'). 모두 화면이 PC의 스냅숏을 덜 꾸미거나, 잃은 요청을 한 번만 다시 보내거나, 지난 비교를 새것처럼 보이지 않게 하는 쪽이다. 하나는 통합에서 내가 정했다: 바닥글 '판정: …'과 AI 탭 '내 PC · 판정: …'의 이름은 요청 순서가 아니라 턴의 AI 순서(탭 순서)다(계획의 예 'Claude haiku · Codex gpt-6-luna · …'와 같게). 검토에서 고를 자리로 남은 셋도 내가 정했다: 아무도 답하지 않은 턴은 '답이 하나뿐' 대신 `need_two_answers` 문구(COR-1, 검토 고침 ②와 같음), AI 탭 '판정: …'에서 그 답의 판정이 실패한 AI는 뺌(COR-8), 판정할 쌍이 없는 턴은 '비교하기' 대신 `no_judge` 상태(COR-9).
 
 #### 15. S1 구현 메모 (10-31)
 
@@ -812,6 +813,58 @@ S4를 worktree에서 만들었다(11-01 커밋, f589c2c 위). 데이터 조각(`
   - 결과: gofmt 깨끗, `go vet`(태그 있이·없이, Windows·Linux) 깨끗, `go test -tags judgeeval ./cmd/judge-eval/...` 통과(약 27초), test-all ALL PASSED(첫 번에, Go 118초·judge-eval 32초·jest 628/628·expo-doctor 20/20).
 - **결과.** gofmt 깨끗, `go vet`(태그 있이·없이, Windows·Linux) 깨끗, `go test ./...` 통과(judge-eval은 빠짐), `go test -tags judgeeval ./cmd/judge-eval/...` 통과(약 23초), `check-eval-data.py` OK, test-all ALL PASSED(첫 번에, Go 131초·judge-eval 30초·jest 628/628·expo-doctor 20/20). test-live는 어댑터·claude 다루기를 바꾸지 않아 돌리지 않았다.
 - **알려진 한계.** perturb는 서로 묶인 수를 맞춰 바꾸지 않는다(시급×209시간=월급, 공값+방망이값=합계, Q24 계산 줄): 반대 말은 맞지만 꼼꼼히 읽으면 답 안에서 어긋난다. Q25는 공·방망이 값만 바뀌고 질문의 $1.10·$1.00은 그대로다. '지구 저궤도(약 600km)'처럼 같은 것을 다른 말로 부른 값은 반대가 약할 수 있다. 근거 정답과 perturb 손 확인은 Claude 계열 에이전트가 했다(P0-6 라벨과 같은 치우침). OpenCode 토큰은 하한이다(`step_finish` 없음). `TestResumeSubsetOfEngines`는 50ms 기다림으로 Codex 한도가 먼저 닿게 해, 부하가 큰 PC에서는 시간에 민감한 테스트 목록에 들 수 있다(10번 반복 통과). `go.mod`의 `golang.org/x/sys`는 judge-eval이 직접 쓰는데도 `// indirect`로 남아 있다(claude 어댑터의 `pty_windows.go`와 같음, `go mod tidy`는 돌리지 않음). 제품 `judge.Numbers`는 '㎢'(U+33A2)와 'km2'를 넓이 단위로 읽지 못하고 'km²'만 읽는다(P0-6 데이터에는 없어 숫자에 영향 없음. 한국어 답의 숫자 확인이 놓칠 수 있어 S6에서 본다).
+
+#### 19. S5 구현 메모 (11-01)
+
+S5를 worktree에서 만들었다(커밋 전, e35d4de 위). core 조각(타입·클라이언트·`ask/compare.ts`·`ask/thread.ts`·`ui/inlineMath.ts`·prefs·문구·UT)과 ui 조각(화면 다섯·묻기 화면·설정·가짜 에이전트·ST)을 따로 만들고, 통합 단계에서 이음매를 보고 test-all과 테스트 폰 확인을 했다. 에이전트는 바꾸지 않았다(배포된 에이전트 그대로, test-live는 돌리지 않음).
+
+- **만든 것.**
+  - 타입(`api/types.ts`): 에이전트 JSON 그대로(`judge`·`judging`·`integrations`, `compare`·`comparisonId`·`compareError`, 비교 스냅숏, `POST /v1/comparisons` 몸). 문자열 합집합은 모두 새 값도 받고(`string & {}`), 배열은 늘 `?? []`로 읽는다.
+  - 클라이언트(`api/client.ts`): `comparison`, `waitComparison`(바로 한 번, 그 뒤 PC가 준 `pollAfterMs` 간격으로. 모르는 상태도 `pollAfterMs`가 있으면 계속, 끊긴 요청은 30번 연속까지 1초 뒤 다시), `startComparison`(`clientComparisonId`가 있을 때만 같은 몸으로 다시, 많아야 3번), `retryComparison`, `cancelComparison`, `comparisonPolling`. `startRun`은 그대로이고 몸에 `compare`가 실릴 뿐이다.
+  - `ask/compare.ts`(새, 순수 함수만): 누가 판정하나(`judgesOf`, `compareStart`: 모두에게 셋 이상이면 auto·manual, 둘이면 noJudgeOff·noJudgeNone, 한 AI·'이 AI에게만'·`judge` 없는 PC는 P2-2 그대로), 보낼 것(`earlierFor`: 이번 판정 AI가 모두 답한 앞 턴 질문 셋까지, `directRequest`, `startCost`. 길이는 늘 UTF-8 바이트 `utf8Bytes`·`cutUtf8`로), 상태(`withRun`·`withSnap`·`withError`, `compareState` 아홉 가지: 답하는 중·비교하기·판정할 AI 없음·답 하나·비교하는 중·끝·실패·404·연결 끊김), 문구 고르기(`compareErrorText`: compare → ask → 일반 → 코드 순, `judge_failed`는 AI 글을 다음 줄에), 탭·카드·시트 보기(`tabs`·`cards`·`chipCounts`·`shownCards`·`usableJudgments`·`pairView`·`requestLines`·`judgeModels`·`judgedBy`·`failedWith`·`longAnswers`), 단위 글 조각(`pieces`: 수식은 PC가 준 `math` 자리만, 굵게는 숫자 자리만. 글에서 `$`를 찾지 않는다, S1 결정 1).
+  - `ask/thread.ts`: `TurnCompare`(보낼 때 정한 start·judges·earlier와 id·key·snap·error. error는 코드이고 문구는 그릴 때 고름), `Turn.at`·`Turn.compare`, `newTurn`, `followRun`(묻기를 따라가고 자동 비교면 비교 끝까지), `followCompare`(poll·start·retry), `stopAll`('새 질문'이 따라가기를 모두 멈추고, 끝나지 않은 비교는 PC에 cancel을 보내고 기다리지 않음). 비교는 `run.parts`에 넣지 않는다. 주석의 'P2-5'(폰 기록)는 'P2-6'으로(`ask.tsx`도).
+  - `ui/inlineMath.ts`: Markdown의 줄 안 수식 규칙(주석 포함)을 그대로 옮기고 `inlineMathSpans`·`texOfSpan`을 더했다. 에이전트와 같은 공유 데이터 `docs/judge/testdata/inline-math.json` 62건이 앱에서도 자리까지 같다. Markdown 동작은 그대로(Markdown-test 통과).
+  - 화면: `TurnTabs`(정리 + AI마다, '…' 답하는 중, '✕' 실패. 화면 읽기에는 접근성 값과 busy로, 검토에서 더함), `CompareItem`·`UnitText`(카드 종류마다 7절의 모양, 문맥은 위에 작게, 고를 수 있는 평문), `CompareSection`(정리 탭: 상태 줄과 버튼, 칩 거르기, 카드마다 뜻 한 줄과 3개 먼저 그다음 '{n}개 더 보기', 바닥글 넷), `PairSheet`(편마다 이름과 문장, 까닭, 방향별 판정, '{name} 원문 보기'가 그 AI 탭을 고르고 닫힘, 확률 없음), `JudgesSheet`(요청마다 누가 누구의 문장을 누구의 답과 견줬는지와 시간·대기·판정 중·실패 글). 묻기 화면은 턴마다 탭(기본 정리)이고 시트는 화면에 하나다. 설정에 '비교' 절(스위치 '답이 모이면 자동으로 비교', 기본 켬, 예전에 저장한 prefs도 켬, 도움말). `judge`가 있고 자동 비교가 켜져 있으면 첫 안내는 `ask.introCompare`.
+  - 문구: 74개(검토에서 `compare.tab.failed` 하나 더함), 한국어·영어 같은 키와 자리표시. 새 한국어 문장은 합니다체이고 이름 자리 뒤에 이름 따라 바뀌는 조사가 없다(i18n 테스트가 지킴).
+  - 가짜 에이전트: `enableJudge`(세 AI의 판정 모델과 `judging`), `POST /v1/runs`의 compare 검사와 `comparisonId`, 비교 경로 전부(계획·재시도·취소·직접 비교·404), 시험 손잡이(`judgeReplies`·`compareHold`·`maxUnits`·`core`·`comparisonError`·`loseReplies`·`forgetComparisons`). 문장 나누기·주제와 숫자로 판정·카드 모으기는 `test/fakeCompare.ts`(순수)에 있고 스냅숏 모양은 실제와 같다.
+- **S5 결정(11-01, 상시 지시에 따라 추천대로 정함, 14절).** 계획이 고를 자리를 남긴 곳과 계획 글대로는 어색하던 곳이다.
+  1. 비교 요청을 보내는 중(key 있음)이면 예전 id가 있어도 '비교하는 중'이고, 'start'는 예전 스냅숏을 지운다. 404 뒤 '다시 비교'에서 사라진 비교의 카드가 새 답이 올 때까지 남아 보이지 않게.
+  2. `POST /v1/comparisons`가 에이전트 오류(429 `too_many_comparisons` 등)를 받으면 key를 버려 다음 '비교하기'는 새 `clientComparisonId`다. 답이 오지 않았을 때(NetworkError)만 같은 key로 다시 보낸다('key = 답을 못 받은 POST').
+  3. 바뀐 따라가기(같은 턴의 새 따라가기나 '새 질문')는 그 뒤 도착한 답으로 턴을 고치지 않는다.
+  4. 앞 질문(earlier)에서 NUL을 뺀다(에이전트가 NUL을 `bad_compare`로 거절).
+  5. 묻기가 실패한 턴(`turn.error`)에는 '답하는 중' 줄을 보이지 않는다(탭이 '✕').
+  6. 이름과 코드: 화면에 보이는 이름은 모두 표시 이름(`agentName`), 탭 키와 시트의 '원문 보기'가 넘기는 값은 AI 코드.
+  7. 같은 키가 둘이면 보일 수 있는 첫 항목을 남긴다(첫 항목의 단위를 폰이 못 찾으면 뒤의 것).
+  8. `pieces`: 글에 맞지 않는 수식 자리는 버리고 굵게 자리는 잘라 맞추며, 이모지 가운데에 걸린 자리는 바깥으로 넓힌다. 앞 수식과 겹치는 수식은 버린다. `texOfSpan`은 짝이 안 맞는 `$$x$`·`$x$$`도 null(평문).
+  9. 판정이 도는 동안 빈 '다른 말' 카드는 그리지 않는다('찾지 못했습니다'는 끝난 뒤에만). 사람이 고른 칩의 카드는 비어도 보인다. 판정이 도는 동안 고른 빈 카드에는 '비교하는 중…' 한 줄을 붙인다(검토에서 더함, 끝난 뒤의 빈 카드는 그대로).
+  10. 칩과 카드는 '비교하는 중'과 '끝'에만 보인다. 비교 전체가 실패하면 오류와 버튼, 바닥글만(판정한 AI 시트로 AI 글을 볼 수 있게).
+  11. 바닥글은 비교하기·비교하는 중·끝·실패, 또는 스냅숏이 있을 때 보인다. '판정: … ›'는 스냅숏이 있을 때만 눌리고, 그 전에는 info의 판정 모델로 만든 평문이다. 판정한 AI가 하나도 없으면(쌍이 모두 `no_judge`) 그 줄을 그리지 않는다(검토에서 고침).
+  12. PairSheet의 '까닭'은 아는 검사가 붙은 항목이면 보인다(확인 필요, 에이전트가 붙이면 다른 말도).
+  13. JudgesSheet의 끝난 요청은 시간 뒤에 모델을 붙인다('9.8초 · deepseek-v4.1-flash').
+  14. 'AI {n}개가 답했습니다' 줄은 n이 0이면 숨긴다(정리 탭이 답하는 AI를 대신 보임). 'PC의 AI를 {n}번 더 씁니다'는 n이 0이면 숨긴다.
+  15. 수식 조각은 답의 줄 안 수식처럼 그린다: 유니코드로 바뀌면 평문(숫자 자리와 겹치면 굵게), 못 바꾸면 코드 모양 TeX.
+  16. 설정 스위치는 막대와 손잡이만 있고 '켬/끔' 글자가 없다(새 문구 키를 더하지 않음. 접근성은 switch·checked). 끔 막대는 `th.muted`(검토에서 `th.border`에서 바꿈, 쪽과 3:1 넘게).
+  17. 칩 거르기와 '더 보기'는 `CompareSection` 안의 상태라 AI 탭에 갔다 오면 처음으로 돌아간다. 폰에서 거슬리면 턴마다 `ask.tsx`로 옮긴다.
+  18. 판정 AI 이름 순서는 턴의 AI 순서(통합에서 정함, 아래).
+  19. 한국어 끝맺음 테스트(니다./세요.)는 `compare.*`와 `ask.introCompare`만 본다. `settings.compareHint`는 계획 글대로 '합니다(…).'로 끝나 뺐다. 조사 테스트는 모든 한국어 키를 본다.
+- **통합에서 고친 것.** 판정 AI 이름 순서: 바닥글 '판정: …'과 AI 탭 '내 PC · 판정: …'이 요청 순서라 'OpenCode … · Codex … · Claude …'로 탭과 거꾸로 나왔다. `judgeModels`는 턴의 AI 순서, `judgedBy`는 스냅숏의 답 순서로 정렬하고(묻지 않은 판정 AI는 뒤), UT와 ST 기대값을 고쳤다. 그 밖의 이음매(이름과 코드, `UnitText`가 자기 단위의 숫자 자리만 넘김, 수식 조각 그리기, `FollowDeps`)는 두 조각의 계약이 맞았다. 버그는 나오지 않아 회귀 표에 더한 줄은 없다.
+- **검토.** 조각마다 코드를 바꿔 보는 검사를 했다: `followCompare`의 따라가기 가드를 빼면 UT 'a follow that was replaced patches nothing more'가, `ask.tsx`의 `stopAll`을 그냥 abort로 바꾸면 ST '새 질문'(cancel 한 번)이 실패한다. 따로 맡긴 검토는 테스트 폰 확인 뒤에 했다(아래 '커밋 전 검토').
+- **결과(11-01).** tsc 깨끗, jest 713/713(24묶음, S4의 628에서 core 61·ui 24 더함), test-all ALL PASSED 첫 번에(약 251초: Go 134초·judge-eval 38초·tsc 8초·jest 32초·expo-doctor 20/20). test-live는 에이전트를 바꾸지 않아 돌리지 않았다.
+- **테스트 폰 확인(MT-11 테스트 폰 반, 11-01).** Galaxy S10(영어), Expo Go, 이 worktree의 8082, 배포된 에이전트(짝 맺어 둔 그대로), 빠르게, 세 AI, 자동 비교 켬, 화면은 `phone.ps1`(agent-device·adb). 스크린숏 11장은 저장소 밖(세션 scratchpad `s5\phone`).
+  - 첫 안내가 `ask.introCompare`였다.
+  - 질문 'In two sentences: how tall is Mount Everest in metres, and in which year was it first climbed?': 답 Claude 9.8초(claude-haiku-5-5), Codex 4.9초(gpt-6-luna), OpenCode 7.1초(deepseek-v4.1-flash#high). 보낸 지 약 15초에 'Comparing… 0/6'(칩은 Differ 0과 나머지 '…'), 판정 6개 6.6~11.0초(Codex 6.6·6.9, Claude 10.2·10.3, OpenCode 10.3·11.0초) 모두 done, 보낸 지 약 25초에 끝(늦어도 47초, 폴 간격 탓에 정확히는 못 잼). 카드 다른 말 0·확인 필요 0·같은 말 2·한 AI만 0(Claude '8,849 metres'와 Codex '8,848.86 metres'도 같은 말).
+  - 이어서 묻기(모두) 'In one sentence: how many people live in Seoul?': 다른 말 카드를 보려고 더한 질문이다. 판정 셋이 모두 첫 턴에 답했으므로 첫 질문이 earlier로 실렸고 에이전트가 받았다(compareError 없음). 보낸 지 약 27초에 끝. 다른 말 0·확인 필요 2(Codex '약 9.34 million', OpenCode '9.4 million … 26 million'. 까닭 '판정한 AI가 확신하지 못했습니다', 방향별 판정 'Same'과 'Same · not sure')·같은 말 1·한 AI만 0.
+  - 본 것: 탭 [Summary | Claude | Codex | OpenCode] 기본 Summary, 'AIs answered: 3 · My PC 3', 칩 개수, 카드 순서(다른 말 → 확인 필요 → 같은 말)와 뜻 한 줄, 다른 말 없음 문장, 바닥글 넷('Judged by: Claude claude-haiku-5-5 · Codex gpt-6-luna · OpenCode opencode-go/deepseek-v4.1-flash#high ›', 회사, 틀릴 수 있음, 아직 재지 않음), 판정한 AI 시트(요청 6줄, 시간·모델), 확인 필요 시트('See OpenCode's answer'가 시트를 닫고 그 턴의 OpenCode 탭을 고름), AI 탭('My PC · Judged by: Claude, OpenCode'와 그대로인 답 카드·시간·Copy·Only this AI), 설정 '비교' 절(스위치 켜짐, 도움말), 다크 모드(`cmd uimode night yes`로 바꿨다가 no로 되돌림)의 정리 탭과 시트. 앱이 죽거나 글이 잘린 곳은 없다. 폰 언어가 영어라 한국어 문구는 ST(한국어 시험)로만 봤다.
+  - 못 본 것: 두 질문 모두 다른 말 카드가 나오지 않아 '두 문장 나란히 보기 ›'와 굵은 숫자는 폰에서 보지 못했다(ST가 지킴).
+  - 화면에서 본 작은 문제(고치지 않음): '다른 말' 카드의 'Found no place where the AIs said different things.' 한 줄 아래에 한 줄쯤 빈 자리가 남는다. 문장이 줄 너비에 거의 꽉 차서 Android가 두 줄로 잰 것으로 보인다(React Native Android의 글 재기 문제로, 이 화면만의 일은 아님). 바닥글의 모델 이름은 비교가 시작되기 전에는 info의 이름('haiku'), 요청이 생기면 실제 이름('claude-haiku-5-5', OpenCode는 '#high'까지)으로 바뀐다.
+  - 끝나고 폰은 `phone.ps1 release`, 홈, 화면 끔(Expo Go가 화면을 켜 둠). 8082 서버, 에이전트, Tailscale serve는 건드리지 않았다(8082는 `/status`만 읽음).
+- **커밋 전 검토(11-01, R-34).** 맞음(코드를 바꿔 보는 검사)과 화면·문구·접근성 두 갈래로 검토했고, 확인된 12건을 모두 고쳤다. 고치기 전에 각 테스트가 실패(버그)하거나 바꾼 코드를 잡는 것(테스트 빈틈)을 확인했다.
+  - 버그 7: ① 화면이 다시 그리기 전 '비교하기' 두 번 → `clientComparisonId`가 다른 POST 둘(PC가 비교 둘, 판정 12번). 같은 턴의 비교 따라가기가 살아 있으면 'start'는 그냥 돌아온다(끝난 따라가기는 늘 지도에서 빠져, 잃은·거절된 요청 뒤의 'start'는 그대로). ② 아무도 답하지 않은 턴이 '답이 하나뿐'이라고 함 → 한 AI만 답했을 때만 그 문장, 아니면 `compare.error.need_two_answers`. 검토는 '답이 하나라도 있으면'을 권했는데, 둘 이상 답했어도 PC가 쓸 답이 둘 못 되는 경우(빈 답)에도 틀린 말이라 '꼭 하나'로 좁혔다. ③ `no_judge`뿐인 비교의 바닥글 'Judged by:  ›' → 이름이 있을 때만. ④ 설정 스위치 끔 막대가 쪽과 1.2:1(어두운 1.45:1) → `th.muted`. ⑤ 탭의 '…'·'✕'가 화면 읽기에 안 들림 → `accessibilityValue`('답하는 중…'·'답하지 못했습니다')와 `busy`, 이름은 그대로(테스트가 이름으로 탭을 찾음). ⑥ 판정 중 고른 빈 카드에 '비교하는 중…'. ⑦ 영어 첫 안내의 'then' → 'While judging, the judging AI's company receives …'(한국어 '이때'는 그대로).
+  - 테스트 빈틈 5: 202의 `compareError`(429 뒤 '비교하기'와 까닭)와 `comparisonId`(답하는 동안 '새 질문'의 cancel)가 답하는 동안 턴에 실림, 끊긴 폴 뒤 '다시 받기'가 같은 비교를 따라감(POST 없음), 일부 실패의 다른 말 없음 문장, `compareErrorText`의 compare → ask 순서(`internal`·`bad_model`·`agent_unavailable`), `newTurn`이 판정할 수 있는 AI만 judges로(묻기만 하는 넷째 AI).
+  - 내가 정한 것 셋(14절 S5 결정): 검토의 '아무도 답하지 않은 턴'(COR-1)은 위 ②로 풀렸다. AI 탭 '내 PC · 판정: …'은 그 답의 판정이 실패한 AI를 빼고(COR-8), 판정할 쌍이 없어 '비교하기'가 실패밖에 못 하는 턴(물은 AI 하나가 판정을 못 하고 판정 AI가 둘 다 답한 경우, 지금 세 어댑터로는 생기지 않음)은 버튼 대신 `no_judge` 상태다(COR-9). 둘 다 `compare-test.ts`에 테스트를 넣고 바꾼 코드를 잡는 것을 확인했다.
+  - 결과: tsc 깨끗, jest 725/725(UT 4·ST 8 더함, `compareErrorText` 테스트에 셋), test-all ALL PASSED 첫 번에(222초: Go 118초·judge-eval 32초·tsc 8초·jest 32초·expo-doctor 20/20). 에이전트는 바꾸지 않았다.
+- **알려진 한계.** 비교 결과는 메모리에만 있어 앱을 끄거나 '새 질문'을 누르면 사라진다(P2-6). 'AI n개가 답했습니다 · 내 PC n'은 P2-3에서 늘 두 수가 같다(공식 앱 답은 P2-4). '답하는 중… n초'는 1초 폴이 다시 그릴 때만 바뀐다(타이머 없음). 가짜 에이전트의 판정 규칙(주제와 숫자)은 실제 판정 AI와 다르다: ST는 화면과 흐름을 지키고, 판정의 질은 S6이 잰다. 판정 정확도는 아직 재지 않았다(바닥글이 그렇게 말함, S6 뒤 `judging.verified`). 확인 필요 항목(누르는 버튼)의 접근성 이름에는 '{name}의 문장'과 까닭만 있고 인용한 문장은 따로 읽힌다(고를 수 있는 글이라, 폰의 화면 읽기에서 봄).
+- **사용자에게 남은 것.** MT-11의 S23 반: 이 worktree의 8082(`exp://PC-TAILSCALE-IP:8082`)로 S23에서 '검증 전' 상태의 비교를 써 본다(12절 S5, 합치기 전에 8082를 끔). 검토로 바뀐 설정 스위치의 끔 색도 그때 같이 보면 된다.
 
 ## 5. 단계 (초안)
 

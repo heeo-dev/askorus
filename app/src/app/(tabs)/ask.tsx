@@ -1,19 +1,37 @@
 // 한 번에 묻기 / Ask all at once (Phase 2, P2-2): one question to the PC's
 // AIs at once (POST /v1/runs), each answer as it comes, follow-ups to
 // everyone or one AI on its own session, and Claude's answer carried on in
-// the Claude app. The conversation is kept in memory; the history is P2-5.
+// the Claude app. The conversation is kept in memory; the history is P2-6.
+//
+// P2-3: a turn to every AI turned on, on a PC whose AIs judge, gets tabs:
+// 정리 (Summary) first, where the AIs' judgments of each other's answers
+// show as cards, then one tab per AI with its answer card. thread.ts follows
+// the run and the comparison; this screen wires them and draws.
 
 import * as Clipboard from 'expo-clipboard';
 import * as Crypto from 'expo-crypto';
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Keyboard, Linking, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { agentName } from '@/api/agents';
-import { type AgentClient, AgentError, CancelledError } from '@/api/client';
-import { type Info, type Run, type RunRequest, tiers } from '@/api/types';
+import { type AgentClient, AgentError } from '@/api/client';
+import { type Info, type RunPart, tiers } from '@/api/types';
+import { answered, judgedBy, type TabView, tabs } from '@/ask/compare';
 import { defaultAskPrefs, loadAskPrefs, saveAskPrefs, type AskPrefs } from '@/ask/prefs';
-import { type Asker, askers, parts, request, running, type Target, type Turn } from '@/ask/thread';
+import {
+  type Asker,
+  askers,
+  type FollowDeps,
+  followCompare,
+  followRun,
+  newTurn,
+  parts,
+  running,
+  stopAll,
+  type Target,
+  type Turn,
+} from '@/ask/thread';
 import { connect } from '@/connections/open';
 import { type Cause, cause } from '@/connections/reach';
 import { type Connection, ConnectionStore } from '@/connections/store';
@@ -21,10 +39,14 @@ import { errorText, has, t } from '@/i18n';
 import { AnswerCard, partError } from '@/ui/AnswerCard';
 import { Button } from '@/ui/Button';
 import { Choices } from '@/ui/Choices';
+import { CompareSection } from '@/ui/CompareSection';
 import { FormScroll } from '@/ui/FormScroll';
+import { JudgesSheet } from '@/ui/JudgesSheet';
 import { ModelSheet } from '@/ui/ModelSheet';
+import { PairSheet } from '@/ui/PairSheet';
 import { ReachError } from '@/ui/ReachError';
 import { type Theme, useTheme } from '@/ui/theme';
+import { TurnTabs } from '@/ui/TurnTabs';
 
 const store = new ConnectionStore();
 
@@ -43,6 +65,10 @@ function askErrorText(e: unknown): string {
 }
 type Load = { state: 'loading' } | { state: 'ok'; info: Info } | { state: 'error'; cause: Cause; text: string };
 type Note = { text: string; error?: boolean };
+// The sheet open over the turns: one Summary item's, or who judged.
+type Sheet = { turn: string; kind: 'pair'; key: string } | { turn: string; kind: 'judges' } | null;
+
+const judgeOn = (info: Info) => info.agents.some((a) => a.available && a.capabilities.includes('judge'));
 
 export default function Ask() {
   const th = useTheme();
@@ -56,6 +82,8 @@ export default function Ask() {
   const [to, setTo] = useState<Target>('all');
   const [picking, setPicking] = useState<string | null>(null);
   const [notes, setNotes] = useState<Record<string, Note>>({});
+  const [tabOf, setTabOf] = useState<Record<string, string>>({}); // turn id -> 'summary' or an AI
+  const [sheet, setSheet] = useState<Sheet>(null);
   const follows = useRef(new Map<string, AbortController>());
 
   // Back on the tab: the PCs or the default tier may have changed.
@@ -99,26 +127,12 @@ export default function Ask() {
     saveAskPrefs(next);
   };
 
-  const update = (id: string, patch: Partial<Turn>) =>
-    setTurns((ts) => ts.map((x) => (x.id === id ? { ...x, ...patch } : x)));
-
-  // follow sends (or, with a run id, picks up) a run and shows its answers
-  // as they come.
-  const follow = async (client: AgentClient, turn: Turn, runId?: string) => {
-    follows.current.get(turn.id)?.abort();
-    const ctl = new AbortController();
-    follows.current.set(turn.id, ctl);
-    update(turn.id, { error: undefined });
-    try {
-      let run: Run = runId ? await client.run(runId, ctl.signal) : await client.startRun(turn.req, ctl.signal);
-      update(turn.id, { run });
-      run = await client.waitRun(run, { signal: ctl.signal, onUpdate: (r) => update(turn.id, { run: r }) });
-      update(turn.id, { run });
-    } catch (e) {
-      if (!(e instanceof CancelledError)) update(turn.id, { error: askErrorText(e) });
-    } finally {
-      if (follows.current.get(turn.id) === ctl) follows.current.delete(turn.id);
-    }
+  // What following a run or a comparison needs; thread.ts does the following.
+  const deps: FollowDeps = {
+    follows: follows.current,
+    update: (id, patch) => setTurns((ts) => ts.map((x) => (x.id === id ? { ...x, ...patch(x) } : x))),
+    newId: () => Crypto.randomUUID(),
+    errorText: askErrorText,
   };
 
   if (conns === null) return <View style={s.screen} />;
@@ -143,23 +157,35 @@ export default function Ask() {
 
   const send = () => {
     const question = text.trim();
-    if (!pc || !question || busy) return;
-    const id = Crypto.randomUUID();
-    const req: RunRequest = request({ question, tier: prefs.tier, to, on, turns, models: prefs.models, id });
-    if (!req.agents?.length) return;
-    const turn: Turn = { id, question, req, agents: req.agents.map((a) => a.agent) };
+    if (!pc || !info || !question || busy) return;
+    const turn = newTurn({
+      id: Crypto.randomUUID(),
+      question,
+      tier: prefs.tier,
+      to,
+      on,
+      turns,
+      models: prefs.models,
+      info,
+      auto: prefs.compare,
+      at: Date.now(),
+    });
+    if (!turn.agents.length) return;
     setTurns((ts) => [...ts, turn]);
     setText('');
     setTo('all');
     Keyboard.dismiss();
-    follow(pc.client, turn);
+    followRun(pc.client, turn, deps);
   };
 
+  // A new question stops following everything and asks the PC to stop the
+  // comparisons still running.
   const fresh = () => {
-    follows.current.forEach((c) => c.abort());
-    follows.current.clear();
+    stopAll(pc?.client, turns, follows.current);
     setTurns([]);
     setNotes({});
+    setTabOf({});
+    setSheet(null);
     setTo('all');
   };
 
@@ -197,6 +223,55 @@ export default function Ask() {
     note(key, { text: t('sheet.copied') });
   };
 
+  const card = (turn: Turn, p: RunPart) => {
+    const key = `${turn.id}/${p.agent}`;
+    return (
+      <AnswerCard
+        key={key}
+        part={p}
+        note={notes[key]}
+        onCopy={p.answer ? () => copy(key, p.answer ?? '') : undefined}
+        onOnly={list.some((a) => a.agent === p.agent && a.canAsk) ? () => setTo({ agent: p.agent }) : undefined}
+        onContinue={p.agent === 'claude' && p.session && canOpen ? () => continueInClaude(key, p.session ?? '') : undefined}
+      />
+    );
+  };
+
+  // A compared turn: how many answered, the tabs, and the picked tab.
+  const compared = (turn: Turn, tv: TabView[]) => {
+    const picked = tabOf[turn.id] ?? 'summary';
+    const tab = tv.some((x) => x.key === picked) ? picked : 'summary';
+    const c = turn.compare;
+    const snap = c?.snap && c.snap.comparisonId === c.id ? c.snap : undefined;
+    const part = tab === 'summary' ? undefined : parts(turn).find((p) => p.agent === tab);
+    const by = part ? judgedBy(snap, part.agent) : [];
+    const n = answered(turn);
+    return (
+      <>
+        {/* Before the first answer the Summary tab says who is answering instead. */}
+        {n.n ? <Text style={s.muted}>{t('compare.answered', n)}</Text> : null}
+        <TurnTabs tabs={tv} value={tab} onChange={(k) => setTabOf((m) => ({ ...m, [turn.id]: k }))} />
+        {part ? (
+          <Fragment key={part.agent}>
+            <Text style={s.muted}>{by.length ? t('compare.aiLine', { names: by.join(', ') }) : t('compare.via.pc')}</Text>
+            {card(turn, part)}
+          </Fragment>
+        ) : (
+          <CompareSection
+            key={turn.id}
+            turn={turn}
+            info={info}
+            onAction={(how) => pc && followCompare(pc.client, turn, how, deps)}
+            onPair={(key) => setSheet({ turn: turn.id, kind: 'pair', key })}
+            onJudges={() => setSheet({ turn: turn.id, kind: 'judges' })}
+          />
+        )}
+      </>
+    );
+  };
+
+  const sheetSnap = sheet ? turns.find((x) => x.id === sheet.turn)?.compare?.snap : undefined;
+
   const toggle = (agent: string) => {
     const off = prefs.off.includes(agent) ? prefs.off.filter((x) => x !== agent) : [...prefs.off, agent];
     change({ ...prefs, off });
@@ -223,40 +298,32 @@ export default function Ask() {
         {load.state === 'loading' ? <ActivityIndicator color={th.accent} /> : null}
         {info && !anyAsk ? <Text style={s.muted}>{oldAgent(info) ? t('ask.oldAgent') : t('ask.noAI')}</Text> : null}
 
-        {turns.length === 0 && info && anyAsk ? <Text style={s.muted}>{t('ask.intro')}</Text> : null}
+        {turns.length === 0 && info && anyAsk ? (
+          // With auto compare on a PC whose AIs judge, the intro also says where the answers go.
+          <Text style={s.muted}>{judgeOn(info) && prefs.compare ? t('ask.introCompare') : t('ask.intro')}</Text>
+        ) : null}
 
-        {turns.map((turn) => (
-          <View key={turn.id} style={s.turn}>
-            <Text style={s.question} selectable>
-              {turn.question}
-            </Text>
-            {parts(turn).map((p) => {
-              const key = `${turn.id}/${p.agent}`;
-              return (
-                <AnswerCard
-                  key={key}
-                  part={p}
-                  note={notes[key]}
-                  onCopy={p.answer ? () => copy(key, p.answer ?? '') : undefined}
-                  onOnly={list.some((a) => a.agent === p.agent && a.canAsk) ? () => setTo({ agent: p.agent }) : undefined}
-                  onContinue={
-                    p.agent === 'claude' && p.session && canOpen ? () => continueInClaude(key, p.session ?? '') : undefined
-                  }
-                />
-              );
-            })}
-            {turn.error ? (
-              <View style={s.lost}>
-                <Text style={s.error}>{turn.error}</Text>
-                <Button
-                  secondary
-                  label={t('ask.retry')}
-                  onPress={() => pc && follow(pc.client, turn, turn.run?.runId)}
-                />
-              </View>
-            ) : null}
-          </View>
-        ))}
+        {turns.map((turn) => {
+          const tv = tabs(turn);
+          return (
+            <View key={turn.id} style={s.turn}>
+              <Text style={s.question} selectable>
+                {turn.question}
+              </Text>
+              {tv ? compared(turn, tv) : parts(turn).map((p) => card(turn, p))}
+              {turn.error ? (
+                <View style={s.lost}>
+                  <Text style={s.error}>{turn.error}</Text>
+                  <Button
+                    secondary
+                    label={t('ask.retry')}
+                    onPress={() => pc && followRun(pc.client, turn, deps, turn.run?.runId)}
+                  />
+                </View>
+              ) : null}
+            </View>
+          );
+        })}
 
         {info && anyAsk ? (
           <View style={s.composer}>
@@ -329,6 +396,16 @@ export default function Ask() {
           setPicking(null);
         }}
       />
+      <PairSheet
+        snap={sheetSnap}
+        itemKey={sheet?.kind === 'pair' ? sheet.key : null}
+        onClose={() => setSheet(null)}
+        onShowAnswer={(agent) => {
+          if (sheet) setTabOf((m) => ({ ...m, [sheet.turn]: agent }));
+          setSheet(null);
+        }}
+      />
+      <JudgesSheet snap={sheetSnap} open={sheet?.kind === 'judges'} onClose={() => setSheet(null)} />
     </View>
   );
 }

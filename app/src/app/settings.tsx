@@ -1,10 +1,11 @@
 // Settings: paired PCs (check the connection, unpair), what new sessions
-// start with, the default ask tier, and about the app.
+// start with, the default ask tier, whether answers are compared on their
+// own (P2-3), and about the app.
 
 import Constants from 'expo-constants';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { AgentError } from '@/api/client';
 import { tiers } from '@/api/types';
@@ -134,6 +135,26 @@ export default function Settings() {
       />
       <Text style={s.muted}>{t('settings.askTierHint')}</Text>
 
+      {/* P2-3. A Pressable rather than Switch, so screen tests can press it (R-07). */}
+      <Text style={s.heading}>{t('settings.compare')}</Text>
+      <Pressable
+        onPress={() => {
+          const next = { ...ask, compare: !ask.compare };
+          setAsk(next);
+          saveAskPrefs(next);
+        }}
+        style={({ pressed }) => [s.switchRow, pressed && s.pressed]}
+        accessibilityRole="switch"
+        accessibilityLabel={t('settings.compareAuto')}
+        accessibilityState={{ checked: ask.compare }}
+      >
+        <Text style={s.switchLabel}>{t('settings.compareAuto')}</Text>
+        <View style={[s.track, ask.compare && s.trackOn]}>
+          <View style={[s.knob, ask.compare && s.knobOn]} />
+        </View>
+      </Pressable>
+      <Text style={s.muted}>{t('settings.compareHint')}</Text>
+
       <Text style={s.heading}>{t('settings.about')}</Text>
       <Text style={s.muted}>
         {t('app.name')} {Constants.expoConfig?.version ?? ''}
@@ -163,4 +184,12 @@ const styles = (th: Theme) =>
     ok: { color: th.ok, fontSize: 14 },
     bad: { color: th.danger, fontSize: 14 },
     buttons: { gap: 8, marginTop: 6 },
+    switchRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 6 },
+    switchLabel: { flex: 1, color: th.text, fontSize: 15 },
+    // Off in muted, not border: a control's parts need 3:1 against the page (WCAG 1.4.11).
+    track: { width: 44, height: 26, borderRadius: 13, padding: 3, backgroundColor: th.muted },
+    trackOn: { backgroundColor: th.accent },
+    knob: { width: 20, height: 20, borderRadius: 10, backgroundColor: th.card },
+    knobOn: { alignSelf: 'flex-end' },
+    pressed: { opacity: 0.7 },
   });
