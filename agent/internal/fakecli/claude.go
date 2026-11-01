@@ -82,15 +82,34 @@ func claudeJudge(c *Call) int {
 }
 
 // claudeAsk answers like the claude fake of the adapter's own tests:
-// "fake answer: " and the prompt's last line, in the session --resume
-// names or a new one.
+// "fake answer: " and the prompt's last line (or the answers file's
+// text), in the session --resume names or a new one. Ask mode fail is the
+// usage limit, is_error with exit 1; empty is a result with no text.
 func claudeAsk(c *Call) int {
+	mode, err := askMode(RoleClaude)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "fakecli:", err)
+		return 2
+	}
 	out := claudeResult(flagValue(c.Args, "--model"))
 	if id := flagValue(c.Args, "--resume"); id != "" {
 		out["session_id"] = id
 	}
-	lines := strings.Split(strings.TrimSpace(c.Stdin), "\n")
-	out["result"] = "fake answer: " + lines[len(lines)-1]
+	switch mode {
+	case AskFail:
+		out["subtype"], out["is_error"], out["result"] = "error_during_execution", true, UsageLimitClaude
+		printJSON(out)
+		return 1
+	case AskEmpty:
+		out["result"] = ""
+	default:
+		text, err := askText(RoleClaude, "fake answer: ", c.Stdin)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "fakecli:", err)
+			return 2
+		}
+		out["result"] = text
+	}
 	printJSON(out)
 	return 0
 }

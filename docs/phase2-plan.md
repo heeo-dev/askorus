@@ -611,7 +611,7 @@ worktree `.claude/worktrees/p2-3-judge`(c4b43e9). 커밋·합치기는 요청할
 - **S0 결정과 설계 글**(문서만, 10-31 끝): 결정 1~6, 원본 설계와 Phase 1 N2 고치기, 스냅숏, 메뉴 지도, 버전 표(Claude Code 2.1.314, OpenCode 2.2.1), 단계 표. 코드 주석의 'P2-5'(폰 기록)는 그 파일을 고칠 때 'P2-6'으로 바꾼다(`runs.go`는 S3, `ask.tsx`·`thread.ts`는 S5).
 - **S1 판정 라이브러리**: `core/judge.go`, `internal/judge` 전부, UT·퍼즈. 10-31 만들고 검토함(커밋 전, 15절).
 - **S2 CLI 판정**: 세 어댑터 `judge.go`, fakecli, 판정 폴더와 숨김, LT-06a. + test-live. 11-01 만들고 검토함(16절).
-- **S3 비교와 API**: compares, OnEnd, API, check, CLI, IT-12~14, LT-06b, LT-07. 14절 S2 결정 3번(판정한 모델의 회사 확인)과 4번(Codex 묻기도 기능 끄기, LT-05)도 한다. + test-live. 지나면 에이전트를 합치고 배포할지 묻는다(검증 전 기본값, 깔린 APK는 compare를 보내지 않아 달라지는 것 없음).
+- **S3 비교와 API**: compares, OnEnd, API, check, CLI, IT-12~14, LT-06b, LT-07. 14절 S2 결정 3번(판정한 모델의 회사 확인)과 4번(Codex 묻기도 기능 끄기, LT-05)도 한다. + test-live. 지나면 에이전트를 합치고 배포할지 묻는다(검증 전 기본값, 깔린 APK는 compare를 보내지 않아 달라지는 것 없음). 11-01 만들고 검토함(17절), 상시 지시에 따라 합치고 배포함(14절 S3 결정 2).
 - **S4 검증 도구와 데이터**: judge-eval, 데이터 파일, 시운전 36번(OK 뒤).
 - **S5 앱**: 타입·클라이언트·화면·설정·문구, ST. 단위 글은 `math` 자리만 수식으로 그린다(2절). 8082로 S23에서 '검증 전'으로 보게 하고 합치기 전에 끈다. MT-11.
 - **S6 검증 1단계**: 약 1,000번, 결과를 보이고 기본값에 넣음, 결과 파일과 이 문서. + test-live, 다시 배포.
@@ -659,6 +659,9 @@ worktree `.claude/worktrees/p2-3-judge`(c4b43e9). 커밋·합치기는 요청할
   2. **(c) 어댑터가 더 정한 것과 통합에서 고친 것(16절).** 정함: 그대로 둔다.
   3. **판정한 모델의 회사(COR-2).** Claude `Family`는 별칭(haiku 등)을 anthropic으로 본다. 그런데 사용자가 Claude Code를 다른 회사 모델로 돌리면(ANTHROPIC_BASE_URL 등) DeepSeek가 OpenCode의 DeepSeek 답을 판정할 수 있다. 정함: S3에서 판정이 끝나면 `Family(res.Model)`을 계획한 판정 회사와 견주고, 다르거나 비어 있으면 그 요청을 실패로 보고 출력을 버린다. Claude의 `res.Model`은 `modelUsage`가 준 실제 모델 이름이다.
   4. **Codex 묻기의 앱 도구.** 판정과 같은 기본 기능이 P2-1 묻기에도 켜져 있다. 정함: S3에서 Codex 묻기도 같은 기능을 끈다. 웹 검색(`--search`)은 그대로 두고, 합치고 배포할 때 같이 나간다. test-live LT-05로 확인한다.
+- **S3 결정(11-01, 상시 지시에 따라 추천대로 정함, 사용자에게 알림).** 17절 'S3 결정' 19개는 구현이 계획의 빈자리를 안전한 쪽으로 채운 것이라 그대로 둔다. 아래 둘은 내가 정했다.
+  1. **실패한 비교의 오류(검토 COR-2).** 모든 요청이 실패했을 때 계획 순서로 첫 실패를 고르면, 판정 AI가 없는 쌍의 `no_judge` 기록이 앞에 있어 폰이 'retry로 안 풀림'으로 보인다(예: OpenCode가 옛 판이고 Claude·Codex가 사용 한도). 정함: 판정 AI가 있던 요청의 실패를 먼저 고르고, 없을 때만 `no_judge`. 재현 테스트 `TestFailedErrorPrefersAJudgeFailure`.
+  2. **합치기와 배포(12절 S3).** 정함: S3 테스트가 지나면 에이전트를 main에 합치고 `.local\bin`에 배포한다(상시 지시). 깔린 APK는 compare를 보내지 않아 폰에서 달라지는 것은 Codex 묻기의 기능 끄기뿐이다.
 
 #### 15. S1 구현 메모 (10-31)
 
@@ -706,6 +709,54 @@ S2를 만들고 합쳤다(11-01 커밋): 'shared' 조각(core, 판정 폴더 숨
     - 모르는 이름(`--disable no_such_feature`)은 종료 코드 1로 실패한다.
   - 코드: `judgeOff` 목록, `checkJudgeArgs`의 길이 검사, 테스트 6건(apps를 빼거나 다른 기능으로 바꾸거나 `--enable`로 바꾸거나 더하면 거절). 목록에서 apps를 빼면 테스트가 실패하는 것도 확인했다.
   - 확인: LT-06a를 다시 돌려 LIVE PASSED. Codex 판정 7.3·5.4초, 셋 모두 첫 시도에 유효 출력, 주입을 따른 AI 없음, 접속·비밀 표식 0.
+
+#### 17. S3 구현 메모 (11-01)
+
+S3를 worktree에서 만들었다(11-01 커밋, c9bb3fa 위). 네 조각(shared·api·cli·codexask)을 따로 만들고 통합 단계에서 이음매를 보고 fakecli 확장, IT-12~14, LT-06b·LT-07, 문서를 더했다.
+
+- **만든 것.**
+  - core: capability `judge`(알리지 않으면 `reserved`에 나옴), `JudgeInfo{model, effort, family}`와 `AdapterInfo.judge`, `JudgeSchemaFile`(`judge-schema-v1.json`), `ErrCodeCancelled`.
+  - config: `agent.json`의 `judge` 블록 `{off, models, perAI, checks, maxUnits}`(기본 2·[unsure]·40)과 검사. 블록이 없는 예전 파일도 그대로 읽힌다.
+  - logx: answer·question·sentence·claim·evidence·reason·earlier·apikey·api_key 키를 막는다.
+  - `internal/compares`(새, 메모리만, 특정 AI를 모름): 판정 관문 `Gate`(꺼짐 → 판정 폴더 → Judger → 사용 가능 → 시험한 판 → 회사 순), `Announce`(API `/v1/info`와 CLI `info`가 같이 씀), 비교 관리자(묻기가 끝나면 정확히 한 번 시작, AI마다 2개·전체 6개 판정 프로세스, 줄 서기 5분, 시도마다 새 nonce, 출력이 틀리거나 id가 빠지면 한 번 더, 판정한 모델의 회사 확인, OpenCode 정리, retry·cancel, 30분·100개·미완료 8개).
+  - runs: `OnEnd`(묻기마다 한 번, 마지막 답 뒤).
+  - API: `/v1/info`의 `judging`·`integrations: []`, `POST /v1/runs`의 `compare`·`comparisonId`·`compareError`(나쁜 compare여도 묻기는 시작), `POST /v1/comparisons`·`GET /v1/comparisons/{id}`·`…/retry`·`…/cancel`, 판정 폴더 세션의 열기·멈추기·지우기·미리보기는 404.
+  - CLI: `asksemble-agent compare`, `info`에 judge, `check`에 판정 줄, `uninstall`에 OpenCode 판정 대화와 스키마 파일 정리.
+  - Codex 묻기도 판정과 같은 기능 18개를 끈다(14절 S2 결정 4). 웹 검색 `--search`는 그대로다.
+- **S3 결정 (추천대로).** 계획이 고를 자리를 남긴 곳은 추천이나 가장 안전한 쪽으로 정했다. 모두 판정을 줄이거나 실패를 드러내는 쪽이다.
+  1. 판정 엔진 이름은 `pc`.
+  2. 판정이 끝난 뒤 판정한 모델의 회사(`Family(res.Model)`)가 계획한 회사와 다르거나 비면 그 요청은 `bad_model`(고정 문구)로 실패하고 출력은 버린다. 다시 묻지 않는다(14절 S2 결정 3).
+  3. cancel이 버린 대기 요청은 `cancelled`. 실행 중인 판정은 끝까지 돌고, 그 뒤로 새 판정은 시작하지 않는다.
+  4. 빠진 id가 있으면 새 nonce로 한 번 더 묻고, 첫 시도의 판정에 두 번째 시도에서 첫 시도가 빠뜨린 id만 더한다. 두 번째 시도가 어떻게든 실패하면 첫 시도의 판정으로 done이다.
+  5. 요청이 하나라도 done이면 비교는 done. 모두 실패면 판정 AI가 있던 요청 중 계획 순서로 첫 실패의 오류이고, 그런 요청이 없을 때만 `no_judge` 기록의 오류다(검토 COR-2, 14절 S3 결정 1).
+  6. `judge_failed`만 AI가 쓴 글(300자까지)을 메시지로 남기고, 다른 코드는 고정 영어 문장이다. 로그에는 코드와 개수만.
+  7. 카드 모으기(`judge.Aggregate`)는 잠금 안에서 돈다(순수하고 크기가 정해져 있음). 패닉은 `internal`로.
+  8. 판정 폴더 세션 확인은 세션 목록을 한 번 부르고, 목록이 실패하면 막지 않는다(목록 숨김이 첫 방어선). id는 대소문자 없이 견준다.
+  9. `integrations`는 늘 `[]`이고, 항목 모양은 `{id, kind, destination}`로 자리만 둔다.
+  10. `compare.judges`가 물은 AI를 하나도 남기지 않으면 물은 AI 전부가 판정 후보다. 같은 `clientRunId`로 다시 보낸 묻기는 처음 비교의 `comparisonId`를 받는다(최대 8개에 걸려 있어도).
+  11. 비교의 묻기를 찾지 못하면(사라짐) 바로 `internal`로 끝내 자리를 붙잡지 않는다. 아직 돌고 있는 묻기의 `RunEnded`는 무시한다.
+  12. `Judge`가 시간 제한(2분 30초)을 넘겨 ctx도 듣지 않으면 5초 뒤 그 호출을 버리고 `judge_timeout`(그 정리 ref는 잃고, OpenCode의 10분 청소가 지움). 판정할 단위가 하나도 없으면(답이 모두 코드) 빈 카드로 done.
+  13. retry에서 판정 AI가 더는 판정하지 않으면 `agent_unavailable`, 모델 회사가 바뀌었으면 `bad_model`. 기다리던 중 취소된 묻기 비교의 retry는 그 묻기를 다시 기다린다.
+  14. 직접 비교(`POST /v1/comparisons`): 답 2~6개, id는 `^[a-z][a-z0-9-]{0,31}$`, via는 pc(이 PC의 AI, 한 번씩, 모델이 없으면 회사를 몰라 판정을 맡기지 않음)나 handoff(표의 앱 이름, 소문자). 답 64KiB·질문 32KiB(앞뒤 공백 뺀 뒤)·앞 질문 3개×4KiB·판정 AI 8개, UTF-8이고 NUL 없음. 너무 크면 413, 나머지는 400. 202의 스냅숏은 계획 전이라 답·요청이 비어 있을 수 있다(몇 ms 뒤 채워짐).
+  15. CLI `compare`: `-model`이 없으면 그 AI의 standard 단계 모델로 보고 '(model assumed: …)'를 찍는다. 파일 하나는 `-`(stdin)일 수 있고, BOM은 뺀다. handoff 답은 chatgpt·gemini 앱만(`claude=`는 늘 이 PC의 Claude Code). 단위 글과 AI 메시지의 제어 문자는 띄어쓰기로 바꿔 터미널에 찍고, 로그에는 남기지 않는다. `judge.off`면 바로 거절. 관리자 터미널은 `serve`와 같은 문구로 거절.
+  16. `check`: 꺼졌을 때는 꺼짐 줄과 '에이전트가 직접 밖으로 보내는 요청은 없습니다' 줄만. 시험한 판 줄은 이 PC의 판이 다를 때만(2026-10-31에 시험한 판). 판을 숫자로 견준다(2.2 = 2.2.0).
+  17. `uninstall`: 판정 폴더가 있고 opencode가 있을 때만 남은 OpenCode 판정 대화를 지우고(opencode가 없으면 지울 것 없음), 실패해도 코드만 알리고 계속한다. 스키마 파일은 늘 지운다.
+  18. runs의 `OnPart`도 패닉을 잡는다(로그 훅이 `OnEnd`를 빼먹지 않게).
+  19. fakecli의 열쇠 없는 'NUM n'은 열쇠 없는 숫자와만 견준다(열쇠 있는 숫자만 쓰는 S3 시나리오와 섞이지 않게. S2 테스트는 그대로).
+- **통합에서 본 것.** 네 조각의 계약(관문·`Announce`·`OnEnd`·API 옵션·CLI의 `serve` 옵션·`core.JudgeSchemaFile`)이 맞물리는지 보고 IT로 확인했다. 고칠 이음매 버그는 없었다. 나누기는 `</data-…>`만 있는 줄을 HTML 줄로 빼므로, IT-14는 가짜 끝 표시를 문장 안에도 넣어 실제로 판정 AI에게 닿는지까지 본다.
+- **검토(11-01).** 보안·정확성 검토에서 7건이 나왔다. 6건은 고쳤고, 버그는 고치기 전 코드에서 실패하는 테스트를 넣었다(R-30).
+  - SEC-1: 에이전트 종료나 CLI `compare`의 Ctrl+C로 `Close`가 불리면 OpenCode 판정 대화를 지우지 않았다. 이제 닫혀도 정리를 시작한다.
+  - SEC-2: 라이브 테스트의 Codex가 판정 스키마를 사용자 에이전트 폴더(`%APPDATA%\Asksemble`)에 썼다. 이제 시험 임시 폴더에 쓴다.
+  - COR-1: 계획 중 취소나 닫힌 뒤 retry에서 한 라운드가 두 번 끝났다.
+  - COR-2: 모든 요청이 실패한 비교가 `judge_failed`(retry로 풀림)인데도 `no_judge`('판정할 AI 없음')로 보일 수 있었다. 판정 AI가 있던 요청의 실패를 먼저 고르게 고쳤다(설계 결정 5를 바꾸는 것이라 14절 S3 결정 1로 정함).
+  - COR-3~5: 테스트 빈틈(코드를 바꿔 봐도 통과하던 곳) 6개를 테스트로 메웠다.
+- **결과(11-01).** gofmt·`go vet`(Windows·Linux, `-tags live` 포함) 깨끗, test-all ALL PASSED(207초: Go 133초, tsc, jest 628/628, expo-doctor 20/20), test-live LIVE PASSED(221초, LT-01~05·06a·06b·07). 판은 Claude Code 2.1.316, Codex 0.164.0, OpenCode 2.2.1, 판정 모델 claude-haiku-5-5, gpt-6-luna, opencode-go/deepseek-v4.1-flash#high. 판정은 모두 첫 시도에 유효 출력(다시 묻기 0).
+  - LT-05: Codex 묻기가 `--disable` 18개를 받고도 '서울'로 답함(첫 질문 8.6초, 후속 11.7초).
+  - LT-06b: 벽시계 15.7초, 요청 5.8~15.2초, 세 AI 모두 자기 두 요청이 함께 돎. 카드는 다른 말 하나 [claude:1~3] ↔ [codex:1~2, opencode:1~3]: Claude 답 전체가 '18 Pro'를 전제로 해서 반대 말로 이어진 단위가 한 항목으로 묶였다(S6에서 항목이 너무 커지는지 볼 것). OpenCode 판정 대화 0, 내용 표식은 opencode.db에만(지운 대화의 글, S2와 같음).
+  - LT-07: 판정 중 후속 질문 202, 그 앞뒤로 비교 running, 후속은 같은 세션으로 done(9.7~17.7초), 비교 done(같은 말 하나).
+  - LT-06a: 주입 셋 다 따르지 않음(inject:1 opposite), 접속 0, 비밀 표식 0, `judge_used_tool` 없음.
+  - OpenCode 토큰은 이번에도 0으로 나온 판정이 있다(`step_finish`를 안 냄, 16절 한계).
+- **알려진 한계.** `-race`는 이 PC에 C 컴파일러가 없어 못 돌렸다(compares 테스트 30번 반복, 잠금은 손으로 봄). Codex가 18개 기능 이름 중 하나를 없애거나 바꾸면 판정뿐 아니라 Codex 묻기도 'Unknown feature flag'로 실패한다(닫힌 쪽으로 실패, LT-05가 잡음, `check`에는 줄이 없음). LT-05는 Codex가 플래그를 받고 답하는 것만 보고 웹 검색이 실제로 일어났는지는 보지 않는다. 판정 폴더 세션 확인으로 열기·멈추기·지우기·미리보기마다 세션 목록을 한 번 더 부른다. 시간에 민감한 테스트 셋(`internal/judge`의 `TestSplitHostileIsQuick` 100ms 한도, `internal/pairing`의 50ms 토큰, Claude 어댑터 `TestAgentsCache`의 2초 캐시)이 전체 실행 부하에서 가끔 실패했다가 다시 돌면 통과한다(S3가 고치지 않은 패키지, 11-01 마지막 test-all도 첫 번은 앞의 하나와 뒤의 하나로 실패, 다시 돌려 ALL PASSED).
 
 ## 5. 단계 (초안)
 

@@ -110,11 +110,12 @@ type judgment struct {
 	Unsure   bool     `json:"unsure"`
 }
 
-// numRe finds "NUM n" in a unit's text.
-var numRe = regexp.MustCompile(`NUM\s+(-?[0-9]+(?:\.[0-9]+)?)`)
+// numRe finds "NUM n" or "NUM key=n" in a unit's text.
+var numRe = regexp.MustCompile(`NUM\s+(?:([a-z]+)=)?(-?[0-9]+(?:\.[0-9]+)?)`)
 
 type promptUnit struct {
 	id    string
+	key   string // the number's key; "" for a plain "NUM n"
 	num   float64
 	hasN  bool
 	other bool // ANSWER B
@@ -128,7 +129,10 @@ type promptUnit struct {
 // has "NUM n", same with that id; else absent with no evidence. Such a
 // unit is core. A unit without NUM is absent and not core. The first such
 // b-unit is the evidence, reason is "fake" and unsure is the argument.
-// A prompt without a data block gives {"judgments":[]}.
+// A number may carry a key, "NUM price=3" (S3 scenario tests): then only
+// b-units with the same key count, so one answer can agree on one thing
+// and disagree on another; a number without a key meets only numbers
+// without one. A prompt without a data block gives {"judgments":[]}.
 func Answer(prompt string, unsure bool) string {
 	var a, b []promptUnit
 	for _, u := range promptUnits(prompt) {
@@ -142,9 +146,9 @@ func Answer(prompt string, unsure bool) string {
 	for _, u := range a {
 		j := judgment{ID: u.id, Evidence: []string{}, Reason: "fake", Label: "absent", Unsure: unsure, Core: u.hasN}
 		if u.hasN {
-			if i := slices.IndexFunc(b, func(o promptUnit) bool { return o.hasN && o.num != u.num }); i >= 0 {
+			if i := slices.IndexFunc(b, func(o promptUnit) bool { return o.hasN && o.key == u.key && o.num != u.num }); i >= 0 {
 				j.Label, j.Evidence = "opposite", []string{b[i].id}
-			} else if i := slices.IndexFunc(b, func(o promptUnit) bool { return o.hasN && o.num == u.num }); i >= 0 {
+			} else if i := slices.IndexFunc(b, func(o promptUnit) bool { return o.hasN && o.key == u.key && o.num == u.num }); i >= 0 {
 				j.Label, j.Evidence = "same", []string{b[i].id}
 			}
 		}
@@ -185,8 +189,8 @@ func promptUnits(prompt string) []promptUnit {
 			continue
 		}
 		if m := numRe.FindStringSubmatch(u.Text); m != nil {
-			if n, err := strconv.ParseFloat(m[1], 64); err == nil {
-				pu.num, pu.hasN = n, true
+			if n, err := strconv.ParseFloat(m[2], 64); err == nil {
+				pu.key, pu.num, pu.hasN = m[1], n, true
 			}
 		}
 		out = append(out, pu)

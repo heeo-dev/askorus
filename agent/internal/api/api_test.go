@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -31,10 +32,12 @@ func (f fakeAdapter) ListSessions(context.Context) (core.ListResult, error) {
 }
 
 type env struct {
-	h     http.Handler
-	token string
-	logs  *bytes.Buffer
-	store *devices.Store
+	h      http.Handler
+	srv    *Server
+	token  string
+	device string // the device id of token, the owner of its runs and comparisons
+	logs   *syncBuffer
+	store  *devices.Store
 }
 
 // addDevice pairs another device and returns its token.
@@ -53,19 +56,42 @@ func newEnv(t *testing.T, a core.Adapter, mutate func(*Options)) env {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tok, _, err := store.Add("test phone")
+	tok, dev, err := store.Add("test phone")
 	if err != nil {
 		t.Fatal(err)
 	}
-	var logs bytes.Buffer
+	logs := &syncBuffer{}
 	o := Options{
 		Version: "0.1.0", Hostname: "pc", Adapters: []core.Adapter{a}, Devices: store,
-		Logger: logx.New(&logs, slog.LevelInfo), ServeHosts: []string{"pc.tail.ts.net"},
+		Logger: logx.New(logs, slog.LevelInfo), ServeHosts: []string{"pc.tail.ts.net"},
 	}
 	if mutate != nil {
 		mutate(&o)
 	}
-	return env{h: New(o).Handler(), token: tok, logs: &logs, store: store}
+	srv := New(o)
+	// Asks and judges still running end with the test, before its folders
+	// are removed (cleanups run last in, first out).
+	t.Cleanup(srv.Close)
+	return env{h: srv.Handler(), srv: srv, token: tok, device: dev.ID, logs: logs, store: store}
+}
+
+// syncBuffer is a log buffer that the request goroutine and background
+// work (run parts, judges) may write at the same time.
+type syncBuffer struct {
+	mu sync.Mutex
+	b  bytes.Buffer
+}
+
+func (b *syncBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.b.Write(p)
+}
+
+func (b *syncBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.b.String()
 }
 
 func (e env) do(method, target string, hdr map[string]string) *httptest.ResponseRecorder {

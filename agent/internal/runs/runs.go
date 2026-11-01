@@ -2,7 +2,7 @@
 // at once (mode ask, Phase 2). Like jobs, the phone gets a run id at once
 // and then asks for it; each AI's answer shows as soon as that AI is done,
 // so a slow AI does not hold back the others. Runs live in memory only:
-// the phone keeps the history (P2-5).
+// the phone keeps the history (P2-6).
 package runs
 
 import (
@@ -109,6 +109,12 @@ type Manager struct {
 	// OnPart is told when a part ends, for the agent log. It gets no
 	// prompt or answer text.
 	OnPart func(mode string, p Part)
+	// OnEnd is told once when a run has ended, with its final snapshot:
+	// after the last part's OnPart, from that part's goroutine, without
+	// the lock held (a run without parts gets it from a goroutine of
+	// Start). The comparisons start there (P2-3). A panic in it is
+	// recovered. Set it before the first Start.
+	OnEnd func(r Run)
 
 	base   context.Context
 	cancel context.CancelFunc
@@ -133,6 +139,18 @@ func (m *Manager) now() time.Time {
 
 // Start runs every task at the same time and returns the run.
 func (m *Manager) Start(sp Spec) (Run, error) {
+	run, ended, err := m.start(sp)
+	if ended {
+		// A run without parts has ended already; OnEnd still comes, as
+		// for any other run, once Start has let the lock go.
+		go m.ended(run)
+	}
+	return run, err
+}
+
+// start is Start under the lock. ended reports a new run that has ended
+// at once, because it has no parts.
+func (m *Manager) start(sp Spec) (run Run, ended bool, err error) {
 	owner, key, tasks := sp.Owner, sp.Key, sp.Tasks
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -140,7 +158,7 @@ func (m *Manager) Start(sp Spec) (Run, error) {
 	if key != "" {
 		for _, r := range m.runs {
 			if r.owner == owner && r.key == key {
-				return r.snapshot(), nil
+				return r.snapshot(), false, nil
 			}
 		}
 	}
@@ -151,11 +169,11 @@ func (m *Manager) Start(sp Spec) (Run, error) {
 		}
 	}
 	if running >= MaxRunning {
-		return Run{}, ErrTooMany
+		return Run{}, false, ErrTooMany
 	}
 	for _, t := range tasks {
 		if t.Session != "" && m.inUse[t.Session] {
-			return Run{}, ErrSessionBusy
+			return Run{}, false, ErrSessionBusy
 		}
 	}
 	for _, t := range tasks {
@@ -179,7 +197,7 @@ func (m *Manager) Start(sp Spec) (Run, error) {
 	for i, t := range tasks {
 		go m.runPart(r, i, t)
 	}
-	return r.snapshot(), nil
+	return r.snapshot(), len(tasks) == 0, nil
 }
 
 func (m *Manager) runPart(r *Run, i int, t Task) {
@@ -216,13 +234,33 @@ func (m *Manager) runPart(r *Run, i int, t Task) {
 	}
 	r.Parts[i] = p
 	r.left--
-	if r.left == 0 {
+	last := r.left == 0
+	if last {
 		r.finish(m.now())
 	}
+	final := r.snapshot()
 	m.mu.Unlock()
 	if m.OnPart != nil {
-		m.OnPart(r.Mode, p)
+		func() {
+			defer func() { _ = recover() }() // a log hook must not cost the run its OnEnd
+			m.OnPart(r.Mode, p)
+		}()
 	}
+	if last {
+		// Only the part that ended the run gets here: left reached 0 once,
+		// under the lock.
+		m.ended(final)
+	}
+}
+
+// ended tells OnEnd that run r has ended. A panicking OnEnd cannot take
+// the agent down or keep the next run from being told.
+func (m *Manager) ended(r Run) {
+	if m.OnEnd == nil {
+		return
+	}
+	defer func() { _ = recover() }()
+	m.OnEnd(r)
 }
 
 // safeAsk keeps a panicking adapter from taking the agent down.

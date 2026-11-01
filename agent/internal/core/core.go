@@ -50,12 +50,16 @@ const (
 	CapAsk          Capability = "ask"
 	CapTUI          Capability = "tui"
 	CapChat         Capability = "chat"
+	// CapJudge: the AI judges comparisons (P2-3). It is announced only for
+	// an AI whose CLI is at least the version the judge command was tested
+	// with, when judging is on and the judge folder exists.
+	CapJudge Capability = "judge"
 )
 
 // AllCapabilities lists every name the API knows, implemented or not.
 var AllCapabilities = []Capability{
 	CapList, CapStart, CapResume, CapStop, CapRemove,
-	CapOpenOfficial, CapServe, CapPreview, CapAsk, CapTUI, CapChat,
+	CapOpenOfficial, CapServe, CapPreview, CapAsk, CapTUI, CapChat, CapJudge,
 }
 
 // OpenModeOfficial opens a session in the AI's official app (principle 6).
@@ -91,11 +95,20 @@ type AdapterInfo struct {
 	Capabilities []Capability `json:"capabilities"`
 	Notices      []string     `json:"notices,omitempty"` // codes the app turns into text
 	Ask          *AskInfo     `json:"ask,omitempty"`     // set with the ask capability
+	Judge        *JudgeInfo   `json:"judge,omitempty"`   // set with the judge capability
 }
 
 // AskInfo tells the app which model each ask tier uses (P2-2).
 type AskInfo struct {
 	Tiers map[string]AskModel `json:"tiers"`
+}
+
+// JudgeInfo tells the app which model an AI judges comparisons with and
+// that model's company (P2-3). Effort is empty when the AI decides.
+type JudgeInfo struct {
+	Model  string `json:"model"`
+	Effort string `json:"effort,omitempty"`
+	Family string `json:"family"`
 }
 
 // ListResult is what an adapter returns for the session list.

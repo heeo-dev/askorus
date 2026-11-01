@@ -7,11 +7,14 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"unicode/utf8"
 
+	"github.com/asksemble/asksemble/agent/internal/compares"
 	"github.com/asksemble/asksemble/agent/internal/core"
+	"github.com/asksemble/asksemble/agent/internal/judge"
 	"github.com/asksemble/asksemble/agent/internal/runs"
 )
 
@@ -23,14 +26,25 @@ const (
 	CodeAgentNoAsk    = "agent_cannot_ask"
 	CodeAskFolder     = "ask_folder_unavailable"
 	CodeBadSessionRef = "bad_session"
+	// compareError of POST /v1/runs: compare was not {earlier, judges}
+	// within its limits. The ask runs all the same (P2-3).
+	CodeBadCompare = "bad_compare"
 )
 
 const (
 	// maxPrompt bounds one question. A follow-up that quotes other AIs'
 	// answers (P2-3) is the longest case expected.
-	maxPrompt   = 32 << 10
-	maxRunBody  = 2*maxPrompt + 8<<10 // JSON escapes (\n, \") make the body longer than the prompt
+	maxPrompt = 32 << 10
+	// maxRunBody: JSON escapes (\n, \") make the body longer than the
+	// prompt; compare's earlier questions (3 of 4 KiB) take up to 32 KiB
+	// more, escaped the same way.
+	maxRunBody  = 2*maxPrompt + 8<<10 + 32<<10
 	maxClientID = 64
+	// compare's limits: the earlier questions every judge gets (judge
+	// limits) and the judges a phone may name.
+	maxCompareEarlier      = judge.MaxEarlier
+	maxCompareEarlierBytes = judge.MaxEarlierBytes
+	maxCompareJudges       = compares.MaxJudges
 )
 
 // RunTarget is one AI of a run. Model and effort override the tier for
@@ -52,12 +66,109 @@ type RunRequest struct {
 	// ClientRunID is the phone's own id for this run. Sending the same
 	// request again returns the first run instead of asking twice.
 	ClientRunID string `json:"clientRunId,omitempty"`
+	// Compare asks for the answers to be compared once they are all in
+	// (P2-3): {earlier, judges}, see RunCompare. It is read apart from the
+	// rest, so a bad one never refuses the ask: the 202 then carries
+	// compareError instead of comparisonId.
+	Compare json.RawMessage `json:"compare,omitempty"`
+}
+
+// RunCompare is RunRequest.compare. Earlier are the earlier questions of a
+// follow-up, oldest first, at most 3 of 4 KiB; judges are the AIs that may
+// judge, in order of preference, at most 8: the agent keeps those that
+// were asked (결정 5), and every asked AI when none of them was. Unknown
+// fields are ignored (principle 4).
+type RunCompare struct {
+	Earlier []string `json:"earlier,omitempty"`
+	Judges  []string `json:"judges,omitempty"`
 }
 
 // RunStatus is the answer to POST /v1/runs (202) and GET /v1/runs/{runId}.
 type RunStatus struct {
 	runs.Run
 	PollAfterMs int `json:"pollAfterMs,omitempty"` // set while running
+	// ComparisonID is the run's comparison (GET /v1/comparisons/{id}).
+	ComparisonID string `json:"comparisonId,omitempty"`
+	// CompareError is why the POST that asked for a comparison got none:
+	// bad_compare, need_two_answers, too_many_comparisons or internal. Only
+	// that POST's 202 carries it.
+	CompareError *judge.Error `json:"compareError,omitempty"`
+}
+
+// Fixed messages of compareError.
+const (
+	msgBadCompare  = "compare must be {earlier, judges}: at most 3 earlier questions of 4 KiB each, and at most 8 AI programs of this PC, each named once"
+	msgNeedTwo     = "a comparison needs answers from at least two AIs"
+	msgTooManyCmp  = "the PC is still comparing other answers"
+	msgCompareFail = "the agent could not make the comparison"
+)
+
+// agentNameRe is what an AI program's name looks like (an adapter's
+// Agent()); compare's judges must match it.
+var agentNameRe = regexp.MustCompile(`^[a-z][a-z0-9-]{0,31}$`)
+
+// parseCompare reads RunRequest.compare. It is nil, nil when there is none
+// (absent or null), and a bad_compare error when it is not a RunCompare
+// within its limits.
+func (s *Server) parseCompare(raw json.RawMessage) (*RunCompare, *judge.Error) {
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil, nil
+	}
+	bad := &judge.Error{Code: CodeBadCompare, Message: msgBadCompare}
+	var c RunCompare
+	if err := json.Unmarshal(raw, &c); err != nil {
+		return nil, bad
+	}
+	if len(c.Earlier) > maxCompareEarlier || len(c.Judges) > maxCompareJudges {
+		return nil, bad
+	}
+	for _, e := range c.Earlier {
+		if len(e) > maxCompareEarlierBytes || !utf8.ValidString(e) || strings.ContainsRune(e, 0) {
+			return nil, bad
+		}
+	}
+	seen := map[string]bool{}
+	for _, j := range c.Judges {
+		if !agentNameRe.MatchString(j) || seen[j] || s.adapterFor(j) == nil {
+			return nil, bad
+		}
+		seen[j] = true
+	}
+	return &c, nil
+}
+
+// attachCompare makes the comparison of a run that has just started. It
+// returns the compareError for the 202, or nil when the comparison was
+// made (or found again, for a re-sent run).
+func (s *Server) attachCompare(owner, question string, run runs.Run, targets []RunTarget, c *RunCompare) *judge.Error {
+	if len(targets) < 2 {
+		return &judge.Error{Code: core.ErrCodeNeedTwoAnswers, Message: msgNeedTwo}
+	}
+	asked := make([]string, len(targets))
+	for i, t := range targets {
+		asked[i] = t.Agent
+	}
+	var judges []string
+	for _, j := range c.Judges {
+		if slices.Contains(asked, j) {
+			judges = append(judges, j) // only AIs that were asked judge (결정 5)
+		}
+	}
+	if len(judges) == 0 {
+		judges = asked
+	}
+	_, err := s.compares.Attach(compares.RunSpec{
+		Owner: owner, RunID: run.ID, Question: question,
+		Earlier: c.Earlier, Judges: judges, Asked: asked,
+	})
+	switch {
+	case err == nil:
+		return nil
+	case errors.Is(err, compares.ErrTooMany):
+		return &judge.Error{Code: core.ErrCodeTooManyComparisons, Message: msgTooManyCmp}
+	default:
+		return &judge.Error{Code: core.ErrCodeInternal, Message: msgCompareFail}
+	}
 }
 
 const runPollMs = 1000
@@ -167,6 +278,8 @@ func (s *Server) startRun(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	// compare is checked before the ask starts but never stops it.
+	cmp, cmpErr := s.parseCompare(req.Compare)
 	folder, err := s.askFolder()
 	if err != nil {
 		if s.o.Logger != nil {
@@ -200,6 +313,10 @@ func (s *Server) startRun(w http.ResponseWriter, r *http.Request) {
 		s.actionError(w, err)
 		return
 	}
+	owner := deviceOf(r)
+	if cmp != nil {
+		cmpErr = s.attachCompare(owner, prompt, run, targets, cmp)
+	}
 	if s.o.Logger != nil {
 		names := make([]string, len(targets))
 		followUp := false
@@ -207,26 +324,36 @@ func (s *Server) startRun(w http.ResponseWriter, r *http.Request) {
 			names[i] = t.Agent
 			followUp = followUp || t.Session != ""
 		}
-		s.o.Logger.Info("run started", "mode", req.Mode, "tier", tier, "agents", strings.Join(names, ","), "followUp", followUp)
+		compareCode := ""
+		if cmpErr != nil {
+			compareCode = cmpErr.Code
+		}
+		s.o.Logger.Info("run started", "mode", req.Mode, "tier", tier, "agents", strings.Join(names, ","), "followUp", followUp,
+			"compare", cmp != nil || cmpErr != nil, "compareCode", compareCode)
 	}
-	writeJSON(w, http.StatusAccepted, s.runStatus(run))
+	st := s.runStatus(owner, run)
+	st.CompareError = cmpErr
+	writeJSON(w, http.StatusAccepted, st)
 }
 
 // getRun is GET /v1/runs/{runId}. A device only sees its own runs.
 func (s *Server) getRun(w http.ResponseWriter, r *http.Request) {
-	run, ok := s.runs.Get(deviceOf(r), r.PathValue("runId"))
+	owner := deviceOf(r)
+	run, ok := s.runs.Get(owner, r.PathValue("runId"))
 	if !ok {
 		writeError(w, http.StatusNotFound, CodeRunNotFound, "no such run (finished more than 30 minutes ago, or the agent restarted)")
 		return
 	}
-	writeJSON(w, http.StatusOK, s.runStatus(run))
+	writeJSON(w, http.StatusOK, s.runStatus(owner, run))
 }
 
-func (s *Server) runStatus(run runs.Run) RunStatus {
+// runStatus is run as the phone gets it, with its comparison's id.
+func (s *Server) runStatus(owner string, run runs.Run) RunStatus {
 	st := RunStatus{Run: run}
 	if run.Status == runs.Running {
 		st.PollAfterMs = runPollMs
 	}
+	st.ComparisonID, _ = s.compares.ForRun(owner, run.ID)
 	return st
 }
 

@@ -657,3 +657,111 @@ func TestUnexpected(t *testing.T) {
 		t.Errorf("unknown role = %d", r.ExitCode)
 	}
 }
+
+// Keyed numbers (S3): only numbers of the same key meet, so one answer
+// agrees on one thing and disagrees on another; plain NUM meets plain NUM
+// only, as before.
+func TestAnswerKeyed(t *testing.T) {
+	tk := task(
+		[]core.JudgeUnit{unit("a1", "가격은 NUM p=1입니다."), unit("a2", "높이는 NUM h=5입니다."), unit("a3", "색 번호는 NUM c=9입니다."), unit("a4", "그냥 NUM 7"), unit("a5", "음수 NUM t=-2.5")},
+		[]core.JudgeUnit{unit("b1", "가격은 NUM p=2입니다."), unit("b2", "높이는 NUM h=5입니다."), unit("b3", "온도 NUM t=-2.5")},
+	)
+	v := validate(t, tk, Answer(prompt(t, tk), false))
+	want := []struct {
+		label    string
+		evidence []string
+		core     bool
+	}{
+		{judge.LabelOpposite, []string{"b1"}, true},
+		{judge.LabelSame, []string{"b2"}, true},
+		{judge.LabelAbsent, nil, true},
+		{judge.LabelAbsent, nil, true}, // a plain number meets no keyed one
+		{judge.LabelSame, []string{"b3"}, true},
+	}
+	if len(v.Verdicts) != len(want) {
+		t.Fatalf("verdicts = %+v", v.Verdicts)
+	}
+	for i, w := range want {
+		g := v.Verdicts[i]
+		if g.Label != w.label || g.Core != w.core || !slices.Equal(g.Evidence, w.evidence) && len(g.Evidence)+len(w.evidence) > 0 {
+			t.Errorf("a%d = %+v, want %+v", i+1, g, w)
+		}
+	}
+	// A plain number still meets a plain one.
+	plain := task([]core.JudgeUnit{unit("a1", "NUM 3")}, []core.JudgeUnit{unit("b1", "NUM k=4"), unit("b2", "NUM 4")})
+	if g := validate(t, plain, Answer(prompt(t, plain), false)).Verdicts[0]; g.Label != judge.LabelOpposite || !slices.Equal(g.Evidence, []string{"b2"}) {
+		t.Errorf("plain = %+v", g)
+	}
+}
+
+// The answers file and the ask modes (S3): an ask answers the file's text
+// for its role, fail is the usage limit, empty has no text.
+func TestAskAnswersAndModes(t *testing.T) {
+	exes := Install(t)
+	SetAnswers(t, map[string]string{RoleClaude: "클로드 답 NUM p=1.", RoleCodex: "코덱스 답.", RoleOpenCode: "오픈코드 답."})
+	dir := t.TempDir()
+	env := map[string]string{"PWD": dir}
+	claudeAsk := []string{"-p", "--output-format", "json", "--model", "haiku", "--tools", "WebSearch,WebFetch"}
+	codexAsk := []string{"--search", "exec", "-s", "read-only", "--ignore-user-config", "--skip-git-repo-check", "--json", "-m", "gpt-6-luna", "-"}
+	opencodeAsk := []string{"run", "--standalone", "--format", "json", "--agent", "asksemble-ask", "-m", "opencode-go/deepseek-v4.1-flash#high"}
+	answers := func() (string, string, string) {
+		t.Helper()
+		c := parseClaude(t, run(t, exes[RoleClaude], dir, claudeAsk, "preamble\n질문", nil))
+		x := lastMessage(parseCodex(t, run(t, exes[RoleCodex], dir, codexAsk, "preamble\n질문", nil).Stdout))
+		o := lastText(parseOpenCode(t, run(t, exes[RoleOpenCode], dir, opencodeAsk, "preamble\n질문", env).Stdout))
+		return c.Result, x, o
+	}
+	if c, x, o := answers(); c != "클로드 답 NUM p=1." || x != "코덱스 답." || o != "오픈코드 답." {
+		t.Errorf("answers = %q %q %q", c, x, o)
+	}
+	SetAnswers(t, map[string]string{RoleCodex: "코덱스만."})
+	if c, x, o := answers(); c != "fake answer: 질문" || x != "코덱스만." || o != "fake: 질문" {
+		t.Errorf("a role not in the file = %q %q %q", c, x, o)
+	}
+
+	t.Setenv(EnvAsk, AskFail)
+	res := run(t, exes[RoleClaude], dir, claudeAsk, "질문", nil)
+	if o := parseClaude(t, res); res.ExitCode != 1 || !o.IsError || o.Result != UsageLimitClaude {
+		t.Errorf("claude fail = %d %+v", res.ExitCode, o)
+	}
+	res = run(t, exes[RoleCodex], dir, codexAsk, "질문", nil)
+	if evs := parseCodex(t, res.Stdout); res.ExitCode != 1 || evs[len(evs)-1].Type != "turn.failed" || evs[len(evs)-1].Error.Message != UsageLimitCodex || lastMessage(evs) != "" {
+		t.Errorf("codex fail = %d %s", res.ExitCode, res.Stdout)
+	}
+	res = run(t, exes[RoleOpenCode], dir, opencodeAsk, "질문", env)
+	if evs := parseOpenCode(t, res.Stdout); res.ExitCode != 1 || evs[len(evs)-1].Error == nil || evs[len(evs)-1].Error.Message != UsageLimitOpenCode || lastText(evs) != "" {
+		t.Errorf("opencode fail = %d %s", res.ExitCode, res.Stdout)
+	}
+
+	t.Setenv(EnvAsk, "codex=empty,opencode=empty,claude=empty")
+	res = run(t, exes[RoleClaude], dir, claudeAsk, "질문", nil)
+	if o := parseClaude(t, res); res.ExitCode != 0 || o.IsError || o.Result != "" {
+		t.Errorf("claude empty = %d %+v", res.ExitCode, o)
+	}
+	res = run(t, exes[RoleCodex], dir, codexAsk, "질문", nil)
+	if evs := parseCodex(t, res.Stdout); res.ExitCode != 0 || lastMessage(evs) != "" || evs[len(evs)-1].Type != "turn.completed" {
+		t.Errorf("codex empty = %d %s", res.ExitCode, res.Stdout)
+	}
+	res = run(t, exes[RoleOpenCode], dir, opencodeAsk, "질문", env)
+	if evs := parseOpenCode(t, res.Stdout); res.ExitCode != 0 || lastText(evs) != "" {
+		t.Errorf("opencode empty = %d %s", res.ExitCode, res.Stdout)
+	}
+
+	// Only opencode fails; the others answer.
+	t.Setenv(EnvAsk, "opencode=fail")
+	if c, x, _ := answers(); c != "fake answer: 질문" || x != "코덱스만." {
+		t.Errorf("per role = %q %q", c, x)
+	}
+	if n := len(Sessions(t)); n != 5 {
+		t.Errorf("opencode asks keep their sessions, failed ones too: %d", n)
+	}
+	t.Setenv(EnvAsk, "nonsense")
+	if r := run(t, exes[RoleCodex], dir, codexAsk, "질문", nil); r.ExitCode != 2 {
+		t.Errorf("unknown ask mode = %d", r.ExitCode)
+	}
+	t.Setenv(EnvAsk, "")
+	t.Setenv(EnvAnswers, filepath.Join(dir, "missing.json"))
+	if r := run(t, exes[RoleCodex], dir, codexAsk, "질문", nil); r.ExitCode != 2 {
+		t.Errorf("missing answers file = %d", r.ExitCode)
+	}
+}

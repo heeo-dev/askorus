@@ -28,6 +28,7 @@ import (
 	"github.com/asksemble/asksemble/agent/internal/adapter/codex"
 	"github.com/asksemble/asksemble/agent/internal/adapter/opencode"
 	"github.com/asksemble/asksemble/agent/internal/api"
+	"github.com/asksemble/asksemble/agent/internal/compares"
 	"github.com/asksemble/asksemble/agent/internal/config"
 	"github.com/asksemble/asksemble/agent/internal/core"
 	"github.com/asksemble/asksemble/agent/internal/devices"
@@ -79,6 +80,9 @@ Usage / 사용법:
   asksemble-agent ask [-agents claude,codex,opencode] [-tier quick|standard|deep] [-follow ID,ID] QUESTION
       ask several AIs at once, answer only (web search on, no file writes)
       여러 AI에게 한 번에 묻습니다 (답만, 웹 검색 켬, 파일 쓰기 없음)
+  asksemble-agent compare -q FILE -answer AI=FILE ... [-model AI=MODEL] [-earlier FILE] [-judges A,B] [-json]
+      split the answers into sentences and have the AIs judge each other's (the judging AI's company receives the question and the answers)
+      답을 문장으로 나눠 AI끼리 판정합니다 (판정하는 AI의 회사가 질문과 답을 받습니다)
   asksemble-agent stop SESSION_ID
       stop a background session
       백그라운드 세션을 멈춥니다
@@ -147,6 +151,8 @@ func run(args []string, in io.Reader, out io.Writer) error {
 		return newCmd(dir, args[1:], out)
 	case "ask":
 		return askCmd(dir, args[1:], out)
+	case "compare":
+		return compareCmd(dir, args[1:], in, out)
 	case "stop":
 		return stopCmd(dir, args[1:], out)
 	case "rm":
@@ -181,6 +187,27 @@ func newAdapter(cfg config.Config) (*claude.Adapter, error) {
 		DefaultModel: cfg.DefaultModel, DefaultEffort: cfg.DefaultEffort,
 		AskTiers: cfg.Ask.Tiers[claude.Name],
 	}), nil
+}
+
+// judgeMinVersions maps each AI to the oldest version of its CLI the judge
+// command was tested with. An AI not listed never judges.
+func judgeMinVersions() map[string]string {
+	return map[string]string{
+		claude.Name:   claude.JudgeMinVersion,
+		codex.Name:    codex.JudgeMinVersion,
+		opencode.Name: opencode.JudgeMinVersion,
+	}
+}
+
+// judgeGate decides which AIs judge, as serve's API does: the settings'
+// judge block, the tested versions and the judge folder inside the ask
+// folder ("" without an ask folder, and then no AI judges).
+func judgeGate(cfg config.Config) compares.Gate {
+	g := compares.Gate{Settings: cfg.Judge, MinVersions: judgeMinVersions()}
+	if ask, err := cfg.AskFolder(); err == nil {
+		g.Folder = core.JudgeFolder(ask)
+	}
+	return g
 }
 
 // askOnlyAdapters are the AIs that only answer questions for now (Phase 2;
@@ -253,8 +280,7 @@ func serve(dir string, args []string) error {
 	}
 	// N3: every session the agent starts inherits its rights.
 	if claude.SelfElevated() {
-		return fail("refusing to run as administrator: sessions started from here would get full rights. Start the agent from a normal terminal",
-			"관리자 권한으로는 실행하지 않습니다. 여기서 켠 세션이 모든 권한을 갖게 됩니다. 일반 터미널에서 에이전트를 켜세요")
+		return errElevated()
 	}
 	cfg, err := config.Load(dir)
 	if err != nil {
@@ -343,6 +369,10 @@ func serve(dir string, args []string) error {
 		HistoryFolders:  historyFoldersOn(dir),
 		AddFolder:       addFolder(dir),
 		AskFolder:       askFolder,
+		// Comparison judging (P2-3): the AIs judge in <askFolder>\judge,
+		// each only with a CLI as new as its judge command was tested with.
+		Judge:            cfg.Judge,
+		JudgeMinVersions: judgeMinVersions(),
 	})
 	srv := api.HTTPServer(apiSrv.Handler())
 	ln, err := api.Listen(cfg.Port)
@@ -704,14 +734,14 @@ func info(dir string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	infos := []core.AdapterInfo{}
-	for _, a := range append([]core.Adapter{adapter}, askOnlyAdapters(cfg)...) {
-		ai := a.Info(context.Background())
-		if asker, ok := a.(core.Asker); ok && slices.Contains(ai.Capabilities, core.CapAsk) {
-			ai.Ask = &core.AskInfo{Tiers: asker.AskTiers()}
-		}
-		infos = append(infos, ai)
-	}
+	return printInfo(context.Background(), append([]core.Adapter{adapter}, askOnlyAdapters(cfg)...), judgeGate(cfg), out)
+}
+
+// printInfo prints every AI's Info as GET /v1/info's agents shows it:
+// with its ask tiers, and for an AI that judges the capability judge and
+// its judge model, effort and company (compares.Announce, as the API).
+func printInfo(ctx context.Context, adapters []core.Adapter, g compares.Gate, out io.Writer) error {
+	infos, _ := compares.Announce(ctx, adapters, g)
 	enc := json.NewEncoder(out)
 	enc.SetIndent("", "  ")
 	return enc.Encode(infos)

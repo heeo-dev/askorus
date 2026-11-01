@@ -3,9 +3,12 @@
 // person's config.toml left out (P0-2: its approvals_reviewer =
 // "auto_review" approved a write under read-only) and live web search on
 // (P0-7); a judge (judge.go) runs in the judge folder with web search off
-// and keeps no session file. It is the only package that runs codex or
-// knows its formats (principle 2), and it never reads Codex login files
-// (N10). Session listing comes in Phase 3.
+// and keeps no session file. Both turn off the features in featuresOff
+// (features.go): even with the person's config left out, an exec saw their
+// ChatGPT app tools such as Gmail, plugins and hooks (P2-3 S2 decision 4).
+// It is the only package that runs codex or knows its formats (principle
+// 2), and it never reads Codex login files (N10). Session listing comes in
+// Phase 3.
 package codex
 
 import (
@@ -204,9 +207,17 @@ func (a *Adapter) AskTiers() map[string]core.AskModel {
 }
 
 // askArgs builds one ask. --search is a top-level option and goes before
-// exec; -s goes after exec and before resume, which does not take it, so
-// a follow-up also sets sandbox_mode after resume (P2-1 probe). "-" reads
-// the prompt from stdin.
+// exec, and turns on the native web search; -s goes after exec and before
+// resume, which does not take it, so a follow-up also sets sandbox_mode
+// after resume (P2-1 probe). The featuresOff features are turned off
+// after the -c options (disableArgs; P2-3 S2 decision 4: app tools such as
+// Gmail were visible to an exec with the person's config left out), on a
+// new question and on resume alike, which takes --disable among its
+// options before the thread id. The thread id stays second to last and
+// "-", which reads the prompt from stdin, last:
+//
+//	--search exec -s read-only --ignore-user-config --skip-git-repo-check --json -m M [-c effort] --disable f… -
+//	--search exec -s read-only resume --ignore-user-config --skip-git-repo-check --json -m M [-c effort] -c sandbox_mode="read-only" --disable f… <thread> -
 func askArgs(model, effort, resume string) []string {
 	args := []string{"--search", "exec", "-s", "read-only"}
 	if resume != "" {
@@ -217,14 +228,22 @@ func askArgs(model, effort, resume string) []string {
 		args = append(args, "-c", `model_reasoning_effort="`+effort+`"`)
 	}
 	if resume != "" {
-		args = append(args, "-c", `sandbox_mode="read-only"`, resume)
+		args = append(args, "-c", `sandbox_mode="read-only"`)
+	}
+	args = append(args, disableArgs()...)
+	if resume != "" {
+		args = append(args, resume)
 	}
 	return append(args, "-")
 }
 
 // checkArgs accepts exactly what askArgs makes from valid values, so no
-// other option (a sandbox or approval change, a profile, a config key)
-// reaches codex through an ask.
+// other option (a sandbox or approval change, a profile, a config key, a
+// feature left on or turned on with --enable, the judge's
+// web_search="disabled" or --ephemeral) reaches codex through an ask. It
+// reads the model, the effort and the thread (second to last after
+// resume) and compares the whole list with askArgs of those values, so
+// every flag, its place and the order of the disabled features must match.
 func checkArgs(args []string) error {
 	model, effort, resume := "", "", ""
 	for i := 0; i+1 < len(args); i++ {

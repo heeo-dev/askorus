@@ -3,11 +3,11 @@ package codex
 // Comparison judging with codex (P2-3, spec part 8): `codex exec` in the
 // judge folder, read-only, with the person's config.toml left out, web
 // search off, no session file (--ephemeral) and the judge JSON forced by
-// --output-schema. Codex cannot run with zero tools: the judge also turns
-// off every feature that brings a tool (judgeOff), and what keeps the rest
-// (apply_patch, MCP resource reads) harmless is the read-only sandbox, the
-// left-out config, web search off and throwing away any result in which
-// it reached for a tool.
+// --output-schema. Codex cannot run with zero tools: like an ask, the judge
+// turns off every feature that brings a tool (featuresOff, features.go),
+// and what keeps the rest (apply_patch, MCP resource reads) harmless is the
+// read-only sandbox, the left-out config, web search off and throwing away
+// any result in which it reached for a tool.
 
 import (
 	"bytes"
@@ -32,8 +32,8 @@ import (
 const JudgeMinVersion = "0.164.0"
 
 // schemaName is the judge schema file in the agent folder; codex reads
-// --output-schema from a file only.
-const schemaName = "judge-schema-v1.json"
+// --output-schema from a file only, and uninstall removes it.
+const schemaName = core.JudgeSchemaFile
 
 // judgeDefault is the judge model when the settings name none (spec part
 // 8, 기본값). Stage 1 of 판정 검증 may change it.
@@ -61,41 +61,27 @@ func (a *Adapter) Family(model string) string {
 	return ""
 }
 
-// judgeOff lists the codex 0.164.0 features a judge turns off with
-// --disable (11-01 probe: by default even an exec with the person's config
-// left out has their ChatGPT apps such as Gmail, plugins, hooks, sub-agents,
-// the browser and computer use). Commands go with shell_tool and
-// unified_exec. A name codex does not know fails the run ("Unknown feature
-// flag"), so a codex that dropped one judges nothing until this list is
-// fixed.
-var judgeOff = []string{
-	"shell_tool", "unified_exec", "hooks", "apps", "plugins", "remote_plugin",
-	"multi_agent", "browser_use", "browser_use_external", "in_app_browser", "computer_use",
-	"image_generation", "view_image", "goals", "sleep_tool", "tool_suggest", "skill_search",
-	"skill_mcp_dependency_install",
-}
-
 // judgeArgs builds one judge: exec with no --search before it, read-only,
 // the person's config left out, no session file, web search off, the
-// schema from a file and the judgeOff features off. "-" reads the prompt
-// from stdin.
+// schema from a file and the featuresOff features off (disableArgs). "-"
+// reads the prompt from stdin.
 func judgeArgs(model, effort, schema string) []string {
 	args := []string{"exec", "-s", "read-only", "--ignore-user-config", "--skip-git-repo-check", "--ephemeral", "--json",
 		"-m", model, "-c", `model_reasoning_effort="` + effort + `"`, "-c", `web_search="disabled"`,
 		"--output-schema", schema}
-	for _, f := range judgeOff {
-		args = append(args, "--disable", f)
-	}
+	args = append(args, disableArgs()...)
 	return append(args, "-")
 }
 
 // checkJudgeArgs accepts exactly what judgeArgs makes from a valid model,
 // a codex effort and this adapter's schema file, so no other option (a
 // sandbox or approval change, a profile, a config key, --search, resume,
-// --enable, a feature left on or a prompt) reaches codex through a judge. Ask's checkArgs refuses this
-// shape and this refuses an ask's.
+// --enable, a feature left on or a prompt) reaches codex through a judge.
+// Ask's checkArgs refuses this shape and this refuses an ask's: an ask
+// starts with --search and has no --ephemeral, web_search="disabled" or
+// --output-schema.
 func (a *Adapter) checkJudgeArgs(args []string) error {
-	if len(args) != 16+2*len(judgeOff) {
+	if len(args) != 16+2*len(featuresOff) {
 		return fmt.Errorf("codex judge: %d arguments refused", len(args))
 	}
 	model, schema := args[8], args[14]

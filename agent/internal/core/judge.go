@@ -126,6 +126,11 @@ const (
 	ErrCodeNoJudge            = "no_judge"             // no AI may judge the pair: the others wrote an answer, work for an answer's company or cannot judge
 	ErrCodeNeedTwoAnswers     = "need_two_answers"     // fewer than two answers to compare
 	ErrCodeTooManyComparisons = "too_many_comparisons" // 8 comparisons are still unfinished
+	// ErrCodeCancelled is a request the comparison's cancel dropped while it
+	// waited in the queue, and a waiting comparison that was cancelled
+	// before its run ended (POST /v1/comparisons/{id}/cancel). A request
+	// that already runs finishes, but is not asked again.
+	ErrCodeCancelled = "cancelled"
 	// ErrCodeInternal is the agent's own fault, never the AI's: an empty
 	// prompt, or a judge schema file that changed after the agent wrote
 	// it. It is api.CodeInternal.
@@ -143,6 +148,10 @@ const (
 	JudgeMessageChars = 300
 	// JudgeFolderName is the judge folder inside the ask folder.
 	JudgeFolderName = "judge"
+	// JudgeSchemaFile names the judge schema file (JudgeSchemaV1) in the
+	// agent folder: codex reads --output-schema from a file only, and
+	// uninstall removes it.
+	JudgeSchemaFile = "judge-schema-v1.json"
 )
 
 // JudgeFolder is where judges run: <ask folder>\judge, an empty folder

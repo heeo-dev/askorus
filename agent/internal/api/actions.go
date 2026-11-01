@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -105,7 +106,34 @@ func (s *Server) launcherFor(w http.ResponseWriter, r *http.Request) (core.Launc
 		writeError(w, http.StatusNotImplemented, CodeNotSupported, "this agent cannot do that")
 		return nil, "", "", false
 	}
+	if s.judgeSession(r.Context(), a, id) {
+		writeError(w, http.StatusNotFound, core.ErrCodeNotFound, "")
+		return nil, "", "", false
+	}
 	return l, id, native, true
+}
+
+// judgeSession reports whether session id of adapter a ran in the judge
+// folder (P2-3). Such a session is a judge's, never the person's: the
+// phone never lists it, and open, stop, remove and preview answer 404 as
+// for a session that does not exist. A failing list lets the action go on:
+// this is a second line of defence, after the list's hiding, and the
+// adapter still checks the id itself (S3 decision 9).
+func (s *Server) judgeSession(ctx context.Context, a core.Adapter, id string) bool {
+	if s.o.AskFolder == "" {
+		return false
+	}
+	dir := core.JudgeFolder(s.o.AskFolder)
+	res, err := a.ListSessions(ctx)
+	if err != nil {
+		return false
+	}
+	for _, sess := range res.Sessions {
+		if strings.EqualFold(sess.ID, id) && core.InFolder(sess.Folder, dir) {
+			return true
+		}
+	}
+	return false
 }
 
 // JobStarted is the 202 answer to a slow action. The phone then reads
@@ -279,6 +307,10 @@ func (s *Server) previewSession(w http.ResponseWriter, r *http.Request) {
 	p, ok := a.(core.Previewer)
 	if !ok {
 		writeError(w, http.StatusNotImplemented, CodeNotSupported, "this agent cannot do that")
+		return
+	}
+	if s.judgeSession(r.Context(), a, id) {
+		writeError(w, http.StatusNotFound, core.ErrCodeNotFound, "")
 		return
 	}
 	pv, err := p.Preview(r.Context(), native)

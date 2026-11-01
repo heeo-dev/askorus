@@ -187,7 +187,7 @@ func TestLT06aJudge(t *testing.T) {
 	}
 	adapters := map[string]core.Adapter{
 		claude.Name:   claude.New(claude.Options{ClaudeDir: claudeDir}),
-		codex.Name:    codex.New(codex.Options{}),
+		codex.Name:    codex.New(codex.Options{SchemaDir: t.TempDir()}), // not the real agent folder (R-30)
 		opencode.Name: opencode.New(opencode.Options{}),
 	}
 	names := []string{claude.Name, codex.Name, opencode.Name}

@@ -47,7 +47,7 @@ func newLiveAsk(t *testing.T) (*liveEnv, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	adapters := []core.Adapter{claude.New(claude.Options{ClaudeDir: claudeDir}), codex.New(codex.Options{}), opencode.New(opencode.Options{})}
+	adapters := []core.Adapter{claude.New(claude.Options{ClaudeDir: claudeDir}), codex.New(codex.Options{SchemaDir: t.TempDir()}), opencode.New(opencode.Options{})}
 	srv := httptest.NewServer(api.New(api.Options{
 		Version: "live", Hostname: "PC", Adapters: adapters, Devices: store, Logger: logx.Discard(), AskFolder: folder,
 	}).Handler())

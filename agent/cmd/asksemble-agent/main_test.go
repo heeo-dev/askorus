@@ -2,6 +2,9 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"encoding/json"
+	"maps"
 	"net/url"
 	"path/filepath"
 	"runtime"
@@ -10,6 +13,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/asksemble/asksemble/agent/internal/adapter/claude"
+	"github.com/asksemble/asksemble/agent/internal/adapter/codex"
+	"github.com/asksemble/asksemble/agent/internal/adapter/opencode"
 	"github.com/asksemble/asksemble/agent/internal/config"
 	"github.com/asksemble/asksemble/agent/internal/core"
 )
@@ -54,6 +60,80 @@ func TestBilingualErrors(t *testing.T) {
 	b.Reset()
 	if err := run([]string{"help"}, strings.NewReader(""), &b); err != nil || !strings.Contains(b.String(), "사용법") || strings.Contains(b.String(), "%!") {
 		t.Errorf("help = %v %q", err, b.String())
+	}
+}
+
+// help names compare in both languages, with the note that the judging
+// AI's company gets the question and the answers.
+func TestHelpMentionsCompare(t *testing.T) {
+	var b bytes.Buffer
+	if err := run([]string{"help"}, strings.NewReader(""), &b); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"asksemble-agent compare -q FILE -answer AI=FILE ... [-model AI=MODEL] [-earlier FILE] [-judges A,B] [-json]",
+		"the judging AI's company receives the question and the answers",
+		"답을 문장으로 나눠 AI끼리 판정합니다 (판정하는 AI의 회사가 질문과 답을 받습니다)",
+	} {
+		if !strings.Contains(b.String(), want) {
+			t.Errorf("help lacks %q", want)
+		}
+	}
+	err := run([]string{"compare"}, strings.NewReader(""), &b)
+	if err == nil || !strings.Contains(err.Error(), "usage: asksemble-agent compare") || !strings.Contains(err.Error(), "사용법: asksemble-agent compare") {
+		t.Errorf("compare without flags: %v", err)
+	}
+}
+
+// info shows, for each AI that judges, the capability judge and its judge
+// model, effort and company, as /v1/info does; an AI too old to judge has
+// neither.
+func TestInfoShowsJudge(t *testing.T) {
+	ais := threeAIs()
+	ais[1].version = "0.9.0" // older than its tested version
+	var b bytes.Buffer
+	if err := printInfo(context.Background(), adaptersOf(ais), testGate(t), &b); err != nil {
+		t.Fatal(err)
+	}
+	var infos []core.AdapterInfo
+	if err := json.Unmarshal(b.Bytes(), &infos); err != nil {
+		t.Fatalf("%v\n%s", err, b.String())
+	}
+	if len(infos) != 3 {
+		t.Fatalf("infos = %+v", infos)
+	}
+	c, x, o := infos[0], infos[1], infos[2]
+	if !slices.Contains(c.Capabilities, core.CapJudge) || c.Judge == nil || *c.Judge != (core.JudgeInfo{Model: "haiku", Effort: "medium", Family: "anthropic"}) {
+		t.Errorf("claude = %+v %+v", c, c.Judge)
+	}
+	if slices.Contains(x.Capabilities, core.CapJudge) || x.Judge != nil {
+		t.Errorf("an old codex judges: %+v", x)
+	}
+	if o.Judge == nil || o.Judge.Family != "deepseek" || o.Ask == nil || o.Ask.Tiers[core.TierStandard].Model != "opencode-standard" {
+		t.Errorf("opencode = %+v", o)
+	}
+	if !strings.Contains(b.String(), `"judge": {`) || !strings.Contains(b.String(), `"family": "anthropic"`) {
+		t.Errorf("info JSON:\n%s", b.String())
+	}
+	// The adapters' own capability lists are left as they were.
+	if caps := ais[0].Info(context.Background()).Capabilities; slices.Contains(caps, core.CapJudge) {
+		t.Errorf("the adapter's list changed: %v", caps)
+	}
+}
+
+// The gate of the CLI: the settings, the adapters' tested versions and
+// the judge folder inside the ask folder, or none without one.
+func TestJudgeGate(t *testing.T) {
+	cfg := config.Default()
+	cfg.Ask.Folder = filepath.Join(t.TempDir(), "ask")
+	cfg.Judge = config.JudgeConfig{PerAI: 1}
+	g := judgeGate(cfg)
+	if g.Folder != core.JudgeFolder(cfg.Ask.Folder) || g.Settings.PerAI != 1 {
+		t.Errorf("gate = %+v", g)
+	}
+	want := map[string]string{claude.Name: claude.JudgeMinVersion, codex.Name: codex.JudgeMinVersion, opencode.Name: opencode.JudgeMinVersion}
+	if !maps.Equal(g.MinVersions, want) {
+		t.Errorf("min versions = %v, want %v", g.MinVersions, want)
 	}
 }
 

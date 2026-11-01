@@ -2,6 +2,8 @@ package runs
 
 import (
 	"context"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -183,5 +185,180 @@ func TestFinishedRunsExpire(t *testing.T) {
 	now = now.Add(KeepFor + time.Second)
 	if _, ok := m.Get("phone", r.ID); ok {
 		t.Fatal("finished run kept past KeepFor")
+	}
+}
+
+// endLog records OnPart and OnEnd calls, for the OnEnd tests.
+type endLog struct {
+	mu    sync.Mutex
+	parts int   // OnPart calls so far
+	ends  []Run // OnEnd snapshots
+	seen  []int // OnPart calls when each OnEnd came
+	got   chan struct{}
+}
+
+func newEndLog(m *Manager) *endLog {
+	l := &endLog{got: make(chan struct{}, 16)}
+	m.OnPart = func(string, Part) {
+		l.mu.Lock()
+		l.parts++
+		l.mu.Unlock()
+	}
+	m.OnEnd = func(r Run) {
+		l.mu.Lock()
+		l.ends = append(l.ends, r)
+		l.seen = append(l.seen, l.parts)
+		l.mu.Unlock()
+		l.got <- struct{}{}
+	}
+	return l
+}
+
+func (l *endLog) wait(t *testing.T) {
+	t.Helper()
+	select {
+	case <-l.got:
+	case <-time.After(5 * time.Second):
+		t.Fatal("OnEnd never came")
+	}
+}
+
+func (l *endLog) snapshot() (ends []Run, seen []int) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return append([]Run(nil), l.ends...), append([]int(nil), l.seen...)
+}
+
+// OnEnd comes once per run, after the last part's OnPart, with every part
+// filled in, also when the parts end at the same moment (P2-3: the
+// comparison starts there).
+func TestOnEndOnceAfterTheLastPart(t *testing.T) {
+	for _, failLast := range []bool{false, true} {
+		m := NewManager()
+		l := newEndLog(m)
+		var ready sync.WaitGroup
+		ready.Add(3)
+		gate := make(chan struct{})
+		task := func(agent, text string) Task {
+			return Task{Agent: agent, Ask: func(context.Context) (core.AskResult, error) {
+				ready.Done()
+				<-gate // the three end together
+				if text == "" {
+					return core.AskResult{SessionID: agent}, core.Fail(core.ErrCodeAskFailed, "limit")
+				}
+				return core.AskResult{SessionID: agent, Answer: text, Model: "m"}, nil
+			}}
+		}
+		third := "c"
+		if failLast {
+			third = ""
+		}
+		r, err := m.Start(Spec{Owner: "phone", Mode: core.ModeAsk, Tasks: []Task{task("a", "x"), task("b", "y"), task("c", third)}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		ready.Wait()
+		ends, _ := l.snapshot()
+		if len(ends) != 0 {
+			t.Fatalf("OnEnd before the parts ended: %+v", ends)
+		}
+		close(gate)
+		l.wait(t)
+		wait(t, m, "phone", r.ID)
+		time.Sleep(50 * time.Millisecond) // a second OnEnd would come now
+		ends, seen := l.snapshot()
+		if len(ends) != 1 || seen[0] != 3 {
+			t.Fatalf("OnEnd calls = %d, OnPart calls before it = %v", len(ends), seen)
+		}
+		e := ends[0]
+		if e.ID != r.ID || e.Status != Done || e.FinishedAt.IsZero() || len(e.Parts) != 3 {
+			t.Fatalf("OnEnd run = %+v", e)
+		}
+		for _, p := range e.Parts {
+			if p.Status == Running || p.Session == "" {
+				t.Errorf("part not filled in: %+v", p)
+			}
+		}
+		if failLast && (e.Parts[2].Status != Failed || e.Parts[2].Error == nil || e.Parts[2].Error.Code != core.ErrCodeAskFailed) {
+			t.Errorf("failed part = %+v", e.Parts[2])
+		}
+	}
+}
+
+// A run in which every part failed ends failed, and OnEnd says so.
+func TestOnEndFailedRun(t *testing.T) {
+	m := NewManager()
+	l := newEndLog(m)
+	fail := func(context.Context) (core.AskResult, error) {
+		return core.AskResult{}, core.Fail(core.ErrCodeAskFailed, "")
+	}
+	m.Start(Spec{Owner: "phone", Mode: core.ModeAsk, Tasks: []Task{{Agent: "a", Ask: fail}, {Agent: "b", Ask: fail}}})
+	l.wait(t)
+	ends, _ := l.snapshot()
+	if len(ends) != 1 || ends[0].Status != Failed || ends[0].Parts[0].Status != Failed || ends[0].Parts[1].Status != Failed {
+		t.Fatalf("OnEnd = %+v", ends)
+	}
+}
+
+// A run without parts ends at once, and still gets its OnEnd, from a
+// goroutine once Start has let the lock go: OnEnd may call the Manager.
+func TestOnEndZeroTasks(t *testing.T) {
+	m := NewManager()
+	got := make(chan Run, 2)
+	m.OnEnd = func(r Run) {
+		if _, ok := m.Get("phone", r.ID); !ok { // takes the lock: Start must not hold it
+			t.Error("the ended run is not readable from OnEnd")
+		}
+		got <- r
+	}
+	r, err := m.Start(Spec{Owner: "phone", Key: "k", Mode: core.ModeAsk})
+	if err != nil || r.Status != Failed {
+		t.Fatalf("start = %+v, %v", r, err)
+	}
+	select {
+	case e := <-got:
+		if e.ID != r.ID || e.Status != Failed || len(e.Parts) != 0 {
+			t.Fatalf("OnEnd = %+v", e)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("no OnEnd for a run without parts")
+	}
+	// The same key again is the same run: no second OnEnd.
+	if again, _ := m.Start(Spec{Owner: "phone", Key: "k", Mode: core.ModeAsk}); again.ID != r.ID {
+		t.Fatalf("same key gave a new run")
+	}
+	select {
+	case e := <-got:
+		t.Fatalf("second OnEnd: %+v", e)
+	case <-time.After(50 * time.Millisecond):
+	}
+}
+
+// A panicking OnEnd or OnPart is recovered: the next run still ends and
+// is told, and the Manager's lock is free.
+func TestOnEndPanicIsRecovered(t *testing.T) {
+	m := NewManager()
+	var calls atomic.Int32
+	m.OnPart = func(string, Part) { panic("log broke") }
+	m.OnEnd = func(Run) {
+		calls.Add(1)
+		panic("hook broke")
+	}
+	r1, _ := m.Start(Spec{Owner: "phone", Mode: core.ModeAsk, Tasks: []Task{{Agent: "a", Ask: answer("1", "ok")}}})
+	wait(t, m, "phone", r1.ID)
+	m.Start(Spec{Owner: "phone", Mode: core.ModeAsk}) // zero tasks: OnEnd from Start's goroutine
+	r2, err := m.Start(Spec{Owner: "phone", Mode: core.ModeAsk, Tasks: []Task{{Agent: "a", Ask: answer("2", "ok")}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if done := wait(t, m, "phone", r2.ID); done.Status != Done {
+		t.Fatalf("next run = %+v", done)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for calls.Load() < 3 {
+		if time.Now().After(deadline) {
+			t.Fatalf("OnEnd calls = %d, want 3", calls.Load())
+		}
+		time.Sleep(5 * time.Millisecond)
 	}
 }

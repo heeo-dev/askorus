@@ -9,12 +9,14 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"path/filepath"
 	"runtime"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/asksemble/asksemble/agent/internal/compares"
 	"github.com/asksemble/asksemble/agent/internal/config"
 	"github.com/asksemble/asksemble/agent/internal/core"
 	"github.com/asksemble/asksemble/agent/internal/devices"
@@ -92,8 +94,15 @@ type Options struct {
 	// AskFolder is where asks run (mode ask, P0-9): an empty folder
 	// outside every project. Sessions there get the ask badge and it is
 	// never offered for new sessions. Empty turns asks off. Sessions in
-	// its judge folder (core.JudgeFolder) are left out of the list.
+	// its judge folder (core.JudgeFolder) are left out of the list, and
+	// no session action reaches them. Without it no AI judges.
 	AskFolder string
+	// Judge is agent.json's judge block (P2-3).
+	Judge config.JudgeConfig
+	// JudgeMinVersions maps an AI to the oldest version of its CLI the
+	// judge command was tested with (its adapter's JudgeMinVersion). An AI
+	// not listed never judges.
+	JudgeMinVersions map[string]string
 }
 
 // Server serves /v1.
@@ -103,6 +112,9 @@ type Server struct {
 	limiter *limiter
 	jobs    *jobs.Manager
 	runs    *runs.Manager
+	// gate decides which AIs judge; /v1/info and the comparisons share it.
+	gate     compares.Gate
+	compares *compares.Manager
 }
 
 // New builds a server.
@@ -127,8 +139,18 @@ func New(o Options) *Server {
 	for _, h := range o.ServeHosts {
 		s.hosts[strings.ToLower(h)] = true
 	}
+	s.gate = compares.Gate{Settings: o.Judge, MinVersions: o.JudgeMinVersions}
+	if filepath.IsAbs(o.AskFolder) {
+		s.gate.Folder = core.JudgeFolder(o.AskFolder)
+	}
+	s.compares = compares.New(compares.Options{Adapters: o.Adapters, Gate: s.gate, Runs: s.runs, Logger: o.Logger})
+	// A run's comparison starts when its last answer is in (P2-3).
+	s.runs.OnEnd = s.compares.RunEnded
 	return s
 }
+
+// Compares is the server's comparisons, for tests that wait for one.
+func (s *Server) Compares() *compares.Manager { return s.compares }
 
 // Handler returns the full middleware chain.
 func (s *Server) Handler() http.Handler {
@@ -159,6 +181,10 @@ func (s *Server) Handler() http.Handler {
 	route("GET", "/v1/jobs/{jobId}", s.jobStatus)
 	route("POST", "/v1/runs", s.startRun)
 	route("GET", "/v1/runs/{runId}", s.getRun)
+	route("POST", "/v1/comparisons", s.startComparison)
+	route("GET", "/v1/comparisons/{id}", s.getComparison)
+	route("POST", "/v1/comparisons/{id}/retry", s.retryComparison)
+	route("POST", "/v1/comparisons/{id}/cancel", s.cancelComparison)
 	route("GET", "/v1/folders", s.folders)
 	route("PUT", "/v1/folders/{id}/server", s.setFolderServer)
 	route("DELETE", "/v1/devices/self", s.forgetSelf)
@@ -290,6 +316,21 @@ type InfoResponse struct {
 	Agents       []core.AdapterInfo `json:"agents"`
 	Capabilities []core.Capability  `json:"capabilities"` // union over agents
 	Reserved     []core.Capability  `json:"reserved"`     // known names not offered yet
+	// Judging is how comparisons are judged here; set when any AI
+	// announces judge (P2-3).
+	Judging *compares.JudgingInfo `json:"judging,omitempty"`
+	// Integrations are the services outside the PC the agent sends to
+	// itself. There are none (N1): it is always [].
+	Integrations []IntegrationInfo `json:"integrations"`
+}
+
+// IntegrationInfo is one service outside the PC the agent would send to.
+// None exists in P2-3; it is an object so that later entries can gain
+// fields inside /v1 (principle 4, S3 decision 13).
+type IntegrationInfo struct {
+	ID          string `json:"id"`
+	Kind        string `json:"kind"`
+	Destination string `json:"destination"`
 }
 
 func (s *Server) info(w http.ResponseWriter, r *http.Request) {
@@ -297,12 +338,12 @@ func (s *Server) info(w http.ResponseWriter, r *http.Request) {
 		Name: "asksemble-agent", Version: s.o.Version, APIVersion: APIVersion,
 		Hostname: s.o.Hostname, OS: runtime.GOOS,
 		Agents: []core.AdapterInfo{}, Capabilities: []core.Capability{}, Reserved: []core.Capability{},
+		Integrations: []IntegrationInfo{},
 	}
-	for _, a := range s.o.Adapters {
-		ai := a.Info(r.Context())
-		if asker, ok := a.(core.Asker); ok && slices.Contains(ai.Capabilities, core.CapAsk) {
-			ai.Ask = &core.AskInfo{Tiers: asker.AskTiers()}
-		}
+	// The CLI's info calls Announce too, so the two cannot disagree on
+	// the ask tiers or on which AIs judge.
+	infos, engines := compares.Announce(r.Context(), s.o.Adapters, s.gate)
+	for _, ai := range infos {
 		resp.Agents = append(resp.Agents, ai)
 		for _, c := range ai.Capabilities {
 			if !slices.Contains(resp.Capabilities, c) {
@@ -314,6 +355,10 @@ func (s *Server) info(w http.ResponseWriter, r *http.Request) {
 		if !slices.Contains(resp.Capabilities, c) {
 			resp.Reserved = append(resp.Reserved, c)
 		}
+	}
+	if len(engines) > 0 {
+		j := s.gate.Judging()
+		resp.Judging = &j
 	}
 	writeJSON(w, http.StatusOK, resp)
 }
@@ -414,9 +459,12 @@ func (w *statusWriter) WriteHeader(code int) {
 	w.ResponseWriter.WriteHeader(code)
 }
 
-// Close ends the work the server still runs in the background (asks), for
-// agent shutdown.
-func (s *Server) Close() { s.runs.Close() }
+// Close ends the work the server still runs in the background (asks and
+// comparisons), for agent shutdown.
+func (s *Server) Close() {
+	s.runs.Close()
+	s.compares.Close()
+}
 
 // Listen opens 127.0.0.1:port. The agent never listens on other addresses.
 func Listen(port int) (net.Listener, error) {

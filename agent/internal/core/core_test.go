@@ -1,8 +1,10 @@
 package core
 
 import (
+	"encoding/json"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -140,5 +142,26 @@ func TestVersionAtLeast(t *testing.T) {
 		if got := VersionAtLeast(c.have, c.min); got != c.want {
 			t.Errorf("VersionAtLeast(%q, %q) = %v, want %v", c.have, c.min, got, c.want)
 		}
+	}
+}
+
+func TestJudgeCapabilityAndInfo(t *testing.T) {
+	if !slices.Contains(AllCapabilities, CapJudge) || CapJudge != "judge" {
+		t.Errorf("AllCapabilities = %v, want judge in it", AllCapabilities)
+	}
+	b, _ := json.Marshal(AdapterInfo{Agent: "codex", Capabilities: []Capability{}})
+	if strings.Contains(string(b), "judge") {
+		t.Errorf("an AI that does not judge shows judge: %s", b)
+	}
+	b, _ = json.Marshal(AdapterInfo{Agent: "claude", Capabilities: []Capability{CapJudge}, Judge: &JudgeInfo{Model: "sonnet", Family: "anthropic"}})
+	if want := `"judge":{"model":"sonnet","family":"anthropic"}`; !strings.Contains(string(b), want) {
+		t.Errorf("judge info = %s, want %s (effort left out when empty)", b, want)
+	}
+	b, _ = json.Marshal(JudgeInfo{Model: "haiku", Effort: "medium", Family: "anthropic"})
+	if string(b) != `{"model":"haiku","effort":"medium","family":"anthropic"}` {
+		t.Errorf("JudgeInfo = %s", b)
+	}
+	if JudgeSchemaFile != "judge-schema-v1.json" || ErrCodeCancelled != "cancelled" {
+		t.Errorf("JudgeSchemaFile %q, ErrCodeCancelled %q", JudgeSchemaFile, ErrCodeCancelled)
 	}
 }

@@ -34,6 +34,14 @@
 //	ASKSEMBLE_FAKECLI_FAIL     OpenCode session commands that fail: "list"
 //	                           (exit 1), "listjunk" (no JSON), "delete" (every
 //	                           delete) or "delete=<id>", comma separated
+//	ASKSEMBLE_FAKECLI_ANSWERS  path of a JSON file {role: answer text}: an ask
+//	                           of a role named there answers that text
+//	                           instead of "fake…: <the prompt's last line>"
+//	                           (S3 scenario tests); sessions are unchanged
+//	ASKSEMBLE_FAKE_ASK         ask mode: "fail" for every AI, or per AI
+//	                           "opencode=fail,codex=empty"; fail is the AI's
+//	                           usage limit (exit 1), empty an answer with
+//	                           no text, ok (the default) an answer
 package fakecli
 
 import (
@@ -61,7 +69,19 @@ const (
 	EnvSleep   = "ASKSEMBLE_FAKECLI_SLEEP"
 	EnvVersion = "ASKSEMBLE_FAKECLI_VERSION"
 	EnvFail    = "ASKSEMBLE_FAKECLI_FAIL"
+	EnvAnswers = "ASKSEMBLE_FAKECLI_ANSWERS"
+	EnvAsk     = "ASKSEMBLE_FAKE_ASK"
 )
+
+// Ask modes of ASKSEMBLE_FAKE_ASK.
+const (
+	AskOK    = "ok"    // the default: an answer
+	AskFail  = "fail"  // the AI's usage limit: Claude is_error, Codex turn.failed, OpenCode an error event; exit 1
+	AskEmpty = "empty" // the ask ends well with no answer text
+)
+
+// AskModes lists the ask modes.
+var AskModes = []string{AskOK, AskFail, AskEmpty}
 
 // Roles.
 const (
@@ -262,6 +282,46 @@ func flagValue(args []string, name string) string {
 	return ""
 }
 
+// askMode is role's ask mode (ASKSEMBLE_FAKE_ASK).
+func askMode(role string) (string, error) {
+	return pick(os.Getenv(EnvAsk), role, AskOK, func(v string) bool { return slices.Contains(AskModes, v) })
+}
+
+// askText is what an ask of role answers: its text in the answers file,
+// or prefix and the prompt's last line.
+func askText(role, prefix, prompt string) (string, error) {
+	if p := os.Getenv(EnvAnswers); p != "" {
+		b, err := os.ReadFile(p)
+		if err != nil {
+			return "", err
+		}
+		texts := map[string]string{}
+		if err := json.Unmarshal(b, &texts); err != nil {
+			return "", fmt.Errorf("answers file: %w", err)
+		}
+		if text, ok := texts[role]; ok {
+			return text, nil
+		}
+	}
+	lines := strings.Split(strings.TrimSpace(prompt), "\n")
+	return prefix + lines[len(lines)-1], nil
+}
+
+// SetAnswers writes the answers file for asks (ASKSEMBLE_FAKECLI_ANSWERS)
+// and points the fake at it, for the rest of the test.
+func SetAnswers(t testing.TB, texts map[string]string) {
+	t.Helper()
+	b, err := json.Marshal(texts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := filepath.Join(t.TempDir(), "answers.json")
+	if err := os.WriteFile(p, b, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(EnvAnswers, p)
+}
+
 func unexpected(role string) int {
 	fmt.Fprintf(os.Stderr, "fake %s: unexpected arguments\n", role)
 	return 2
@@ -423,7 +483,7 @@ func setEnv(t testing.TB, role string) {
 	t.Setenv(EnvRole, role)
 	t.Setenv(EnvRecord, t.TempDir())
 	t.Setenv(EnvState, t.TempDir())
-	for _, k := range []string{EnvJudge, EnvSleep, EnvVersion, EnvFail} {
+	for _, k := range []string{EnvJudge, EnvSleep, EnvVersion, EnvFail, EnvAnswers, EnvAsk} {
 		t.Setenv(k, "")
 	}
 }

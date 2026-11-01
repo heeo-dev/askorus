@@ -51,14 +51,12 @@ func judgeAdapter(t *testing.T) (a *Adapter, schemaDir, folder string) {
 	return New(Options{Path: exe, SchemaDir: schemaDir}), schemaDir, t.TempDir()
 }
 
+// wantJudgeArgs is a judge's exact arguments, with the features written
+// out in wantOff (codex_test.go), the same list an ask turns off.
 func wantJudgeArgs(model, effort, schema string) []string {
-	return []string{"exec", "-s", "read-only", "--ignore-user-config", "--skip-git-repo-check", "--ephemeral", "--json",
-		"-m", model, "-c", `model_reasoning_effort="` + effort + `"`, "-c", `web_search="disabled"`, "--output-schema", schema,
-		"--disable", "shell_tool", "--disable", "unified_exec", "--disable", "hooks", "--disable", "apps",
-		"--disable", "plugins", "--disable", "remote_plugin", "--disable", "multi_agent", "--disable", "browser_use",
-		"--disable", "browser_use_external", "--disable", "in_app_browser", "--disable", "computer_use",
-		"--disable", "image_generation", "--disable", "view_image", "--disable", "goals", "--disable", "sleep_tool",
-		"--disable", "tool_suggest", "--disable", "skill_search", "--disable", "skill_mcp_dependency_install", "-"}
+	return slices.Concat([]string{"exec", "-s", "read-only", "--ignore-user-config", "--skip-git-repo-check", "--ephemeral", "--json",
+		"-m", model, "-c", `model_reasoning_effort="` + effort + `"`, "-c", `web_search="disabled"`, "--output-schema", schema},
+		wantDisables(), []string{"-"})
 }
 
 func sameDir(a, b string) bool {
@@ -90,7 +88,7 @@ func TestJudgeArgsAndStdin(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	schema := filepath.Join(schemaDir, schemaName)
+	schema := filepath.Join(schemaDir, core.JudgeSchemaFile)
 	calls := fakecli.Calls(t)
 	if len(calls) != 1 {
 		t.Fatalf("calls = %+v", calls)
@@ -167,7 +165,7 @@ func TestSchemaFirstCallConcurrent(t *testing.T) {
 	if n := writes(a); n != 1 {
 		t.Errorf("schema written %d times", n)
 	}
-	if b, err := os.ReadFile(filepath.Join(schemaDir, schemaName)); err != nil || string(b) != core.JudgeSchemaV1 {
+	if b, err := os.ReadFile(filepath.Join(schemaDir, core.JudgeSchemaFile)); err != nil || string(b) != core.JudgeSchemaV1 {
 		t.Errorf("schema file = %q, %v", b, err)
 	}
 	calls := fakecli.Calls(t)
@@ -188,7 +186,7 @@ func TestSchemaFirstCallConcurrent(t *testing.T) {
 func TestSchemaTampered(t *testing.T) {
 	a, schemaDir, folder := judgeAdapter(t)
 	p := judgePrompt(t, judgeTask())
-	schema := filepath.Join(schemaDir, schemaName)
+	schema := filepath.Join(schemaDir, core.JudgeSchemaFile)
 	if _, err := a.Judge(context.Background(), core.JudgeRequest{Folder: folder, Prompt: p}); err != nil {
 		t.Fatal(err)
 	}
@@ -307,8 +305,8 @@ func TestCheckJudgeArgsRefuses(t *testing.T) {
 		"no ephemeral":         del(5),
 		"oss":                  set(5, "--oss"),
 		"no json":              del(6),
-		"other schema":         set(14, filepath.Join(t.TempDir(), schemaName)),
-		"relative schema":      set(14, schemaName),
+		"other schema":         set(14, filepath.Join(t.TempDir(), core.JudgeSchemaFile)),
+		"relative schema":      set(14, core.JudgeSchemaFile),
 		"no schema":            append(slices.Clone(good[:13]), "-"),
 		"extra -c":             ins(last, "-c", `approval_policy="never"`),
 		"web search on":        set(12, `web_search="live"`),

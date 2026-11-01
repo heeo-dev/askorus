@@ -144,25 +144,47 @@ func opencodeJudge(c *Call) int {
 	return 0
 }
 
+// AskTitle is the title of the ask conversations the fake saves.
+const AskTitle = "fake ask"
+
 // opencodeAsk answers like the opencode fake of the adapter's own tests:
 // a lead-in step with a web search, then "fake: " and the prompt's last
-// line, in the session --session names or a new one.
+// line (or the answers file's text), in the session --session names or a
+// new one. Ask mode fail is an error event after the session is saved;
+// empty does the web search and says nothing.
 func opencodeAsk(c *Call) int {
+	mode, err := askMode(RoleOpenCode)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "fakecli:", err)
+		return 2
+	}
+	text, err := askText(RoleOpenCode, "fake: ", c.Stdin)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "fakecli:", err)
+		return 2
+	}
 	id := flagValue(c.Args, "--session")
 	if id == "" {
 		id = newSessionID()
 	}
-	if err := saveSession(c, id, "fake ask"); err != nil {
+	if err := saveSession(c, id, AskTitle); err != nil {
 		fmt.Fprintln(os.Stderr, "fakecli:", err)
 		return 2
 	}
-	lines := strings.Split(strings.TrimSpace(c.Stdin), "\n")
 	opencodeEvent("step_start", id, opencodePart("step-start", nil))
-	opencodeEvent("text", id, opencodePart("text", map[string]any{"text": "검색해 볼게요."}))
+	if mode == AskFail {
+		return opencodeError(id, "provider.rate-limit", UsageLimitOpenCode)
+	}
+	if mode != AskEmpty {
+		opencodeEvent("text", id, opencodePart("text", map[string]any{"text": "검색해 볼게요."}))
+	}
 	opencodeEvent("tool_use", id, opencodePart("tool", map[string]any{"tool": "websearch", "state": map[string]string{"status": "completed"}}))
 	opencodeStepFinish(id, "tool-calls")
+	if mode == AskEmpty {
+		return 0
+	}
 	opencodeEvent("step_start", id, opencodePart("step-start", nil))
-	opencodeEvent("text", id, opencodePart("text", map[string]any{"text": "fake: " + lines[len(lines)-1]}))
+	opencodeEvent("text", id, opencodePart("text", map[string]any{"text": text}))
 	return 0 // the last step_finish is sometimes never printed; neither here
 }
 
