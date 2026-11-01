@@ -7,6 +7,10 @@
 // 정리 (Summary) first, where the AIs' judgments of each other's answers
 // show as cards, then one tab per AI with its answer card. thread.ts follows
 // the run and the comparison; this screen wires them and draws.
+//
+// S5b: on a PC that writes combined answers, a compared turn also asks one
+// AI (Settings: on, and which) to write the answers into one; it shows at
+// the top of the Summary tab.
 
 import * as Clipboard from 'expo-clipboard';
 import * as Crypto from 'expo-crypto';
@@ -17,7 +21,7 @@ import { ActivityIndicator, Keyboard, Linking, Pressable, StyleSheet, Text, Text
 import { agentName } from '@/api/agents';
 import { type AgentClient, AgentError } from '@/api/client';
 import { type Info, type RunPart, tiers } from '@/api/types';
-import { answered, judgedBy, type TabView, tabs } from '@/ask/compare';
+import { answered, canSynthesize, judgedBy, type TabView, tabs, writerFor } from '@/ask/compare';
 import { defaultAskPrefs, loadAskPrefs, saveAskPrefs, type AskPrefs } from '@/ask/prefs';
 import {
   type Asker,
@@ -168,6 +172,7 @@ export default function Ask() {
       models: prefs.models,
       info,
       auto: prefs.compare,
+      synth: { on: prefs.synth, agent: prefs.synthAgent },
       at: Date.now(),
     });
     if (!turn.agents.length) return;
@@ -261,9 +266,16 @@ export default function Ask() {
             key={turn.id}
             turn={turn}
             info={info}
-            onAction={(how) => pc && followCompare(pc.client, turn, how, deps)}
+            onAction={(how) =>
+              pc &&
+              (how === 'synth'
+                ? followCompare(pc.client, turn, how, deps, { agent: writerFor(info, prefs.synthAgent) })
+                : followCompare(pc.client, turn, how, deps))
+            }
             onPair={(key) => setSheet({ turn: turn.id, kind: 'pair', key })}
             onJudges={() => setSheet({ turn: turn.id, kind: 'judges' })}
+            onCopy={(answer) => copy(`${turn.id}/synth`, answer)}
+            note={notes[`${turn.id}/synth`]}
           />
         )}
       </>
@@ -301,6 +313,10 @@ export default function Ask() {
         {turns.length === 0 && info && anyAsk ? (
           // With auto compare on a PC whose AIs judge, the intro also says where the answers go.
           <Text style={s.muted}>{judgeOn(info) && prefs.compare ? t('ask.introCompare') : t('ask.intro')}</Text>
+        ) : null}
+        {turns.length === 0 && info && anyAsk && canSynthesize(info) && prefs.synth ? (
+          // And the combined answer's writer gets every answer too (S5b).
+          <Text style={s.muted}>{t('ask.introSynth')}</Text>
         ) : null}
 
         {turns.map((turn) => {

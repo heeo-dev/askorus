@@ -246,26 +246,34 @@ func openCodeExe(t *testing.T) string {
 // model call).
 func (e *compareEnv) openCodeJudgeSessions() int {
 	e.t.Helper()
+	return openCodeJudgeSessionsIn(e.t, e.judge)
+}
+
+// openCodeJudgeSessionsIn counts the OpenCode conversations with the
+// judge title left in folder (writers take it too), with the real
+// opencode's session list (read only, no model call).
+func openCodeJudgeSessionsIn(t *testing.T, folder string) int {
+	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	res, err := proc.Run(ctx, proc.Cmd{Exe: openCodeExe(e.t), Dir: e.judge, Env: map[string]string{"PWD": e.judge},
+	res, err := proc.Run(ctx, proc.Cmd{Exe: openCodeExe(t), Dir: folder, Env: map[string]string{"PWD": folder},
 		Args: []string{"session", "list", "--format", "json", "--standalone"}})
 	if err != nil || res.ExitCode != 0 {
-		e.t.Fatalf("opencode session list: %v, exit %d", err, res.ExitCode)
+		t.Fatalf("opencode session list: %v, exit %d", err, res.ExitCode)
 	}
 	var list []struct {
 		ID, Title, Directory string
 	}
 	if err := json.Unmarshal(bytes.TrimSpace(res.Stdout), &list); err != nil {
-		e.t.Fatalf("opencode session list is not JSON: %v", err)
+		t.Fatalf("opencode session list is not JSON: %v", err)
 	}
 	n := 0
 	for _, s := range list {
-		if s.Title == "asksemble-judge" && core.InFolder(s.Directory, e.judge) {
+		if s.Title == "asksemble-judge" && core.InFolder(s.Directory, folder) {
 			n++
 		}
 	}
-	e.t.Logf("opencode session list: %d sessions, %d judge conversations in the judge folder", len(list), n)
+	t.Logf("opencode session list: %d sessions, %d judge-titled conversations in the folder", len(list), n)
 	return n
 }
 

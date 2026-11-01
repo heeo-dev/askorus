@@ -192,8 +192,19 @@ export type RunRequest = {
   compare?: RunCompare;
 };
 
-/** earlier: questions the judges' companies already got (oldest first); judges: who may judge. */
-export type RunCompare = { earlier?: string[]; judges?: string[] };
+/**
+ * earlier: questions the judges' companies already got (oldest first);
+ * judges: who may judge; synthesis: whether one AI then writes the answers
+ * into one (S5b). Without synthesis the PC writes none (an S5 app).
+ */
+export type RunCompare = { earlier?: string[]; judges?: string[]; synthesis?: SynthesisRequest };
+
+/**
+ * The combined answer a comparison asks for (P2-3 S5b): agent is the AI the
+ * person picked (the PC falls back to the first asked AI that may write;
+ * left out, the PC picks), or off. The tier is the run's.
+ */
+export type SynthesisRequest = { agent?: string; off?: boolean };
 
 /** One AI's share of a run; it shows as soon as that AI is done. */
 export type RunPart = {
@@ -298,8 +309,31 @@ export type CardItem = {
 
 export type CardCounts = { differ: number; check: number; agree: number; onlyOne: number; notCompared: number; notJudged: number };
 
+/**
+ * A comparison's combined answer (S5b), written by one AI once the judging
+ * ended. Its status is its own: the comparison's status stays the judges'.
+ * agent is the AI asked for until one is picked, then the writer; ms and
+ * tokens add up over the attempts; text (Markdown) comes only when done;
+ * judged: the writer had the comparison's results; unnamedSides: Differ
+ * sides whose AI names the text never mentions.
+ */
+export type Synthesis = {
+  status: 'waiting' | 'running' | 'done' | 'failed' | 'off' | (string & {});
+  agent?: string;
+  model?: string;
+  attempt?: number;
+  ms?: number;
+  inputTokens?: number;
+  outputTokens?: number;
+  text?: string;
+  judged: boolean;
+  unnamedSides?: number;
+  error?: CodeError;
+};
+
 export type Comparison = {
   comparisonId: string;
+  /** The judges' status; pollAfterMs also stays while the synthesis waits or writes. */
   status: 'waiting' | 'running' | 'done' | 'failed' | (string & {});
   pollAfterMs?: number;
   source: 'run' | 'direct' | (string & {});
@@ -311,6 +345,8 @@ export type Comparison = {
   items: CardItem[];
   counts: CardCounts;
   error?: CodeError;
+  /** Set by agents that write combined answers (S5b); an older agent leaves it out. */
+  synthesis?: Synthesis;
 };
 
 /** An answer the phone sends for a direct comparison (POST /v1/comparisons). */
@@ -323,4 +359,6 @@ export type ComparisonRequest = {
   earlier?: string[];
   answers: ComparisonAnswer[];
   judges?: string[];
+  /** The combined answer (S5b), with the question's tier ('' or left out: standard). */
+  synthesis?: SynthesisRequest & { tier?: Tier };
 };

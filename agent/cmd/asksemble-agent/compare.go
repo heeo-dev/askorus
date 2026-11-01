@@ -29,9 +29,10 @@ import (
 
 // `asksemble-agent compare` (P2-3): a comparison of answers the person
 // gives as files, made in this process the way POST /v1/comparisons makes
-// one, and judged by the AI programs on this PC. The running agent is not
-// needed. The unit texts go to the person's own terminal only; nothing of
-// the question or the answers is logged.
+// one, and judged by the AI programs on this PC; with -synth one AI then
+// writes the combined answer (종합 답변, S5b). The running agent is not
+// needed. The unit texts and the combined answer go to the person's own
+// terminal only; nothing of the question or the answers is logged.
 
 const (
 	// compareOwner owns the CLI's comparisons.
@@ -39,8 +40,8 @@ const (
 	// compareFileMax bounds what is read of any one file; the limits of
 	// each kind are below it.
 	compareFileMax = 1 << 20
-	compareUsageEn = "usage: asksemble-agent compare -q FILE -answer AI=FILE -answer AI=FILE ... [-model AI=MODEL] [-earlier FILE] [-judges A,B] [-json]"
-	compareUsageKo = "사용법: asksemble-agent compare -q 파일 -answer AI=파일 -answer AI=파일 ... [-model AI=모델] [-earlier 파일] [-judges A,B] [-json]"
+	compareUsageEn = "usage: asksemble-agent compare -q FILE -answer AI=FILE -answer AI=FILE ... [-model AI=MODEL] [-earlier FILE] [-judges A,B] [-synth [-writer AI] [-tier quick|standard|deep]] [-json]"
+	compareUsageKo = "사용법: asksemble-agent compare -q 파일 -answer AI=파일 -answer AI=파일 ... [-model AI=모델] [-earlier 파일] [-judges A,B] [-synth [-writer AI] [-tier quick|standard|deep]] [-json]"
 )
 
 // compareLimit bounds a whole comparison of the CLI; a variable so a test
@@ -62,6 +63,7 @@ type compareFlags struct {
 	models   map[string]string
 	earlier  []string // file paths, oldest first
 	judges   []string
+	synth    *compares.SynthSpec // -synth with -writer and -tier; nil without
 	asJSON   bool
 }
 
@@ -76,6 +78,7 @@ type compareInput struct {
 	earlier  []string
 	answers  []compares.DirectAnswer // Model only as -model gave it
 	judges   []string
+	synth    *compares.SynthSpec
 	asJSON   bool
 }
 
@@ -114,7 +117,7 @@ func compareCmd(dir string, args []string, in io.Reader, out io.Writer) error {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
-	spec := compares.DirectSpec{Owner: compareOwner, Question: ci.question, Earlier: ci.earlier, Answers: answers, Judges: ci.judges}
+	spec := compares.DirectSpec{Owner: compareOwner, Question: ci.question, Earlier: ci.earlier, Answers: answers, Judges: ci.judges, Synth: ci.synth}
 	return compareWith(ctx, adapters, judgeGate(cfg), spec, out, ci.asJSON)
 }
 
@@ -138,6 +141,9 @@ func parseCompareFlags(args []string) (compareFlags, error) {
 	})
 	judges := fs.String("judges", "", "comma-separated AIs that may judge, in order of preference (default: every AI that judges here)")
 	asJSON := fs.Bool("json", false, "print the comparison as JSON, as GET /v1/comparisons/{id} shows it")
+	synth := fs.Bool("synth", false, "then have one AI write a combined answer (its company receives the question, every answer with the AIs' names and the comparison's results)")
+	writer := fs.String("writer", claude.Name, "with -synth: the AI that writes the combined answer, claude, codex or opencode; another that may write takes over when it cannot")
+	tier := fs.String("tier", core.TierStandard, "with -synth: the ask tier whose model writes: quick, standard or deep")
 	if err := fs.Parse(args); err != nil {
 		return compareFlags{}, err
 	}
@@ -145,6 +151,18 @@ func parseCompareFlags(args []string) (compareFlags, error) {
 		return compareFlags{}, fail(compareUsageEn, compareUsageKo)
 	}
 	f := compareFlags{question: *q, models: map[string]string{}, earlier: earlier, asJSON: *asJSON}
+	withSynth := false
+	fs.Visit(func(fl *flag.Flag) { withSynth = withSynth || fl.Name == "writer" || fl.Name == "tier" })
+	switch {
+	case !*synth && withSynth:
+		return compareFlags{}, fail("-writer and -tier go with -synth", "-writer, -tier는 -synth와 함께 씁니다")
+	case !slices.Contains(pcAIs, *writer):
+		return compareFlags{}, fail("-writer must name claude, codex or opencode", "-writer에는 claude, codex, opencode 중 하나를 쓰세요")
+	case !core.ValidTier(*tier):
+		return compareFlags{}, fail("-tier must be quick, standard or deep", "-tier는 quick, standard, deep 중 하나입니다")
+	case *synth:
+		f.synth = &compares.SynthSpec{Agent: *writer, Tier: *tier}
+	}
 	if len(answers) < compares.MinAnswers || len(answers) > compares.MaxAnswers {
 		return compareFlags{}, fail("give 2 to 6 answers, each with -answer AI=FILE", "-answer AI=파일로 답을 2~6개 주세요")
 	}
@@ -210,7 +228,7 @@ func parseCompareFlags(args []string) (compareFlags, error) {
 // limits: the question 32 KiB without white space around it, each answer
 // 64 KiB, each earlier question 4 KiB without white space around it.
 func readCompareFiles(f compareFlags, in io.Reader) (compareInput, error) {
-	ci := compareInput{judges: f.judges, asJSON: f.asJSON}
+	ci := compareInput{judges: f.judges, synth: f.synth, asJSON: f.asJSON}
 	text, over, err := readText(f.question, in)
 	if err != nil {
 		return ci, err
@@ -310,8 +328,10 @@ func answerModels(adapters []core.Adapter, answers []compares.DirectAnswer) ([]c
 }
 
 // compareWith runs one comparison in this process and prints it: the
-// cards, the judge requests and the counts, or the comparison as JSON. A
-// comparison that failed is an error with its code.
+// cards, the judge requests and the counts, then the combined answer when
+// spec.Synth asks for one, or the comparison as JSON. A comparison that
+// failed is an error with its code, and so is a combined answer that
+// failed.
 func compareWith(ctx context.Context, adapters []core.Adapter, gate compares.Gate, spec compares.DirectSpec, out io.Writer, asJSON bool) error {
 	if gate.Settings.Off {
 		return fail("comparison judging is off (agent.json judge.off)", "비교 판정이 꺼져 있습니다 (agent.json judge.off)")
@@ -353,7 +373,8 @@ func compareWith(ctx context.Context, adapters []core.Adapter, gate compares.Gat
 	wctx, cancel := context.WithTimeout(ctx, compareLimit)
 	defer cancel()
 	c, _ = mgr.WaitIdle(wctx, compareOwner, c.ID)
-	if c.Status == compares.Waiting || c.Status == compares.Running {
+	synthBusy := c.Synthesis != nil && (c.Synthesis.Status == compares.SynthWaiting || c.Synthesis.Status == compares.SynthRunning)
+	if c.Status == compares.Waiting || c.Status == compares.Running || synthBusy {
 		if ctx.Err() != nil {
 			return fail("cancelled", "취소했습니다")
 		}
@@ -367,6 +388,7 @@ func compareWith(ctx context.Context, adapters []core.Adapter, gate compares.Gat
 		}
 	} else {
 		printComparison(out, c)
+		printSynthesis(out, c.Synthesis)
 	}
 	if c.Status == compares.Failed {
 		e := judge.Error{Code: core.ErrCodeInternal}
@@ -375,7 +397,56 @@ func compareWith(ctx context.Context, adapters []core.Adapter, gate compares.Gat
 		}
 		return fail("the comparison failed (%s): %s", "비교에 실패했습니다 (%s): %s", e.Code, terminalText(e.Message))
 	}
+	if s := c.Synthesis; s != nil && s.Status == compares.SynthFailed {
+		e := judge.Error{Code: core.ErrCodeInternal}
+		if s.Error != nil {
+			e = *s.Error
+		}
+		return fail("the combined answer failed (%s): %s", "종합 답변을 쓰지 못했습니다 (%s): %s", e.Code, terminalText(e.Message))
+	}
 	return nil
+}
+
+// printSynthesis prints the combined answer under its header: who wrote
+// it with which model and in how long, and whether it was written without
+// the comparison's results. The text keeps its line breaks and loses every
+// other control character. A combined answer that failed prints its code
+// and message; one that is off prints nothing.
+func printSynthesis(out io.Writer, s *compares.Synthesis) {
+	if s == nil || s.Status == compares.SynthOff {
+		return
+	}
+	head := "no AI / AI 없음"
+	if s.Agent != "" {
+		head = displayName(s.Agent)
+	}
+	if s.Model != "" {
+		head += " " + s.Model
+	}
+	if s.Ms > 0 {
+		head += fmt.Sprintf(" · %.1f s", float64(s.Ms)/1000)
+	}
+	if s.Status == compares.SynthDone && !s.Judged {
+		head += "; not compared / 비교 결과 없이"
+	}
+	fmt.Fprintf(out, "\n== Combined answer / 종합 답변 (%s)\n", terminalText(head))
+	switch s.Status {
+	case compares.SynthDone:
+		fmt.Fprintln(out, terminalLines(s.Text))
+		if s.UnnamedSides > 0 {
+			fmt.Fprintln(out)
+			say(out, m("(some places where the AIs differ may be missing from the combined answer: check the Differ card above)",
+				"(갈린 곳 일부가 종합 답변에 빠졌을 수 있습니다. 위의 다른 말 카드에서 확인하세요)"))
+		}
+	case compares.SynthFailed:
+		code, message := core.ErrCodeInternal, ""
+		if s.Error != nil {
+			code, message = s.Error.Code, s.Error.Message
+		}
+		fmt.Fprintf(out, "  failed / 실패: %s %s\n", code, terminalText(message))
+	default:
+		fmt.Fprintf(out, "  %s\n", s.Status)
+	}
 }
 
 // cardNames are the cards' headers, as the app names them.
@@ -522,6 +593,23 @@ func requestLine(r judge.Request) string {
 func terminalText(s string) string {
 	return strings.Map(func(r rune) rune {
 		if unicode.IsControl(r) || r == ' ' || r == ' ' {
+			return ' '
+		}
+		return r
+	}, s)
+}
+
+// terminalLines is s with its line breaks kept, a CR LF or a lone CR as
+// a line break, and every other control character, U+2028 and U+2029 as
+// a space, so a combined answer cannot move the cursor or recolour the
+// person's terminal.
+func terminalLines(s string) string {
+	s = strings.ReplaceAll(strings.ReplaceAll(s, "\r\n", "\n"), "\r", "\n")
+	return strings.Map(func(r rune) rune {
+		switch {
+		case r == '\n':
+			return r
+		case unicode.IsControl(r), r == '\u2028', r == '\u2029':
 			return ' '
 		}
 		return r

@@ -1,15 +1,17 @@
 // Settings: paired PCs (check the connection, unpair), what new sessions
 // start with, the default ask tier, whether answers are compared on their
-// own (P2-3), and about the app.
+// own (P2-3), whether a combined answer is then written and by which AI
+// (S5b), and about the app.
 
 import Constants from 'expo-constants';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { agentName } from '@/api/agents';
 import { AgentError } from '@/api/client';
 import { tiers } from '@/api/types';
-import { type AskPrefs, defaultAskPrefs, loadAskPrefs, saveAskPrefs } from '@/ask/prefs';
+import { type AskPrefs, defaultAskPrefs, loadAskPrefs, saveAskPrefs, synthWriters } from '@/ask/prefs';
 import { type Check, diagnose } from '@/connections/diagnose';
 import { connect } from '@/connections/open';
 import { type Prefs, efforts, loadPrefs, models, savePrefs } from '@/connections/prefs';
@@ -75,6 +77,27 @@ export default function Settings() {
     savePrefs(next);
   };
 
+  const changeAsk = (next: AskPrefs) => {
+    setAsk(next);
+    saveAskPrefs(next);
+  };
+
+  // A Pressable rather than Switch, so screen tests can press it (R-07).
+  const toggle = (label: string, on: boolean, onPress: () => void) => (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [s.switchRow, pressed && s.pressed]}
+      accessibilityRole="switch"
+      accessibilityLabel={label}
+      accessibilityState={{ checked: on }}
+    >
+      <Text style={s.switchLabel}>{label}</Text>
+      <View style={[s.track, on && s.trackOn]}>
+        <View style={[s.knob, on && s.knobOn]} />
+      </View>
+    </Pressable>
+  );
+
   return (
     <ScrollView style={s.screen} contentContainerStyle={s.body}>
       <Text style={s.heading}>{t('settings.pcs')}</Text>
@@ -123,37 +146,25 @@ export default function Settings() {
       />
 
       <Text style={s.heading}>{t('settings.askTier')}</Text>
-      <Choices
-        options={tiers}
-        value={ask.tier}
-        onChange={(tier) => {
-          const next = { ...ask, tier };
-          setAsk(next);
-          saveAskPrefs(next);
-        }}
-        labelOf={(x) => t(`ask.tier.${x}`)}
-      />
+      <Choices options={tiers} value={ask.tier} onChange={(tier) => changeAsk({ ...ask, tier })} labelOf={(x) => t(`ask.tier.${x}`)} />
       <Text style={s.muted}>{t('settings.askTierHint')}</Text>
 
-      {/* P2-3. A Pressable rather than Switch, so screen tests can press it (R-07). */}
+      {/* P2-3. */}
       <Text style={s.heading}>{t('settings.compare')}</Text>
-      <Pressable
-        onPress={() => {
-          const next = { ...ask, compare: !ask.compare };
-          setAsk(next);
-          saveAskPrefs(next);
-        }}
-        style={({ pressed }) => [s.switchRow, pressed && s.pressed]}
-        accessibilityRole="switch"
-        accessibilityLabel={t('settings.compareAuto')}
-        accessibilityState={{ checked: ask.compare }}
-      >
-        <Text style={s.switchLabel}>{t('settings.compareAuto')}</Text>
-        <View style={[s.track, ask.compare && s.trackOn]}>
-          <View style={[s.knob, ask.compare && s.knobOn]} />
-        </View>
-      </Pressable>
+      {toggle(t('settings.compareAuto'), ask.compare, () => changeAsk({ ...ask, compare: !ask.compare }))}
       <Text style={s.muted}>{t('settings.compareHint')}</Text>
+
+      {/* S5b. A fixed list of writers: Settings has no PC info, and the PC falls back when it lacks the AI. */}
+      <Text style={s.heading}>{t('settings.synth')}</Text>
+      {toggle(t('settings.synthAuto'), ask.synth, () => changeAsk({ ...ask, synth: !ask.synth }))}
+      <Text style={s.label}>{t('settings.synthAgent')}</Text>
+      <Choices
+        options={synthWriters}
+        value={ask.synthAgent as (typeof synthWriters)[number]}
+        onChange={(synthAgent) => changeAsk({ ...ask, synthAgent })}
+        labelOf={agentName}
+      />
+      <Text style={s.muted}>{t('settings.synthHint')}</Text>
 
       <Text style={s.heading}>{t('settings.about')}</Text>
       <Text style={s.muted}>

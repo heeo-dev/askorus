@@ -1,7 +1,7 @@
 import { AgentClient, CancelledError } from '@/api/client';
 import type { AdapterInfo, Comparison, Info, Run } from '@/api/types';
 
-import { compareState } from './compare';
+import { compareState, synthState } from './compare';
 import {
   askers,
   type FollowDeps,
@@ -94,7 +94,20 @@ const infoOf = (agents: AdapterInfo[]) =>
   ({ name: 'asksemble-agent', version: '0.3.0', apiVersion: 1, hostname: 'pc', os: 'windows', agents, capabilities: ['ask'], reserved: [] }) as Info;
 const info3 = infoOf([judge('claude', 'anthropic'), judge('codex', 'openai'), judge('opencode', 'deepseek')]);
 const ask = (over: Partial<Parameters<typeof newTurn>[0]> = {}) =>
-  newTurn({ id: 't1', question: 'Capital?', tier: 'quick', to: 'all', on: all, turns: [], models: {}, info: info3, auto: true, at: 5, ...over });
+  newTurn({
+    id: 't1',
+    question: 'Capital?',
+    tier: 'quick',
+    to: 'all',
+    on: all,
+    turns: [],
+    models: {},
+    info: info3,
+    auto: true,
+    synth: { on: true, agent: 'claude' },
+    at: 5,
+    ...over,
+  });
 
 const answers = [
   { agent: 'claude', status: 'done', answer: 'Seoul. 9.4 million.', model: 'claude-standard', session: 'claude:s1' },
@@ -414,4 +427,104 @@ test('two presses of 비교하기 before the screen redraws send one comparison'
   expect(h.now().compare).toMatchObject({ id: 'c1', key: undefined, error: undefined });
   expect(compareState(h.now())).toEqual({ kind: 'done', partial: false, retry: false });
   expect(h.deps.follows.size).toBe(0);
+});
+
+// ---- S5b: the combined answer ----
+
+const writes = (a: AdapterInfo): AdapterInfo => ({ ...a, capabilities: [...a.capabilities, 'synthesize'] });
+const info3w = infoOf([judge('claude', 'anthropic'), judge('codex', 'openai'), judge('opencode', 'deepseek')].map(writes));
+const written = { status: 'done', agent: 'codex', model: 'gpt-6.1-terra', ms: 15200, text: 'All in one.', judged: true, unnamedSides: 0 };
+
+test('newTurn on a PC that writes asks for the combined answer with the compare, fixed at send time', () => {
+  const t = ask({ info: info3w });
+  expect(t.req.compare).toEqual({ earlier: [], judges: all, synthesis: { agent: 'claude' } });
+  expect(t.compare).toEqual({ start: 'auto', judges: all, earlier: [], synth: { agent: 'claude' } });
+  expect(ask({ info: info3w, synth: { on: true, agent: 'codex' } }).req.compare?.synthesis).toEqual({ agent: 'codex' });
+  const off = ask({ info: info3w, synth: { on: false, agent: 'codex' } });
+  expect(off.req.compare).toEqual({ earlier: [], judges: all, synthesis: { off: true } });
+  expect(off.compare?.synth).toEqual({ off: true });
+  // An AI the PC does not list is not named (the PC would refuse the whole compare): the PC picks.
+  const gone = ask({ info: info3w, synth: { on: true, agent: 'gemini' } });
+  expect(gone.req.compare?.synthesis).toEqual({});
+  expect(gone.compare?.synth).toEqual({});
+  // Manual compare: nothing goes with the run, 비교하기 sends it.
+  const manual = ask({ info: info3w, auto: false });
+  expect('compare' in manual.req).toBe(false);
+  expect(manual.compare?.synth).toEqual({ agent: 'claude' });
+  // No comparison, no combined answer: two AIs (결정 5), one AI.
+  expect(ask({ info: info3w, on: ['claude', 'codex'] }).compare).toEqual({ start: 'noJudgeOff', judges: [], earlier: [] });
+  expect(ask({ info: info3w, to: { agent: 'codex' } }).compare).toBeUndefined();
+  // A PC that does not write (an S5 agent), or whose only writer is not available: the S5 bodies.
+  expect(ask().req.compare).toEqual({ earlier: [], judges: all });
+  expect(ask().compare).toEqual({ start: 'auto', judges: all, earlier: [] });
+  const away = infoOf([judge('claude', 'anthropic'), judge('codex', 'openai'), { ...writes(judge('opencode', 'deepseek')), available: false }]);
+  expect(ask({ info: away }).req.compare).toEqual({ earlier: [], judges: ['claude', 'codex'] });
+});
+
+test('a run with a comparison is followed until its combined answer is written', async () => {
+  const pc = script({
+    'POST runs': [[202, runAt('running', [], { comparisonId: 'c1' })]],
+    'GET runs/r1': [[200, runAt('done', answers, { comparisonId: 'c1', pollAfterMs: undefined })]],
+    'GET comparisons/c1': [
+      [200, snap('c1', 'running', { synthesis: { status: 'waiting', agent: 'claude', judged: false } })],
+      [200, snap('c1', 'done', { pollAfterMs: 1, synthesis: { status: 'running', agent: 'codex', judged: true } })],
+      [200, snap('c1', 'done', { synthesis: written })],
+    ],
+  });
+  const h = harness(ask({ info: info3w }));
+  await followRun(pc.client, h.now(), h.deps);
+  expect(said(pc.calls)).toEqual(['POST runs', 'GET runs/r1', 'GET comparisons/c1', 'GET comparisons/c1', 'GET comparisons/c1']);
+  expect(pc.calls[0].body?.compare).toEqual({ earlier: [], judges: all, synthesis: { agent: 'claude' } });
+  const kinds = h.seen.filter((x) => x.compare?.snap).map((x) => `${compareState(x)?.kind}/${synthState(x, info3w)?.kind}`);
+  expect(kinds).toEqual(['comparing/waiting', 'done/writing', 'done/done']);
+  expect(synthState(h.now(), info3w)).toEqual({ kind: 'done', text: 'All in one.', agent: 'codex', model: 'gpt-6.1-terra', ms: 15200, judged: true, unnamed: 0 });
+  expect(h.deps.follows.size).toBe(0);
+});
+
+test("'synth' asks the PC to write the combined answer and follows it; 409 is just followed", async () => {
+  const t = ask({ info: info3w, synth: { on: false, agent: 'claude' } });
+  const off = snap('c1', 'done', { synthesis: { status: 'off', judged: false } });
+  const pc = script({
+    'POST comparisons/c1/synthesis': [[202, snap('c1', 'done', { pollAfterMs: 1, synthesis: { status: 'waiting', agent: 'codex', judged: false } })]],
+    'GET comparisons/c1': [
+      [200, snap('c1', 'done', { pollAfterMs: 1, synthesis: { status: 'running', agent: 'codex', judged: true } })],
+      [200, snap('c1', 'done', { synthesis: written })],
+    ],
+  });
+  const h = harness({ ...t, run: runAt('done', answers), compare: { ...t.compare!, id: 'c1', snap: off } });
+  expect(synthState(h.now(), info3w)).toEqual({ kind: 'off', cost: 1 });
+  await followCompare(pc.client, h.now(), 'synth', h.deps, { agent: 'codex' });
+  expect(said(pc.calls)).toEqual(['POST comparisons/c1/synthesis', 'GET comparisons/c1', 'GET comparisons/c1']);
+  expect(pc.calls[0].body).toEqual({ agent: 'codex' });
+  expect(h.seen.map((x) => synthState(x, info3w)?.kind)).toEqual(['off', 'waiting', 'writing', 'done']);
+  // While it was written the comparison stayed done, with no 다시 비교.
+  expect(h.seen.every((x) => JSON.stringify(compareState(x)) === JSON.stringify({ kind: 'done', partial: false, retry: false }))).toBe(true);
+
+  // Still being written (another device, or a press on its way): just follow it. No writer: {}.
+  pc.routes['POST comparisons/c1/synthesis'] = [[409, { error: { code: 'comparison_running', message: 'running' } }]];
+  pc.routes['GET comparisons/c1'] = [[200, snap('c1', 'done', { synthesis: written })]];
+  await followCompare(pc.client, h.now(), 'synth', h.deps);
+  expect(said(pc.calls).slice(3)).toEqual(['POST comparisons/c1/synthesis', 'GET comparisons/c1']);
+  expect(pc.calls[3].body).toEqual({});
+  expect(h.now().compare?.error).toBeUndefined();
+
+  // Any other refusal is kept as a code on the turn.
+  pc.routes['POST comparisons/c1/synthesis'] = [[404, { error: { code: 'comparison_not_found', message: 'gone' } }]];
+  await followCompare(pc.client, h.now(), 'synth', h.deps, { agent: 'codex' });
+  expect(said(pc.calls).slice(5)).toEqual(['POST comparisons/c1/synthesis']);
+  expect(h.now().compare?.error).toBe('comparison_not_found');
+  expect(compareState(h.now())).toEqual({ kind: 'notFound' });
+  expect(h.deps.follows.size).toBe(0);
+});
+
+test('stopAll also stops a comparison whose combined answer is still being written', () => {
+  const pc = script({ 'POST comparisons/c1/cancel': [[200, snap('c1', 'done', { synthesis: { status: 'running', judged: true } })]] });
+  const base = ask({ info: info3w });
+  const turns: Turn[] = [
+    { ...base, id: '1', compare: { ...base.compare!, id: 'c1', snap: snap('c1', 'done', { pollAfterMs: 1, synthesis: { status: 'running', judged: true } }) } },
+    { ...base, id: '2', compare: { ...base.compare!, id: 'c2', snap: snap('c2', 'done', { synthesis: written }) } },
+    { ...base, id: '3', compare: { ...base.compare!, id: 'c3', snap: snap('c3', 'failed', { synthesis: { status: 'off', judged: false } }) } },
+  ];
+  stopAll(pc.client, turns, new Map());
+  expect(said(pc.calls)).toEqual(['POST comparisons/c1/cancel']);
 });

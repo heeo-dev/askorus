@@ -2,6 +2,11 @@
 // stands, the chips and cards (Differ first; the other cards once every
 // judge ended), and a footer saying who judged and what that means. All of
 // it comes from compare.ts; this only draws and passes the presses on.
+//
+// S5b: a combined answer goes right under the status line. While it is on
+// its way or written, the chips and cards fold into one row under it
+// ('Show the evidence cards · Differ n · …'); without one (off, failed, an
+// older agent) they show open as in S5.
 
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -17,17 +22,21 @@ import {
   chipCounts,
   compareErrorText,
   compareState,
+  evidenceFolded,
   failedWith,
   firstShown,
   judgeModels,
   longAnswers,
   shownCards,
+  synthOn,
+  synthState,
 } from '@/ask/compare';
 import type { Turn } from '@/ask/thread';
 import { t } from '@/i18n';
 
 import { Button } from './Button';
 import { CompareItem } from './CompareItem';
+import { SynthesisCard } from './SynthesisCard';
 import { type Theme, useTheme } from './theme';
 
 export function CompareSection({
@@ -36,17 +45,24 @@ export function CompareSection({
   onAction,
   onPair,
   onJudges,
+  onCopy,
+  note,
 }: {
   turn: Turn;
   info: Info | null;
-  onAction: (how: 'start' | 'retry' | 'poll') => void;
+  onAction: (how: 'start' | 'retry' | 'poll' | 'synth') => void;
   onPair: (itemKey: string) => void;
   onJudges: () => void;
+  /** Copy the combined answer (S5b). */
+  onCopy: (text: string) => void;
+  /** What copying the combined answer said. */
+  note?: { text: string; error?: boolean };
 }) {
   const th = useTheme();
   const s = styles(th);
   const [only, setOnly] = useState<CardKind | null>(null);
   const [open, setOpen] = useState<Set<CardKind>>(() => new Set());
+  const [evidence, setEvidence] = useState(false); // folded cards opened
   const state = compareState(turn);
   if (!state) return null;
 
@@ -55,6 +71,8 @@ export function CompareSection({
   const comparing = state.kind === 'comparing';
   const ended = state.kind === 'done';
   const cs = snap && (comparing || ended) ? cards(snap) : null;
+  const synth = synthState(turn, info);
+  const folded = !!cs && evidenceFolded(synth);
 
   const status = (() => {
     switch (state.kind) {
@@ -127,8 +145,16 @@ export function CompareSection({
         <Text style={s.small}>{t('compare.footer.company')}</Text>
         <Text style={s.small}>{t('compare.footer.mayErr')}</Text>
         {!info?.judging?.verified ? <Text style={s.small}>{t('compare.footer.unverified')}</Text> : null}
+        {synthOn(turn) ? <Text style={s.small}>{t('compare.synth.company')}</Text> : null}
       </View>
     ) : null;
+
+  // The row the cards fold into: what it holds, '…' while judges still run.
+  const counts = cs ? chipCounts(cs) : null;
+  const foldLabel =
+    evidence || !counts
+      ? t('compare.evidence.hide')
+      : [t('compare.evidence.show'), ...cardKinds.map((k) => `${t(`compare.kind.${k}`)} ${comparing ? '…' : counts[k]}`)].join(' · ');
 
   return (
     <View style={s.root}>
@@ -138,8 +164,23 @@ export function CompareSection({
         </Text>
       ))}
       {status}
+      {synth ? (
+        <SynthesisCard state={synth} onWrite={() => onAction('synth')} onCopy={onCopy} onBy={onJudges} note={note} />
+      ) : null}
       {ended && state.retry ? <Button secondary label={t('compare.retry')} onPress={() => onAction('retry')} /> : null}
-      {cs && snap ? (
+      {folded ? (
+        <Pressable
+          onPress={() => setEvidence((x) => !x)}
+          accessibilityRole="button"
+          accessibilityLabel={foldLabel}
+          accessibilityState={{ expanded: evidence }}
+          hitSlop={6}
+          style={({ pressed }) => [s.fold, pressed && s.pressed]}
+        >
+          <Text style={s.link}>{foldLabel}</Text>
+        </Pressable>
+      ) : null}
+      {cs && snap && (!folded || evidence) ? (
         <Cards
           th={th}
           cs={cs}
@@ -153,7 +194,7 @@ export function CompareSection({
           onPair={onPair}
         />
       ) : null}
-      {cs && snap
+      {cs && snap && (!folded || evidence)
         ? longAnswers(snap).map((l) => (
             <Text key={l.agent} style={s.muted}>
               {t('compare.long', { name: l.agent, n: l.judged })}
@@ -257,6 +298,7 @@ const styles = (th: Theme) =>
     small: { color: th.muted, fontSize: 12, lineHeight: 17 },
     link: { color: th.accent, fontSize: 13, lineHeight: 18, fontWeight: '600' },
     footer: { gap: 4, paddingTop: 4 },
+    fold: { paddingVertical: 4 },
     chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
     chip: {
       borderColor: th.border,

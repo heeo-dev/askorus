@@ -16,7 +16,8 @@
 #   powershell -NoProfile -File scripts\judge-eval.ps1 report -run trial-2026-11-01
 #
 # Exit codes pass through: 0 done, 1 error, 2 bad flags, 3 stopped on a usage
-# limit (run again with -resume), 4 interrupted, 5 call budget reached.
+# limit (run again with -resume), 4 interrupted, 5 call budget reached,
+# 6 a judge reached for a tool or answered with another model (look first).
 # Keep this file ASCII: Windows PowerShell 5.1 reads scripts without a BOM as
 # the ANSI code page.
 #

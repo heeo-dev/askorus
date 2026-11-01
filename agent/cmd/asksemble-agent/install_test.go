@@ -227,3 +227,37 @@ func TestSetupTipsTrustTheAskFolder(t *testing.T) {
 		t.Errorf("tips = %+v", tips)
 	}
 }
+
+// Uninstall deletes the combined-answer schema file next to the judge's,
+// and says so in its plan; saying no keeps it.
+func TestUninstallRemovesSynthSchema(t *testing.T) {
+	judgeCleanups.reset(nil)
+	dir, _ := uninstallDir(t)
+	synth := filepath.Join(dir, core.SynthSchemaFile)
+	if err := os.WriteFile(synth, []byte(core.SynthSchemaV1), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if err := uninstallCmd(dir, nil, strings.NewReader("n\n"), &out); err != nil {
+		t.Fatal(err)
+	}
+	if want := "delete " + synth + " / " + synth + " 삭제"; !strings.Contains(out.String(), want) {
+		t.Errorf("the plan lacks %q:\n%s", want, out.String())
+	}
+	if _, err := os.Stat(synth); err != nil {
+		t.Error("declined uninstall deleted the synth schema file")
+	}
+	out.Reset()
+	if err := uninstallCmd(dir, []string{"-yes"}, strings.NewReader(""), &out); err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range []string{synth, filepath.Join(dir, core.JudgeSchemaFile)} {
+		if _, err := os.Stat(f); !os.IsNotExist(err) {
+			t.Errorf("%s stayed: %v", f, err)
+		}
+	}
+	// A missing file is no error.
+	if err := uninstallCmd(dir, []string{"-yes"}, strings.NewReader(""), &bytes.Buffer{}); err != nil {
+		t.Errorf("again: %v", err)
+	}
+}

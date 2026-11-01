@@ -242,3 +242,45 @@ export function aggregate(
     },
   };
 }
+
+/**
+ * combinedText is the pretend writer's combined answer (S5b): a first line,
+ * then for every Differ item what each side says, after its AIs' names
+ * (named) or with no name at all (as a writer that leaves them out). A
+ * writer without the comparison's results (judged false) says so instead.
+ */
+export function combinedText(o: {
+  items: CardItem[];
+  answers: CompareAnswer[];
+  name: (agent: string) => string;
+  named: boolean;
+  judged: boolean;
+}): string {
+  const lines = ['Fake combined answer.'];
+  if (!o.judged) return [...lines, 'Written from the answers alone.'].join('\n\n');
+  const text = new Map(o.answers.flatMap((a) => a.units.map((u) => [u.id, u.text] as const)));
+  for (const it of o.items) {
+    if (it.kind !== 'differ') continue;
+    const sides = it.positions.map((p) => {
+      const said = text.get(p.units[0]) ?? '';
+      return o.named ? `${sideNames(p.agents, o.answers, o.name).join(', ')}: ${said}` : said;
+    });
+    lines.push(`The AIs differ. ${sides.join(' ')}`);
+  }
+  if (lines.length === 1) lines.push('The AIs agree.');
+  return lines.join('\n\n');
+}
+
+// sideNames: the display names of a side's answers.
+function sideNames(ids: string[], answers: CompareAnswer[], name: (agent: string) => string): string[] {
+  return ids.map((id) => name(answers.find((a) => a.id === id)?.agent ?? id));
+}
+
+/** unnamedSides counts the Differ sides none of whose AI names the text mentions (any case), as the agent does. */
+export function unnamedSides(items: CardItem[], answers: CompareAnswer[], name: (agent: string) => string, text: string): number {
+  const lower = text.toLowerCase();
+  return items
+    .filter((it) => it.kind === 'differ')
+    .flatMap((it) => it.positions)
+    .filter((p) => !sideNames(p.agents, answers, name).some((n) => lower.includes(n.toLowerCase()))).length;
+}

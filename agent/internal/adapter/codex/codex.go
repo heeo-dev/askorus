@@ -60,8 +60,9 @@ var threadRe = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]
 type Options struct {
 	Path  string                   // empty: codex.exe on PATH
 	Tiers map[string]core.AskModel // settings ask.tiers.codex
-	// SchemaDir holds the judge schema file judge-schema-v1.json, which
-	// codex reads for --output-schema. Empty: the agent folder,
+	// SchemaDir holds the judge schema file judge-schema-v1.json and the
+	// combined-answer schema file synth-schema-v1.json, which codex reads
+	// for --output-schema. Empty: the agent folder,
 	// config.Dir() (%APPDATA%\Asksemble). Tests give a temporary folder.
 	SchemaDir string
 }
@@ -85,6 +86,13 @@ type Adapter struct {
 	schemaMu     sync.Mutex
 	schemaReady  bool
 	schemaWrites int
+
+	// The combined-answer schema file (synth.go), next to the judge's in
+	// schemaDir, with its own lock and the same write-once rule: synthMu
+	// guards synthReady and synthWrites.
+	synthMu     sync.Mutex
+	synthReady  bool
+	synthWrites int
 }
 
 // New finds codex. A missing codex is not an error: /v1/info reports it.

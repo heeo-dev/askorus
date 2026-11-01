@@ -1,0 +1,161 @@
+package codex
+
+// Combined answers with codex (종합 답변, P2-3 S5b, spec part 20): the
+// judge's locked-down `codex exec` (judge.go) with two changes: the model
+// is the question's ask tier model, and --output-schema is the
+// combined-answer schema file, synth-schema-v1.json, next to the judge's.
+// Read-only, the person's config left out, web search off, no session
+// file, the featuresOff features off, any tool item thrown away, the
+// prompt on stdin.
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"fmt"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"slices"
+	"strings"
+
+	"github.com/asksemble/asksemble/agent/internal/config"
+	"github.com/asksemble/asksemble/agent/internal/core"
+	"github.com/asksemble/asksemble/agent/internal/proc"
+)
+
+// synthSchemaName is the combined-answer schema file in the agent folder;
+// uninstall removes it.
+const synthSchemaName = core.SynthSchemaFile
+
+// synthTimeout is the time limit Synthesize sets itself
+// (core.Synthesizer); a variable so a test can shorten it.
+var synthTimeout = core.SynthTimeout
+
+// synthEffort is the effort a writer runs with when its tier names none:
+// the command needs one.
+const synthEffort = "medium"
+
+var (
+	_ core.Synthesizer = (*Adapter)(nil)
+	_ core.Named       = (*Adapter)(nil)
+)
+
+// DisplayName is "Codex", as a combined answer names its answers
+// (core.Named).
+func (a *Adapter) DisplayName() string { return "Codex" }
+
+// synthArgs builds one combined answer: judgeArgs with the synth schema
+// file. "-" reads the prompt from stdin.
+func synthArgs(model, effort, schema string) []string {
+	return judgeArgs(model, effort, schema)
+}
+
+// checkSynthArgs accepts exactly what synthArgs makes from a valid model,
+// a codex effort and this adapter's synth schema file: never the judge
+// schema file, and no other option.
+func (a *Adapter) checkSynthArgs(args []string) error {
+	if len(args) != 16+2*len(featuresOff) {
+		return fmt.Errorf("codex synth: %d arguments refused", len(args))
+	}
+	model, schema := args[8], args[14]
+	effort, ok := strings.CutPrefix(args[10], `model_reasoning_effort="`)
+	effort, ok2 := strings.CutSuffix(effort, `"`)
+	switch {
+	case !config.ValidModel(model):
+		return fmt.Errorf("codex synth: model %q refused", model)
+	case !ok || !ok2 || !efforts[effort]:
+		return fmt.Errorf("codex synth: effort %q refused", args[10])
+	case schema == "" || !filepath.IsAbs(schema) || schema != a.synthSchemaPath():
+		return fmt.Errorf("codex synth: schema %q refused", schema)
+	case !slices.Equal(args, synthArgs(model, effort, schema)):
+		return fmt.Errorf("codex synth: arguments %q refused", args)
+	}
+	return nil
+}
+
+// synthSchemaPath is the combined-answer schema file, or "" without an
+// agent folder.
+func (a *Adapter) synthSchemaPath() string {
+	if a.schemaDir == "" {
+		return ""
+	}
+	return filepath.Join(a.schemaDir, synthSchemaName)
+}
+
+// synthSchema makes sure the combined-answer schema file holds
+// core.SynthSchemaV1 and returns its path, by judgeSchema's rule: the
+// first call of the process writes it unless it already holds those
+// bytes, and later ones only read and compare, so a file that changed is
+// refused as internal, never repaired while another codex may read it.
+func (a *Adapter) synthSchema() (string, error) {
+	p := a.synthSchemaPath()
+	if p == "" {
+		return "", core.Fail(core.ErrCodeInternal, "codex synth: no folder for the combined-answer schema")
+	}
+	want := []byte(core.SynthSchemaV1)
+	a.synthMu.Lock()
+	defer a.synthMu.Unlock()
+	if !a.synthReady {
+		if b, err := os.ReadFile(p); err != nil || !bytes.Equal(b, want) {
+			if err := config.WriteFileAtomic(p, want); err != nil {
+				return "", core.Fail(core.ErrCodeInternal, "codex synth: the combined-answer schema file could not be written")
+			}
+			a.synthWrites++
+		}
+		a.synthReady = true
+	}
+	if b, err := os.ReadFile(p); err != nil || !bytes.Equal(b, want) {
+		return "", core.Fail(core.ErrCodeInternal, "codex synth: the combined-answer schema file changed; restart the agent")
+	}
+	return p, nil
+}
+
+// Synthesize writes one combined answer with codex exec
+// (core.Synthesizer). The prompt goes on stdin; the output is returned
+// unchecked. Cleanup is always empty: --ephemeral keeps no session file.
+func (a *Adapter) Synthesize(ctx context.Context, req core.SynthRequest) (core.SynthResult, error) {
+	if a.exeErr != nil {
+		return core.SynthResult{}, core.Fail(core.ErrCodeAgentUnavailable, "codex was not found")
+	}
+	if strings.TrimSpace(req.Prompt) == "" {
+		return core.SynthResult{}, core.Fail(core.ErrCodeInternal, "codex synth: empty prompt")
+	}
+	if info, err := os.Stat(req.Folder); !filepath.IsAbs(req.Folder) || err != nil || !info.IsDir() {
+		return core.SynthResult{}, core.Fail(core.ErrCodeInternal, "codex synth: the judge folder is not an absolute existing folder")
+	}
+	model, effort := req.Model, req.Effort
+	if effort == "" {
+		effort = synthEffort
+	}
+	switch {
+	case !config.ValidModel(model):
+		return core.SynthResult{}, core.Fail(core.ErrCodeBadModel, "codex synth: model refused")
+	case !efforts[effort]:
+		return core.SynthResult{}, core.Fail(core.ErrCodeBadModel, "codex synth: effort refused")
+	}
+	schema, err := a.synthSchema()
+	if err != nil {
+		return core.SynthResult{}, err
+	}
+	args := synthArgs(model, effort, schema)
+	if err := a.checkSynthArgs(args); err != nil {
+		return core.SynthResult{}, core.Fail(core.ErrCodeInternal, "codex synth: arguments refused")
+	}
+	ctx, cancel := context.WithTimeout(ctx, synthTimeout)
+	defer cancel()
+	res, err := proc.Run(ctx, proc.Cmd{Exe: a.exe, Dir: req.Folder, Args: args, Stdin: req.Prompt})
+	r := core.SynthResult{Model: model}
+	switch {
+	case errors.Is(err, proc.ErrTimeout), err != nil && ctx.Err() != nil:
+		return r, core.Fail(core.ErrCodeJudgeTimeout, "")
+	case errors.Is(err, fs.ErrNotExist), errors.Is(err, proc.ErrScript):
+		return r, core.Fail(core.ErrCodeAgentUnavailable, "codex was not found")
+	case err != nil:
+		return r, core.Fail(core.ErrCodeJudgeFailed, "codex could not run")
+	}
+	// The judge's parser reads the same events: a tool item is
+	// judge_used_tool, the last agent message is the output.
+	jr, err := parseJudgeOutput(res, model)
+	return core.SynthResult{Output: jr.Output, Model: jr.Model, InputTokens: jr.InputTokens, OutputTokens: jr.OutputTokens}, err
+}

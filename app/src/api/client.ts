@@ -294,6 +294,16 @@ export class AgentClient {
     return this.request<Comparison>('POST', `comparisons/${encodeURIComponent(id)}/retry`, undefined, signal);
   }
 
+  /**
+   * Writes a comparison's combined answer (S5b), again after it failed or
+   * when it was off (202). agent is the AI the person picked; left out, the
+   * PC picks. One already written comes back unchanged. 409
+   * comparison_running while the judging or the writing still runs.
+   */
+  writeSynthesis(id: string, agent?: string, signal?: AbortSignal) {
+    return this.request<Comparison>('POST', `comparisons/${encodeURIComponent(id)}/synthesis`, agent ? { agent } : {}, signal);
+  }
+
   /** Stops a comparison: queued judgments are dropped, running ones finish. */
   cancelComparison(id: string) {
     return this.request<Comparison>('POST', `comparisons/${encodeURIComponent(id)}/cancel`);
@@ -372,7 +382,8 @@ const deviceNameFallback = 'phone';
 
 /**
  * comparisonPolling: a comparison is asked for again while it waits or
- * runs, and also while a newer status still asks to be polled.
+ * runs, and also while the PC still asks to be polled (pollAfterMs): its
+ * combined answer is still being written (S5b), or a newer status.
  */
 export function comparisonPolling(c: Pick<Comparison, 'status' | 'pollAfterMs'>): boolean {
   return c.status === 'waiting' || c.status === 'running' || (c.pollAfterMs ?? 0) > 0;

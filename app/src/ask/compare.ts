@@ -9,6 +9,12 @@
 // through unchanged, so a card (and an open sheet) stays put while judges
 // finish. Lengths the agent limits are UTF-8 bytes: measure them with
 // utf8Bytes and cutUtf8, never with .length.
+//
+// S5b: once the judging ended, one AI may write the answers into one
+// combined answer (the snapshot's synthesis). It has its own status: the
+// comparison's status stays the judges', and the PC keeps pollAfterMs while
+// the writing is not done. With a combined answer the cards fold under it
+// as evidence; without one (off, failed, an older agent) they show as in S5.
 
 import { agentName } from '@/api/agents';
 import { AgentError, CancelledError, NetworkError, comparisonPolling } from '@/api/client';
@@ -24,6 +30,8 @@ import type {
   NumberSpan,
   Run,
   RunPart,
+  Synthesis,
+  SynthesisRequest,
   UnitMath,
 } from '@/api/types';
 import type { Target, Turn, TurnCompare } from '@/ask/thread';
@@ -57,6 +65,19 @@ export const compareCodes = [
   'comparison_running',
   'bad_compare',
   'bad_request',
+] as const;
+
+/** Error codes of a combined answer with words of their own (compare.synth.error.*); others take the compare words. */
+export const synthCodes = [
+  'judge_failed',
+  'judge_timeout',
+  'judge_bad_output',
+  'judge_used_tool',
+  'bad_model',
+  'agent_unavailable',
+  'no_judge',
+  'cancelled',
+  'internal',
 ] as const;
 
 /** Items shown in a card before 'Show n more'. */
@@ -114,6 +135,29 @@ export function cutUtf8(s: string, maxBytes: number): string {
 // ---- Who judges, and what a turn sends ----
 
 const canJudge = (a: AdapterInfo) => a.available && (a.capabilities ?? []).includes('judge');
+
+const canWrite = (a: AdapterInfo) => a.available && (a.capabilities ?? []).includes('synthesize');
+
+/** canSynthesize: some AI of this PC can write combined answers (S5b); an older agent has none. */
+export function canSynthesize(info: Info | null | undefined): boolean {
+  return (info?.agents ?? []).some(canWrite);
+}
+
+/**
+ * writerFor gives the AI to ask for as the writer: the one the person
+ * picked when the PC lists it, else undefined (the PC picks). Asking for an
+ * AI the PC does not have would make it refuse the whole comparison.
+ */
+export function writerFor(info: Info | null | undefined, agent: string): string | undefined {
+  return agent && (info?.agents ?? []).some((a) => a.agent === agent) ? agent : undefined;
+}
+
+/** synthRequest is what a turn asks for: the writer (or the PC's pick), or off. */
+export function synthRequest(info: Info, o: { on: boolean; agent: string }): SynthesisRequest {
+  if (!o.on) return { off: true };
+  const agent = writerFor(info, o.agent);
+  return agent ? { agent } : {};
+}
 
 /** judgesOf gives the asked AIs (in asked order) that can judge on this PC. */
 export function judgesOf(info: Info, asked: string[]): string[] {
@@ -177,25 +221,34 @@ export function directRequest(turn: Turn, key: string): ComparisonRequest | null
     return a;
   });
   if (answers.length < 2) return null;
-  return {
+  const req: ComparisonRequest = {
     clientComparisonId: key,
     question: cutUtf8(turn.question, maxQuestionBytes),
     earlier: turn.compare?.earlier ?? [],
     judges: turn.compare?.judges ?? [],
     answers,
   };
+  // The combined answer as fixed at send time, with the question's tier.
+  const synth = turn.compare?.synth;
+  if (synth) req.synthesis = turn.req.tier ? { ...synth, tier: turn.req.tier } : { ...synth };
+  return req;
 }
+
+// synthAsked: the turn asks for a combined answer (fixed at send time).
+const synthAsked = (turn: Turn) => !!turn.compare?.synth && !turn.compare.synth.off;
 
 /**
  * startCost is how many more times 비교하기 uses the PC's AIs: every
  * ordered pair of answers once; two answers need a judge that wrote none.
+ * A combined answer asked for adds one more. 0: nothing to start.
  */
 export function startCost(turn: Turn): number {
   const ready = readyParts(turn);
   const k = ready.length;
-  if (k >= 3) return k * (k - 1);
-  if (k === 2 && (turn.compare?.judges ?? []).some((j) => !ready.some((p) => p.agent === j))) return 2;
-  return 0;
+  let n = 0;
+  if (k >= 3) n = k * (k - 1);
+  else if (k === 2 && (turn.compare?.judges ?? []).some((j) => !ready.some((p) => p.agent === j))) n = 2;
+  return n > 0 && synthAsked(turn) ? n + 1 : n;
 }
 
 // ---- State updates (the same object back when nothing changes) ----
@@ -238,6 +291,17 @@ export function polling(s: Pick<Comparison, 'status' | 'pollAfterMs'>): boolean 
 
 export function isFinal(s: Pick<Comparison, 'status' | 'pollAfterMs'>): boolean {
   return !polling(s);
+}
+
+/**
+ * judging: the judges still run. Unlike polling, a done or failed
+ * comparison whose combined answer is still being written is not judging;
+ * a status this app does not know is judging while the PC asks to be polled.
+ */
+export function judging(s: Pick<Comparison, 'status' | 'pollAfterMs'>): boolean {
+  if (s.status === 'waiting' || s.status === 'running') return true;
+  if (s.status === 'done' || s.status === 'failed') return false;
+  return (s.pollAfterMs ?? 0) > 0;
 }
 
 const judgedFailed = (s: Comparison) => (s.requests ?? []).some((r) => r.status === 'failed' && r.judge !== '');
@@ -291,7 +355,7 @@ export function compareState(turn: Turn): CompareState | null {
   }
   const s = c.snap;
   if (!s || s.comparisonId !== c.id) return { kind: 'comparing', ended: 0, total: 0 };
-  if (polling(s)) return { kind: 'comparing', ...progress(s) };
+  if (judging(s)) return { kind: 'comparing', ...progress(s) };
   if (s.status === 'failed') {
     if (s.error?.code === 'need_two_answers') return { kind: 'oneAnswer' };
     return { kind: 'failed', code: s.error?.code ?? 'internal', message: s.error?.message, action: canRetry(s) ? 'retry' : null };
@@ -318,6 +382,123 @@ export function compareErrorText(code: string, message?: string): string {
         ? t(general)
         : t('error.unknown', { code });
   return code === 'judge_failed' && message ? `${base}\n${message}` : base;
+}
+
+// ---- The combined answer (S5b) ----
+
+export type SynthState =
+  | { kind: 'waiting' }
+  | { kind: 'writing' }
+  | { kind: 'done'; text: string; agent: string; model?: string; ms?: number; judged: boolean; unnamed: number }
+  | { kind: 'failed'; code: string; message?: string; retry: boolean }
+  | { kind: 'off'; cost: 1 };
+
+// The turn's latest snapshot when it is of the turn's comparison.
+const snapOf = (turn: Turn) => {
+  const c = turn.compare;
+  return c?.snap && c.snap.comparisonId === c.id ? c.snap : undefined;
+};
+
+/**
+ * synthState is the combined answer the Summary tab shows; null shows none
+ * and leaves the cards open as in S5: no snapshot of this comparison, a
+ * snapshot without synthesis (an older agent), an error on the turn, a
+ * Summary tab that is not comparing, done or failed, a status this app
+ * does not know, or too few answers. Off offers 'Write a combined answer'
+ * only once the comparison is final, on a PC that can write. A failed one
+ * may be written again once the comparison is final (else the PC says 409).
+ */
+export function synthState(turn: Turn, info: Info | null): SynthState | null {
+  const s = snapOf(turn);
+  const y = s?.synthesis;
+  if (!s || !y || turn.compare?.error) return null;
+  const kind = compareState(turn)?.kind;
+  if (kind !== 'comparing' && kind !== 'done' && kind !== 'failed') return null;
+  switch (y.status) {
+    case 'waiting':
+      return { kind: 'waiting' };
+    case 'running':
+      return { kind: 'writing' };
+    case 'done': {
+      const out: SynthState = {
+        kind: 'done',
+        text: y.text ?? '',
+        agent: y.agent ?? '',
+        judged: !!y.judged,
+        unnamed: Math.max(0, y.unnamedSides ?? 0),
+      };
+      if (y.model) out.model = y.model;
+      if (y.ms !== undefined) out.ms = y.ms;
+      return out;
+    }
+    case 'failed': {
+      const code = y.error?.code || 'internal';
+      if (code === 'need_two_answers') return null;
+      const out: SynthState = { kind: 'failed', code, retry: isFinal(s) };
+      if (y.error?.message) out.message = y.error.message;
+      return out;
+    }
+    case 'off':
+      return isFinal(s) && canSynthesize(info) ? { kind: 'off', cost: 1 } : null;
+    default:
+      return null;
+  }
+}
+
+/** evidenceFolded: the cards fold under a combined answer that is coming or came. */
+export function evidenceFolded(st: SynthState | null): boolean {
+  return st?.kind === 'waiting' || st?.kind === 'writing' || st?.kind === 'done';
+}
+
+/**
+ * synthOn: the writing AI's company gets the answers, so the footer says
+ * so: the snapshot's synthesis is not off, or before a snapshot the turn
+ * asks for one. A snapshot without synthesis (an older agent) writes none.
+ */
+export function synthOn(turn: Turn): boolean {
+  const s = snapOf(turn);
+  if (s) return !!s.synthesis && s.synthesis.status !== 'off';
+  return synthAsked(turn);
+}
+
+/**
+ * synthErrorText explains why a combined answer failed: its own words,
+ * else the comparison's (compareErrorText). The writing AI's own message
+ * follows judge_failed on the next line.
+ */
+export function synthErrorText(code: string, message?: string): string {
+  const own = `compare.synth.error.${code}`;
+  if (!has(own)) return compareErrorText(code, message);
+  const base = t(own);
+  return code === 'judge_failed' && message ? `${base}\n${message}` : base;
+}
+
+/** synthBy: who wrote it, with what and how long: "Claude sonnet · 15.2 s". */
+export function synthBy(o: { agent: string; model?: string; ms?: number }): string {
+  const who = [agentName(o.agent), o.model ?? ''].filter(Boolean).join(' ');
+  const time = o.ms !== undefined ? t('ask.seconds', { s: (o.ms / 1000).toFixed(1) }) : '';
+  return [who, time].filter(Boolean).join(' · ');
+}
+
+/** synthLine is the combined answer's line in the Judged by sheet; null when there is none to show. */
+export function synthLine(s: Comparison | undefined): { what: string; text: string; failed?: boolean } | null {
+  const y: Synthesis | undefined = s?.synthesis;
+  if (!y || y.status === 'off') return null;
+  const what = y.agent ? t('compare.synth.line', { name: agentName(y.agent) }) : t('compare.synth.title');
+  switch (y.status) {
+    case 'waiting':
+      return { what, text: t('compare.req.queued') };
+    case 'running':
+      return { what, text: t('compare.synth.writing') };
+    case 'done': {
+      const time = y.ms !== undefined ? t('ask.seconds', { s: (y.ms / 1000).toFixed(1) }) : '';
+      return { what, text: [time, y.model ?? ''].filter(Boolean).join(' · ') };
+    }
+    case 'failed':
+      return { what, text: synthErrorText(y.error?.code || 'internal', y.error?.message), failed: true };
+    default:
+      return { what, text: y.status };
+  }
 }
 
 /** whyText: why an item needs a look, or null for a check this app does not know. */

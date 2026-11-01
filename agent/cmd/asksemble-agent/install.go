@@ -452,7 +452,8 @@ func uninstallCmd(dir string, args []string, in io.Reader, out io.Writer) error 
 		plan = append(plan, m("delete OpenCode's leftover judge conversations in the judge folder", "판정 폴더에 남은 OpenCode 판정 대화를 지움"))
 	}
 	schemaFile := filepath.Join(dir, core.JudgeSchemaFile)
-	plan = append(plan, m("delete %s", "%s 삭제", schemaFile))
+	synthSchemaFile := filepath.Join(dir, core.SynthSchemaFile)
+	plan = append(plan, m("delete %s", "%s 삭제", schemaFile), m("delete %s", "%s 삭제", synthSchemaFile))
 	if *all {
 		plan = append(plan, m("delete %s", "%s 삭제", dir))
 	}
@@ -494,6 +495,7 @@ func uninstallCmd(dir string, args []string, in io.Reader, out io.Writer) error 
 		}
 	}
 	os.Remove(schemaFile)
+	os.Remove(synthSchemaFile)
 	if ti.served {
 		if c, err := tailnet.New(); err == nil {
 			if err := c.ServeOff(ctx, ti.serve.HTTPSPort); err != nil {

@@ -6,21 +6,38 @@
 // it does, who judges and which earlier questions go along are fixed when
 // it is sent (newTurn), so 비교하기 later sends the same. followRun and
 // followCompare follow the PC and patch the turn; the screen only draws.
+//
+// S5b: on a PC that writes combined answers, the turn also fixes at send
+// time whether one AI then writes the answers into one, and who.
 
 import { type AgentClient, AgentError, CancelledError } from '@/api/client';
-import type { Comparison, Info, Run, RunCompare, RunPart, RunRequest, RunTarget, Tier } from '@/api/types';
+import type { Comparison, Info, Run, RunCompare, RunPart, RunRequest, RunTarget, SynthesisRequest, Tier } from '@/api/types';
 
-import { compareStart, directRequest, earlierFor, judgesOf, polling, withError, withRun, withSnap } from './compare';
+import {
+  canSynthesize,
+  compareStart,
+  directRequest,
+  earlierFor,
+  judgesOf,
+  polling,
+  synthRequest,
+  withError,
+  withRun,
+  withSnap,
+} from './compare';
 
 /**
- * A turn's comparison. start, judges and earlier are fixed at send time.
- * key is the clientComparisonId of a POST /v1/comparisons not answered yet
- * (cleared on its 202); error is a code, its words chosen when drawn.
+ * A turn's comparison. start, judges, earlier and synth are fixed at send
+ * time. key is the clientComparisonId of a POST /v1/comparisons not
+ * answered yet (cleared on its 202); error is a code, its words chosen when
+ * drawn. synth (S5b) is set only on a PC that writes combined answers: the
+ * writer asked for, or off.
  */
 export type TurnCompare = {
   start: 'auto' | 'manual' | 'noJudgeOff' | 'noJudgeNone';
   judges: string[];
   earlier: string[];
+  synth?: SynthesisRequest;
   id?: string;
   key?: string;
   snap?: Comparison;
@@ -91,6 +108,9 @@ export function request(opts: {
 /**
  * newTurn makes the next turn: its run, and whether and how it compares.
  * With auto compare the run asks the PC to compare once the answers are in.
+ * synth is the person's combined-answer setting (on, and the writer); a
+ * turn that compares on a PC that can write sends it ({agent} or off), a
+ * two-AI turn has no comparison and so no combined answer.
  */
 export function newTurn(o: {
   id: string;
@@ -102,16 +122,20 @@ export function newTurn(o: {
   models: Record<string, string>;
   info: Info;
   auto: boolean;
+  synth: { on: boolean; agent: string };
   at: number;
 }): Turn {
   const req = request({ question: o.question, tier: o.tier, to: o.to, on: o.on, turns: o.turns, models: o.models, id: o.id });
   const asked = (req.agents ?? []).map((a) => a.agent);
   const start = compareStart({ info: o.info, asked, to: o.to, auto: o.auto });
-  const judges = start === 'auto' || start === 'manual' ? judgesOf(o.info, asked) : [];
+  const compares = start === 'auto' || start === 'manual';
+  const judges = compares ? judgesOf(o.info, asked) : [];
   const earlier = judges.length ? earlierFor(o.turns, judges) : [];
   const turn: Turn = { id: o.id, question: o.question, req, agents: asked, at: o.at };
   if (start) turn.compare = { start, judges, earlier };
-  if (start === 'auto') req.compare = { earlier, judges };
+  const synth = compares && canSynthesize(o.info) ? synthRequest(o.info, o.synth) : undefined;
+  if (turn.compare && synth) turn.compare.synth = synth;
+  if (start === 'auto') req.compare = synth ? { earlier, judges, synthesis: synth } : { earlier, judges };
   return turn;
 }
 
@@ -174,9 +198,17 @@ export async function followRun(client: AgentClient, turn: Turn, deps: FollowDep
  * followCompare follows a turn's comparison until it is final: 'poll' asks
  * for the one the turn has, 'start' sends the answers for a new one (the
  * same clientComparisonId again after a lost request), 'retry' asks the PC
- * to judge the failed pairs again. Errors become a code on the turn.
+ * to judge the failed pairs again, 'synth' asks it to write the combined
+ * answer (S5b; opts.agent the writer, left out the PC picks). Errors become
+ * a code on the turn.
  */
-export async function followCompare(client: AgentClient, turn: Turn, how: 'poll' | 'start' | 'retry', deps: FollowDeps): Promise<void> {
+export async function followCompare(
+  client: AgentClient,
+  turn: Turn,
+  how: 'poll' | 'start' | 'retry' | 'synth',
+  deps: FollowDeps,
+  opts: { agent?: string } = {},
+): Promise<void> {
   const key = `${turn.id}/compare`;
   // A second 비교하기 before the screen redraws is the same press: the first
   // POST is already out. Every follow that ended (also a lost or refused
@@ -199,14 +231,15 @@ export async function followCompare(client: AgentClient, turn: Turn, how: 'poll'
       const snap = await client.startComparison(req, ctl.signal);
       id = snap.comparisonId;
       patch((x) => withSnap({ ...x, key: undefined }, snap));
-    } else if (how === 'retry') {
+    } else if (how === 'retry' || how === 'synth') {
       patch((x) => ({ ...x, error: undefined }));
       if (id) {
         try {
-          const snap = await client.retryComparison(id, ctl.signal);
+          const snap =
+            how === 'retry' ? await client.retryComparison(id, ctl.signal) : await client.writeSynthesis(id, opts.agent, ctl.signal);
           patch((x) => withSnap(x, snap));
         } catch (e) {
-          // Still running (another device, or a retry already on its way): just follow it.
+          // Still running (another device, or a press already on its way): just follow it.
           if (!(e instanceof AgentError && e.code === 'comparison_running')) throw e;
         }
       }
@@ -224,7 +257,8 @@ export async function followCompare(client: AgentClient, turn: Turn, how: 'poll'
 
 /**
  * stopAll stops following everything (새 질문) and asks the PC to stop the
- * comparisons that are not final, without waiting for it.
+ * comparisons that are not final (also one whose combined answer is still
+ * being written), without waiting for it.
  */
 export function stopAll(client: AgentClient | undefined, turns: Turn[], follows: Map<string, AbortController>): void {
   follows.forEach((c) => c.abort());

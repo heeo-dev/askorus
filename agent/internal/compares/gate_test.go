@@ -226,3 +226,88 @@ func TestAnnounce(t *testing.T) {
 		t.Errorf("Engines = %v, Announce %v", got, names)
 	}
 }
+
+// Gate.Writer: the judge gate first, then Synthesizer and Asker, the tier
+// model and its company.
+func TestGateWriter(t *testing.T) {
+	ctx := context.Background()
+	cl := newWriter("claude", "anthropic", "Claude")
+	cl.fams = map[string]string{"claude-deep": ""}
+	g := testGate(t, cl)
+	w, why := g.Writer(cl, cl.Info(ctx), core.TierQuick)
+	if why != "" || w.Synth == nil || w.Judger == nil || w.Cleaner != nil || w.Model != "claude-quick" || w.Effort != "low" || w.Family != "anthropic" || w.Agent != "claude" {
+		t.Fatalf("writer: %+v %q", w, why)
+	}
+	for _, tier := range []string{"", "fast", core.TierStandard} {
+		if w, why := g.Writer(cl, cl.Info(ctx), tier); why != "" || w.Model != "claude-standard" {
+			t.Errorf("tier %q: %+v %q", tier, w, why)
+		}
+	}
+	if w, why := g.Writer(cl, cl.Info(ctx), core.TierDeep); why != WhyNoFamily || w.Synth != nil || w.Judger != nil {
+		t.Errorf("unknown company: %+v %q", w, why)
+	}
+	// The judge gate's reasons come first.
+	off := g
+	off.Settings.Off = true
+	if w, why := off.Writer(cl, cl.Info(ctx), core.TierQuick); why != WhyOff || w.Synth != nil {
+		t.Errorf("off: %+v %q", w, why)
+	}
+	cl.setAvailable(false)
+	if _, why := g.Writer(cl, cl.Info(ctx), core.TierQuick); why != WhyUnavailable {
+		t.Errorf("unavailable: %q", why)
+	}
+	cl.setAvailable(true)
+	// A judge that cannot write, or has no tier model.
+	judgeOnly := newFake("codex", "openai")
+	if _, why := testGate(t, judgeOnly).Writer(judgeOnly, judgeOnly.Info(ctx), core.TierQuick); why != WhyCannotWrite {
+		t.Errorf("judge only: %q", why)
+	}
+	asker := askerAI{fakeAI: newFake("codex", "openai"), tiers: map[string]core.AskModel{core.TierStandard: {Model: "gpt"}}}
+	if _, why := testGate(t, asker).Writer(asker, asker.Info(ctx), core.TierQuick); why != WhyCannotWrite {
+		t.Errorf("asks but does not write: %q", why)
+	}
+	cl.tiers = map[string]core.AskModel{core.TierStandard: {Effort: "medium"}}
+	if _, why := g.Writer(cl, cl.Info(ctx), core.TierStandard); why != WhyCannotWrite {
+		t.Errorf("no tier model: %q", why)
+	}
+	// The cleaner comes with the engine.
+	oc := cleanerWriter{newWriter("opencode", "deepseek", "OpenCode")}
+	if w, why := testGate(t, oc).Writer(oc, oc.Info(ctx), core.TierQuick); why != "" || w.Cleaner == nil {
+		t.Errorf("opencode: %+v %q", w, why)
+	}
+}
+
+// Announce gives synthesize to an AI that judges and can ask and write,
+// never on its own say, and judge.off takes both away.
+func TestAnnounceSynthesize(t *testing.T) {
+	cl := newWriter("claude", "anthropic", "Claude")
+	cl.caps = []core.Capability{core.CapAsk, core.CapSynthesize} // it names synthesize itself
+	old := newWriter("codex", "openai", "Codex")
+	old.version = "0.9.0"
+	old.caps = []core.Capability{core.CapAsk, core.CapSynthesize}
+	judgeOnly := askerAI{fakeAI: newFake("opencode", "deepseek"), tiers: map[string]core.AskModel{core.TierStandard: {Model: "x"}}}
+	judgeOnly.caps = []core.Capability{core.CapAsk}
+	ais := []core.Adapter{cl, old, judgeOnly}
+	g := testGate(t, ais...)
+	g.MinVersions["codex"] = "1.0.0"
+	infos, _ := Announce(context.Background(), ais, g)
+	if !slices.Equal(infos[0].Capabilities, []core.Capability{core.CapAsk, core.CapJudge, core.CapSynthesize}) {
+		t.Errorf("claude: %v", infos[0].Capabilities)
+	}
+	if slices.Contains(infos[1].Capabilities, core.CapSynthesize) || slices.Contains(infos[1].Capabilities, core.CapJudge) {
+		t.Errorf("an old AI that names synthesize itself: %v", infos[1].Capabilities)
+	}
+	if !slices.Contains(infos[2].Capabilities, core.CapJudge) || slices.Contains(infos[2].Capabilities, core.CapSynthesize) {
+		t.Errorf("a judge that cannot write: %v", infos[2].Capabilities)
+	}
+	if len(cl.caps) != 2 || len(old.caps) != 2 {
+		t.Errorf("the adapters' own lists changed: %v %v", cl.caps, old.caps)
+	}
+	g.Settings.Off = true
+	infos, _ = Announce(context.Background(), ais, g)
+	for _, info := range infos {
+		if slices.Contains(info.Capabilities, core.CapSynthesize) || slices.Contains(info.Capabilities, core.CapJudge) {
+			t.Errorf("off: %v", info.Capabilities)
+		}
+	}
+}

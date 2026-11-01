@@ -1,11 +1,12 @@
 // The sheet behind 'Judged by: …' in the Summary footer (P2-3): one line
 // per judging request, who read whose sentences against whose answer, and
 // how it went (the time, still waiting, or why it failed in the AI's words).
+// S5b: the combined answer comes first, with the AI that wrote it.
 
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import type { Comparison } from '@/api/types';
-import { compareErrorText, type RequestLine, requestLines } from '@/ask/compare';
+import { compareErrorText, type RequestLine, requestLines, synthLine } from '@/ask/compare';
 import { t } from '@/i18n';
 
 import { type Theme, useTheme } from './theme';
@@ -31,12 +32,19 @@ export function JudgesSheet({ snap, open, onClose }: { snap?: Comparison; open: 
   const s = styles(th);
   if (!open) return null;
   const lines = snap ? requestLines(snap) : [];
+  const synth = synthLine(snap);
   return (
     <Modal transparent animationType="slide" visible onRequestClose={onClose}>
       <Pressable style={s.backdrop} onPress={onClose} accessibilityLabel={t('sheet.close')} />
       <View style={s.sheet}>
         <ScrollView contentContainerStyle={s.body}>
           <Text style={s.title}>{t('compare.judgesTitle')}</Text>
+          {synth ? (
+            <View style={s.row}>
+              <Text style={s.what}>{synth.what}</Text>
+              {synth.text ? <Text style={synth.failed ? s.failed : s.status}>{synth.text}</Text> : null}
+            </View>
+          ) : null}
           {lines.map((l) => {
             const st = statusOf(l);
             const what = l.judge

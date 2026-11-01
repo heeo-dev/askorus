@@ -4,7 +4,13 @@
 // P2-3: with enableJudge() its AIs also judge, and a run that carries
 // compare gets a comparison, judged by the simple rule of fakeCompare.ts.
 // Each GET /v1/comparisons/{id} lets the next three judging requests end.
+//
+// S5b: with enableSynth() its AIs also write combined answers. A
+// comparison takes its synthesis from the request (none: off) and, like the
+// agent, always reports it. Once the judging ended, the next GET starts the
+// writing (running) and the one after ends it (fakeCompare's combinedText).
 
+import { agentName } from '@/api/agents';
 import type {
   AdapterInfo,
   CodeError,
@@ -17,9 +23,10 @@ import type {
   Judgment,
   Preview,
   Session,
+  Synthesis,
 } from '@/api/types';
 
-import { aggregate, judgePair, splitUnits } from './fakeCompare';
+import { aggregate, combinedText, judgePair, splitUnits, unnamedSides } from './fakeCompare';
 
 export const HOST = 'desktop-test.tail0.ts.net';
 export const PORT = 8790;
@@ -39,6 +46,9 @@ export const judgeInfos: Record<string, JudgeInfo> = {
 /** What a judging AI does: judge, judge but say it is not sure, or fail with this error. */
 export type JudgeReply = 'ok' | 'unsure' | { code: string; message?: string };
 
+/** What the writing AI does (S5b): write, write without naming the AIs, fail (usage limit), or keep writing. */
+export type SynthReply = 'ok' | 'unnamed' | 'fail' | 'hold';
+
 type FakeRun = { id: string; tier: string; prompt: string; parts: any[]; key?: string; comparisonId?: string };
 type Source = { id: string; agent: string; via: string; model?: string; text?: string };
 
@@ -56,7 +66,12 @@ type FakeComparison = {
   judgments: Judgment[];
   rounds: number; // GETs that let requests end
   error?: CodeError;
+  asked: string[]; // who may write the combined answer, in turn order
+  synth?: FakeSynth; // only on a PC that writes (enableSynth)
 };
+
+// The combined answer's state; want is the AI asked for, tier the question's.
+type FakeSynth = Omit<Synthesis, 'agent'> & { agent?: string; want?: string; tier: string };
 
 const batch = 3; // requests that end per GET
 const utf8 = (s: string) => new TextEncoder().encode(s).length;
@@ -119,6 +134,13 @@ export class FakeAgent {
   loseReplies: Partial<Record<'POST /v1/runs' | 'POST /v1/comparisons', number>> = {};
   /** compareError codes the POST /v1/runs 202s carried, in order. */
   compareErrors: string[] = [];
+  /** Combined answers (S5b): what the writing AI does (default 'ok'). */
+  synthReply: SynthReply = 'ok';
+  /** Whether the writer had the comparison's results; by default when some judging ended done. */
+  synthJudged: boolean | undefined = undefined;
+  /** How many combined answers were started (each takes one more AI call). */
+  synthCalls = 0;
+  private synthOn = false;
   private judging: JudgingInfo | null = null;
   private comparisons = new Map<string, FakeComparison>();
   private made: FakeComparison[] = [];
@@ -185,6 +207,23 @@ export class FakeAgent {
     if (o.typicalMs) this.judging.typicalMs = o.typicalMs;
   }
 
+  /**
+   * enableSynth makes the PC's judging AIs also write combined answers
+   * (S5b, the same gate as judging); call it after enableJudge.
+   */
+  enableSynth() {
+    this.synthOn = true;
+    if (!this.capabilities.includes('synthesize')) this.capabilities = [...this.capabilities, 'synthesize'];
+    this.askAgents = this.askAgents.map((a) =>
+      a.capabilities.includes('judge') ? { ...a, capabilities: [...new Set([...a.capabilities, 'synthesize'])] } : a,
+    );
+  }
+
+  /** The bodies of every POST /v1/comparisons/{id}/synthesis, in order. */
+  synthRequests(): any[] {
+    return this.compareCalls('POST', '/synthesis').map((c) => c.body);
+  }
+
   /** Like an agent restart: every comparison is gone (404 comparison_not_found). */
   forgetComparisons() {
     this.comparisons.clear();
@@ -227,9 +266,104 @@ export class FakeAgent {
     return agent === 'claude' || this.askAgents.some((a) => a.agent === agent);
   }
 
+  private canWrite(agent: string): boolean {
+    if (!this.synthOn || !this.canJudge(agent)) return false;
+    if (agent === 'claude') return this.capabilities.includes('synthesize');
+    return this.askAgents.some((a) => a.agent === agent && a.capabilities.includes('synthesize'));
+  }
+
+  // badSynthesis checks a request's synthesis like the agent: an object
+  // whose agent is '' or an AI of this PC, off a boolean, tier (direct
+  // comparisons) one of the tiers. null is no synthesis.
+  private badSynthesis(y: any, withTier: boolean): boolean {
+    if (y === undefined || y === null) return false;
+    if (typeof y !== 'object' || Array.isArray(y)) return true;
+    if (y.agent !== undefined && (typeof y.agent !== 'string' || (y.agent !== '' && !this.known(y.agent)))) return true;
+    if (y.off !== undefined && typeof y.off !== 'boolean') return true;
+    if (withTier && y.tier !== undefined && !['', 'quick', 'standard', 'deep'].includes(y.tier)) return true;
+    return false;
+  }
+
+  // newSynth makes a comparison's synthesis from its request: off unless asked.
+  private newSynth(y: any, tier: string): FakeSynth | undefined {
+    if (!this.synthOn) return undefined;
+    const on = !!y && typeof y === 'object' && !y.off;
+    const out: FakeSynth = { status: on ? 'waiting' : 'off', judged: false, tier: tier || 'standard' };
+    if (on && y.agent) out.want = y.agent;
+    return out;
+  }
+
+  // resetSynth makes a synthesis wait to be written again (by want, or the AI the PC picks).
+  private resetSynth(y: FakeSynth, want?: string) {
+    const written = ['agent', 'model', 'attempt', 'ms', 'inputTokens', 'outputTokens', 'text', 'unnamedSides', 'error'] as const;
+    for (const k of written) delete y[k];
+    Object.assign(y, { status: 'waiting', judged: false });
+    if (want !== undefined) {
+      if (want) y.want = want;
+      else delete y.want;
+    }
+  }
+
+  private tierModel(agent: string, tier: string): string {
+    const info = (agent === 'claude' ? this.claudeInfo() : this.askAgents.find((a) => a.agent === agent)) as AdapterInfo | undefined;
+    return info?.ask?.tiers?.[tier]?.model ?? `${agent}-${tier}`;
+  }
+
+  // synthStep moves a comparison's synthesis on, from what the last look
+  // left: once the judging ended a waiting one starts (one more AI call),
+  // and a running one ends as synthReply says.
+  private synthStep(cmp: FakeComparison) {
+    const y = cmp.synth;
+    if (!y) return;
+    if (y.status === 'waiting' && (cmp.status === 'done' || cmp.status === 'failed')) {
+      if (cmp.answers.filter((a) => a.status === 'ready').length < 2) {
+        Object.assign(y, { status: 'failed', error: { code: 'need_two_answers', message: 'a combined answer needs two answers' } });
+        return;
+      }
+      // The AI asked for if it was asked and may write, else the first asked AI that may.
+      const wanted = y.want && cmp.asked.includes(y.want) && this.canWrite(y.want) ? y.want : undefined;
+      const writer = wanted ?? cmp.asked.find((a) => this.canWrite(a));
+      if (!writer) {
+        Object.assign(y, { status: 'failed', error: { code: 'no_judge', message: 'no AI may write the combined answer' } });
+        return;
+      }
+      const judged = this.synthJudged ?? cmp.requests.some((r) => r.status === 'done');
+      Object.assign(y, { status: 'running', agent: writer, model: this.tierModel(writer, y.tier), attempt: 1, judged });
+      this.synthCalls++;
+      return;
+    }
+    if (y.status !== 'running' || this.synthReply === 'hold') return;
+    if (this.synthReply === 'fail') {
+      Object.assign(y, { status: 'failed', ms: 2100, error: { code: 'judge_failed', message: 'usage limit reached' } });
+      return;
+    }
+    const all = cmp.requests.length > 0 && cmp.requests.every(ended);
+    const items = y.judged ? aggregate(cmp.answers, cmp.requests, cmp.judgments, all).items : [];
+    const text = combinedText({ items, answers: cmp.answers, name: agentName, named: this.synthReply !== 'unnamed', judged: y.judged });
+    Object.assign(y, {
+      status: 'done',
+      ms: 15200,
+      inputTokens: 5200,
+      outputTokens: 640,
+      text,
+      unnamedSides: unnamedSides(items, cmp.answers, agentName, text),
+    });
+  }
+
+  // synthSnap is the snapshot's synthesis: the AI asked for until one is picked, the text only when done.
+  private synthSnap(y: FakeSynth): Synthesis {
+    const { want, tier: _tier, text, ...rest } = y;
+    const out: Synthesis = { ...rest };
+    if (!out.agent && want) out.agent = want;
+    if (y.status === 'done' && text !== undefined) out.text = text;
+    return out;
+  }
+
   // badCompare checks POST /v1/runs compare like the agent's parseCompare.
   private badCompare(c: any): boolean {
     if (typeof c !== 'object' || Array.isArray(c)) return true;
+    // An older agent ignores synthesis; one that writes checks it.
+    if (this.synthOn && this.badSynthesis(c.synthesis, false)) return true;
     const earlier = c.earlier ?? [];
     const judges = c.judges ?? [];
     if (!Array.isArray(earlier) || !Array.isArray(judges) || earlier.length > 3 || judges.length > 8) return true;
@@ -255,12 +389,16 @@ export class FakeAgent {
       judges: (wanted.length ? wanted : asked).filter((j) => this.canJudge(j)),
       question: String(r.prompt ?? '').trim(),
       earlier: compare.earlier ?? [],
+      asked,
+      synth: this.newSynth(compare.synthesis, r.tier),
     });
     r.comparisonId = cmp.id;
     return {};
   }
 
-  private newComparison(o: Pick<FakeComparison, 'source' | 'runId' | 'key' | 'judges' | 'question' | 'earlier'>): FakeComparison {
+  private newComparison(
+    o: Pick<FakeComparison, 'source' | 'runId' | 'key' | 'judges' | 'question' | 'earlier' | 'asked' | 'synth'>,
+  ): FakeComparison {
     const cmp: FakeComparison = { ...o, id: `cmp-${++this.n}`, status: 'waiting', answers: [], requests: [], judgments: [], rounds: 0 };
     this.comparisons.set(cmp.id, cmp);
     this.made.push(cmp);
@@ -364,7 +502,9 @@ export class FakeAgent {
 
   // look is one GET: a run's comparison waits for the run, is planned on
   // the first look after it ended, and then each look lets requests end.
+  // The synthesis moves first, so it starts on the look after the judging ended.
   private look(cmp: FakeComparison) {
+    this.synthStep(cmp);
     if (cmp.status !== 'waiting') return this.advance(cmp);
     const r = cmp.runId ? this.runs.get(cmp.runId) : undefined;
     if (r?.parts.some((p) => p.status === 'running')) return;
@@ -389,8 +529,10 @@ export class FakeAgent {
       counts,
     };
     if (cmp.runId) s.runId = cmp.runId;
-    if (cmp.status === 'waiting' || cmp.status === 'running') s.pollAfterMs = 1;
+    const writing = cmp.synth?.status === 'waiting' || cmp.synth?.status === 'running';
+    if (cmp.status === 'waiting' || cmp.status === 'running' || writing) s.pollAfterMs = 1;
     if (cmp.error) s.error = cmp.error;
+    if (cmp.synth) s.synthesis = this.synthSnap(cmp.synth);
     return s;
   }
 
@@ -404,14 +546,20 @@ export class FakeAgent {
       const answers: any[] = Array.isArray(b.answers) ? b.answers : [];
       if (answers.length < 2) return err(400, 'need_two_answers');
       if (answers.some((a) => typeof a?.text !== 'string' || utf8(a.text) > 65536)) return err(413, 'bad_request');
+      if (this.synthOn && this.badSynthesis(b.synthesis, true)) return err(400, 'bad_request');
       const asked: string[] = Array.isArray(b.judges) ? b.judges : [];
       const all = ['claude', ...this.askAgents.map((a) => a.agent)].filter((a) => this.canJudge(a));
+      const judges = asked.length ? asked.filter((j) => all.includes(j)) : all;
+      const pcAnswers: string[] = answers.filter((a) => a.via === 'pc').map((a) => a.agent);
       const cmp = this.newComparison({
         source: 'direct',
         key: b.clientComparisonId,
-        judges: asked.length ? asked.filter((j) => all.includes(j)) : all,
+        judges,
         question: String(b.question ?? ''),
         earlier: Array.isArray(b.earlier) ? b.earlier : [],
+        // Who was asked: the AIs that wrote a PC answer, then the judges.
+        asked: [...new Set([...pcAnswers, ...judges])],
+        synth: this.newSynth(b.synthesis, b.synthesis?.tier),
       });
       this.plan(
         cmp,
@@ -419,16 +567,27 @@ export class FakeAgent {
       );
       return json(202, this.snapshot(cmp));
     }
-    const m = c.path.match(/^\/v1\/comparisons\/([^/]+)(?:\/(retry|cancel))?$/);
+    const m = c.path.match(/^\/v1\/comparisons\/([^/]+)(?:\/(retry|cancel|synthesis))?$/);
     if (!m) return null;
+    // An older agent has no synthesis route.
+    if (m[2] === 'synthesis' && !this.synthOn) return err(404, 'not_found');
     const cmp = this.comparisons.get(decodeURIComponent(m[1]));
     if (!cmp) return err(404, 'comparison_not_found');
+    const writing = cmp.synth?.status === 'waiting' || cmp.synth?.status === 'running';
     if (c.method === 'GET' && !m[2]) {
       this.look(cmp);
       return json(200, this.snapshot(cmp));
     }
+    if (c.method === 'POST' && m[2] === 'synthesis') {
+      const b = c.body ?? {};
+      if (typeof b !== 'object' || Array.isArray(b) || this.badSynthesis({ agent: b.agent }, false)) return err(400, 'bad_request');
+      if (cmp.status === 'waiting' || cmp.status === 'running' || writing) return err(409, 'comparison_running');
+      // Written already: unchanged. Failed or off: written (again).
+      if (cmp.synth && cmp.synth.status !== 'done') this.resetSynth(cmp.synth, b.agent ?? '');
+      return json(202, this.snapshot(cmp));
+    }
     if (c.method === 'POST' && m[2] === 'retry') {
-      if (cmp.status === 'waiting' || cmp.status === 'running') return err(409, 'comparison_running');
+      if (cmp.status === 'waiting' || cmp.status === 'running' || writing) return err(409, 'comparison_running');
       const again = cmp.requests.filter((r) => r.status === 'failed' && r.judge);
       if (again.length) {
         for (const r of again) {
@@ -439,6 +598,8 @@ export class FakeAgent {
         cmp.status = 'running';
         delete cmp.error;
         this.startNext(cmp);
+        // A round that judges again writes the combined answer again.
+        if (cmp.synth && cmp.synth.status !== 'off') this.resetSynth(cmp.synth);
       }
       return json(202, this.snapshot(cmp));
     }
@@ -450,6 +611,10 @@ export class FakeAgent {
         // Queued requests are dropped; running ones would still finish.
         for (const r of cmp.requests) if (r.status === 'queued') Object.assign(r, { status: 'failed', error: { code: 'cancelled' } });
         this.settleCompare(cmp);
+      }
+      // A combined answer not started yet is dropped, also after the judging ended; a running one finishes.
+      if (cmp.synth?.status === 'waiting') {
+        Object.assign(cmp.synth, { status: 'failed', error: { code: 'cancelled', message: 'cancelled' } });
       }
       return json(200, this.snapshot(cmp));
     }

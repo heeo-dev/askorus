@@ -365,6 +365,42 @@ test('comparison, retry and cancel use their method and an encoded id', async ()
   expect(f.calls[1].body).toBeUndefined();
 });
 
+// S5b: the combined answer.
+test('writeSynthesis posts the writer, or an empty body, to the encoded id', async () => {
+  const waiting = cmp('done', { pollAfterMs: 1000, synthesis: { status: 'waiting', agent: 'codex', judged: false } });
+  const f = fakeFetch([
+    json(202, waiting),
+    json(202, cmp('done', { synthesis: { status: 'done', agent: 'claude', text: 'x', judged: true } })),
+    json(409, { error: { code: 'comparison_running', message: 'still running' } }),
+    json(404, { error: { code: 'comparison_not_found', message: 'gone' } }),
+  ]);
+  const c = new AgentClient(base, { token: 'tok', fetch: f.fn, sleep: noSleep });
+  expect((await c.writeSynthesis('c 1/x', 'codex')).synthesis).toEqual({ status: 'waiting', agent: 'codex', judged: false });
+  expect((await c.writeSynthesis('c1')).synthesis?.status).toBe('done');
+  expect(await c.writeSynthesis('c1', '').catch((e) => [e.code, e.status])).toEqual(['comparison_running', 409]);
+  expect(await c.writeSynthesis('c1').catch((e) => [e.code, e.status])).toEqual(['comparison_not_found', 404]);
+  expect(paths(f.calls)).toEqual([
+    'POST /v1/comparisons/c%201%2Fx/synthesis',
+    'POST /v1/comparisons/c1/synthesis',
+    'POST /v1/comparisons/c1/synthesis',
+    'POST /v1/comparisons/c1/synthesis',
+  ]);
+  expect(f.calls.map((x) => x.body)).toEqual([{ agent: 'codex' }, {}, {}, {}]);
+  expect(f.calls[0].headers['Content-Type']).toBe('application/json');
+});
+
+test('a done comparison whose combined answer is still being written is waited for', async () => {
+  const f = fakeFetch([
+    json(200, cmp('done', { pollAfterMs: 300, synthesis: { status: 'running', agent: 'claude', judged: true } })),
+    json(200, cmp('done', { synthesis: { status: 'done', agent: 'claude', text: 'All in one.', judged: true } })),
+  ]);
+  const waits: number[] = [];
+  const s = await new AgentClient(base, { fetch: f.fn, sleep: async (ms) => void waits.push(ms) }).waitComparison('c1');
+  expect(s.synthesis?.text).toBe('All in one.');
+  expect(waits).toEqual([300]);
+  expect(f.calls).toHaveLength(2);
+});
+
 test('comparisonPolling: waiting or running, or whatever the PC still wants polled', () => {
   expect(comparisonPolling({ status: 'waiting' })).toBe(true);
   expect(comparisonPolling({ status: 'running' })).toBe(true);

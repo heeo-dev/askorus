@@ -7,12 +7,15 @@ import (
 	"slices"
 )
 
-// codexMain plays codex: exec with --output-schema is a judge, any other
-// exec (also after --search) an ask.
+// codexMain plays codex: exec with --output-schema is a combined-answer
+// writer when the schema file holds the synth schema and a judge
+// otherwise, any other exec (also after --search) an ask.
 func codexMain(c *Call, schemaErr error) int {
 	exec := len(c.Args) > 0 && c.Args[0] == "exec" ||
 		len(c.Args) > 1 && c.Args[0] == "--search" && c.Args[1] == "exec"
 	switch {
+	case exec && slices.Contains(c.Args, "--output-schema") && schemaErr == nil && isSynthSchema(c.Schema):
+		return codexSynth(c)
 	case exec && slices.Contains(c.Args, "--output-schema"):
 		return codexJudge(c, schemaErr)
 	case exec:

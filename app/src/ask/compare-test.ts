@@ -1,10 +1,12 @@
 import { AgentError, CancelledError, NetworkError } from '@/api/client';
-import type { AdapterInfo, CardItem, Comparison, Info, JudgeRequest, Judgment, Run, RunPart } from '@/api/types';
+import type { AdapterInfo, CardItem, Comparison, Info, JudgeRequest, Judgment, Run, RunPart, Synthesis } from '@/api/types';
+import { setLang } from '@/i18n';
 
 import {
   answered,
   answeringLines,
   canRetry,
+  canSynthesize,
   cards,
   chipCounts,
   compareErrorText,
@@ -14,9 +16,11 @@ import {
   directRequest,
   earlierFor,
   errorCode,
+  evidenceFolded,
   failedWith,
   isFinal,
   judgedBy,
+  judging,
   judgeModels,
   judgesOf,
   labelText,
@@ -28,6 +32,12 @@ import {
   requestLines,
   shownCards,
   startCost,
+  synthBy,
+  synthErrorText,
+  synthLine,
+  synthOn,
+  synthRequest,
+  synthState,
   tabs,
   usableJudgments,
   utf8Bytes,
@@ -35,6 +45,7 @@ import {
   withError,
   withRun,
   withSnap,
+  writerFor,
 } from './compare';
 import type { Turn, TurnCompare } from './thread';
 
@@ -787,4 +798,216 @@ test('judgeModels: from the snapshot, before it from the turn and the PC', () =>
   // A snapshot of another comparison (a lost one) does not count.
   expect(judgeModels(doneTurn({ id: 'c2', snap: s, judges: ['codex'] }), three)).toEqual([{ agent: 'Codex', model: 'codex-quick' }]);
   expect(judgeModels(turnOf(), three)).toEqual([]);
+});
+
+// ---- The combined answer (S5b) ----
+
+const writer = (a: AdapterInfo): AdapterInfo => ({ ...a, capabilities: [...a.capabilities, 'synthesize'] });
+const threeW = infoOf([ai('claude', 'anthropic'), ai('codex', 'openai'), ai('opencode', 'deepseek')].map(writer));
+const syn = (over: Partial<Synthesis> = {}): Synthesis => ({ status: 'done', judged: true, ...over });
+const doneSyn: Synthesis = syn({ agent: 'claude', model: 'sonnet', ms: 15230, text: '# Seoul\n\nThe AIs differ.', unnamedSides: 0 });
+// A comparison with its synthesis; the PC keeps pollAfterMs while the synthesis waits or runs.
+const withSyn = (y: Synthesis, over: Partial<Comparison> = {}) =>
+  snapshot({ ...(y.status === 'waiting' || y.status === 'running' ? { pollAfterMs: 1000 } : {}), ...over, synthesis: y });
+const synTurn = (s: Comparison, c: Partial<TurnCompare> = {}) => doneTurn({ id: s.comparisonId, snap: s, synth: { agent: 'claude' }, ...c });
+
+test('canSynthesize, writerFor and synthRequest', () => {
+  expect(canSynthesize(threeW)).toBe(true);
+  expect(canSynthesize(three)).toBe(false); // an S5 agent
+  expect(canSynthesize(null)).toBe(false);
+  expect(canSynthesize(infoOf([writer(ai('claude', 'anthropic', ['ask', 'judge'], false)), ai('codex', 'openai')]))).toBe(false);
+  expect(writerFor(threeW, 'codex')).toBe('codex');
+  expect(writerFor(threeW, 'gemini')).toBeUndefined();
+  expect(writerFor(threeW, '')).toBeUndefined();
+  expect(writerFor(null, 'claude')).toBeUndefined();
+  // Listed but unable to write is still named: the PC falls back to an asked AI that can.
+  expect(writerFor(infoOf([ai('claude', 'anthropic', ['ask'], false)]), 'claude')).toBe('claude');
+  expect(synthRequest(threeW, { on: true, agent: 'opencode' })).toEqual({ agent: 'opencode' });
+  expect(synthRequest(threeW, { on: true, agent: 'gemini' })).toEqual({});
+  expect(synthRequest(threeW, { on: false, agent: 'opencode' })).toEqual({ off: true });
+});
+
+test('judging: the judges run; a done or failed comparison whose answer is being written is not judging', () => {
+  for (const status of ['waiting', 'running']) {
+    expect(judging({ status })).toBe(true);
+    expect(judging({ status, pollAfterMs: 1000 })).toBe(true);
+  }
+  for (const status of ['done', 'failed']) {
+    expect(judging({ status, pollAfterMs: 1000 })).toBe(false);
+    expect(polling({ status, pollAfterMs: 1000 })).toBe(true);
+    expect(judging({ status })).toBe(false);
+  }
+  expect(judging({ status: 'paused', pollAfterMs: 500 })).toBe(true);
+  expect(judging({ status: 'archived' })).toBe(false);
+});
+
+test('compareState: a done comparison whose combined answer is being written is done, with no retry yet', () => {
+  const partial = snapshot({
+    requests: [...snapshot().requests.slice(0, 5), req('r6', 'opencode', 'codex', 'claude', { status: 'failed', error: { code: 'judge_failed' } })],
+  });
+  const writing = withSyn(syn({ status: 'running', agent: 'claude' }), { requests: partial.requests });
+  expect(polling(writing)).toBe(true);
+  expect(canRetry(writing)).toBe(false); // the PC says 409 while the synthesis runs
+  expect(compareState(synTurn(writing))).toEqual({ kind: 'done', partial: true, retry: false });
+  expect(compareState(synTurn(withSyn(doneSyn, { requests: partial.requests })))).toEqual({ kind: 'done', partial: true, retry: true });
+  // Every judge failed: still failed, and 다시 비교 only once the writing ended.
+  const allFailed = (y: Synthesis) =>
+    withSyn(y, {
+      status: 'failed',
+      error: { code: 'judge_failed', message: 'usage limit reached' },
+      requests: snapshot().requests.map((r) => ({ ...r, status: 'failed', error: { code: 'judge_failed' } })),
+      items: [],
+    });
+  expect(compareState(synTurn(allFailed(syn({ status: 'running', judged: false }))))).toMatchObject({ kind: 'failed', action: null });
+  expect(compareState(synTurn(allFailed(syn({ judged: false, text: 'x' }))))).toMatchObject({ kind: 'failed', action: 'retry' });
+  // The judges still run: comparing, whatever the synthesis says.
+  expect(compareState(synTurn(withSyn(syn({ status: 'waiting' }), { status: 'running', pollAfterMs: 1000 })))).toMatchObject({ kind: 'comparing' });
+});
+
+test('synthState: waiting, writing, done, failed and off', () => {
+  expect(synthState(synTurn(withSyn(syn({ status: 'waiting', agent: 'codex' }), { status: 'running', pollAfterMs: 1000 })), threeW)).toEqual({ kind: 'waiting' });
+  expect(synthState(synTurn(withSyn(syn({ status: 'waiting' }))), threeW)).toEqual({ kind: 'waiting' });
+  expect(synthState(synTurn(withSyn(syn({ status: 'running', agent: 'claude' }))), threeW)).toEqual({ kind: 'writing' });
+  expect(synthState(synTurn(withSyn(doneSyn)), threeW)).toEqual({
+    kind: 'done',
+    text: '# Seoul\n\nThe AIs differ.',
+    agent: 'claude',
+    model: 'sonnet',
+    ms: 15230,
+    judged: true,
+    unnamed: 0,
+  });
+  expect(synthState(synTurn(withSyn(syn({ agent: 'codex', judged: false, unnamedSides: 2 }))), threeW)).toEqual({
+    kind: 'done',
+    text: '',
+    agent: 'codex',
+    judged: false,
+    unnamed: 2,
+  });
+  expect(synthState(synTurn(withSyn(syn({ judged: undefined as unknown as boolean, unnamedSides: -1 }))), threeW)).toMatchObject({ judged: false, unnamed: 0 });
+
+  const failed = syn({ status: 'failed', agent: 'claude', error: { code: 'judge_failed', message: 'usage limit reached' } });
+  expect(synthState(synTurn(withSyn(failed)), threeW)).toEqual({ kind: 'failed', code: 'judge_failed', message: 'usage limit reached', retry: true });
+  expect(synthState(synTurn(withSyn(syn({ status: 'failed' }))), threeW)).toEqual({ kind: 'failed', code: 'internal', retry: true });
+  expect(synthState(synTurn(withSyn(syn({ status: 'failed', error: { code: 'no_judge' } }))), threeW)).toMatchObject({ code: 'no_judge', retry: true });
+  // Failed while the judges still run (cancelled): writing again waits for them.
+  const cancelled = withSyn(syn({ status: 'failed', error: { code: 'cancelled' } }), { status: 'running', pollAfterMs: 1000 });
+  expect(synthState(synTurn(cancelled), threeW)).toEqual({ kind: 'failed', code: 'cancelled', retry: false });
+
+  // Off: 'Write a combined answer' once the comparison is final, on a PC that can write.
+  const off = syn({ status: 'off', judged: false });
+  expect(synthState(synTurn(withSyn(off), { synth: { off: true } }), threeW)).toEqual({ kind: 'off', cost: 1 });
+  expect(synthState(synTurn(withSyn(off, { status: 'failed', error: { code: 'judge_failed' } })), threeW)).toEqual({ kind: 'off', cost: 1 });
+  expect(synthState(synTurn(withSyn(off, { status: 'running', pollAfterMs: 1000 })), threeW)).toBeNull();
+  expect(synthState(synTurn(withSyn(off)), three)).toBeNull();
+  expect(synthState(synTurn(withSyn(off)), null)).toBeNull();
+});
+
+test('synthState: nothing to show', () => {
+  // An older agent: no synthesis in the snapshot.
+  expect(synthState(synTurn(snapshot()), threeW)).toBeNull();
+  // No snapshot, or one of another comparison.
+  expect(synthState(doneTurn({ id: 'c1' }), threeW)).toBeNull();
+  expect(synthState(doneTurn({ id: 'c2', snap: withSyn(doneSyn) }), threeW)).toBeNull();
+  expect(synthState(turnOf(), threeW)).toBeNull();
+  // An error on the turn takes the status line; a direct comparison on its way.
+  expect(synthState(synTurn(withSyn(doneSyn), { error: 'network' }), threeW)).toBeNull();
+  expect(synthState(synTurn(withSyn(doneSyn), { error: 'internal' }), threeW)).toBeNull();
+  expect(synthState(synTurn(withSyn(doneSyn), { key: 'k', snap: undefined }), threeW)).toBeNull();
+  // Not comparing, done or failed: still answering, or one answer.
+  expect(synthState({ ...synTurn(withSyn(doneSyn)), run: runOf('running', answers3) }, threeW)).toBeNull();
+  const two = withSyn(syn({ status: 'failed', error: { code: 'need_two_answers' } }), { status: 'failed', error: { code: 'need_two_answers' }, requests: [] });
+  expect(synthState(synTurn(two), threeW)).toBeNull();
+  // Too few answers for the writer alone, or a status this app does not know.
+  expect(synthState(synTurn(withSyn(syn({ status: 'failed', error: { code: 'need_two_answers' } }))), threeW)).toBeNull();
+  expect(synthState(synTurn(withSyn(syn({ status: 'paused' }))), threeW)).toBeNull();
+});
+
+test('evidenceFolded: under a combined answer that is coming or came', () => {
+  expect(evidenceFolded({ kind: 'waiting' })).toBe(true);
+  expect(evidenceFolded({ kind: 'writing' })).toBe(true);
+  expect(evidenceFolded({ kind: 'done', text: 'x', agent: 'claude', judged: true, unnamed: 0 })).toBe(true);
+  expect(evidenceFolded({ kind: 'failed', code: 'judge_failed', retry: true })).toBe(false);
+  expect(evidenceFolded({ kind: 'off', cost: 1 })).toBe(false);
+  expect(evidenceFolded(null)).toBe(false);
+});
+
+test('synthOn: the snapshot says, before it the turn', () => {
+  expect(synthOn(synTurn(withSyn(doneSyn)))).toBe(true);
+  expect(synthOn(synTurn(withSyn(syn({ status: 'failed', error: { code: 'judge_failed' } }))))).toBe(true);
+  expect(synthOn(synTurn(withSyn(syn({ status: 'off' }))))).toBe(false);
+  expect(synthOn(synTurn(snapshot()))).toBe(false); // an older agent writes none
+  expect(synthOn(doneTurn({ synth: { agent: 'claude' } }))).toBe(true);
+  expect(synthOn(doneTurn({ synth: {} }))).toBe(true);
+  expect(synthOn(doneTurn({ synth: { off: true } }))).toBe(false);
+  expect(synthOn(doneTurn())).toBe(false);
+  expect(synthOn(turnOf())).toBe(false);
+});
+
+test('synthErrorText: its own words, then the comparison words; judge_failed adds the AI words', () => {
+  expect(synthErrorText('judge_failed', 'usage limit reached')).toBe('The writing AI reported an error.\nusage limit reached');
+  expect(synthErrorText('judge_failed')).toBe('The writing AI reported an error.');
+  expect(synthErrorText('judge_timeout', 'ignored')).toBe('The combined answer did not finish in time.');
+  expect(synthErrorText('no_judge')).toBe('No AI could write it: it takes an AI that got this question and can judge on this PC.');
+  expect(synthErrorText('internal')).toBe('Something went wrong on the PC while writing the combined answer.');
+  // Codes without words of their own: the comparison's, then the ask's and the general ones.
+  expect(synthErrorText('need_two_answers')).toBe('Comparing needs at least two answers.');
+  expect(synthErrorText('comparison_running')).toBe('Still comparing.');
+  expect(synthErrorText('unauthorized')).toBe('This phone is no longer paired with the PC. Pair again.');
+  expect(synthErrorText('brand_new')).toBe('Something went wrong (brand_new).');
+});
+
+test('synthBy and synthLine', () => {
+  expect(synthBy({ agent: 'claude', model: 'sonnet', ms: 15230 })).toBe('Claude sonnet · 15.2 s');
+  expect(synthBy({ agent: 'opencode', ms: 900 })).toBe('OpenCode · 0.9 s');
+  expect(synthBy({ agent: 'codex', model: 'gpt-6.1-terra' })).toBe('Codex gpt-6.1-terra');
+  expect(synthBy({ agent: 'gemini' })).toBe('gemini');
+
+  expect(synthLine(undefined)).toBeNull();
+  expect(synthLine(snapshot())).toBeNull();
+  expect(synthLine(withSyn(syn({ status: 'off' })))).toBeNull();
+  expect(synthLine(withSyn(doneSyn))).toEqual({ what: 'Combined answer by Claude', text: '15.2 s · sonnet' });
+  expect(synthLine(withSyn(syn({ status: 'waiting' })))).toEqual({ what: 'Combined answer', text: 'Waiting' });
+  expect(synthLine(withSyn(syn({ status: 'waiting', agent: 'codex' })))).toEqual({ what: 'Combined answer by Codex', text: 'Waiting' });
+  expect(synthLine(withSyn(syn({ status: 'running', agent: 'codex' })))).toEqual({ what: 'Combined answer by Codex', text: 'Combining…' });
+  expect(synthLine(withSyn(syn({ status: 'failed', agent: 'codex', error: { code: 'judge_failed', message: 'quota' } })))).toEqual({
+    what: 'Combined answer by Codex',
+    text: 'The writing AI reported an error.\nquota',
+    failed: true,
+  });
+  expect(synthLine(withSyn(syn({ status: 'later', agent: 'codex' })))).toEqual({ what: 'Combined answer by Codex', text: 'later' });
+
+  setLang('ko');
+  try {
+    expect(synthBy({ agent: 'claude', model: 'sonnet', ms: 15230 })).toBe('Claude sonnet · 15.2초');
+    expect(synthLine(withSyn(doneSyn))).toEqual({ what: 'Claude 종합 답변', text: '15.2초 · sonnet' });
+  } finally {
+    setLang('en');
+  }
+});
+
+test('startCost and directRequest carry the combined answer fixed at send time', () => {
+  expect(startCost(doneTurn({ start: 'manual', synth: { agent: 'claude' } }))).toBe(7);
+  expect(startCost(doneTurn({ start: 'manual', synth: {} }))).toBe(7);
+  expect(startCost(doneTurn({ start: 'manual', synth: { off: true } }))).toBe(6);
+  const two = [answers3[0], answers3[1], { agent: 'opencode', status: 'failed' }];
+  expect(startCost(doneTurn({ start: 'manual', synth: { agent: 'claude' } }, two))).toBe(3);
+  // Nothing to start stays nothing: no pair has a judge.
+  expect(startCost(doneTurn({ start: 'manual', judges: ['claude', 'codex'], synth: { agent: 'claude' } }, two))).toBe(0);
+  expect(compareState(doneTurn({ start: 'manual', synth: { agent: 'claude' } }))).toEqual({ kind: 'manual', cost: 7 });
+
+  const withTier = (synth: TurnCompare['synth'], tier?: 'quick' | 'deep') => {
+    const t = doneTurn({ start: 'manual', synth });
+    return { ...t, req: tier ? { ...t.req, tier } : t.req };
+  };
+  expect(directRequest(withTier({ agent: 'codex' }, 'deep'), 'k')?.synthesis).toEqual({ agent: 'codex', tier: 'deep' });
+  expect(directRequest(withTier({ off: true }, 'quick'), 'k')?.synthesis).toEqual({ off: true, tier: 'quick' });
+  expect(directRequest(withTier({}, 'quick'), 'k')?.synthesis).toEqual({ tier: 'quick' });
+  expect(directRequest(withTier({ agent: 'claude' }), 'k')?.synthesis).toEqual({ agent: 'claude' });
+  // An S5 turn (no synth): the S5 body.
+  expect('synthesis' in (directRequest(withTier(undefined, 'deep'), 'k') ?? {})).toBe(false);
+  // The turn's synth is not changed by the request.
+  const t = withTier({ agent: 'codex' }, 'deep');
+  directRequest(t, 'k');
+  expect(t.compare?.synth).toEqual({ agent: 'codex' });
 });

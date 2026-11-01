@@ -705,7 +705,8 @@ func (m *Manager) endRoundLocked(c *comparison, rd *round) {
 	m.finishLocked(c, status, err, rd.start)
 }
 
-// finishLocked ends comparison c and logs it. Callers hold mu.
+// finishLocked ends comparison c, logs it and starts its combined answer
+// when one waits. Callers hold mu.
 func (m *Manager) finishLocked(c *comparison, status string, err *judge.Error, start time.Time) {
 	if status == Done {
 		err = nil
@@ -719,6 +720,7 @@ func (m *Manager) finishLocked(c *comparison, status string, err *judge.Error, s
 	m.log.Info("comparison ended", "comparison", c.id, "status", status, "code", code,
 		"differ", n.Differ, "check", n.Check, "agree", n.Agree, "onlyOne", n.OnlyOne,
 		"notCompared", n.NotCompared, "notJudged", n.NotJudged, "ms", time.Since(start).Milliseconds())
+	m.synthAfterLocked(c) // the combined answer starts now, before the judges' cleanup
 }
 
 // aggregateLocked makes the cards again from every judgment so far. When
