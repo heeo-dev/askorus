@@ -612,7 +612,7 @@ worktree `.claude/worktrees/p2-3-judge`(c4b43e9). 커밋·합치기는 요청할
 - **S1 판정 라이브러리**: `core/judge.go`, `internal/judge` 전부, UT·퍼즈. 10-31 만들고 검토함(커밋 전, 15절).
 - **S2 CLI 판정**: 세 어댑터 `judge.go`, fakecli, 판정 폴더와 숨김, LT-06a. + test-live. 11-01 만들고 검토함(16절).
 - **S3 비교와 API**: compares, OnEnd, API, check, CLI, IT-12~14, LT-06b, LT-07. 14절 S2 결정 3번(판정한 모델의 회사 확인)과 4번(Codex 묻기도 기능 끄기, LT-05)도 한다. + test-live. 지나면 에이전트를 합치고 배포할지 묻는다(검증 전 기본값, 깔린 APK는 compare를 보내지 않아 달라지는 것 없음). 11-01 만들고 검토함(17절), 상시 지시에 따라 합치고 배포함(14절 S3 결정 2).
-- **S4 검증 도구와 데이터**: judge-eval, 데이터 파일, 시운전 36번(OK 뒤).
+- **S4 검증 도구와 데이터**: judge-eval, 데이터 파일, 시운전 36번(OK 뒤). 11-01 만들고 통합함(18절): 정답 재생 놓침 0·카드 19/273/15, perturb 손 확인, test-all ALL PASSED, 시운전 36번(상시 지시에 따라 돌리고 뒤에 알림).
 - **S5 앱**: 타입·클라이언트·화면·설정·문구, ST. 단위 글은 `math` 자리만 수식으로 그린다(2절). 8082로 S23에서 '검증 전'으로 보게 하고 합치기 전에 끈다. MT-11.
 - **S6 검증 1단계**: 약 1,000번, 결과를 보이고 기본값에 넣음, 결과 파일과 이 문서. + test-live, 다시 배포.
 - **S7 문서**: privacy.md, testing.md, 'P2-3 만든 것', '정리: AI별 판정 명령'. CLAUDE.md '지킬 것' 한 줄은 제안만.
@@ -662,6 +662,19 @@ worktree `.claude/worktrees/p2-3-judge`(c4b43e9). 커밋·합치기는 요청할
 - **S3 결정(11-01, 상시 지시에 따라 추천대로 정함, 사용자에게 알림).** 17절 'S3 결정' 19개는 구현이 계획의 빈자리를 안전한 쪽으로 채운 것이라 그대로 둔다. 아래 둘은 내가 정했다.
   1. **실패한 비교의 오류(검토 COR-2).** 모든 요청이 실패했을 때 계획 순서로 첫 실패를 고르면, 판정 AI가 없는 쌍의 `no_judge` 기록이 앞에 있어 폰이 'retry로 안 풀림'으로 보인다(예: OpenCode가 옛 판이고 Claude·Codex가 사용 한도). 정함: 판정 AI가 있던 요청의 실패를 먼저 고르고, 없을 때만 `no_judge`. 재현 테스트 `TestFailedErrorPrefersAJudgeFailure`.
   2. **합치기와 배포(12절 S3).** 정함: S3 테스트가 지나면 에이전트를 main에 합치고 `.local\bin`에 배포한다(상시 지시). 깔린 APK는 compare를 보내지 않아 폰에서 달라지는 것은 Codex 묻기의 기능 끄기뿐이다.
+- **S4 결정(11-01, 상시 지시에 따라 추천대로 정함, 사용자에게 알림).** 계획이 고를 자리를 남긴 곳과 계획 글대로는 안 되던 곳이다. 제품 코드는 바꾸지 않았다(18절).
+  1. **2단계 모양.** `-shape pair`·`-labels v1four`는 받지만 'not built until stage 2 (P2-6)'로 종료 코드 2.
+  2. **요청 고리(attempt.go).** compares의 고리를 규칙 그대로 옮겼다. 다른 점 하나: 첫 시도 뒤에 멈춤·호출 한도·사용량 한도가 오면(두 번째 시도의 사용량 한도도) 그 요청을 기록하지 않고 이어 가기에서 다시 묻는다. 제품은 첫 시도 결과로 끝낸다.
+  3. **합성 반대 말.** 정답이 same인 주장만 합성 반대 말이 된다. absent·opposite 주장은 수가 같아도 정답 그대로 두고 숫자에서 뺀다(Y가 말하지 않은 것을 바꿔도 반대가 되지 않음).
+  4. **perturb 고치기 세부.** 날은 +7(22일 이상이면 −7), 앞 0은 원래 있을 때만('11월'→'1월'), 날 없는 달은 +2(영어 달 이름 포함), 연대·세기('1990년대')는 안 바꿈.
+  5. **perturb 손 확인에서 더한 규칙(R-32).** 질문에 있는 값, 수에 붙은 괄호와 그 안의 수('1446년(세종 28년)'), 기준 날짜('…기준'·'as of'), 한도('under', '이하')는 안 바꾼다. 기간은 같은 단위, 해는 같은 해일 때만 같은 값이다('1년'과 '6개월', '1876년'과 '1877년경'은 다름).
+  6. **보기.** gold만 돈 run도 제품 보기를 만들고 gold가 모든 판정 AI를 대신한다(정답 재생이 두 보기 모두 놓침 0을 보게).
+  7. **지표 자리.** 규칙 1a–g는 실제 엔진의 엔진 보기(여섯 방향, 자기 쌍 포함)로 재고, p06 split=all이 있을 때만(1b는 perturb run이 있을 때) 낸다. core 재현율·확인 필요 비율·카드 혼동·보이는 단위 중앙값은 자연 비교만. 근거는 자연(51쌍)과 합성 따로. 중앙값도 가까운 순위.
+  8. **플래그.** `-expect`는 이번 실행이 시작할 요청 전부(gold 포함)이고 실제 엔진이 있을 때만 필요. 이어 가기에서 모델·effort·회사가 바뀌면 거절(종료 1, 계획에 더함). CLI 판이 바뀐 것은 sessions에 적고 찍기만.
+  9. **기록.** manifest에 `goldEvidence`·`perturbN`을 더함. 여러 run을 합친 report는 첫 run 폴더에 씀. `eval-evidence.json`의 쌍 파일 이름 키는 `pairsFile`(계획 글에 `"pairs"`가 두 번 있어 JSON 키가 겹침, 로더는 둘 다 읽음).
+  10. **근거 붙인 정답 재생.** `-gold-evidence`면 카드가 23/269/15다. 근거가 상대 답의 단위를 다른 말 항목으로 끌어와(Aggregate C2-5) 정답 카드가 같은 말인 주장 4개(8-codex2, 16-codex2, 27-claude4, 27-codex1)가 다른 말로 보인다. 그 단위가 반대 방향 쌍의 근거이고 주장 자신의 쌍은 same인, 방향에 따른 라벨 차이다. 그래서 19/273/15는 근거 없이만 확인한다.
+  11. **스크립트(R-31).** `judge-eval.ps1`은 계획의 param 줄 대신 `$args`를 넘긴다(param이 있으면 `-out`이 PowerShell 공통 매개변수와 겹쳐 거절됨).
+  12. **도구를 쓰려 한 판정에서 멈춤(검토 SEC-1, 내가 정함).** 판정 AI가 `judge_used_tool`이나 `bad_model`로 끝나면 그 요청은 실패로 기록하고 run 전체를 멈춘다(새 시도 없음, OpenCode 정리, stop.json `suspect`, 종료 코드 6, 스크립트가 'events.log를 본 뒤 -resume'을 찍음). 계획의 '시운전에서 보이면 멈추고 살핀다'를 사람이 지켜보지 않는 S6의 약 1,000번에도 코드로 지키게 했다. CLI가 바뀌어 판정이 도구를 쓰기 시작해도 1,000번을 다 돌지 않는다. 재현 테스트 `TestSuspectStops`.
 
 #### 15. S1 구현 메모 (10-31)
 
@@ -757,6 +770,48 @@ S3를 worktree에서 만들었다(11-01 커밋, c9bb3fa 위). 네 조각(shared�
   - LT-06a: 주입 셋 다 따르지 않음(inject:1 opposite), 접속 0, 비밀 표식 0, `judge_used_tool` 없음.
   - OpenCode 토큰은 이번에도 0으로 나온 판정이 있다(`step_finish`를 안 냄, 16절 한계).
 - **알려진 한계.** `-race`는 이 PC에 C 컴파일러가 없어 못 돌렸다(compares 테스트 30번 반복, 잠금은 손으로 봄). Codex가 18개 기능 이름 중 하나를 없애거나 바꾸면 판정뿐 아니라 Codex 묻기도 'Unknown feature flag'로 실패한다(닫힌 쪽으로 실패, LT-05가 잡음, `check`에는 줄이 없음). LT-05는 Codex가 플래그를 받고 답하는 것만 보고 웹 검색이 실제로 일어났는지는 보지 않는다. 판정 폴더 세션 확인으로 열기·멈추기·지우기·미리보기마다 세션 목록을 한 번 더 부른다. 시간에 민감한 테스트 셋(`internal/judge`의 `TestSplitHostileIsQuick` 100ms 한도, `internal/pairing`의 50ms 토큰, Claude 어댑터 `TestAgentsCache`의 2초 캐시)이 전체 실행 부하에서 가끔 실패했다가 다시 돌면 통과한다(S3가 고치지 않은 패키지, 11-01 마지막 test-all도 첫 번은 앞의 하나와 뒤의 하나로 실패, 다시 돌려 ALL PASSED).
+
+#### 18. S4 구현 메모 (11-01)
+
+S4를 worktree에서 만들었다(11-01 커밋, f589c2c 위). 데이터 조각(`docs/judge`)과 도구 조각(`agent/cmd/judge-eval`, 스크립트)을 따로 만들고, 통합 단계에서 이음매를 보고 정답 재생, perturb 손 확인, test-all, 시운전 36번을 했다. 제품 코드(`internal/…`)는 바꾸지 않았다.
+
+- **만든 것.**
+  - 데이터: `eval-split.json`(질문 단위 dev/test), `eval-groups.json`(hard·경계 목록, 분명은 나머지), `eval-evidence.json`(근거 정답 51쌍), `check-eval-data.py`(표준 라이브러리만, Go 로더와 따로 다시 셈: `python -I docs/judge/check-eval-data.py` → OK).
+  - 도구 `judge-eval`(모든 파일 `//go:build judgeeval`, 에이전트 실행 파일·`go vet ./...`·`go test ./...`에 안 들어감. `go list -deps`로 확인): `run`·`report`·`perturb`·`data`·`cleanup`. 종료 코드 0 끝, 1 오류, 2 나쁜 플래그, 3 사용량 한도로 멈춤, 4 Ctrl+C, 5 호출 한도, 6 판정이 도구를 쓰려 했거나 다른 모델로 답해 멈춤(14절 S4 결정 12). 관리자 권한이면 거절.
+  - 엔진은 에이전트처럼 만들어 `compares.Gate`·`Announce`를 거친다(판·회사·모델). `agent.json`은 실행 파일 경로와 묻기 폴더만 읽고 `judge.models`는 무시한다(manifest에 `settingsIgnored`). 판정 폴더 `<묻기 폴더>\judge\eval`, Codex 스키마는 `<run>\codex-schema`(에이전트의 `%APPDATA%` 파일은 그대로). `gold` 엔진은 정답 라벨로 답하는 프로세스 안 엔진이고 모델을 부르지 않는다.
+  - 요청 고리 `attempt.go`는 compares의 `judgeRequest`·`mergeVerdicts`를 규칙 그대로 옮겼고, 같은 가짜 판정을 실제 `compares.Manager`와 함께 돌리는 패리티 표 11건이 묶는다. 사용량 한도 문구 12가지면 전체가 멈추고(돌던 요청은 끝나 기록, 한도 걸린 요청은 기록 안 함, OpenCode 정리, stop.json, 종료 3) 같은 명령에 `-resume`로 이어 간다.
+  - run 폴더 `%LOCALAPPDATA%\Asksemble\judge-eval\<run>`: manifest.json, requests.jsonl(끝난 요청마다 한 줄, 줄마다 Sync, 같은 키는 마지막 줄, 찢어진 끝 줄은 잘라 냄), events.log(코드·id·개수·ms만), stop.json, set.json, report.json·report.md. 판정 글(출력·이유)은 이 폴더에만 있다.
+  - 보기: 엔진 보기(엔진 하나의 여섯 방향 전부. 판정 이름을 `eval:E`로 바꿔 Aggregate가 자기 답 방향도 셈, 614쌍 정답과 비교)와 제품 보기(Plan의 셋째 AI 요청 여섯). 지표는 계획 2절 전부, 질문 단위 부트스트랩(PCG 씨앗 20261101, 2,000번), 규칙 1a–g, `-checks`·`-sweep-checks`, `-texts`.
+  - `scripts\judge-eval.ps1`(ASCII, Go 경로, 관리자 거절, 세션 변수 지움, `%LOCALAPPDATA%\Asksemble\judge-eval\bin`에 빌드, `-data`·`-commit`을 붙임, 종료 코드 그대로). test-all에 'go vet judgeeval'(Windows·Linux)과 'judge-eval tests'를 더함.
+- **데이터 손보기 결과(정확한 규칙과 수).**
+  - 나누기: dev Q1·2·4·7·10·12·13·15·17·19·21·23·25·28·30, test 나머지. dev 15문항·영어 4·주장 152·쌍 304·반대 11·hard 8, test 15·4·155·310·10·10. 정답 카드 dev 10/135/7, test 9/138/8.
+  - 묶음: hard = `hard: true`(18). 경계 = doubt이거나, review이고 label이 same이 아님(hard 모두 포함, 123 = doubt 109 + doubt 아닌 반대 5 + doubt 아닌 absent review 9). 분명 = 나머지 491(same 426·absent 65). 반대 21개는 모두 경계. dev 8/57/239, test 10/48/252(hard/경계만/분명).
+  - 근거 정답: 반대 21쌍(쌍 파일 순서) + same 30쌍(질문마다 분명 묶음의 same 중 id의 SHA-256이 가장 작은 것, dev 15·test 15, 한국어 22·영어 8). 51개에 75문장(1개 32, 2개 13, 3개 6). 문장은 답에 보이는 그대로(목록 표시·굵게·백틱·링크 주소 빼고, 표 칸은 ' | '). Q12는 `aggQ12Evidence`와 첫 문장이 같다. 따로 블라인드로 다시 골라 51/51 같았다(19-claude4-opencode 순서 하나만 달라 정답 순서 유지, hit@3·top-1에는 영향 없음).
+  - 맞추기: 주장 307개 → 단위 하나 292·이어진 단위 15·실패 0. 근거 75문장 → 단위 하나 73·이어진 단위 2(12-codex2-claude, 12-opencode2-claude의 claude:4~5)·안쪽 0·실패 0. 단위 1,060개.
+- **정답 재생(모델 호출 없음).** `run -set p06 -split all -engines gold -run gold-replay` 뒤 `report`: gold 보기와 제품 보기 모두 반대 21개 다른 말(엄격 21)·확인 필요 0·놓침 0, 카드 19/273/15(정답 카드와 대각선만), 매크로 F1 1.000, 거짓 반대 말 0/593, core 재현율 100%, 요청 180개. `-gold-evidence`: 놓침 0, 근거 hit@3·top-1 51/51(카드는 23/269/15, 14절 S4 결정 10). perturb 정답 재생(`-set perturb -gold-evidence`): 합성 반대 말 71개 모두 다른 말, 근거 hit@3 71/71.
+- **perturb 손 확인.** 처음 만든 집합(60항목, 18문항, 합성 77개)의 첫 10개 중 7개만 좋았다: p1-claude-opencode·p1-opencode-claude는 '세종 28년'(재위 해)을 기간으로 읽어 '세종 48년'으로 바꿨고 '1440년(세종 25년)'처럼 괄호와 어긋났다. p1-codex-opencode는 '1449년(세종 28년)'이 어긋났다. 다음 항목들에서도 질문의 '2026년'을 바꿔 다른 해 이야기가 되고(Q7), 기준 날짜만 바꿔 반대가 아니고(Q8·Q10), 질문의 '2리터'(Q14)·한도 'under about 4–5%'(Q17)를 옮겨도 반대가 아니고, '1년'과 '6개월'·'1876년'과 '1877년경'이 반올림 폭으로 맞아 엉뚱한 주장이 합성 반대 말이 됐다. 그래서 14절 S4 결정 5의 규칙을 더하고 다시 만들었다(R-32). 새 집합의 첫 10개는 10/10, 다음 10개는 9/10이다(p7-claude-opencode는 시급·주 시간·월급 셋을 따로 바꿔 '주 60시간, 월 209시간 기준'이 어긋남. 반대 말은 맞음). 확인한 것: 공유한 값만 바뀌고 나타난 곳 모두 바뀜, 새 값이 질문이 묻는 것에서 주장과 반대, 글이 자연스러움. 두 번 만든 파일의 sha256이 같다(`8e5fcac3…cbe736`, `testdata/perturb-v1.sha256`에 고정).
+  - 최종 perturb-v1: 60항목, 15문항(질문당 2~6), dev 31·test 29, 합성 반대 말 71개(dev 36·test 35), 바꾼 값 80개(돈 16·기간 15·날짜 13·측정 10·해 9·수 6·판 6·% 4·비 1). 엔진마다 요청 60개·합성 반대 말 71개, 셋이면 요청 180개. 상대 답으로는 codex 23·claude 19·opencode 18항목. 설계 예상 100~150개보다 적어 규칙 1b의 하한은 150개일 때(97.5%)보다 넓다.
+- **시운전 결과(11-01, 36번, 상시 지시에 따라 돌리고 사용자에게 알림).** `scripts\judge-eval.ps1 run -set p06 -split dev -questions 2,12 -engines claude,codex,opencode -tier quick -run trial-2026-11-01 -expect 36 -max-calls 40` 뒤 `report`. 벽시계 229초(빌드 포함), 엔진마다 동시 2개.
+  - 판·모델: Claude Code 2.1.316 claude-haiku-5-5(medium), Codex 0.164.0 gpt-6-luna(medium), OpenCode 2.2.1 opencode-go/deepseek-v4.1-flash#high. 호출 36번(다시 묻기 0), 사용량 한도·`judge_used_tool`·`bad_model` 없음.
+  - 유효 출력: Claude 12/12, Codex 12/12, OpenCode 11/12(Q12 opencode>claude가 2분 `judge_timeout`). 잘못된 첫 출력 0/36. 버린 근거 id Claude 2·Codex 5·OpenCode 2.
+  - 시간(요청 p50/p90): Claude 14.6/20.2초, Codex 6.7/10.4초, OpenCode 13.0/45.0초(가장 긴 것은 시간 초과 120초). 제품 보기 10.4/21.8초.
+  - 토큰(입력/출력 합, 입력 중앙값): Claude 132,704/23,860(11,240), Codex 129,030/5,297(10,720, 요청당 약 10.7k로 예상 14k보다 적음), OpenCode 12,039/1,347(12개 중 6개가 0, 하한).
+  - 자연 반대 말 9개(Q2 2·Q12 7): 제품 보기와 세 엔진 보기 모두 다른 말 9(엄격 9)·확인 필요 0·놓침 0. 반대 라벨을 직접 단 것은 Claude 9/9, Codex 8/9(나머지 하나는 unsure), OpenCode 7/9(빠진 둘은 시간 초과한 방향), 제품 8/9(하나는 absent unsure, 카드는 다른 방향으로 다른 말).
+  - 거짓 반대 말: 모두 0/29. 매크로 F1(38쌍): Claude 0.967, Codex 0.925, OpenCode 0.909, 제품 0.925. 틀린 쌍은 2-opencode3-codex(same인데 absent, 셋 다), 위의 반대 라벨 못 단 쌍, OpenCode의 시간 초과 방향 4쌍(판정 없음)이다.
+  - core 재현율 OR/AND: Claude 63.2/57.9%, Codex 57.9/47.4%, OpenCode 63.2/47.4%, 제품 57.9/52.6%. 규칙 1e(90%)에 한참 못 미친다. 정답이 같은 말인 주장 3~4개가 core가 아니어서 숨음(hidden)으로 간다(2-codex2, 12-claude4, 12-opencode4 등). S6의 큰 숫자에서 다시 본다.
+  - 카드 혼동(정답 다른 말 8·같은 말 11): 제품 보기 다른 말 8→8, 같은 말 11→같은 말 4·다른 말 4·숨음 3. Claude 보기 같은 말 11→같은 말 2·확인 필요 1·다른 말 4·숨음 4, Codex·OpenCode 보기 5·0·3·3. 같은 말이 다른 말로 간 것은 판정 AI가 그 단위를 반대 말의 근거로 든 경우다(LT-06b와 같은 큰 다른 말 항목: Q12의 '발표·출시' 단위, 2-claude2 등).
+  - 근거: 정답 근거가 있고 예측이 맞은 쌍에서 hit@3 모두 100%, top-1 Claude 90.9%·Codex 80%·OpenCode 100%·제품 90%. same·opposite 판정의 근거 없음 0.
+  - 확인 필요 비율: Claude 25%(모두 unsure만), Codex·OpenCode 0.
+  - 정리와 흔적: OpenCode 정리 4번(시작 청소, 질문마다 ref 6개씩, 끝 청소) 모두 ok, 끝난 뒤 eval 폴더의 OpenCode 대화 0(`session list` 읽기만). 판정 동안 Codex rollout 새 파일 0, Claude 기록 폴더(`…ask-judge-eval`) 없음. eval 폴더는 비어 있다. 에이전트(`.local\bin`), Tailscale serve, Claude 서비스는 건드리지 않았다.
+  - 다음: S6(약 1,000번, 3번쯤 나눠)은 설계대로 S5 뒤에.
+- **통합에서 고친 것.** R-31(스크립트 `-out`), R-32(perturb 규칙). 데이터와 도구의 키 이름(`pairsFile`)은 도구가 둘 다 읽어 맞았다.
+- **검토에서 고친 것(11-01, R-33).** S4 검토에서 확인된 11개를 고쳤다(제품 코드는 그대로).
+  - 보고 버그 셋. 기록 없는 요청이 있는 run(사용량 한도로 멈춤, 엔진·질문 일부)에도 규칙 1a–g가 판정을 냈다 → 그 집합(p06·perturb)에 기록 없는 요청이 하나라도 있으면 그 집합의 규칙은 n/a, report.md와 화면에 그 수(검토가 낸 '하나라도 없으면 모두 n/a'보다 좁혀, perturb만 덜 돈 run도 P0-6 규칙은 판정). `report -run A,B`가 같은 요청 키를 가진 run 둘을 말없이 섞었다 → 같은 키, 한 엔진의 다른 모델·effort·회사는 거절('report such runs apart'), CLI 판만 다르면 엔진 표에 둘 다('2.1.316, 2.1.317'). perturb run을 합치면 1d·1f가 perturb 요청도 셌다 → P0-6 요청만(요청 표는 합친 그대로).
+  - 테스트 빈틈 여덟. 잘못된 첫 출력 세 경우와 요청 시간이 시도의 합, 정답 반대가 없는 묶음의 매크로 F1, unsure만 항목, perturb 항목이 카드·나누기에 섞이지 않음, core AND와 보이는 단위 AND(손 run에서 claude2를 codex에만 core로 바꿔 core OR 3·AND 2), 단위 둘에 걸친 주장의 상태·예측·엄격, hit@3과 top-1, 부트스트랩의 네 수와 백분위(`bootInterval`로 묶음, 전과 같은 자리), 규칙 1a–g의 값과 `-sweep-checks`, 끝이 아닌 실패 코드(`agent_unavailable`)의 이어 가기, 태그 검사가 `judgeeval || linux`도 통과시킴(이제 태그 없이 windows·linux·darwin 어디서도 빌드되지 않아야 함). 검토의 코드 바꿔 보기를 고친 코드에 다시 걸어 36가지 모두 테스트가 잡는 것을 확인했다.
+  - 시운전 보고를 고친 도구로 복사본에서 다시 만들어도(모델 호출 없음) report.json·report.md가 만든 시각 말고 같아, 위 시운전 숫자는 그대로다(Q2·12뿐이라 규칙은 원래 n/a, 기록 없는 요청 0).
+  - 결과: gofmt 깨끗, `go vet`(태그 있이·없이, Windows·Linux) 깨끗, `go test -tags judgeeval ./cmd/judge-eval/...` 통과(약 27초), test-all ALL PASSED(첫 번에, Go 118초·judge-eval 32초·jest 628/628·expo-doctor 20/20).
+- **결과.** gofmt 깨끗, `go vet`(태그 있이·없이, Windows·Linux) 깨끗, `go test ./...` 통과(judge-eval은 빠짐), `go test -tags judgeeval ./cmd/judge-eval/...` 통과(약 23초), `check-eval-data.py` OK, test-all ALL PASSED(첫 번에, Go 131초·judge-eval 30초·jest 628/628·expo-doctor 20/20). test-live는 어댑터·claude 다루기를 바꾸지 않아 돌리지 않았다.
+- **알려진 한계.** perturb는 서로 묶인 수를 맞춰 바꾸지 않는다(시급×209시간=월급, 공값+방망이값=합계, Q24 계산 줄): 반대 말은 맞지만 꼼꼼히 읽으면 답 안에서 어긋난다. Q25는 공·방망이 값만 바뀌고 질문의 $1.10·$1.00은 그대로다. '지구 저궤도(약 600km)'처럼 같은 것을 다른 말로 부른 값은 반대가 약할 수 있다. 근거 정답과 perturb 손 확인은 Claude 계열 에이전트가 했다(P0-6 라벨과 같은 치우침). OpenCode 토큰은 하한이다(`step_finish` 없음). `TestResumeSubsetOfEngines`는 50ms 기다림으로 Codex 한도가 먼저 닿게 해, 부하가 큰 PC에서는 시간에 민감한 테스트 목록에 들 수 있다(10번 반복 통과). `go.mod`의 `golang.org/x/sys`는 judge-eval이 직접 쓰는데도 `// indirect`로 남아 있다(claude 어댑터의 `pty_windows.go`와 같음, `go mod tidy`는 돌리지 않음). 제품 `judge.Numbers`는 '㎢'(U+33A2)와 'km2'를 넓이 단위로 읽지 못하고 'km²'만 읽는다(P0-6 데이터에는 없어 숫자에 영향 없음. 한국어 답의 숫자 확인이 놓칠 수 있어 S6에서 본다).
 
 ## 5. 단계 (초안)
 

@@ -1,0 +1,58 @@
+{
+ "set": "P0-6",
+ "made": "2026-11-01",
+ "pairs": "pairs-2026-10-30.json",
+ "about": "Dev/test split of the P0-6 set by question for judge-eval (P2-3 part 9 (1)): prompts, checks and rules are tuned only on dev, and test is read once at the end.",
+ "dev": [
+  1,
+  2,
+  4,
+  7,
+  10,
+  12,
+  13,
+  15,
+  17,
+  19,
+  21,
+  23,
+  25,
+  28,
+  30
+ ],
+ "test": [
+  3,
+  5,
+  6,
+  8,
+  9,
+  11,
+  14,
+  16,
+  18,
+  20,
+  22,
+  24,
+  26,
+  27,
+  29
+ ],
+ "counts": {
+  "dev": {
+   "questions": 15,
+   "english": 4,
+   "claims": 152,
+   "pairs": 304,
+   "opposite": 11,
+   "hard": 8
+  },
+  "test": {
+   "questions": 15,
+   "english": 4,
+   "claims": 155,
+   "pairs": 310,
+   "opposite": 10,
+   "hard": 10
+  }
+ }
+}
