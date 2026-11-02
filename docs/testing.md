@@ -128,8 +128,8 @@ Asksemble Phase 1과 Phase 2(P2-3 비교 판정·종합 답변·화면 재구성
 - **USB 디버깅**으로 붙는다(11-02~). 폰은 충전을 겸해 PC USB에 늘 꽂혀 있다. 개발자 옵션의 USB 디버깅을 켜고 처음 한 번 '이 컴퓨터에서 항상 허용'을 눌렀다. 'adb 권한 승인 자동 취소 사용 안 함'(`adb_allowed_connection_time` 0)도 켰다. 이것이 꺼져 있으면 7일 동안 쓰지 않은 PC의 허용을 Android가 지운다. PC에는 삼성 USB 드라이버가 이미 깔려 있다.
 - 무선 디버깅에서 바꾼 까닭: Android는 Wi-Fi가 잠깐 끊기거나 다른 공유기(BSSID)로 옮겨 붙기만 해도 무선 디버깅을 스스로 끄고, 다시 켜면 포트가 바뀐다. 11-02 06:00에 공유기 쪽에서 Wi-Fi를 한 번 끊었고(약 2분 반 뒤 다시 붙음), 그 순간 폰 기록에 `Network disconnected. Disabling adbwifi.`가 남았다. 아무도 폰을 만지지 않았다. USB 디버깅은 Wi-Fi와 재부팅에 상관없이 켜진 채로 남는다.
 - `phone-lib.ps1`의 `Connect-Phone`은 USB로 붙은 폰 → 이미 붙은 무선 → mDNS → 마지막으로 붙은 무선 주소(`D:\Android\phone-adb.txt`) 순서로 찾는다. 무선은 USB를 못 쓸 때의 예비다. 짝은 QR로 한 번 맺었다(`WIFI:T:ADB;S:<이름>;P:<암호>;;` QR을 폰의 'QR 코드로 기기 페어링'으로 찍고, PC가 mDNS로 폰을 찾아 `adb pair`). 폰의 Tailscale(VPN)이 켜져 있으면 PC가 mDNS로 폰을 못 볼 때가 있다. 그때는 폰 화면의 IP:포트로 `adb connect`.
-- 폰에 Tailscale을 깔고 PC와 같은 계정으로 로그인했다(폰 tailnet 주소 PHONE-TAILSCALE-IP). Expo Go 58.0.5와 Claude 앱도 깔려 있다.
-- 앱은 개발 서버 `exp://PC-TAILSCALE-IP:8081`(PC의 Tailscale 주소)에서 받는다. 흐름은 이 주소를 `MAESTRO_HOST`로 받는다(에뮬레이터는 10.0.2.2).
+- 폰에 Tailscale을 깔고 PC와 같은 계정으로 로그인했다(폰의 tailnet 주소는 `tailscale status`로 본다). Expo Go 58.0.5와 Claude 앱도 깔려 있다.
+- 앱은 개발 서버 `exp://<PC의 Tailscale 주소>:8081`에서 받는다(`dev-server.ps1`과 `e2e.ps1`이 `tailscale ip -4`로 찾는다). 흐름은 이 주소를 `MAESTRO_HOST`로 받는다(에뮬레이터는 10.0.2.2).
 - 폰 앱은 에이전트와 짝 맺어 두었다(10-29, 기기 이름 Galaxy S10). PC 허용은 요청 주소가 폰의 tailnet 주소일 때만 y로 답했다.
 - `e2e.ps1`은 시작할 때 폰을 깨우고 잠금을 풀고, 도는 동안 화면 꺼짐을 30분으로 늘리고 애니메이션을 끈 뒤 끝나면 되돌린다. 화면이 꺼지면 Expo Go가 안 보여 흐름이 실패한다. 오래 돌릴 때는 충전기에 꽂아 둔다.
 - 폰을 사람이 만지는 동안 돌리면 흐름이 엉뚱한 화면을 본다. 돌리기 전에 손을 떼 달라고 한다.
@@ -185,7 +185,7 @@ powershell -NoProfile -File scripts\e2e.ps1 -Emulator  # 에뮬레이터에서
 
 새 흐름은 테스트 폰을 실시간으로 다뤄 보며 만든다(5절의 `phone.ps1`). 짐작한 문구로 흐름을 쓰고 실패를 보며 고치는 것보다 빠르다.
 
-1. `phone.ps1 ready` 뒤 `phone.ps1 open "exp://PC-TAILSCALE-IP:8081/--/<경로>"`로 시작 화면을 연다.
+1. `phone.ps1 ready` 뒤 `phone.ps1 open "exp://<PC의 Tailscale 주소>:8081/--/<경로>"`로 시작 화면을 연다.
 2. 사람이 할 순서대로 `snapshot -i` → `click @e…`/`fill @e… "글"` → `snapshot -i`를 되풀이한다. snapshot에 나온 **글자 그대로**를 흐름의 선택자로 쓴다(예: `"Connected · agent 0.1.0-dev"`는 `"Connected · agent .*"`로). 버튼 글자가 목록 글자와 겹치면 `index`·`below`를 정한다.
 3. 화면이 바뀌기까지 걸린 시간을 보고 `extendedWaitUntil` 타임아웃을 정한다(앱·에이전트 10~15초, 실제 `claude` 60초).
 4. `phone.ps1 release` 뒤 `e2e.ps1 -Flow <번호>`로 그 흐름만 돌린다. 통과하면 전체를 돌린다.
@@ -248,7 +248,7 @@ powershell -NoProfile -File scripts\phone.ps1 release         # 끝나면(e2e.ps
 | | Expo Go(지금) | APK(EAS 빌드, B2부터) |
 | --- | --- | --- |
 | 앱 | `host.exp.exponent` 안에서 우리 번들이 돈다 | `app.asksemble` 하나로 깔림 |
-| 여는 법 | `exp://PC-TAILSCALE-IP:8081/--/<경로>`(개발 서버 필요) | `asksemble://<경로>`, 아이콘, `open app.asksemble` |
+| 여는 법 | `exp://<PC 주소>:8081/--/<경로>`(개발 서버 필요) | `asksemble://<경로>`, 아이콘, `open app.asksemble` |
 | 볼 수 있는 것 | 화면·에이전트 연동, 밖으로 나가는 링크(Claude 앱), 밖으로 보내는 공유 | 위 전부 + 아이콘·이름, 권한 창, 다크 모드(R-14), `asksemble://` 딥 링크(카메라 QR, MT-08), **공유 받기**(다른 앱이 공유 시트에서 Asksemble을 고르는 것), 앱을 껐다 켠 뒤 상태(MT-07) |
 | 못 보는 것 | 설치본 설정(app.json의 scheme·권한·인텐트 필터), Expo Go의 개발 도구 버튼이 화면을 가림 | 코드를 고칠 때마다 다시 빌드(개발 빌드면 JS는 metro로 바로 바뀜) |
 | Maestro | `appId: host.exp.exponent`(지금 흐름) | `appId: app.asksemble`로 바꾼 흐름이 필요 |

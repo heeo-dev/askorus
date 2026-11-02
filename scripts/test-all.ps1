@@ -6,7 +6,7 @@
 param([switch]$Quick)
 
 $root = Split-Path -Parent $PSScriptRoot
-$go = 'C:\Users\me\sdk\go1.27.3\bin'
+$go = Join-Path $env:USERPROFILE 'sdk\go1.27.3\bin'
 if (Test-Path $go) { $env:Path = "$go;" + $env:Path }
 $failed = @()
 
@@ -35,6 +35,17 @@ $app = Join-Path $root 'app'
 
 $unformatted = & gofmt -l $agent
 if ($unformatted) { Write-Output '== agent: gofmt'; $unformatted; $failed += 'gofmt' }
+# Personal values (addresses, machine names, user paths, private links)
+# never go into the repo. Their patterns live outside git, one extended
+# regex per line in .local\private-patterns.txt of the main checkout; no
+# blank lines (a blank pattern matches everything). Without the file this
+# check is skipped.
+$common = & git -C $root rev-parse --path-format=absolute --git-common-dir
+$patterns = Join-Path (Split-Path -Parent $common) '.local\private-patterns.txt'
+if (Test-Path $patterns) {
+  $hits = & git -C $root grep --untracked -I -n -i -E -f $patterns
+  if ($hits) { Write-Output '== private values in the repo'; $hits | ForEach-Object { "   $_" }; $failed += 'private values' }
+}
 Step 'agent: go vet (windows)' $agent 'go' @('vet', './...')
 $env:GOOS = 'linux'
 Step 'agent: go vet (linux)' $agent 'go' @('vet', './...')
