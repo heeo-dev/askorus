@@ -5,7 +5,7 @@
 // Modal that slides carried the dark screen up from the bottom with it).
 
 import { type ReactNode, useEffect, useRef } from 'react';
-import { Animated, Easing, Modal, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Animated, Easing, Modal, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View, type ViewProps } from 'react-native';
 
 import { t } from '@/i18n';
 
@@ -30,28 +30,30 @@ export function Sheet(props: SheetProps) {
 }
 
 /**
- * useSheetRise: the style that slides a sheet up from below the screen as
- * it appears, again whenever key changes (a sheet that stays mounted while
- * closed passes what it shows). Its Modal fades; the fade also takes the
- * sheet away on close.
+ * SheetRise is the sheet's own view: it slides up from below the screen
+ * when it mounts, so it belongs inside the open sheet only (a sheet that
+ * stays mounted while closed would run its slide for nothing). Its Modal
+ * fades; the fade also takes the sheet away on close.
  */
-export function useSheetRise(key?: unknown) {
+export function SheetRise({ style, children, ...rest }: ViewProps) {
   const { height } = useWindowDimensions();
   const rise = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    rise.setValue(0);
     const run = Animated.timing(rise, { toValue: 1, duration: 240, easing: Easing.out(Easing.cubic), useNativeDriver: true });
     run.start();
     return () => run.stop();
-  }, [rise, key]);
-  return { transform: [{ translateY: rise.interpolate({ inputRange: [0, 1], outputRange: [height, 0] }) }] };
+  }, [rise]);
+  return (
+    <Animated.View {...rest} style={[style, { transform: [{ translateY: rise.interpolate({ inputRange: [0, 1], outputRange: [height, 0] }) }] }]}>
+      {children}
+    </Animated.View>
+  );
 }
 
 function OpenSheet({ onClose, title, subtitle, children, scroll = true, testID }: SheetProps) {
   const th = useTheme();
   const s = styles(th);
   const insets = useSafeInsets();
-  const rise = useSheetRise();
   return (
     <Modal transparent animationType="fade" visible onRequestClose={onClose} statusBarTranslucent navigationBarTranslucent>
       <View style={s.screen}>
@@ -62,7 +64,7 @@ function OpenSheet({ onClose, title, subtitle, children, scroll = true, testID }
           accessibilityLabel={t('sheet.close')}
           testID={testID ? `${testID}-scrim` : 'sheet-scrim'}
         />
-        <Animated.View style={[s.sheet, { paddingBottom: 20 + insets.bottom }, rise]} testID={testID} accessibilityViewIsModal>
+        <SheetRise style={[s.sheet, { paddingBottom: 20 + insets.bottom }]} testID={testID} accessibilityViewIsModal>
           <View style={s.handle} />
           <View style={s.header}>
             <View style={s.titles}>
@@ -82,7 +84,7 @@ function OpenSheet({ onClose, title, subtitle, children, scroll = true, testID }
           ) : (
             children
           )}
-        </Animated.View>
+        </SheetRise>
       </View>
     </Modal>
   );
