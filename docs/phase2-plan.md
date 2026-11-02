@@ -615,10 +615,10 @@ worktree `.claude/worktrees/p2-3-judge`(c4b43e9). 커밋·합치기는 요청할
 - **S3 비교와 API**: compares, OnEnd, API, check, CLI, IT-12~14, LT-06b, LT-07. 14절 S2 결정 3번(판정한 모델의 회사 확인)과 4번(Codex 묻기도 기능 끄기, LT-05)도 한다. + test-live. 지나면 에이전트를 합치고 배포할지 묻는다(검증 전 기본값, 깔린 APK는 compare를 보내지 않아 달라지는 것 없음). 11-01 만들고 검토함(17절), 상시 지시에 따라 합치고 배포함(14절 S3 결정 2).
 - **S4 검증 도구와 데이터**: judge-eval, 데이터 파일, 시운전 36번(OK 뒤). 11-01 만들고 통합함(18절): 정답 재생 놓침 0·카드 19/273/15, perturb 손 확인, test-all ALL PASSED, 시운전 36번(상시 지시에 따라 돌리고 뒤에 알림).
 - **S5 앱**: 타입·클라이언트·화면·설정·문구, ST. 단위 글은 `math` 자리만 수식으로 그린다(2절). 8082로 S23에서 '검증 전'으로 보게 하고 합치기 전에 끈다. MT-11. 11-01 만들고 통합함(19절): jest 713/713, test-all ALL PASSED, MT-11 테스트 폰 반은 봄(세 AI 실제 묻기 둘, 비교 6/6씩). MT-11의 S23 반은 사용자 몫.
-- **S6 검증 1단계**: 약 1,000번, 결과를 보이고 기본값에 넣음, 결과 파일과 이 문서. + test-live, 다시 배포. 11-01 돌고 넣음(22절, 커밋 전): 1,026번, 사용자 결정(14절 S6 결정)대로 기본값을 넣음, 결과 파일 `docs/judge/results-2026-11-01.md`, test-all ALL PASSED·test-live LIVE PASSED. 11-01 커밋 5a8b336, 에이전트는 이 커밋으로 20:58에 `.localin`에 배포함(main은 아직 b01ba32: 앱을 합치기 전이라 브랜치에서 빌드).
+- **S6 검증 1단계**: 약 1,000번, 결과를 보이고 기본값에 넣음, 결과 파일과 이 문서. + test-live, 다시 배포. 11-01 돌고 넣음(22절, 커밋 전): 1,026번, 사용자 결정(14절 S6 결정)대로 기본값을 넣음, 결과 파일 `docs/judge/results-2026-11-01.md`, test-all ALL PASSED·test-live LIVE PASSED. 11-01 커밋 5a8b336, 에이전트는 이 커밋으로 20:58에 `.local\bin`에 배포함(main은 아직 b01ba32: 앱을 합치기 전이라 브랜치에서 빌드).
 - **S5b 종합 답변**(11-01 사용자 결정, 20절): 에이전트(종합 명령·API·CLI)와 앱(정리 탭 맨 위 종합 답변, 카드는 근거로 접음, 설정), UT·IT-15·LT-08·ST, 테스트 폰. + test-live. S6 측정은 같은 때 c9fe299를 얼린 복사본으로 따로 돈다(측정하는 코드가 바뀌지 않게). 원본 설계 문서·스냅숏·메뉴 지도도 고친다. 11-01 만들고 통합함(21절, 커밋 전): 판정 길 파일은 그대로, jest 755/755, test-all ALL PASSED 첫 번에, test-live 전체 LIVE PASSED(LT-08 세 CLI 모두 첫 시도에 유효·두 편 이름 다 나옴·주입 따르지 않음). 11-01 커밋 9aea218. 테스트 폰은 S6 배포 뒤 끝까지 확인함(23절 '테스트 폰').
-- **S5c 화면 재구성**(11-01 사용자 결정 8, 23절): 앱 화면을 23절의 시안과 기준표대로 다시 만든다(로직 `compare.ts`·`thread.ts`·`client.ts`는 그대로 쓰고 보이는 부분만). 아이콘·시작 화면·글꼴 800, 다크·라이트 살구 테마, 서랍과 헤더 스위치, 테스트 폰에서 찾은 문제(23절)도 함께. ST·UT, 테스트 폰, S23(8082). 그다음 S7 문서, S8 앱 합치기와 MT-12. 11-02 만들고 통합함(24절, 커밋 전): 근거 카드에 판정한 주장 모두, jest 932/932, test-all ALL PASSED, test-live LIVE PASSED, 테스트 폰은 무선 디버깅이 꺼져 있어 에뮬레이터에서 끝까지 봄. S23(8082)은 사용자 몫.
-- **S7 문서**: privacy.md, testing.md, 'P2-3 만든 것', '정리: AI별 판정 명령'. CLAUDE.md '지킬 것' 한 줄은 제안만.
+- **S5c 화면 재구성**(11-01 사용자 결정 8, 23절): 앱 화면을 23절의 시안과 기준표대로 다시 만든다(로직 `compare.ts`·`thread.ts`·`client.ts`는 그대로 쓰고 보이는 부분만). 아이콘·시작 화면·글꼴 800, 다크·라이트 살구 테마, 서랍과 헤더 스위치, 테스트 폰에서 찾은 문제(23절)도 함께. ST·UT, 테스트 폰, S23(8082). 그다음 S7 문서, S8 앱 합치기와 MT-12. 11-02 만들고 통합함(24절, 커밋 전): 근거 카드에 판정한 주장 모두, jest 932/932, test-all ALL PASSED, test-live LIVE PASSED, 테스트 폰은 무선 디버깅이 꺼져 있어 에뮬레이터에서 끝까지 봄. S23(8082)은 사용자 몫. 11-02 커밋 428dd2c(14절 S5c 결정 포함), 에이전트는 이 커밋으로 13:42에 `.local\bin`에 배포함(근거 범위와 R-45가 폰에 보임, 앞 판은 `asksemble-agent.prev.exe`).
+- **S7 문서**: privacy.md, testing.md, 'P2-3 만든 것', '정리: AI별 판정 명령'. CLAUDE.md '지킬 것' 한 줄은 제안만. 11-02 함: privacy.md에 비교·종합 답변·폰에 저장하는 설정, testing.md에 범위와 MT-12·13, 4절 'P2-3 만든 것'과 '정리: AI별 판정·종합 명령'. CLAUDE.md 줄은 사용자에게 제안함.
 - **S8 내기**: 앱 합치기(요청 시), E2E-08 선택, MT-12. **S9 Jev 재기**(선택). **나중**: P2-4, P2-5 더 따져 보기, P2-6 기록.
 
 #### 13. 설계와 다른 점
@@ -1064,7 +1064,50 @@ S5c를 worktree에서 만들었다(커밋 전, 57f9776 위). 기반(테마·아�
 - **결과(11-02).** gofmt 깨끗, go vet(Windows·Linux, 태그 없음·`judgeeval`·`live`) 깨끗, Go 전체와 judge-eval 테스트 통과, tsc 깨끗, jest 34묶음 932개, test-all ALL PASSED(통합 수정 전 첫 번째와 수정 뒤 두 번째 모두 첫 시도). 모으기가 바뀌어 test-live 전체를 돌려 LIVE PASSED(308초, LT-05·06a·06b·07·08 포함, Claude Code 2.1.316·Codex 0.164.0·OpenCode 2.2.1). R-45 뒤 종합 검사를 지나는 LT-08만 다시 돌려 LIVE PASSED(44초, 셋 다 유효, 한국어, 세 이름, unnamedSides 0). 두 번째 test-all은 Go 전체 263초·judge-eval 62초·jest 61초·expo-doctor 20/20.
 - **화면 확인(11-02).** 테스트 폰(S10)은 무선 디버깅이 꺼져 있어(같은 Wi-Fi에서 ping은 되지만 adb 포트가 하나도 열려 있지 않고 mDNS에도 없음) 붙지 못했다. 그래서 같은 화면을 에뮬레이터(`asksemble-play`, Android 15, 1080×2400, 짝 맺어 둔 Expo Go 58.0.5)에서 이 worktree의 8082(`exp://10.0.2.2:8082`)로 끝까지 봤다(스크린숏 `scratchpad/s5c/phone`). 배포된 에이전트는 5a8b336(S6)이라 근거의 같은 말·한 AI만은 core 주장만 보인다(R-44 전): 두 질문 모두 한 AI만 0인데 종합 답변은 'OpenCode only' 셋을 적었다. 라이트(시스템) 빈 화면 → 서랍 → 설정에서 다크 → AI 시트 → '빠르게' 세 AI에게 'In two sentences: how many people live in Seoul, and how tall is Lotte World Tower?' → 답하는 중('#high' 없음) → 비교하는 중 2/6·5/6과 '다음 단계: 종합 답변 쓰는 중…'(R-38) → '판정 6번' ✓와 쓰는 중 → 결과(답 18초·비교 24초, 다른 말 1·같은 말 2) → 강조 펼침 → 판정 정보 → 근거 네 절(빈 절 '해당하는 문장이 없습니다.') → 두 문장 나란히 보기(방향마다 한 줄) → Codex 답 시트 → 이 AI에게만 칩 → AI 시트 → 새 질문(최근 질문) → 서랍 기록 → 다시 열기 → 내 PC(세션 시트 보기만, 새 세션 화면 보기만) → 설정 라이트 → 앱 정보 → 짝 맺기 화면 → 시스템으로 되돌림. 시안(F-*)과 견주어 자리·색·모서리·크기가 맞았다. 첫 질문 뒤 Play 스토어가 Android System WebView를 고치며 Expo Go를 끝내서(우리 앱 탓 아님, logcat 'stop com.google.android.webview due to installPackageLI') 확인 동안 Play 스토어를 껐다가 끝에 다시 켰다. 에뮬레이터는 끝에 껐다.
 - **알려진 한계.** 실제 S10·S23에서는 아직 못 봤다(키보드 올림, 서랍의 상태 막대, FAB 그림자, 점선 연결, 스캐너 틀, 좁은 폭의 입력 칸 R-49, TalkBack으로 강조 펼치기 R-47). Expo Go에서는 앱 아이콘과 시작 화면이 보이지 않는다(S8 APK). 기록은 메모리에만 있어 앱을 끄면 지워진다(P2-6). 첫 서랍 열기가 에뮬레이터에서 약 1초 늦다. E2E 흐름은 새 문구로 고쳤지만 돌리지 않았다(`app/e2e/README.md`는 옛 화면 설명). Android colorPrimary는 Expo 기본값(#023c69) 그대로다. 아이콘 없는 줄도 접근성 값이 `{ text: '' }`라 Android 읽기 이름 끝에 ', '가 붙는다(R-40의 대가, 들리지는 않음).
-- **사용자에게 남은 것.** S23(8082)에서 두 테마의 느낌과 질문 하나, 한국어·영어 빈 화면의 입력 칸(보내기 버튼이 칸 안에 있는지, R-49). 에이전트 배포(근거 범위와 R-45가 폰에 보이려면)는 합친 뒤. 테스트 폰의 무선 디버깅 켜기. 원본 설계 문서와 메뉴 지도 Artifact 다시 올리기는 메인 세션.
+- **사용자에게 남은 것.** S23(8082)에서 두 테마의 느낌과 질문 하나, 한국어·영어 빈 화면의 입력 칸(보내기 버튼이 칸 안에 있는지, R-49). 테스트 폰의 무선 디버깅 켜기(MT-13). 에이전트 배포와 메뉴 지도 다시 올리기는 11-02 메인 세션이 함(12절 S5c 줄).
+
+### 정리: AI별 판정·종합 명령 (P2-3, 11-02 기준)
+
+판정(두 답 비교)과 종합 답변(여러 답을 하나로 정리)은 같은 막힌 명령을 쓴다. 다른 것은 스키마, 모델, 시간 제한뿐이다. 묻기 명령('정리: AI별 묻기 명령')과는 따로 만들고 따로 검사한다(묻기 검사기를 느슨하게 하지 않음).
+
+| AI | 판정 명령(내용은 stdin) | 종합 답변 | 남는 것 |
+| --- | --- | --- | --- |
+| Claude | `claude -p --output-format json --model M --effort E --tools "" --strict-mcp-config --no-session-persistence --safe-mode --json-schema <판정 스키마 v1>` | 같은 명령에 `--json-schema <종합 스키마 v1>` | 대화 기록 없음(도는 동안 `~/.claude/sessions/<pid>.json`만). `--safe-mode`라 사용자의 훅·플러그인·스킬·CLAUDE.md·MCP가 돌지 않음 |
+| Codex | `codex exec -s read-only --ignore-user-config --skip-git-repo-check --ephemeral --json -m M -c model_reasoning_effort="E" -c web_search="disabled" --output-schema %APPDATA%\Asksemble\judge-schema-v1.json --disable <기능 18개> -` | 같은 명령에 `--output-schema …\synth-schema-v1.json` | rollout(대화 파일) 없음. Codex 자체 `logs_2.sqlite`는 남을 수 있음 |
+| OpenCode | `opencode.exe run --standalone --format json --agent asksemble-judge -m M#V --title asksemble-judge`, 환경 `PWD`=판정 폴더, `OPENCODE_CONFIG_CONTENT`=판정 에이전트(`"*": "deny"`) | 에이전트만 `asksemble-synth`(제목은 같음) | 대화가 생기고, 비교가 끝나면 `session list`로 판정 폴더·제목이 맞는 id만 `session delete`. 지운 글은 opencode.db에 한동안 남을 수 있음 |
+
+- **공통.** 실제 exe를 셸 없이 인자 배열로 부르고, 질문·답·지시는 stdin으로만 넘긴다. 폴더는 `<묻기 폴더>\judge`(`GET /v1/sessions`·CLI `sessions`에서 숨김, 그 안의 세션은 열기·멈추기·지우기·미리보기 404). Windows job object로 묶고 판정 2분·종합 3분이면 끈다. 인자는 상수로 만들고 실행 전에 정확히 견준다(`checkJudgeArgs`·`checkSynthArgs`). 권한을 푸는 옵션, `--allowedTools`(웹 허용은 묻기만), 세션 이어 가기는 없다. 끝나면 실제로 답한 모델의 회사를 확인해, 계획과 다르면 `bad_model`로 버린다.
+- **Codex 기능 18개**(`--disable`, 묻기도 같이 끔): shell_tool, unified_exec, hooks, apps, plugins, remote_plugin, multi_agent, browser_use, browser_use_external, in_app_browser, computer_use, image_generation, view_image, goals, sleep_tool, tool_suggest, skill_search, skill_mcp_dependency_install. 도구를 0개로 할 수는 없어, `agent_message`·`reasoning`·`error`·`todo_list`가 아닌 항목(명령 실행 등)이 나오면 결과를 버리고 `judge_used_tool`이다. Codex가 모르는 이름이 있으면 'Unknown feature flag'로 실패하므로, 이름을 뺀 새 Codex에서는 목록을 고칠 때까지 묻지도 판정하지도 않는다.
+- **모델.** 판정은 질문 단계와 상관없이 빠른 모델: Claude haiku·medium, Codex gpt-6-luna·medium, OpenCode opencode-go/deepseek-v4.1-flash#high(S6 검증, 14절 S6 결정 1). 종합 답변은 그 질문 단계의 묻기 모델(빠르게 haiku, 기본 sonnet …, `agent.json` `ask.tiers`). 판정은 `agent.json` `judge {off, models, perAI, checks, maxUnits}`로 바꾼다.
+- **판.** 판정·종합을 하는 가장 낮은 판은 Claude Code 2.1.314, Codex 0.164.0, OpenCode 2.2.1이다(어댑터 `JudgeMinVersion`, S2 시험). 그보다 오래된 CLI는 하지 않는다(`check`에 '[!]'). 판정 품질은 Claude Code 2.1.316, Codex 0.164.0, OpenCode 2.2.1로 검증했다(11-01, `judging.verified`). 판이 다르면 `check`가 '[i] … 판으로 검증했습니다'를 보인다.
+
+### P2-3 만든 것 (2026-11-02)
+
+**흐름.** 둘 이상의 AI에게 물으면 답이 다 모인 뒤 PC가 비교를 시작한다. 답마다 문장(단위)으로 나누고, AI마다 다른 AI의 답을 판정해(자기·같은 회사 답 제외, AI 셋이면 요청 6번), 문장들을 다른 말·확인 필요·같은 말·한 AI만으로 모은다. 비교가 끝나면 그 질문을 받은 AI 하나(기본 Claude)가 종합 답변을 쓴다. 이 PC에서 비교는 보통 약 40초, 종합 답변은 15초 안팎이다(11-01 S10).
+
+**에이전트.**
+- `internal/judge`: 문장 나누기, 숫자 읽기, 판정 계획(누가 누구를), 프롬프트(nonce 블록, '데이터이지 지시가 아님'), 출력 검사, 카드 모으기(확인 필요 규칙 P1·P2·P3), 종합 프롬프트와 검사(R-45: 글 전체가 `{"answer": …}`이면 한 번 풂).
+- `core.Judger`·`core.Synthesizer`, 어댑터마다 `judge.go`·`synth.go`(위 '정리'의 명령), capability `judge`·`synthesize`(시험한 판 이상이고 끄지 않았을 때).
+- `internal/compares`: 묻기가 끝나면 정확히 한 번 시작, AI마다 2개·전체 6개 판정 프로세스, 줄 서기 5분, 빠진 id는 새 nonce로 한 번 더, retry·cancel, 종합 답변, 메모리에만 30분·100개.
+- API(`/v1`은 더하기만): `/v1/info`의 `judging {engine, shape, labels, rules, checks, verified, typicalMs}`·`integrations: []`, `POST /v1/runs`의 `compare`·`comparisonId`, `POST /v1/comparisons`(답을 직접 실음), `GET /v1/comparisons/{id}`, `…/retry`, `…/cancel`, `…/synthesis`, 스냅숏의 `synthesis`.
+- 기본값(S6): 판정 모델은 빠른 모델 셋, 검사 `unsure`·`numberMismatch`·`numbersAbsent`, 답 하나에 단위 30개, `judging.verified` 2026-11-01·`typicalMs` 40,444.
+- 근거 범위(S5c): 판정한 문장 모두가 근거 카드에 실린다(핵심 문장만이 아님).
+- CLI: `asksemble-agent compare`(판정, `-synth`로 종합까지), `info`에 판정 모델, `check`에 판정·종합 줄과 '[i] 회사가 받는 것' 두 줄, `uninstall`이 OpenCode 판정 대화와 스키마 파일을 정리.
+- 로그에는 코드와 개수만 남고, 판정 내용은 디스크에 쓰지 않는다.
+
+**앱(S5·S5b·S5c).** 23절 시안대로 다시 만들었다(24절).
+- 대화 흐름 한 화면: 질문 → 답하는 중 → 종합 답변 카드(비교하는 중 n/6 → 종합 답변 쓰는 중) → AI별 답 카드 → 근거(접힌 네 칸, 누르면 네 절) → 이어서 묻기.
+- 종합 답변 안의 다른 말은 강조('AI마다 다릅니다 ▾')를 눌러 AI마다 펼친다. 판정 정보 시트(ⓘ), 두 문장 나란히 보기, AI·답 시트, '이 AI에게만'.
+- 헤더 가운데 [한 번에 | 내 PC] 스위치와 ☰ 서랍(기록, 내 PC 상태와 입력을 기다리는 세션, 설정). 앱은 '한 번에'로 열린다.
+- 다크·라이트 살구 테마(기본은 폰 설정), 아이콘 B·시작 화면·글자 로고, 앱 정보 화면('Ask, assemble.', 'AI 회사의 공식 제품이 아닙니다.'). 짝 맺기는 QR이 주 경로.
+- 설정: 묻기 기본 단계, 비교와 종합 답변(자동 비교, 자동 종합, 쓰는 AI), 테마.
+- 기록은 앱을 켠 동안 메모리에만 있다(폰 저장은 P2-6).
+
+**측정.** judge-eval(`-tags judgeeval`, 제품에 들어가지 않음)과 데이터 파일(P0-6 614쌍, 숫자를 바꾼 반대 말). S6 1단계 1,026번: 빠른 모델로 자연 반대 말 21/21 보임, 거짓 반대 말 1.5%, 확인 필요 4.3%(S5c 뒤 판정한 문장 모두로 7.9%). 결과는 `docs/judge/results-2026-11-01.md`.
+
+**시험.** IT-12~15(가짜 CLI), LT-06a·06b·07·08(실제 CLI), ST·UT(jest 941/941), 회귀 R-29~R-57. 마지막 test-all ALL PASSED, test-live LIVE PASSED(11-02).
+
+**남은 것.** S8: 8082 끄기 → 앱을 main에 합치기 → main에서 npm ci(사용자가 8081을 닫은 뒤) → MT-12(지인 5명). 실제 폰에서 새 화면 보기(MT-13), E2E 흐름 돌리기(새 문구로 고쳤지만 아직 안 돌림), APK에서 아이콘·시작 화면 보기. 선택: E2E-08, S9 Jev 재기. 나중: P2-4, P2-5, P2-6.
 
 ## 5. 단계 (초안)
 
@@ -1072,7 +1115,7 @@ S5c를 worktree에서 만들었다(커밋 전, 57f9776 위). 기반(테마·아�
 | --- | --- |
 | P2-1 | 에이전트 `core.Asker`와 AI별 ask 어댑터(claude·codex·opencode, 4절 '정리'의 명령), `POST /v1/runs`(mode `ask`, 작업 id, 여러 AI 동시. 2절 결정), capability `ask`, 묻기 세션 `ask` 배지와 묻기 폴더를 기록 폴더에서 빼기. **끝(2026-10-30), 4절 'P2-1 만든 것'** |
 | P2-2 | 앱 '한 번에 묻기' 탭(원칙 9의 숨긴 자리를 켬): 질문 입력, 빠르게·기본·깊게와 AI 고르기, 답 카드, 'Claude 앱에서 이어서 하기'. Phase 1 목록의 '묻기 대화' 칩. **끝(2026-10-30), 4절 'P2-2 만든 것'** |
-| P2-3 | 비교 판정: 다른 말·확인 필요·같은 말·한 AI만 카드(AI 원문 문장만). 기본은 PC의 구독 AI가 서로의 답을 판정(자기·같은 회사 답 제외, AI 셋이면 요청 6번), Jev는 재기만(결정 4). 판정 검증 1단계(빠른·기본 모델, P0-6 614쌍 + 숫자를 바꾼 반대 말)로 AI별 판정 모델과 '확인 필요' 기준을 정한 뒤 앱을 합친다(결정 3). **설계(2026-10-31 사용자 결정), 4절 'P2-3 비교 판정 설계'** |
+| P2-3 | 비교 판정: 다른 말·확인 필요·같은 말·한 AI만 카드(AI 원문 문장만). 기본은 PC의 구독 AI가 서로의 답을 판정(자기·같은 회사 답 제외, AI 셋이면 요청 6번), Jev는 재기만(결정 4). 판정 검증 1단계(빠른·기본 모델, P0-6 614쌍 + 숫자를 바꾼 반대 말)로 AI별 판정 모델과 '확인 필요' 기준을 정한 뒤 앱을 합친다(결정 3). **설계(2026-10-31 사용자 결정), 4절 'P2-3 비교 판정 설계'.** 종합 답변(결정 7)과 화면 재구성(결정 8)을 더해 **만듦(2026-11-02, S8 앱 합치기와 MT-12 남음), 4절 'P2-3 만든 것'** |
 | P2-4 | 공식 앱으로 넘기기: 답은 복사 → 붙여 넣기(2026-10-30 결정). 질문은 안: ChatGPT 주소, Claude·Gemini 공유(4절 P0-4) |
 | P2-5 | 더 따져 보기(내 PC): AI마다 다른 AI의 답을 읽고 틀린 곳을 짚는다. 결과는 'AI가 쓴 검토'로 비교 카드와 따로 보인다(2026-10-31 결정 6, 4절 'P2-3 비교 판정 설계' 14) |
 | P2-6 | 기록은 폰에만(비교 결과 `turn.compare`도). 판정 검증 2단계(네 답 형식, 요청 3번 형식, 두 번 판정)와 CLI·모델이 바뀔 때 다시 재기(P0-6, 4절 'P2-3 비교 판정 설계' 9). |
