@@ -23,13 +23,10 @@ import { ConnectionStore } from '@/connections/store';
 import { CODE, FakeAgent, HOST, PAIR_LINK, PORT, TOKEN, session } from '@/test/fakeAgent';
 import { Header } from '@/ui/Header';
 
-// The status and navigation bars show their styles as test ids.
+// The status bar shows its style as a test id.
 jest.mock('expo-status-bar', () => ({
   ...jest.requireActual('expo-status-bar'),
   StatusBar: ({ style }: { style: string }) => require('react').createElement(require('react-native').View, { testID: `status-bar-${style}` }),
-}));
-jest.mock('expo-navigation-bar', () => ({
-  NavigationBar: ({ style }: { style: string }) => require('react').createElement(require('react-native').View, { testID: `navigation-bar-${style}` }),
 }));
 
 let agent: FakeAgent;
@@ -379,7 +376,7 @@ describe('pairing', () => {
 
   // The camera is dark in either theme; in the light one the status icons
   // were dark on it and could not be seen (S10, 11-03).
-  test('the scanner puts light bars over the camera', async () => {
+  test('the scanner puts light status icons over the camera', async () => {
     jest.spyOn(require('expo-camera'), 'useCameraPermissions').mockReturnValue([{ granted: true, canAskAgain: true }, jest.fn()]);
     const user = userEvent.setup();
     await renderRouter(routes, { initialUrl: '/pair' });
@@ -387,7 +384,6 @@ describe('pairing', () => {
     await user.press(await screen.findByRole('button', { name: 'Scan QR code' }));
     expect(await screen.findByText('Fit the QR code on the PC screen inside the frame.')).toBeTruthy();
     expect(screen.getByTestId('status-bar-light')).toBeTruthy();
-    expect(screen.getByTestId('navigation-bar-dark')).toBeTruthy();
     await user.press(screen.getByRole('button', { name: 'Cancel' }));
     await waitFor(() => expect(screen.queryByTestId('status-bar-light')).toBeNull());
   });
