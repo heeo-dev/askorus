@@ -1,17 +1,20 @@
-# E2E-01: the paired PC shows as connected and opens its session list.
+# E2E-01: My PC shows the paired PC as connected, with its sessions.
+# Since S5c the app opens on All at once; the header's switch leads to My
+# PCs, which is the PC's session list itself.
 # Taps wait only briefly for the screen to settle (waitToSettleTimeoutMs);
 # the wait after each tap is what checks the next screen.
 appId: host.exp.exponent
 ---
 - runFlow: _open-app.yaml
+- tapOn:
+    text: "My PCs"
+    waitToSettleTimeoutMs: 300
 - extendedWaitUntil:
     visible: "Connected · agent .*"
     timeout: 10000
-- tapOn:
-    text: "Connected · agent .*"
-    waitToSettleTimeoutMs: 300
 - extendedWaitUntil:
-    visible: "\\+ New session"
+    visible: "New session"
     timeout: 10000
-- assertVisible: "Folders"
-- assertVisible: "Search titles, folders, last prompts"
+- assertVisible: "Sessions"
+- assertVisible: "Keep folders open"
+- assertVisible: "Search sessions"

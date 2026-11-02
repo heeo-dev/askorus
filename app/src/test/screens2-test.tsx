@@ -1,15 +1,39 @@
-// Screen tests for new session, folders and settings (B1-4).
+// Screen tests (S5c) for a new session, folders and Settings, on the app's
+// own layouts and screens (stand-ins for Ask and About, see screens-test).
 
 import { userEvent } from '@testing-library/react-native';
-import { fireEvent, renderRouter, screen, waitFor } from 'expo-router/testing-library';
-import { Alert, Linking } from 'react-native';
+import Constants from 'expo-constants';
+import { router } from 'expo-router';
+import { act, renderRouter, screen, waitFor, within } from 'expo-router/testing-library';
+import { Alert, Linking, Text } from 'react-native';
 
-import { savePrefs } from '@/connections/prefs';
+import TabsLayout from '@/app/(tabs)/_layout';
+import MyPC from '@/app/(tabs)/pcs';
+import RootLayout from '@/app/_layout';
+import Pair from '@/app/pair';
+import Folders from '@/app/pc/[id]/folders';
+import NewSession from '@/app/pc/[id]/new';
+import Settings from '@/app/settings';
+import { loadAskPrefs } from '@/ask/prefs';
+import { loadPrefs, savePrefs } from '@/connections/prefs';
 import { ConnectionStore } from '@/connections/store';
 import { FakeAgent, HOST, PORT, TOKEN, session } from '@/test/fakeAgent';
+import { loadThemeChoice } from '@/ui/appearance';
+import { palettes } from '@/ui/theme';
 
 let agent: FakeAgent;
-const appDir = './src/app';
+
+const routes = {
+  _layout: RootLayout,
+  '(tabs)/_layout': TabsLayout,
+  '(tabs)/index': () => <Text>ask screen</Text>,
+  '(tabs)/pcs': MyPC,
+  'pc/[id]/new': NewSession,
+  'pc/[id]/folders': Folders,
+  settings: Settings,
+  pair: Pair,
+  about: () => <Text>about screen</Text>,
+};
 
 beforeEach(() => {
   agent = new FakeAgent();
@@ -23,17 +47,9 @@ beforeEach(() => {
 
 afterEach(() => jest.restoreAllMocks());
 
-async function pairedPC() {
+async function pairedPC(name = 'DESKTOP-TEST', host = HOST) {
   return new ConnectionStore().add(
-    {
-      kind: 'pc',
-      name: 'DESKTOP-TEST',
-      host: HOST,
-      port: PORT,
-      deviceId: 'dev-1',
-      deviceName: 'Test Phone',
-      pairedAt: '2026-10-27T00:00:00Z',
-    },
+    { kind: 'pc', name, host, port: PORT, deviceId: 'dev-1', deviceName: 'Test Phone', pairedAt: '2026-10-27T00:00:00Z' },
     TOKEN,
   );
 }
@@ -44,36 +60,52 @@ const confirmDestructive = () =>
   });
 
 describe('new session', () => {
-  test('starts in the chosen folder and hands the link to the Claude app', async () => {
+  test('starts in the chosen folder with Advanced choices and hands the link to the Claude app', async () => {
     const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
     const user = userEvent.setup();
     const c = await pairedPC();
-    await renderRouter(appDir, { initialUrl: `/pc/${c.id}` });
-    await user.press(await screen.findByText('+ New session'));
+    const r = await renderRouter(routes, { initialUrl: '/pcs' });
+    await user.press(await screen.findByRole('button', { name: 'New session' }));
+
+    // The top bar names the screen and the PC.
+    expect(await screen.findByRole('header', { name: 'New session' })).toBeTruthy();
+    expect(screen.getByText('DESKTOP-TEST')).toBeTruthy();
 
     await user.press(await screen.findByRole('radio', { name: 'docs' }));
-    await user.type(screen.getByPlaceholderText('Leave empty for the folder name and time'), 'release notes');
-    await user.press(screen.getByRole('radio', { name: 'opus' }));
-    await user.press(screen.getByText('Start and open in the Claude app'));
+    expect(screen.getByRole('radio', { name: 'docs' })).toBeChecked();
+    expect(screen.getByRole('radio', { name: 'shop' })).not.toBeChecked();
+    await user.type(screen.getByLabelText('Name'), 'release notes');
 
+    // Model and effort wait under Advanced, which says what is picked.
+    expect(screen.queryByRole('radio', { name: 'opus' })).toBeNull();
+    const advanced = screen.getByRole('button', { name: 'Advanced, Model · effort' });
+    expect(advanced).toHaveAccessibilityValue({ text: 'Default' });
+    await user.press(advanced);
+    expect(screen.getByRole('button', { name: 'Advanced, Model · effort' })).toBeExpanded();
+    await user.press(screen.getByRole('radio', { name: 'opus' }));
+    expect(screen.getByRole('button', { name: 'Advanced, Model · effort' })).toHaveAccessibilityValue({ text: 'opus' });
+    expect(screen.getByText('It usually opens within 15 seconds.')).toBeTruthy();
+
+    await user.press(screen.getByRole('button', { name: 'Start and open in the Claude app' }));
     await waitFor(() => expect(open).toHaveBeenCalledWith(agent.remoteUrl));
-    expect(agent.callsTo('POST', '/v1/sessions')[0].body).toEqual({
-      folder: 'docs',
-      name: 'release notes',
-      model: 'opus',
-    });
-    // Back on the list, which shows the new session.
+    expect(agent.callsTo('POST', '/v1/sessions')[0].body).toEqual({ folder: 'docs', name: 'release notes', model: 'opus' });
+    // Back on My PC, which shows the new session.
+    await waitFor(() => expect(r.getPathname()).toBe('/pcs'));
     expect(await screen.findByText('release notes')).toBeTruthy();
+    expect(agent.callsTo('GET', '/v1/folders').length).toBeGreaterThanOrEqual(1);
+    expect(c.id).toBeTruthy();
   });
 
-  test('uses the defaults from settings', async () => {
+  test('uses the defaults from Settings', async () => {
     jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
     await savePrefs({ model: 'sonnet', effort: 'high' });
     const user = userEvent.setup();
     const c = await pairedPC();
-    await renderRouter(appDir, { initialUrl: `/pc/${c.id}/new` });
+    await renderRouter(routes, { initialUrl: `/pc/${c.id}/new` });
     await user.press(await screen.findByRole('radio', { name: 'shop' }));
-    await user.press(screen.getByText('Start and open in the Claude app'));
+    expect(screen.getByRole('button', { name: 'Advanced, Model · effort' })).toHaveAccessibilityValue({ text: 'sonnet · high' });
+    expect(screen.getByText('sonnet · high')).toBeTruthy();
+    await user.press(screen.getByRole('button', { name: 'Start and open in the Claude app' }));
     await waitFor(() => expect(agent.callsTo('POST', '/v1/sessions')).toHaveLength(1));
     expect(agent.callsTo('POST', '/v1/sessions')[0].body).toMatchObject({ model: 'sonnet', effort: 'high' });
   });
@@ -81,16 +113,65 @@ describe('new session', () => {
   test('cannot start before a folder is picked', async () => {
     const user = userEvent.setup();
     const c = await pairedPC();
-    await renderRouter(appDir, { initialUrl: `/pc/${c.id}/new` });
-    await user.press(await screen.findByText('Start and open in the Claude app'));
+    await renderRouter(routes, { initialUrl: `/pc/${c.id}/new` });
+    await screen.findByRole('radio', { name: 'shop' });
+    const start = screen.getByRole('button', { name: 'Start and open in the Claude app' });
+    expect(start).toBeDisabled();
+    await user.press(start);
     expect(agent.callsTo('POST', '/v1/sessions')).toHaveLength(0);
+  });
+
+  test('one folder is picked for you', async () => {
+    agent.folders = agent.folders.slice(0, 1);
+    const c = await pairedPC();
+    await renderRouter(routes, { initialUrl: `/pc/${c.id}/new` });
+    expect(await screen.findByRole('radio', { name: 'shop' })).toBeChecked();
+    expect(screen.getByRole('button', { name: 'Start and open in the Claude app' })).toBeEnabled();
   });
 
   test('a PC without allowed folders says how to add one', async () => {
     agent.folders = [];
     const c = await pairedPC();
-    await renderRouter(appDir, { initialUrl: `/pc/${c.id}/new` });
+    await renderRouter(routes, { initialUrl: `/pc/${c.id}/new` });
     expect(await screen.findByText(/asksemble-agent folders add/)).toBeTruthy();
+  });
+
+  test('a start that takes long can be cancelled', async () => {
+    const user = userEvent.setup();
+    const fake = agent.fetch;
+    // The PC keeps saying the job runs.
+    globalThis.fetch = (async (u: RequestInfo | URL, init?: RequestInit) => {
+      const path = new URL(String(u)).pathname;
+      if (path.startsWith('/v1/jobs/')) {
+        return new Response(JSON.stringify({ jobId: path.split('/').pop(), kind: 'start', status: 'running', pollAfterMs: 1 }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return fake(u, init);
+    }) as typeof fetch;
+    const c = await pairedPC();
+    await renderRouter(routes, { initialUrl: `/pc/${c.id}/new` });
+    await user.press(await screen.findByRole('radio', { name: 'shop' }));
+    await user.press(screen.getByRole('button', { name: 'Start and open in the Claude app' }));
+    expect(await screen.findByText('Starting a new session on the PC… usually under 15 seconds.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Start and open in the Claude app' })).toBeNull();
+    await user.press(screen.getByRole('button', { name: 'Cancel' }));
+    expect(await screen.findByRole('button', { name: 'Start and open in the Claude app' })).toBeEnabled();
+    expect(screen.queryByText('Starting a new session on the PC… usually under 15 seconds.')).toBeNull();
+    expect(screen.getByText('It usually opens within 15 seconds.')).toBeTruthy();
+  });
+
+  test('a failed start says why and offers the button again', async () => {
+    const user = userEvent.setup();
+    const c = await pairedPC();
+    await renderRouter(routes, { initialUrl: `/pc/${c.id}/new` });
+    await user.press(await screen.findByRole('radio', { name: 'shop' }));
+    agent.folders = agent.folders.filter((f) => f.id !== 'shop'); // removed on the PC meanwhile
+    await user.press(screen.getByRole('button', { name: 'Start and open in the Claude app' }));
+    expect(await screen.findByText("This folder isn't on the allowed list.")).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Start and open in the Claude app' })).toBeEnabled();
+    expect(screen.queryByText('Starting a new session on the PC… usually under 15 seconds.')).toBeNull();
   });
 });
 
@@ -98,15 +179,19 @@ describe('folders', () => {
   // The PUT answer still shows the old state; the screen must keep asking
   // until the server catches up (found by E2E-05, R-12).
   test('keeping a folder open follows the server until it is open, and back off', async () => {
+    const user = userEvent.setup();
     const c = await pairedPC();
-    await renderRouter(appDir, { initialUrl: `/pc/${c.id}/folders` });
-    const toggle = await screen.findByLabelText('Keep shop open');
-    await fireEvent(toggle, 'valueChange', true);
+    await renderRouter(routes, { initialUrl: `/pc/${c.id}/folders` });
+    expect(await screen.findByRole('header', { name: 'Folders' })).toBeTruthy();
+    const toggle = await screen.findByRole('switch', { name: 'Keep shop open' });
+    expect(toggle).not.toBeChecked();
+    await user.press(toggle);
     expect(await screen.findByText('Open · 0/4 sessions', {}, { timeout: 5000 })).toBeTruthy();
+    expect(screen.getByRole('switch', { name: 'Keep shop open' })).toBeChecked();
     expect(agent.calls.find((x) => x.method === 'PUT')?.body).toEqual({ enabled: true });
     expect(agent.folders[0].server.enabled).toBe(true);
 
-    await fireEvent(screen.getByLabelText('Keep shop open'), 'valueChange', false);
+    await user.press(screen.getByRole('switch', { name: 'Keep shop open' }));
     await waitFor(() => expect(screen.queryByText('Open · 0/4 sessions')).toBeNull(), { timeout: 5000 });
     expect(screen.getAllByText('Off').length).toBeGreaterThan(0);
   });
@@ -115,29 +200,56 @@ describe('folders', () => {
   // session waits until the folder is opened again (Claude Code keeps the
   // environment for about 4 hours). The screen says so.
   test('turning a folder off says what stays in the Claude app', async () => {
+    const user = userEvent.setup();
     const c = await pairedPC();
-    await renderRouter(appDir, { initialUrl: `/pc/${c.id}/folders` });
+    await renderRouter(routes, { initialUrl: `/pc/${c.id}/folders` });
     expect(await screen.findByText(/drops out of the Claude app's list/)).toBeTruthy();
     expect(screen.queryByText(/still listed in the Claude app/)).toBeNull();
 
-    await fireEvent(await screen.findByLabelText('Keep shop open'), 'valueChange', true);
+    await user.press(await screen.findByRole('switch', { name: 'Keep shop open' }));
     await screen.findByText('Open · 0/4 sessions', {}, { timeout: 5000 });
     expect(screen.queryByText(/still listed in the Claude app/)).toBeNull();
-    await fireEvent(screen.getByLabelText('Keep shop open'), 'valueChange', false);
+    await user.press(screen.getByRole('switch', { name: 'Keep shop open' }));
     expect(await screen.findByText(/still listed in the Claude app/)).toBeTruthy();
+  });
+
+  test('an agent without folder servers cannot switch them', async () => {
+    agent.capabilities = agent.capabilities.filter((x) => x !== 'serve');
+    const user = userEvent.setup();
+    const c = await pairedPC();
+    await renderRouter(routes, { initialUrl: `/pc/${c.id}/folders` });
+    expect(await screen.findByText("This PC's agent doesn't support keeping folders open.")).toBeTruthy();
+    const toggle = screen.getByRole('switch', { name: 'Keep shop open' });
+    expect(toggle).toBeDisabled();
+    await user.press(toggle);
+    expect(agent.calls.filter((x) => x.method === 'PUT')).toHaveLength(0);
   });
 });
 
 describe('settings', () => {
+  async function openPCSheet(user: ReturnType<typeof userEvent.setup>) {
+    await renderRouter(routes, { initialUrl: '/settings' });
+    await user.press(await screen.findByRole('button', { name: 'DESKTOP-TEST, Connected' }));
+    return within(await screen.findByTestId('pc-sheet'));
+  }
+
+  test('the paired PCs show with their state; a PC opens its sheet with this phone’s name', async () => {
+    const user = userEvent.setup();
+    await pairedPC();
+    const pc = await openPCSheet(user);
+    expect(pc.getByText(`${HOST}:${PORT}`)).toBeTruthy();
+    expect(pc.getByText('This phone: Test Phone (id dev-1)')).toBeTruthy();
+  });
+
   test('the connection check walks through what works', async () => {
     const user = userEvent.setup();
     await pairedPC();
-    await renderRouter(appDir, { initialUrl: '/settings' });
-    await user.press(await screen.findByText('Check connection'));
-    expect(await screen.findByText(/Reached the PC/)).toBeTruthy();
-    expect(screen.getByText(/The PC knows this phone/)).toBeTruthy();
-    expect(screen.getByText(/Agent 0\.1\.0/)).toBeTruthy();
-    expect(screen.getByText(/Claude Code 2\.1\.310/)).toBeTruthy();
+    const pc = await openPCSheet(user);
+    await user.press(pc.getByRole('button', { name: 'Check connection' }));
+    expect(await pc.findByText(/Reached the PC/)).toBeTruthy();
+    expect(pc.getByText(/The PC knows this phone/)).toBeTruthy();
+    expect(pc.getByText(/Agent 0\.1\.0/)).toBeTruthy();
+    expect(pc.getByText(/Claude Code 2\.1\.310/)).toBeTruthy();
   });
 
   test('the check names each AI; one that only asks is optional (P2-1)', async () => {
@@ -147,46 +259,48 @@ describe('settings', () => {
     ];
     const user = userEvent.setup();
     await pairedPC();
-    await renderRouter(appDir, { initialUrl: '/settings' });
-    await user.press(await screen.findByText('Check connection'));
-    expect(await screen.findByText(/Claude Code 2\.1\.310/)).toBeTruthy();
-    expect(screen.getByText(/✓ Codex 0\.164\.0 \(asks\)/)).toBeTruthy();
-    expect(screen.getByText(/· OpenCode: not on this PC \(left out of asks\)/)).toBeTruthy();
-    expect(screen.queryByText(/✗/)).toBeNull();
-    expect(screen.queryByText(/opencode_not_found/)).toBeNull();
+    const pc = await openPCSheet(user);
+    await user.press(pc.getByRole('button', { name: 'Check connection' }));
+    expect(await pc.findByText(/Claude Code 2\.1\.310/)).toBeTruthy();
+    expect(pc.getByText(/✓ Codex 0\.164\.0 \(asks\)/)).toBeTruthy();
+    expect(pc.getByText(/· OpenCode: not on this PC \(left out of asks\)/)).toBeTruthy();
+    expect(pc.queryByText(/✗/)).toBeNull();
+    expect(pc.queryByText(/opencode_not_found/)).toBeNull();
   });
 
   test('an AI that is there but broken says why, still as a note', async () => {
     agent.askAgents = [{ agent: 'codex', available: false, capabilities: [], notices: ['codex_script_only'] }];
     const user = userEvent.setup();
     await pairedPC();
-    await renderRouter(appDir, { initialUrl: '/settings' });
-    await user.press(await screen.findByText('Check connection'));
-    expect(await screen.findByText(/· Codex: on the PC but not working/)).toBeTruthy();
-    expect(screen.getByText(/Set codexPath in agent\.json/)).toBeTruthy();
-    expect(screen.queryByText(/not on this PC/)).toBeNull();
-    expect(screen.queryByText(/✗/)).toBeNull();
-    expect(screen.queryByText(/codex_script_only/)).toBeNull();
+    const pc = await openPCSheet(user);
+    await user.press(pc.getByRole('button', { name: 'Check connection' }));
+    expect(await pc.findByText(/· Codex: on the PC but not working/)).toBeTruthy();
+    expect(pc.getByText(/Set codexPath in agent\.json/)).toBeTruthy();
+    expect(pc.queryByText(/not on this PC/)).toBeNull();
+    expect(pc.queryByText(/✗/)).toBeNull();
+    expect(pc.queryByText(/codex_script_only/)).toBeNull();
   });
 
   test('the check shows what the PC reports wrong', async () => {
     agent.notices = ['claude_service_elevated'];
     const user = userEvent.setup();
     await pairedPC();
-    await renderRouter(appDir, { initialUrl: '/settings' });
-    await user.press(await screen.findByText('Check connection'));
-    expect(await screen.findByText(/claude daemon stop --any/)).toBeTruthy();
+    const pc = await openPCSheet(user);
+    await user.press(pc.getByRole('button', { name: 'Check connection' }));
+    expect(await pc.findByText(/claude daemon stop --any/)).toBeTruthy();
   });
 
   test('unpairing removes the phone on the PC and here', async () => {
     confirmDestructive();
     const user = userEvent.setup();
     await pairedPC();
-    await renderRouter(appDir, { initialUrl: '/settings' });
-    await user.press(await screen.findByText('Unpair'));
+    const pc = await openPCSheet(user);
+    await user.press(pc.getByRole('button', { name: 'Unpair' }));
     await waitFor(async () => expect(await new ConnectionStore().list()).toEqual([]));
     expect(agent.callsTo('DELETE', '/v1/devices/self')).toHaveLength(1);
+    await waitFor(() => expect(screen.queryByTestId('pc-sheet')).toBeNull());
     expect(screen.queryByText(/devices revoke/)).toBeNull();
+    expect(await screen.findByText('No PC is paired yet.')).toBeTruthy();
   });
 
   test('unpairing while the PC is away says what is left on the PC', async () => {
@@ -196,16 +310,97 @@ describe('settings', () => {
     }) as typeof fetch;
     const user = userEvent.setup();
     await pairedPC();
-    await renderRouter(appDir, { initialUrl: '/settings' });
-    await user.press(await screen.findByText('Unpair'));
+    await renderRouter(routes, { initialUrl: '/settings' });
+    await user.press(await screen.findByRole('button', { name: 'DESKTOP-TEST, Not connected' }));
+    await user.press(within(await screen.findByTestId('pc-sheet')).getByRole('button', { name: 'Unpair' }));
     expect(await screen.findByText(/asksemble-agent devices revoke dev-1/)).toBeTruthy();
     expect(await new ConnectionStore().list()).toEqual([]);
   });
 
-  test('home links to settings', async () => {
+  test('new session defaults open in a sheet and are saved', async () => {
     const user = userEvent.setup();
-    await renderRouter(appDir, { initialUrl: '/' });
-    await user.press(await screen.findByText('Settings'));
-    expect(screen).toHavePathname('/settings');
+    await renderRouter(routes, { initialUrl: '/settings' });
+    const row = await screen.findByRole('button', { name: 'New session defaults' });
+    expect(row).toHaveAccessibilityValue({ text: 'Default' });
+    await user.press(row);
+    const sheet = within(await screen.findByTestId('defaults-sheet'));
+    await user.press(sheet.getByRole('radio', { name: 'haiku' }));
+    await user.press(sheet.getByRole('radio', { name: 'max' }));
+    await waitFor(async () => expect(await loadPrefs()).toEqual({ model: 'haiku', effort: 'max' }));
+    await user.press(sheet.getByRole('button', { name: 'Close' }));
+    expect(await screen.findByRole('button', { name: 'New session defaults' })).toHaveAccessibilityValue({ text: 'haiku · max' });
+  });
+
+  test('the default tier, comparison, combined answer and its writer are saved in the ask prefs', async () => {
+    const user = userEvent.setup();
+    await renderRouter(routes, { initialUrl: '/settings' });
+    await user.press(await screen.findByRole('radio', { name: 'Deep' }));
+    await waitFor(async () => expect((await loadAskPrefs()).tier).toBe('deep'));
+    expect(screen.getByRole('radio', { name: 'Deep' })).toBeChecked();
+
+    const compare = screen.getByRole('switch', { name: 'Compare answers automatically' });
+    const was = (await loadAskPrefs()).compare;
+    expect(compare.props.accessibilityState.checked).toBe(was);
+    await user.press(compare);
+    await waitFor(async () => expect((await loadAskPrefs()).compare).toBe(!was));
+
+    const synth = screen.getByRole('switch', { name: 'Write a combined answer once compared' });
+    const synthWas = (await loadAskPrefs()).synth;
+    await user.press(synth);
+    await waitFor(async () => expect((await loadAskPrefs()).synth).toBe(!synthWas));
+
+    expect(screen.getByRole('radio', { name: 'Claude' })).toBeChecked();
+    await user.press(screen.getByRole('radio', { name: 'Codex' }));
+    await waitFor(async () => expect((await loadAskPrefs()).synthAgent).toBe('codex'));
+    expect(screen.getByRole('radio', { name: 'Codex' })).toBeChecked();
+  });
+
+  test('the info button explains what comparing and combining cost and send', async () => {
+    const user = userEvent.setup();
+    await renderRouter(routes, { initialUrl: '/settings' });
+    await user.press(await screen.findByRole('button', { name: 'About comparison and combined answers' }));
+    const info = within(await screen.findByTestId('compare-info'));
+    expect(info.getByText(/each AI judges twice more/)).toBeTruthy();
+    expect(info.getByText(/That AI's company receives the question and every answer/)).toBeTruthy();
+  });
+
+  test('the theme is system by default; dark and light are drawn at once and kept', async () => {
+    const user = userEvent.setup();
+    await renderRouter(routes, { initialUrl: '/settings' });
+    expect(await screen.findByRole('radio', { name: 'System' })).toBeChecked();
+    await user.press(screen.getByRole('radio', { name: 'Dark' }));
+    expect(screen.getByRole('radio', { name: 'Dark' })).toBeChecked();
+    await waitFor(async () => expect(await loadThemeChoice()).toBe('dark'));
+    expect(screen.getByRole('header', { name: 'Settings' })).toHaveStyle({ color: palettes.dark.text });
+
+    await user.press(screen.getByRole('radio', { name: 'Light' }));
+    await waitFor(async () => expect(await loadThemeChoice()).toBe('light'));
+    expect(screen.getByRole('header', { name: 'Settings' })).toHaveStyle({ color: palettes.light.text });
+  });
+
+  test('About shows the version and the not-official line, and leads to the about screen', async () => {
+    const user = userEvent.setup();
+    const r = await renderRouter(routes, { initialUrl: '/settings' });
+    const version = Constants.expoConfig?.version ?? '';
+    const about = await screen.findByRole('button', { name: `Asksemble ${version}`.trim() + ', Not an official product of any AI company.' });
+    await user.press(about);
+    await waitFor(() => expect(r.getPathname()).toBe('/about'));
+  });
+
+  test('Pair with a PC opens pairing', async () => {
+    const user = userEvent.setup();
+    const r = await renderRouter(routes, { initialUrl: '/settings' });
+    await user.press(await screen.findByRole('button', { name: 'Pair with a PC' }));
+    await waitFor(() => expect(r.getPathname()).toBe('/pair'));
+  });
+
+  test('Back leaves Settings', async () => {
+    const user = userEvent.setup();
+    const r = await renderRouter(routes, { initialUrl: '/pcs' });
+    await screen.findByText('No PC is paired yet.');
+    // The drawer leads here; pushing it directly stands in for that.
+    await act(async () => router.push('/settings'));
+    await user.press(await screen.findByRole('button', { name: 'Back' }));
+    await waitFor(() => expect(r.getPathname()).toBe('/pcs'));
   });
 });

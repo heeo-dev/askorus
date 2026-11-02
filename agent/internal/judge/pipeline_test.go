@@ -111,11 +111,12 @@ func TestPipelineP06(t *testing.T) {
 			t.Errorf("Q%d: %d of %d judgments usable, counts %+v", q.ID, len(s.Judgments), len(in.Judgments), s.Counts)
 		}
 		// Each unit is where the judge's reading of its text puts it: a
-		// claim on its claim's card, any other unit hidden.
+		// claim on its claim's card, any other unit, absent and not core,
+		// on 한 AI만 (S5c: before, it was hidden).
 		states := aggStates(s)
 		for _, a := range in.Answers {
 			for _, u := range a.Units {
-				want := StateHidden
+				want := CardOnlyOne
 				if c, ok := pipeClaim(t, q.ID, a.ID, u.Text); ok {
 					want = card(fmt.Sprintf("%d-%s%d", q.ID, c.AI, c.N))
 				}

@@ -388,6 +388,13 @@ const (
 // trimmed, and the output must not be over MaxOutputBytes. Anything else
 // is an *Error with code judge_bad_output and a fixed message that never
 // quotes the output; the caller asks once more with a new nonce.
+//
+// A writer may put the whole object, JSON-encoded, into the answer: the
+// 11-02 S5c check showed '{"answer":"Seoul …\n\nLotte …"}' on the phone,
+// braces, quotes and the written \n included (R-45). When the text is
+// exactly that shape (one object, the one "answer" string, nothing
+// around it but white space) it is unwrapped, once, and the checks below
+// apply to what was inside.
 func ValidateSynth(out []byte) (string, error) {
 	bad := func(msg string) (string, error) {
 		return "", &Error{Code: core.ErrCodeJudgeBadOutput, Message: msg}
@@ -402,6 +409,9 @@ func ValidateSynth(out []byte) (string, error) {
 	text, ok := synthAnswerField(obj)
 	if !ok {
 		return bad(synthMsgNotSynth)
+	}
+	if inner, ok := synthAnswerField([]byte(strings.TrimSpace(text))); ok {
+		text = inner
 	}
 	if strings.ContainsRune(text, 0) {
 		return bad(synthMsgNUL)

@@ -554,8 +554,13 @@ export function answeringLines(turn: Turn, now: number): { agent: string; s: num
 export type UnitView = { id: string; answer: string; agent: string; kind: string; text: string; context?: string; math: UnitMath[] };
 /** One side of an item: the AIs that say it (display names) and their units. */
 export type SideView = { agents: string[]; units: UnitView[]; numberSpans: NumberSpan[] };
-/** missing: the AIs (display names) whose answers this item could not be compared with. */
-export type ItemView = { key: string; kind: CardKind; sides: SideView[]; numbersDiffer: boolean; check: string[]; missing: string[] };
+/**
+ * missing: the AIs (display names) whose answers this item could not be
+ * compared with. whole: the AIs (display names) of the sides that are a
+ * whole answer, with no sentence (an opposite no evidence pointed into);
+ * they are not drawn as sides but still named and counted.
+ */
+export type ItemView = { key: string; kind: CardKind; sides: SideView[]; numbersDiffer: boolean; check: string[]; missing: string[]; whole: string[] };
 export type CardView = { kind: CardKind; items: ItemView[] };
 
 const isCardKind = (k: string): k is CardKind => (cardKinds as readonly string[]).includes(k);
@@ -585,8 +590,9 @@ function index(s: Comparison) {
 /**
  * cards are the four cards in their fixed order, items in the snapshot's
  * order. What cannot be shown is left out: an unknown kind, a repeated key
- * (the first stays), units no answer has, sides without units, items
- * without sides.
+ * (the first stays), units no answer has, sides none of whose units are
+ * known, items without sides. A side with no units at all is a whole
+ * answer: its AIs go to the item's whole (COR-1).
  */
 export function cards(s: Comparison): CardView[] {
   const { units, nameOf } = index(s);
@@ -595,9 +601,11 @@ export function cards(s: Comparison): CardView[] {
   for (const it of s.items ?? []) {
     if (!isCardKind(it.kind) || seen.has(it.key)) continue;
     const sides: SideView[] = [];
+    const whole: string[] = [];
     for (const p of it.positions ?? []) {
       const us = (p.units ?? []).map((id) => units.get(id)).filter((u): u is UnitView => !!u);
       if (us.length) sides.push({ agents: (p.agents ?? []).map(nameOf), units: us, numberSpans: p.numberSpans ?? [] });
+      else if (!(p.units ?? []).length) whole.push(...(p.agents ?? []).map(nameOf));
     }
     if (!sides.length) continue;
     seen.add(it.key);
@@ -608,6 +616,7 @@ export function cards(s: Comparison): CardView[] {
       numbersDiffer: !!it.numbersDiffer,
       check: it.check ?? [],
       missing: (it.missing ?? []).map(nameOf),
+      whole,
     });
   }
   return cardKinds.map((kind) => ({ kind, items: byKind.get(kind) ?? [] }));

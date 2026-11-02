@@ -1,0 +1,27 @@
+<!doctype html>
+<!--
+  App icon B, 'a speech bubble made of circles' (design board F-Brand-Icon,
+  option B, the user's choice on 11-01): ink #2A1408 on apricot #FFAD85.
+  The shapes in <defs> are copied from the board without its dashed
+  safe-zone circle. scripts/render-brand.mjs fills {{px}}, {{viewBox}} and
+  {{layers}} (which shapes to draw) for each PNG and screenshots the page.
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<style>html, body { margin: 0; background: transparent; overflow: hidden; } svg { display: block; }</style>
+</head>
+<body>
+<svg xmlns="http://www.w3.org/2000/svg" width="{{px}}" height="{{px}}" viewBox="{{viewBox}}">
+<defs>
+<path id="squircle" d="M50 0C88 0 100 12 100 50S88 100 50 100S0 88 0 50S12 0 50 0Z" fill="#FFAD85"></path>
+<rect id="square" x="0" y="0" width="100" height="100" fill="#FFAD85"></rect>
+<g id="mark"><circle cx="50" cy="43.5" r="17" fill="#2A1408"></circle><circle cx="35" cy="51.5" r="16.5" fill="#2A1408" stroke="#FFAD85" stroke-width="3"></circle><circle cx="65" cy="51.5" r="16.5" fill="#2A1408" stroke="#FFAD85" stroke-width="3"></circle><path d="M28 59.5L27 73L40 65.5Z" fill="#2A1408"></path></g>
+<!-- The same mark as one silhouette: white shows, black hides, so the two
+     apricot rings that part the circles become cut-outs (themed icons). -->
+<mask id="silhouette" maskUnits="userSpaceOnUse" x="-100" y="-100" width="300" height="300"><rect x="-100" y="-100" width="300" height="300" fill="#000000"></rect><circle cx="50" cy="43.5" r="17" fill="#FFFFFF"></circle><circle cx="35" cy="51.5" r="16.5" fill="#FFFFFF" stroke="#000000" stroke-width="3"></circle><circle cx="65" cy="51.5" r="16.5" fill="#FFFFFF" stroke="#000000" stroke-width="3"></circle><path d="M28 59.5L27 73L40 65.5Z" fill="#FFFFFF"></path></mask>
+</defs>
+{{layers}}
+</svg>
+</body>
+</html>

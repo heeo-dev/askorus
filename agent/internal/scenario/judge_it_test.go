@@ -79,7 +79,8 @@ func sameSet(a, b []string) bool {
 
 // checkCards checks the cards of the three keyed answers: Claude and
 // Codex differ on the price, all three agree on the height, only Claude
-// gives a colour, and every unit is the AI's own words.
+// gives a colour, OpenCode's sentence no judge called core comes after it
+// on 한 AI만 (S5c), and every unit is the AI's own words.
 func checkCards(t *testing.T, c api.ComparisonStatus) {
 	t.Helper()
 	differ := itemsOf(c, judge.CardDiffer)
@@ -99,13 +100,13 @@ func checkCards(t *testing.T, c api.ComparisonStatus) {
 		t.Errorf("agree = %+v", agree)
 	}
 	only := itemsOf(c, judge.CardOnlyOne)
-	if len(only) != 1 || !slices.Equal(unitsOf(only[0]), []string{"claude:3"}) {
+	if len(only) != 2 || !slices.Equal(unitsOf(only[0]), []string{"claude:3"}) || !slices.Equal(unitsOf(only[1]), []string{"opencode:2"}) {
 		t.Errorf("onlyOne = %+v", only)
 	}
 	if n := len(itemsOf(c, judge.CardCheck)); n != 0 {
 		t.Errorf("%d check items", n)
 	}
-	if c.Counts.Differ != 1 || c.Counts.Agree != 1 || c.Counts.OnlyOne != 1 || c.Counts.Check != 0 || c.Counts.NotCompared != 0 {
+	if c.Counts.Differ != 1 || c.Counts.Agree != 1 || c.Counts.OnlyOne != 2 || c.Counts.Check != 0 || c.Counts.NotCompared != 0 {
 		t.Errorf("counts = %+v", c.Counts)
 	}
 	unitText(t, c)

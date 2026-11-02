@@ -18,8 +18,10 @@ import (
 // in all six directions, with verdicts picked so that one opposite is
 // missed (codex2 against claude), one shows on the check card (claude2
 // against codex, unsure), one pair is a false opposite (opencode1 against
-// codex) and one request's first output was invalid (r3). Every number
-// below is worked out by hand in the comments.
+// codex) and one request's first output was invalid (r3). The second unit
+// of codex and of opencode is absent everywhere and no judge calls it core:
+// since S5c it is on 한 AI만 (before, hidden). Every number below is worked
+// out by hand in the comments.
 
 type v = verdictRec
 
@@ -155,7 +157,8 @@ func TestMetricsByHand(t *testing.T) {
 	if n.Opposites != 2 || n.OppositeLabel != 0 || n.OppositeOrUnsure != 1 || !near(n.OrUnsureRecall, 0.5) {
 		t.Errorf("opposite recall %+v", n)
 	}
-	// Cards: claude2 is on check, codex2 is hidden: missed. claude2's same
+	// Cards: claude2 is on check, codex2 on 한 AI만 (hidden before S5c,
+	// as no judge called it core): missed. claude2's same
 	// is unsure and its numbers clash with its evidence (605㎢ against
 	// 700㎢), so numberMismatch fires; with handChecks it is not enabled
 	// and the unsure mark stands in for it (S6, P1). The split read no
@@ -166,7 +169,7 @@ func TestMetricsByHand(t *testing.T) {
 	}
 	c := vr.Cards
 	wantCard := map[string]map[string]int{
-		judge.CardDiffer:  {judge.CardCheck: 1, judge.StateHidden: 1},
+		judge.CardDiffer:  {judge.CardCheck: 1, judge.CardOnlyOne: 1},
 		judge.CardAgree:   {judge.CardAgree: 1, judge.CardDiffer: 1},
 		judge.CardOnlyOne: {},
 	}
@@ -179,16 +182,18 @@ func TestMetricsByHand(t *testing.T) {
 		t.Errorf("core %d/%d", c.CoreOR, c.CoreAND)
 	}
 	// Items: differ opencode:1 against codex:1, check claude:2 (unsure
-	// only, as numberMismatch is not enabled), agree claude:1.
-	if c.Items != 3 || c.CheckItems != 1 || c.UnsureOnly != 1 || !near(c.CheckRate, 1.0/3) || !near(c.UnsureOnlyShare, 1.0/3) {
+	// only, as numberMismatch is not enabled), agree claude:1, and since
+	// S5c onlyOne codex:2 and opencode:2.
+	if c.Items != 5 || c.CheckItems != 1 || c.UnsureOnly != 1 || !near(c.CheckRate, 1.0/5) || !near(c.UnsureOnlyShare, 1.0/5) {
 		t.Errorf("items %d, check %d, unsure only %d", c.Items, c.CheckItems, c.UnsureOnly)
 	}
-	// Units on a card: claude 2, codex 1 (codex:1 agrees), opencode 1:
-	// median 1. Core in both directions or in an opposite: claude 1
+	// Units on a card: claude 2, codex 2 (codex:1 is the opposite's
+	// evidence, codex:2 only one), opencode 2 (since S5c; before, 2, 1, 1):
+	// median 2. Core in both directions or in an opposite: claude 1
 	// (claude:2 is core against codex only), codex 1 (codex:1 is the
 	// opposite's evidence), opencode 1.
-	if c.VisibleOR != 1 || c.VisibleAND != 1 || len(view.comps) != 1 ||
-		!slices.Equal(view.comps[0].visibleOR, []int{2, 1, 1}) || !slices.Equal(view.comps[0].visibleAND, []int{1, 1, 1}) {
+	if c.VisibleOR != 2 || c.VisibleAND != 1 || len(view.comps) != 1 ||
+		!slices.Equal(view.comps[0].visibleOR, []int{2, 2, 2}) || !slices.Equal(view.comps[0].visibleAND, []int{1, 1, 1}) {
 		t.Errorf("visible %v/%v, per answer %v/%v", c.VisibleOR, c.VisibleAND, view.comps[0].visibleOR, view.comps[0].visibleAND)
 	}
 	// clear claims: claude1 (both pairs clear) and opencode1; neither on check.
@@ -252,11 +257,12 @@ func TestMetricsByHand(t *testing.T) {
 	// (1b needs a perturb run): only 1f (median 2 s) passes. Values (COR-9):
 	// 1a shown = differ 0 + check 1; 1c 1/5 clear pairs; 1d 1/6 requests;
 	// 1e core OR (AND is 0.5); 1f the median of the summed attempts (p90
-	// is 5000); 1g the unsure-only check item of three items.
+	// is 5000); 1g the unsure-only check item of five items (of three
+	// before S5c).
 	want := map[string]struct {
 		state string
 		value float64
-	}{"1a": {"fail", 1}, "1b": {"n/a", 0}, "1c": {"fail", 0.2}, "1d": {"fail", 1.0 / 6}, "1e": {"fail", 0.75}, "1f": {"pass", 2000}, "1g": {"fail", 1.0 / 3}}
+	}{"1a": {"fail", 1}, "1b": {"n/a", 0}, "1c": {"fail", 0.2}, "1d": {"fail", 1.0 / 6}, "1e": {"fail", 0.75}, "1f": {"pass", 2000}, "1g": {"fail", 1.0 / 5}}
 	for _, r := range vr.Rules {
 		got := "n/a"
 		if r.Pass != nil {
@@ -272,15 +278,15 @@ func TestMetricsByHand(t *testing.T) {
 
 	// -checks makes the cards again without judging: with noEvidence the
 	// agree item of claude:1 (no evidence) goes to check. Check items:
-	// claude:1 (noEvidence) and claude:2 (unsure only) of three, so rule
-	// 1g is 1/3 while the check rate is 2/3 (COR-4, COR-9).
+	// claude:1 (noEvidence) and claude:2 (unsure only) of five, so rule
+	// 1g is 1/5 while the check rate is 2/5 (COR-4, COR-9).
 	vr2 := makeViewReport(u, u.view(views[0], []string{judge.CheckUnsure, judge.CheckNoEvidence}), cov, 0, 1)
 	c2 := vr2.Cards
-	if c2.States[judge.CardCheck] != 2 || c2.States[judge.CardAgree] != 0 || c2.Items != 3 || c2.CheckItems != 2 || c2.UnsureOnly != 1 ||
-		!near(c2.CheckRate, 2.0/3) || !near(c2.UnsureOnlyShare, 1.0/3) {
+	if c2.States[judge.CardCheck] != 2 || c2.States[judge.CardAgree] != 0 || c2.Items != 5 || c2.CheckItems != 2 || c2.UnsureOnly != 1 ||
+		!near(c2.CheckRate, 2.0/5) || !near(c2.UnsureOnlyShare, 1.0/5) {
 		t.Errorf("with noEvidence: %v, items %d, check %d, unsure only %d", c2.States, c2.Items, c2.CheckItems, c2.UnsureOnly)
 	}
-	if r := vr2.Rules[6]; r.Rule != "1g" || !near(r.Value, 1.0/3) {
+	if r := vr2.Rules[6]; r.Rule != "1g" || !near(r.Value, 1.0/5) {
 		t.Errorf("with noEvidence: rule %s %v", r.Rule, r.Value)
 	}
 	// Clear claims: claude1 is on check now, opencode1 is not.
@@ -290,10 +296,13 @@ func TestMetricsByHand(t *testing.T) {
 
 	// With the product's checks (S6R-1) claude2 is on check for
 	// numberMismatch itself, so the item is no unsure-only one and 1g is 0.
+	// Since S5c codex2, which no judge called core, is shown too, and its
+	// absent against claude fires numbersAbsent (700㎢ against 605㎢): the
+	// opposite it was missed for is on check now, after claude2.
 	vr3 := makeViewReport(u, u.view(views[0], judge.DefaultChecks), cov, 0, 1)
 	n3, c3 := vr3.Natural, vr3.Cards
-	if n3.Check != 1 || n3.Missed != 1 || !slices.Equal(n3.CheckIDs, []string{"1-claude2-codex"}) || !slices.Equal(n3.MissedIDs, []string{"1-codex2-claude"}) ||
-		c3.CheckItems != 1 || c3.UnsureOnly != 0 {
+	if n3.Check != 2 || n3.Missed != 0 || !slices.Equal(n3.CheckIDs, []string{"1-claude2-codex", "1-codex2-claude"}) || len(n3.MissedIDs) != 0 ||
+		c3.CheckItems != 2 || c3.UnsureOnly != 0 {
 		t.Errorf("with DefaultChecks: check %v missed %v, check items %d, unsure only %d", n3.CheckIDs, n3.MissedIDs, c3.CheckItems, c3.UnsureOnly)
 	}
 	var reasons [][]string
@@ -302,8 +311,8 @@ func TestMetricsByHand(t *testing.T) {
 			reasons = append(reasons, it.Check)
 		}
 	}
-	if !reflect.DeepEqual(reasons, [][]string{{judge.CheckNumberMismatch}}) {
-		t.Errorf("with DefaultChecks: check reasons %v, want [[numberMismatch]]", reasons)
+	if !reflect.DeepEqual(reasons, [][]string{{judge.CheckNumberMismatch}, {judge.CheckNumbersAbsent}}) {
+		t.Errorf("with DefaultChecks: check reasons %v, want [[numberMismatch] [numbersAbsent]]", reasons)
 	}
 }
 

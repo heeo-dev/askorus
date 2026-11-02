@@ -7,7 +7,7 @@ import ko from './ko.json';
 // P2-3: every code the comparison screens show has words in both languages.
 test('every card, check, label and comparison error has words', () => {
   const keys = [
-    ...cardKinds.flatMap((k) => [`compare.kind.${k}`, `compare.meaning.${k}`]),
+    ...cardKinds.flatMap((k) => [`compare.kind.${k}`, `compare.short.${k}`]),
     ...checkNames.map((c) => `compare.why.${c}`),
     ...labels.map((l) => `compare.label.${l}`),
     ...compareCodes.map((c) => `compare.error.${c}`),
@@ -58,6 +58,17 @@ test('the app name never names Claude or Anthropic', () => {
   }
 });
 
+// S5c (user decision): the not-official line names no company, the slogan
+// is the same in both languages.
+test('the not-official line is about AI companies, not one of them', () => {
+  expect(ko['app.notOfficial']).toBe('AI 회사의 공식 제품이 아닙니다.');
+  expect(en['app.notOfficial']).toBe('Not an official product of any AI company.');
+  for (const table of [ko, en]) {
+    expect(table['app.notOfficial']).not.toMatch(/claude|anthropic|openai/i);
+    expect(table['app.slogan']).toBe('Ask, assemble.');
+  }
+});
+
 test('Korean phones get Korean, everything else English', () => {
   expect(pickLang('ko')).toBe('ko');
   expect(pickLang('KO')).toBe('ko');
@@ -74,6 +85,9 @@ test('unknown codes from a newer agent still show', () => {
   expect(label('state', 'running')).toBe('Running');
   expect(label('state', 'sleeping')).toBe('sleeping');
   expect(label('badge', 'new-badge')).toBe('new-badge');
+  // An activity shows only when it has words (S5c): waiting for input.
+  expect(label('activity', 'blocked')).toBe('Waiting for input');
+  expect(label('activity', 'busy')).toBe('');
   expect(errorText(new AgentError('brand_new_code', 400))).toBe('Something went wrong (brand_new_code).');
 });
 

@@ -13,6 +13,7 @@
 import { agentName } from '@/api/agents';
 import type {
   AdapterInfo,
+  CardItem,
   CodeError,
   CompareAnswer,
   Comparison,
@@ -140,6 +141,8 @@ export class FakeAgent {
   synthJudged: boolean | undefined = undefined;
   /** How many combined answers were started (each takes one more AI call). */
   synthCalls = 0;
+  /** Changes the items every snapshot carries, for shapes the pretend judging never makes (a side with no numbers, a whole answer). */
+  itemsTweak: ((items: CardItem[]) => CardItem[]) | null = null;
   private synthOn = false;
   private judging: JudgingInfo | null = null;
   private comparisons = new Map<string, FakeComparison>();
@@ -519,7 +522,9 @@ export class FakeAgent {
 
   private snapshot(cmp: FakeComparison): Comparison {
     const all = cmp.requests.length > 0 && cmp.requests.every(ended);
-    const { items, counts } = aggregate(cmp.answers, cmp.requests, cmp.judgments, all);
+    const made = aggregate(cmp.answers, cmp.requests, cmp.judgments, all);
+    const items = this.itemsTweak ? this.itemsTweak(made.items) : made.items;
+    const counts = made.counts;
     const s: Comparison = {
       comparisonId: cmp.id,
       status: cmp.status,

@@ -126,8 +126,11 @@ const unique = (xs: string[]) => xs.filter((x, i) => xs.indexOf(x) === i);
  * aggregate builds the cards from the judgments so far. Differ items come
  * at once (keyed by their first opposite judgment, so the key stays while
  * judges finish); Check this, Agree and Only one only once every request
- * ended (ended). A unit shows when a judgment calls it core or it is in an
- * opposite judgment.
+ * ended (ended). Since S5c (R-44), as the agent does, every unit with a
+ * judgment shows, core or not, and so does a unit in an opposite
+ * judgment. Check this, Agree and Only one visit the units a judge called
+ * core (or in an opposite) first, in reading order, then the others with a
+ * judgment, so the items of the core units keep their keys and come first.
  */
 export function aggregate(
   answers: CompareAnswer[],
@@ -145,7 +148,10 @@ export function aggregate(
     inOpposite.add(j.unit);
     j.evidence.forEach((e) => inOpposite.add(e));
   }
-  const shown = (id: string) => inOpposite.has(id) || of(id).some((j) => j.core);
+  const shown = (id: string) => inOpposite.has(id) || of(id).length > 0;
+  // The order Check this, Agree and Only one visit the units in: core (or in an opposite) first, then the rest.
+  const first = (id: string) => inOpposite.has(id) || of(id).some((j) => j.core);
+  const visit = [...order.filter(first), ...order.filter((id) => !first(id))];
   const answerOf = (id: string) => units.get(id)?.answer.id ?? '';
   const items: CardItem[] = [];
   const placed = new Set<string>();
@@ -187,14 +193,14 @@ export function aggregate(
   if (ended) {
     // Check this: a judge was not sure. A stand-in for the screens: since S6 the agent sends an unsure
     // same or absent here only when its number check fires, and names that check as the reason.
-    for (const id of order) {
+    for (const id of visit) {
       if (placed.has(id) || !shown(id) || !of(id).some((j) => j.unsure)) continue;
       items.push({ key: `c:${id}`, kind: 'check', positions: [{ agents: [answerOf(id)], units: [id] }], check: ['unsure'], missing: [] });
       placed.add(id);
     }
     // Agree: a unit judged the same and the units it is directly tied to.
     const agreeOf = new Map<string, CardItem>();
-    for (const id of order) {
+    for (const id of visit) {
       if (placed.has(id) || !shown(id)) continue;
       const sames = judgments.filter((j) => j.label === 'same' && (j.unit === id || j.evidence.includes(id)));
       if (!sames.length) continue;
@@ -219,7 +225,7 @@ export function aggregate(
       agreeOf.set(id, host);
     }
     // Only one: every judgment says the others do not mention it.
-    for (const id of order) {
+    for (const id of visit) {
       if (placed.has(id) || !shown(id)) continue;
       const js = of(id);
       if (!js.length || !js.every((j) => j.label === 'absent')) continue;

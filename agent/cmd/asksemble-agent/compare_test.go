@@ -240,10 +240,12 @@ func TestCompareWithEveryCard(t *testing.T) {
 		"    ↔ [codex] 가격은 p=2입니다.",
 		"== Agree / 같은 말 (1)",
 		"[claude, codex, opencode] 높이는 h=5입니다. (+2 more / 2개 더)",
-		"== Only one / 한 AI만 (1)",
-		"  - [claude] 색 번호는 c=9입니다.",
+		// OpenCode's "오늘은 맑습니다." has no number, so no judge calls it
+		// core; since S5c it is shown after the core claims.
+		"== Only one / 한 AI만 (2)",
+		"  - [claude] 색 번호는 c=9입니다.\n  - [opencode] 오늘은 맑습니다.",
 		"== Judged by / 판정한 AI (6)",
-		"differ 1 · check this 0 · agree 1 · only one 1",
+		"differ 1 · check this 0 · agree 1 · only one 2",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("output lacks %q:\n%s", want, got)

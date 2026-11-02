@@ -1,4 +1,4 @@
-import { type Lang, currentLang, t } from '@/i18n';
+import { type Lang, currentLang, label, t } from '@/i18n';
 
 /**
  * ago turns a time into "3분 전" / "3 min ago". Hermes has no
@@ -31,4 +31,21 @@ export function folderName(path: string | undefined): string {
 /** sessionTitle picks the best words to name a session in a list. */
 export function sessionTitle(s: { title?: string; name?: string; lastPrompt?: string }): string {
   return s.title || s.name || s.lastPrompt || t('session.untitled');
+}
+
+export type SessionStatus = {
+  /** The dot: waiting for input (apricot), running (green), or a ring for every other state. */
+  kind: 'waiting' | 'running' | 'stopped';
+  /** What the row and the sheet say: 입력 기다림, or the state in words. */
+  text: string;
+};
+
+/**
+ * sessionStatus is how a session's state shows in 내 PC (S5c, F-PC): a
+ * session waiting for input (the agent's activity 'blocked') says so first,
+ * whatever its state; a running one is green; the rest get a ring.
+ */
+export function sessionStatus(s: { state: string; activity?: string }): SessionStatus {
+  if (s.activity === 'blocked') return { kind: 'waiting', text: label('activity', 'blocked') };
+  return { kind: s.state === 'running' ? 'running' : 'stopped', text: label('state', s.state) };
 }

@@ -456,6 +456,14 @@ func TestValidateSynth(t *testing.T) {
 		{"Here it is: {\"answer\":\"x\"} done", "x"},
 		{`{"answer":"escaped key"}`, "escaped key"},
 		{`{ "answer" : "a { brace } and \"quote\"" }`, `a { brace } and "quote"`},
+		// R-45: the object JSON-encoded inside the answer is unwrapped, once.
+		{`{"answer":"{\"answer\":\"**Seoul:** 9.4 million.\\n\\nLotte: 555 m.\"}"}`, "**Seoul:** 9.4 million.\n\nLotte: 555 m."},
+		{`{"answer":" \n {\"answer\":\"  inner  \"} \n"}`, "inner"},
+		{`{"answer":"{\"answer\":\"{\\\"answer\\\":\\\"twice\\\"}\"}"}`, `{"answer":"twice"}`},
+		// Only that exact shape: other JSON in the answer stays text.
+		{`{"answer":"{\"answer\":\"a\",\"x\":1}"}`, `{"answer":"a","x":1}`},
+		{`{"answer":"{\"answer\":\"a\"} and more"}`, `{"answer":"a"} and more`},
+		{`{"answer":"{\"text\":\"a\"}"}`, `{"text":"a"}`},
 	}
 	for _, c := range ok {
 		got, err := ValidateSynth([]byte(c.out))
@@ -482,6 +490,9 @@ func TestValidateSynth(t *testing.T) {
 		{`{"answer":"  \n "}`, synthMsgEmpty},
 		{`{"answer":""}`, synthMsgEmpty},
 		{`{"answer":"a\u0000b"}`, synthMsgNUL},
+		// What was inside a double-encoded answer meets the same checks (R-45).
+		{`{"answer":"{\"answer\":\" \"}"}`, synthMsgEmpty},
+		{`{"answer":"{\"answer\":\"a\\u0000b\"}"}`, synthMsgNUL},
 		{`{"answer":"` + strings.Repeat("y", MaxSynthTextBytes+1) + `"}`, synthMsgTextSize},
 		{`{"answer":"` + strings.Repeat("y", MaxOutputBytes) + `"}`, synthMsgTooLong},
 	}

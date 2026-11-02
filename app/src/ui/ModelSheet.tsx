@@ -1,13 +1,20 @@
-// The sheet a long-pressed AI chip opens (P2-2): answer by tier, or always
-// with one of the models the PC uses for that AI's tiers.
+// Which model one AI answers with (P2-2, restyled in S5c): by tier (the
+// models the PC uses for that AI's tiers, listed under it), or always one
+// of those models. Opened from the AI picker. Models show without their
+// variant or provider (R-39); when two would then read the same, the full
+// name is under them.
 
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { agentName } from '@/api/agents';
 import { tiers } from '@/api/types';
+import { displayModel } from '@/ask/present';
 import { t } from '@/i18n';
 
-import { type Theme, useTheme } from './theme';
+import { Icon } from './Icon';
+import { Group, Row } from './List';
+import { Sheet } from './Sheet';
+import { themed, useTheme } from './theme';
 
 export function ModelSheet({
   agent,
@@ -27,52 +34,44 @@ export function ModelSheet({
   if (!agent) return null;
   const byTier = tiers
     .filter((x) => tierModels[x])
-    .map((x) => `${t(`ask.tier.${x}`)} ${tierModels[x].model}`)
+    .map((x) => `${t(`ask.tier.${x}`)} ${displayModel(tierModels[x].model)}`)
     .join(' · ');
   const models = [...new Set(tiers.map((x) => tierModels[x]?.model).filter((m): m is string => !!m))];
   if (value && !models.includes(value)) models.push(value);
-  const row = (model: string, text: string, sub?: string) => {
+  const shown = models.map(displayModel);
+  const row = (model: string, title: string, subtitle?: string) => {
     const on = model === value;
     return (
-      <Pressable
+      <Row
         key={model || '-'}
+        title={title}
+        subtitle={subtitle || undefined}
         onPress={() => onPick(model)}
-        style={({ pressed }) => [s.row, on && s.rowOn, pressed && s.pressed]}
         accessibilityRole="radio"
+        accessibilityLabel={title}
         accessibilityState={{ checked: on }}
-        accessibilityLabel={text}
-      >
-        <Text style={[s.rowText, on && s.rowTextOn]}>{text}</Text>
-        {sub ? <Text style={s.sub}>{sub}</Text> : null}
-      </Pressable>
+        accessibilityValue={{ text: subtitle ?? '' }}
+        titleStyle={on ? s.on : undefined}
+        right={on ? <Icon name="check" size={18} color={th.accent} /> : <View style={s.space} />}
+      />
     );
   };
   return (
-    <Modal transparent animationType="slide" visible onRequestClose={onClose}>
-      <Pressable style={s.backdrop} onPress={onClose} accessibilityLabel={t('sheet.close')} />
-      <View style={s.sheet}>
-        <Text style={s.title}>{t('ask.modelTitle', { name: agentName(agent) })}</Text>
-        {row('', t('ask.byTier'), byTier)}
-        {models.map((m) => row(m, m))}
-        <Pressable onPress={onClose} style={s.close} accessibilityRole="button">
-          <Text style={s.closeText}>{t('sheet.close')}</Text>
-        </Pressable>
+    <Sheet open onClose={onClose} title={t('ask.modelTitle', { name: agentName(agent) })} testID="model-sheet">
+      <View style={s.body}>
+        <Group>
+          {row('', t('ask.byTier'), byTier)}
+          {models.map((m, i) => row(m, shown[i], shown.indexOf(shown[i]) !== shown.lastIndexOf(shown[i]) ? m : undefined))}
+        </Group>
       </View>
-    </Modal>
+    </Sheet>
   );
 }
 
-const styles = (th: Theme) =>
+const styles = themed((th) =>
   StyleSheet.create({
-    backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)' },
-    sheet: { backgroundColor: th.card, padding: 20, gap: 8, borderTopLeftRadius: 16, borderTopRightRadius: 16 },
-    title: { color: th.text, fontSize: 17, fontWeight: '700', marginBottom: 4 },
-    row: { borderColor: th.border, borderWidth: 1, borderRadius: 10, padding: 12, gap: 2 },
-    rowOn: { borderColor: th.accent, backgroundColor: th.bg },
-    rowText: { color: th.text, fontSize: 15 },
-    rowTextOn: { color: th.accent, fontWeight: '700' },
-    sub: { color: th.muted, fontSize: 12 },
-    pressed: { opacity: 0.7 },
-    close: { alignItems: 'center', paddingVertical: 12 },
-    closeText: { color: th.accent, fontSize: 16, fontWeight: '600' },
-  });
+    body: { paddingTop: 6, paddingHorizontal: 16, paddingBottom: 8 },
+    on: { fontWeight: '600', color: th.text },
+    space: { width: 18 },
+  }),
+);

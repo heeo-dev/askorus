@@ -1,8 +1,13 @@
 // Jest setup for screen tests: native modules the screens touch are
 // replaced with small in-memory stand-ins. Each test file still mocks
-// `fetch` itself (see fakeAgent.ts).
+// `fetch` itself (see fakeAgent.ts). The app's in-memory stores (S5c: this
+// run's conversations, the paired PCs and their status) start empty in
+// every test, as the secure store does.
 
+import { conversations } from '@/ask/conversations';
 import { setLang } from '@/i18n';
+import { resetPCs } from '@/ui/shell/pcs';
+import { resetPCStatus } from '@/ui/shell/pcStatus';
 
 const mockSecure = new Map<string, string>();
 
@@ -16,7 +21,10 @@ jest.mock('expo-crypto', () => ({ randomUUID: () => require('node:crypto').rando
 
 jest.mock('expo-device', () => ({ deviceName: 'Test Phone', modelName: 'SM-TEST' }));
 
-jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn(async () => true) }));
+jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn(async () => true), getStringAsync: jest.fn(async () => '') }));
+
+// The theme sets the window's background (S5c); tests can read what it set.
+jest.mock('expo-system-ui', () => ({ setBackgroundColorAsync: jest.fn(async () => undefined), getBackgroundColorAsync: jest.fn(async () => null) }));
 
 jest.mock('expo-camera', () => ({
   CameraView: () => null,
@@ -34,4 +42,9 @@ jest.mock('react-native-webview', () => {
 
 setLang('en');
 
-beforeEach(() => mockSecure.clear());
+beforeEach(() => {
+  mockSecure.clear();
+  conversations.clear();
+  resetPCs();
+  resetPCStatus();
+});

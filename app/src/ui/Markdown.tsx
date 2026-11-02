@@ -477,8 +477,13 @@ const mathBudget = { count: 40, chars: 12_000 };
 
 type Ctx = { s: ReturnType<typeof styles>; notes: Map<string, number>; depth: number; math: { count: number; chars: number } };
 
-export function Markdown({ text }: { text: string }) {
-  const s = styles(useTheme());
+/**
+ * Markdown draws an answer. size 'synth' is the combined answer's larger
+ * reading size (16/26, F-Result-Expanded); 'body' (15/22) everything else.
+ */
+export function Markdown({ text, size = 'body' }: { text: string; size?: 'body' | 'synth' }) {
+  const th = useTheme();
+  const s = useMemo(() => styles(th, size), [th, size]);
   return (
     <AsText text={text} style={s.body}>
       <Drawn text={text} s={s} />
@@ -831,10 +836,10 @@ function inline(tokens: Token[] | undefined, c: Ctx, depth = 0): ReactNode[] {
   });
 }
 
-const styles = (th: Theme) =>
+const styles = (th: Theme, size: 'body' | 'synth' = 'body') =>
   StyleSheet.create({
-    root: { gap: 8 },
-    body: { color: th.text, fontSize: 15, lineHeight: 22 },
+    root: { gap: size === 'synth' ? 10 : 8 },
+    body: size === 'synth' ? { color: th.text, fontSize: 16, lineHeight: 26 } : { color: th.text, fontSize: 15, lineHeight: 22 },
     heading: { fontWeight: '700', marginTop: 2 },
     h1: { fontSize: 18, lineHeight: 25 },
     h3: { fontSize: 16 },

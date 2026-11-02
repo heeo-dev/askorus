@@ -1,11 +1,13 @@
 # E2E-05: keep rc-test open (the PC starts a folder server), then close it.
 # Only a running server shows "Open · n/m sessions", so that text tells the
-# state of rc-test apart from the other folders' "Off".
+# state of rc-test apart from the other folders' "Off". Since S5c My PC
+# leads to the folders screen by its "Keep folders open" row, and each
+# folder is a switch row named "Keep <folder> open".
 appId: host.exp.exponent
 ---
 - runFlow: 01-home-and-list.yaml
 - tapOn:
-    text: "Folders"
+    text: "Keep folders open"
     waitToSettleTimeoutMs: 300
 - extendedWaitUntil:
     visible: "Keep rc-test open"

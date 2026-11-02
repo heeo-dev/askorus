@@ -9,6 +9,7 @@ import { createOnShouldStartLoadWithRequest } from 'react-native-webview/lib/Web
 
 import { katexFonts, katexVersion } from './katex-style';
 import { MathBlock, allowLoad, drawable } from './MathBlock';
+import { palettes } from './theme';
 
 const quadratic = 'x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}';
 
@@ -30,7 +31,7 @@ test('KaTeX draws the quadratic formula into a page that loads nothing', async (
   expect(html).toContain("default-src 'none'; style-src 'unsafe-inline'; font-src data:; script-src 'unsafe-inline'; img-src data:");
   expect(html).not.toMatch(/https?:|file:/i);
   for (const m of html.matchAll(/url\(([^)]*)\)/g)) expect(m[1]).toMatch(/^data:font\/woff2;base64,/);
-  expect(html).toContain('color:#1d1d1b'); // the theme's text colour
+  expect(html).toContain(`color:${palettes.light.text}`); // the theme's text colour
   expect(html).toContain(`font-size:${15 * Dimensions.get('window').fontScale}px`); // body text, scaled like the app's
   expect(screen.getByTestId('math-webview').props.source.baseUrl).toBe('about:blank');
 });

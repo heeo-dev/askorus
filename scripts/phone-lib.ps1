@@ -61,11 +61,18 @@ function Invoke-AgentDevice {
 }
 
 # Wakes the phone and takes the swipe lock off. False if it stays locked
-# (a PIN or pattern lock: set the screen lock to None or Swipe).
+# (a PIN or pattern lock: set the screen lock to None or Swipe). The lock
+# takes a moment to go after dismiss-keyguard, so it reads the state up to
+# 6 times 500 ms apart and is true on the first read without the lock
+# (S5c phone check 7: one read right away said locked, R-43).
 function Wake-Phone {
   Adb shell input keyevent KEYCODE_WAKEUP
   Adb shell wm dismiss-keyguard
-  return -not (((Adb shell dumpsys window) -join "`n") -match 'isKeyguardShowing=true')
+  for ($i = 0; $i -lt 6; $i++) {
+    Start-Sleep -Milliseconds 500
+    if (-not (((Adb shell dumpsys window) -join "`n") -match 'isKeyguardShowing=true')) { return $true }
+  }
+  return $false
 }
 
 # Only one tool at a time can read the screen (Android's UiAutomation).

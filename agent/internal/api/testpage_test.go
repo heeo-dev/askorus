@@ -55,3 +55,45 @@ func TestTestPage(t *testing.T) {
 		t.Errorf("preflight = %d", w.Code)
 	}
 }
+
+// S5c: the test page carries the brand lightly (mark B, the wordmark and
+// apricot buttons, light and dark) under the same CSP, which has no
+// 'unsafe-inline' style and no images: so no style attribute, no style
+// element and no img. Its not-official line names no company.
+func TestTestPageBrand(t *testing.T) {
+	e := newEnv(t, fakeAdapter{}, func(o *Options) { o.TestPage = true })
+	const csp = "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; form-action 'none'; frame-ancestors 'none'; base-uri 'none'"
+	page := e.do("GET", "/test/", map[string]string{"Authorization": ""})
+	css := e.do("GET", "/test/style.css", map[string]string{"Authorization": ""})
+	if page.Code != 200 || css.Code != 200 {
+		t.Fatalf("page %d, style %d", page.Code, css.Code)
+	}
+	for _, w := range []string{page.Header().Get("Content-Security-Policy"), css.Header().Get("Content-Security-Policy")} {
+		if w != csp {
+			t.Errorf("CSP = %q, want %q", w, csp)
+		}
+	}
+	html := page.Body.String()
+	for _, bad := range []string{"style=", "<style", "<img", "Anthropic의 공식", "Anthropic"} {
+		if strings.Contains(html, bad) {
+			t.Errorf("index.html holds %q", bad)
+		}
+	}
+	for _, want := range []string{
+		"AI 회사의 공식 제품이 아닙니다.",
+		`<svg class="mark" width="32" height="32" viewBox="0 0 100 100" aria-hidden="true"`,
+		`<path d="M28 59.5L27 73L40 65.5Z" fill="#2A1408"/>`, // the bubble's tail: icon B
+		`<span class="ask">Ask</span><span class="semble">semble</span>`,
+		`aria-label="Asksemble 시험 페이지"`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Errorf("index.html lacks %q", want)
+		}
+	}
+	style := css.Body.String()
+	for _, want := range []string{"#FFAD85", "#2A1408", "#DD5A26", "#151618", "#FCFAF8", "@media (prefers-color-scheme: dark)", "font-weight: 800; letter-spacing: -0.025em", "border-radius: 22px"} {
+		if !strings.Contains(style, want) {
+			t.Errorf("style.css lacks %q", want)
+		}
+	}
+}

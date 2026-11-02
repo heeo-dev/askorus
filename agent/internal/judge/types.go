@@ -91,7 +91,7 @@ const (
 
 // Unit states (UnitState.State) besides the card kinds.
 const (
-	StateHidden      = "hidden"      // compared, but no judge called it core and it is in no opposite
+	StateHidden      = "hidden"      // before S5c: compared, but no judge called it core and it is in no opposite. Aggregate no longer gives it (every judged unit is shown); kept so the value keeps its meaning
 	StateNotCompared = "notCompared" // no usable judgment, because its requests failed
 	StateNotJudged   = "notJudged"   // after the first maxUnits units of its answer (agent.json judge.maxUnits)
 	StateWaiting     = "waiting"     // its card waits until every request has ended
@@ -339,7 +339,7 @@ type Summary struct {
 // each labelled claim became.
 type UnitState struct {
 	Unit  string `json:"unit"`
-	State string `json:"state"`          // a card kind, or StateHidden, StateNotCompared, StateNotJudged or StateWaiting
+	State string `json:"state"`          // a card kind, or StateNotCompared, StateNotJudged or StateWaiting (StateHidden only before S5c)
 	Item  string `json:"item,omitempty"` // the key of the item that shows it
 }
 

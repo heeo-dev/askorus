@@ -1,6 +1,8 @@
-# Opens the app from the dev server in Expo Go on its home screen. The home
-# link (with a query, or Expo Go treats it as the plain link and keeps the
-# screen the last flow left) starts the app or brings a running one home.
+# Opens the app from the dev server in Expo Go on its home screen (All at
+# once since S5c; "My PCs" is the other half of its header switch, so it
+# shows on both entrances). The home link (with a query, or Expo Go treats
+# it as the plain link and keeps the screen the last flow left) starts the
+# app or brings a running one home.
 # Expo Go shows its developer menu on the first open; it is closed here.
 appId: host.exp.exponent
 ---

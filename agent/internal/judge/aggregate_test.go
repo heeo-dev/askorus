@@ -231,13 +231,14 @@ func aggCheck(t testing.TB, in AggregateInput, s Summary) {
 			t.Errorf("unit %s: item %s it is not on", st.Unit, st.Item)
 		}
 		switch st.State {
-		case StateHidden, StateNotCompared:
+		case StateNotCompared:
 			if !in.Ended {
 				t.Errorf("unit %s is %s before the end", st.Unit, st.State)
 			}
-			if st.State == StateNotCompared {
-				counts.NotCompared++
-			}
+			counts.NotCompared++
+		case StateHidden:
+			// S5c: every judged unit is shown, core or not.
+			t.Errorf("unit %s is hidden", st.Unit)
 		case StateNotJudged:
 			counts.NotJudged++
 			if judged[st.Unit] {
@@ -254,6 +255,8 @@ func aggCheck(t testing.TB, in AggregateInput, s Summary) {
 	if s.Counts != counts {
 		t.Errorf("counts = %+v, want %+v", s.Counts, counts)
 	}
+	// Shown: every unit with a usable judgment, core or not (S5c), and the
+	// evidence of an opposite.
 	shown := map[string]bool{}
 	opposed := map[string]bool{}
 	has := map[string]bool{}
@@ -274,10 +277,7 @@ func aggCheck(t testing.TB, in AggregateInput, s Summary) {
 		if answerOf[j.Unit] == j.Against || !judged[j.Unit] {
 			t.Errorf("judgment %+v should have been left out", j)
 		}
-		has[j.Unit] = true
-		if j.Core {
-			shown[j.Unit] = true
-		}
+		has[j.Unit], shown[j.Unit] = true, true
 		if j.Label == LabelOpposite {
 			opposed[j.Unit], shown[j.Unit] = true, true
 			for _, e := range j.Evidence {
@@ -406,14 +406,15 @@ func TestAggregateCards(t *testing.T) {
 			states: map[string]string{"codex:1": "differ d:claude:1~codex:1"},
 		},
 		{
-			name:    "an opposite no judge called core is shown",
+			// Before S5c claude:2 was hidden, as no judge called it core.
+			name:    "an opposite no judge called core is shown, and so is a same",
 			answers: duo,
 			judgments: []Judgment{
 				aggNotCore(aggJ("claude:1", "codex", LabelOpposite, "codex:2")),
 				aggNotCore(aggJ("claude:2", "codex", LabelSame, "codex:1")),
 			},
-			want:   []string{"d:claude:1~codex:2 [claude: claude:1] <> [codex: codex:2]"},
-			states: map[string]string{"claude:2": StateHidden},
+			want:   []string{"d:claude:1~codex:2 [claude: claude:1] <> [codex: codex:2]", "a:claude:2 [claude codex: claude:2 codex:1]"},
+			states: map[string]string{"claude:2": "agree a:claude:2", "codex:1": "agree a:claude:2"},
 		},
 		{
 			name:    "mirrored opposites are one item",
@@ -706,6 +707,256 @@ func TestAggregateUnsureRule(t *testing.T) {
 	}
 	if !slices.Equal(DefaultChecks, []string{CheckUnsure, CheckNumberMismatch, CheckNumbersAbsent}) {
 		t.Errorf("DefaultChecks = %v", DefaultChecks)
+	}
+}
+
+// S5c (11-02, phone check ①): the cards hold every judged claim, not only
+// those a judge called core. The phone showed 같은 말 0 and 한 AI만 0 while
+// the combined answer listed three claims the AIs agreed on and six only one
+// AI made. The units no judge called core get their cards after the core
+// ones, so a core item never changes. Every case fails with the core gate
+// of before S5c.
+func TestAggregateNonCore(t *testing.T) {
+	trio := aggPlain(3, "claude", "codex", "opencode")
+	duo := aggPlain(3, "claude", "codex")
+	numbers := []Answer{
+		aggAns("claude", "서울 인구는 약 970만 명 안팎입니다.", "커피는 하루 3잔이면 충분합니다.", "Plain."),
+		aggAns("codex", "서울 인구는 약 956만 명입니다.", "커피는 하루 5잔까지 마셔도 됩니다.", "Plain too."),
+	}
+	for _, c := range []struct {
+		name      string
+		answers   []Answer
+		judgments []Judgment
+		want      []string
+		states    map[string]string
+	}{
+		{
+			// claude:1 has more AIs and comes first, but no judge called it core.
+			name:    "a same no judge called core is 같은 말, after the core items",
+			answers: trio,
+			judgments: []Judgment{
+				aggJ("claude:2", "codex", LabelSame, "codex:2"),
+				aggJ("claude:2", "opencode", LabelAbsent),
+				aggNotCore(aggJ("claude:1", "codex", LabelSame, "codex:1")),
+				aggNotCore(aggJ("claude:1", "opencode", LabelSame, "opencode:1")),
+			},
+			want: []string{
+				"a:claude:2 [claude codex: claude:2 codex:2]",
+				"a:claude:1 [claude codex opencode: claude:1 codex:1 opencode:1]",
+			},
+		},
+		{
+			name:    "an absent no judge called core is 한 AI만, after the core items",
+			answers: duo,
+			judgments: []Judgment{
+				aggNotCore(aggJ("claude:1", "codex", LabelAbsent)),
+				aggJ("codex:3", "claude", LabelAbsent),
+				aggNotCore(aggJ("claude:3", "codex", LabelAbsent)),
+			},
+			want:   []string{"o:codex:3 [codex: codex:3]", "o:claude:1 [claude: claude:1]", "o:claude:3 [claude: claude:3]"},
+			states: map[string]string{"claude:2": StateNotCompared},
+		},
+		{
+			// The number checks count on units no judge called core too: a
+			// same whose numbers do not fit never hides under 같은 말.
+			name:    "a check on a unit no judge called core is 확인 필요, not 같은 말",
+			answers: numbers,
+			judgments: []Judgment{
+				aggNotCore(aggJ("claude:1", "codex", LabelSame, "codex:1")),
+				aggNotCore(aggJ("codex:1", "claude", LabelSame, "claude:1")),
+				aggNotCore(aggJ("claude:2", "codex", LabelAbsent)),
+				aggJ("claude:3", "codex", LabelUnclear),
+			},
+			want: []string{
+				"c:claude:3 [claude: claude:3] check=unsure",
+				"c:claude:1 [claude: claude:1] check=numberMismatch",
+				"c:claude:2 [claude: claude:2] check=numbersAbsent",
+				"c:codex:1 [codex: codex:1] check=numberMismatch",
+			},
+		},
+		{
+			// codex:1 had its 한 AI만 item before S5c, and keeps it: the core
+			// units have their cards before claude:1 is looked at. Taking
+			// codex:1 into claude:1's item would make the core item go.
+			name:    "a core unit keeps its card when a unit no judge called core says the same as it",
+			answers: duo,
+			judgments: []Judgment{
+				aggJ("codex:1", "claude", LabelAbsent),
+				aggNotCore(aggJ("claude:1", "codex", LabelSame, "codex:1")),
+			},
+			want:   []string{"a:claude:1 [claude codex: claude:1]", "o:codex:1 [codex: codex:1]"},
+			states: map[string]string{"codex:1": "onlyOne o:codex:1"},
+		},
+		{
+			// As before S5c: a unit no judge called core joins a core
+			// representative it is linked to.
+			name:    "a unit no judge called core joins a core item",
+			answers: duo,
+			judgments: []Judgment{
+				aggJ("claude:1", "codex", LabelSame, "codex:1"),
+				aggNotCore(aggJ("codex:1", "claude", LabelAbsent)),
+			},
+			want: []string{"a:claude:1 [claude codex: claude:1 codex:1]"},
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			in := AggregateInput{Answers: c.answers, Requests: aggRequests(c.answers, RequestDone), Judgments: c.judgments, Checks: DefaultChecks, Ended: true}
+			s := aggRun(t, in)
+			if got := aggDump(s); !slices.Equal(got, c.want) {
+				t.Errorf("items:\n got %q\nwant %q", got, c.want)
+			}
+			states := aggStates(s)
+			for u, want := range c.states {
+				if states[u] != want {
+					t.Errorf("unit %s = %q, want %q", u, states[u], want)
+				}
+			}
+			// Before every request has ended only 다른 말 is made, as before.
+			in.Ended = false
+			for _, st := range aggRun(t, in).Units {
+				if st.State != StateWaiting {
+					t.Errorf("before the end: unit %s = %q", st.Unit, st.State)
+				}
+			}
+		})
+	}
+}
+
+// aggCoreOnly is Aggregate with the core gate of before S5c: besides 다른
+// 말, only the units some judge called core get a card, and the others are
+// StateHidden.
+func aggCoreOnly(in AggregateInput) Summary {
+	a := aggNew(in)
+	a.judgments()
+	a.differ()
+	if in.Ended {
+		a.check(true)
+		a.agree(true)
+		a.onlyOne(true)
+	}
+	a.keepKeys(in.Prev)
+	return a.summary()
+}
+
+// aggByCard are the items of each card, in order.
+func aggByCard(items []Item) map[string][]Item {
+	out := map[string][]Item{}
+	for _, it := range items {
+		out[it.Kind] = append(out[it.Kind], it)
+	}
+	return out
+}
+
+// aggSameStart reports how the items of each card of before (keys, sides,
+// checks, missing) differ from the first items of that card of after: ""
+// when after only adds items at the end of its cards.
+func aggSameStart(before, after []Item) string {
+	b, a := aggByCard(before), aggByCard(after)
+	for _, kind := range CardOrder {
+		if len(a[kind]) < len(b[kind]) || len(b[kind]) > 0 && !reflect.DeepEqual(a[kind][:len(b[kind])], b[kind]) {
+			return fmt.Sprintf("%s: before %q, after %q", kind, aggDump(Summary{Items: b[kind]}), aggDump(Summary{Items: a[kind]}))
+		}
+	}
+	return ""
+}
+
+// Judgments of units no judge called core leave every core item as it was:
+// adding them to a comparison only adds items at the end of the cards.
+func TestAggregateNonCoreKeepsCoreItems(t *testing.T) {
+	ids := []string{"claude", "codex", "opencode"}
+	// Units 1–3 plain, as aggRandom judges them; units 4–6 partly with
+	// numbers, so the number checks fire on the added judgments.
+	texts := []string{"서울 인구는 약 970만 명 안팎입니다.", "Plain words.", "커피는 하루 3잔이면 충분합니다.", "약 956만 명입니다.", "More words.", "커피는 하루 5잔까지 마셔도 됩니다."}
+	var answers []Answer
+	for x, id := range ids {
+		a := aggPlain(3, id)[0]
+		for k := range 3 {
+			n := len(a.Units) + 1
+			a.Units = append(a.Units, Unit{ID: fmt.Sprintf("%s:%d", id, n), N: n, Kind: UnitSentence, Text: texts[(x+k*2)%len(texts)], Judged: true})
+		}
+		answers = append(answers, a)
+	}
+	rng := rand.New(rand.NewPCG(13, 17))
+	added, tagged := 0, 0
+	for c := range 500 {
+		_, base := aggRandom(rng, ids...)
+		var extra []Judgment
+		for range 1 + rng.IntN(8) {
+			x := rng.IntN(len(ids))
+			y := (x + 1 + rng.IntN(len(ids)-1)) % len(ids)
+			u, v := fmt.Sprintf("%s:%d", ids[x], 4+rng.IntN(3)), fmt.Sprintf("%s:%d", ids[y], 4+rng.IntN(3))
+			var j Judgment
+			switch rng.IntN(4) {
+			case 0, 1:
+				j = aggJ(u, ids[y], LabelSame, v)
+			case 2:
+				j = aggJ(u, ids[y], LabelSame)
+			default:
+				j = aggJ(u, ids[y], LabelAbsent)
+			}
+			j.Unsure = rng.IntN(3) == 0
+			extra = append(extra, aggNotCore(j))
+		}
+		in := AggregateInput{Answers: answers, Requests: aggRequests(answers, RequestDone), Judgments: base, Checks: DefaultChecks, Ended: true}
+		without := aggRun(t, in)
+		in.Judgments = append(slices.Clone(base), extra...)
+		with := aggRun(t, in)
+		if d := aggSameStart(without.Items, with.Items); d != "" {
+			t.Fatalf("comparison %d: adding %d judgments of units no judge called core changed a core item: %s", c, len(extra), d)
+		}
+		states := aggStates(with)
+		for _, j := range extra {
+			if !strings.Contains(states[j.Unit], ":") {
+				t.Fatalf("comparison %d: %s is on no card (%s)", c, j.Unit, states[j.Unit])
+			}
+			if strings.HasPrefix(states[j.Unit], CardCheck) {
+				tagged++
+			}
+		}
+		added += len(with.Items) - len(without.Items)
+	}
+	if added < 1000 || tagged < 100 {
+		t.Errorf("only %d items added, %d units on 확인 필요", added, tagged)
+	}
+}
+
+// Whatever the judgments, the items Aggregate makes start with the items of
+// the core gate of before S5c, each card for itself, and the items after
+// them stand for units no judge called core.
+func TestAggregateCoreItemsAsBefore(t *testing.T) {
+	rng := rand.New(rand.NewPCG(19, 23))
+	extra := 0
+	for c := range 1000 {
+		answers, js := aggRandom(rng, "claude", "codex", "opencode")
+		for i := range js {
+			js[i].Core = rng.IntN(2) == 0
+			js[i].Unsure = rng.IntN(5) == 0
+		}
+		in := AggregateInput{Answers: answers, Requests: aggRequests(answers, RequestDone), Judgments: js, Checks: DefaultChecks, Ended: true}
+		s, old := aggRun(t, in), aggCoreOnly(in)
+		if d := aggSameStart(old.Items, s.Items); d != "" {
+			t.Fatalf("comparison %d: %s", c, d)
+		}
+		core := map[string]bool{}
+		for _, j := range js {
+			core[j.Unit] = core[j.Unit] || j.Core
+		}
+		was := map[string]bool{}
+		for _, it := range old.Items {
+			was[it.Key] = true
+		}
+		for _, it := range s.Items {
+			if was[it.Key] {
+				continue
+			}
+			extra++
+			if rep := it.Positions[0].Units[0]; it.Kind == CardDiffer || core[rep] {
+				t.Fatalf("comparison %d: new item %q", c, aggDump(Summary{Items: []Item{it}}))
+			}
+		}
+	}
+	if extra < 300 {
+		t.Errorf("only %d items of units no judge called core", extra)
 	}
 }
 

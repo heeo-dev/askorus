@@ -14,6 +14,15 @@ package judge
 //     unit of Y, in either direction);
 //   - a same judgment with evidence links u to each evidence unit.
 //
+// A unit is shown when it has a usable judgment or is in an opposite
+// judgment. Since S5c (the 11-01 phone check ①) that holds whether or not a
+// judge called it core: the cards hold every judged claim, as the combined
+// answer does. Core still orders the cards: steps 2–4 run first for the
+// units some judge called core, exactly as they did when only those were
+// shown, and then for the other judged units, which take only what is left.
+// So the items of core units keep their keys, representatives and members,
+// and the other units' items come after them on each card.
+//
 // The cards are made in this order, and a unit is on one item at most:
 //  1. 다른 말: each connected group of opposite links is one item. Each
 //     answer in the group starts on a side of its own, and a same link
@@ -34,7 +43,9 @@ package judge
 //     an item, and only units linked to it directly join (no chaining): the
 //     first evidence unit of each of its same judgments, and units whose
 //     same judgment against its answer cites it. A unit with an enabled
-//     check never joins.
+//     check never joins. A unit no judge called core may join an item of a
+//     core unit, as before S5c; a core unit never joins one of the others,
+//     as every core unit has its card before they are made.
 //  4. 한 AI만: the shown units left, whose judgments all say absent.
 //
 // Before every request has ended only 다른 말 is made, from the opposite
@@ -67,9 +78,11 @@ import (
 // or absent one only when its number check (numberMismatch, numbersAbsent)
 // fired and is not enabled itself (S6, see counts).
 //
-// A unit is shown when any judge called it core or it is in an opposite
-// judgment, as the judged unit or as evidence. The cards do not overlap
-// and are made in this order:
+// A unit is shown when it has a usable judgment or is in an opposite
+// judgment, as the judged unit or as evidence, whether or not a judge
+// called it core (S5c). The cards do not overlap and are made in this
+// order, check, agree and onlyOne first for the units some judge called
+// core and then for the others (see the file comment):
 //   - differ: each connected group of opposite edges (a unit to each of
 //     its evidence units, or to the whole other answer when there is none)
 //     is one item. Units joined by same with evidence stand on one side,
@@ -86,9 +99,10 @@ import (
 //   - onlyOne: every usable judgment is absent, unsure ones too unless
 //     numbersAbsent fired (or unclear, when unsure is not enabled).
 //
-// Items come in CardOrder: differ items by their first unit, agree items
-// with more AIs first, the others in reading order. A side lists its
-// representative first.
+// Items come in CardOrder: differ items by their first unit; on check,
+// agree and onlyOne the items of core units first, then those of the other
+// units, and within each, agree items with more AIs first, the others in
+// reading order. A side lists its representative first.
 //
 // Missing names the answers, not on the item, that its units could not be
 // compared with because their requests failed or returned nothing for
@@ -96,7 +110,8 @@ import (
 // representative of any other. Units with no usable judgment are
 // notCompared and never go to the check card; units after the cap are
 // notJudged. Differ items are made as soon as they appear; the other cards
-// only once in.Ended.
+// only once in.Ended, and then every unit with a usable judgment is on a
+// card (StateHidden no longer comes out).
 //
 // Keys: "d:" and the group's first opposite judgment, in the order
 // judgments came: its unit and first evidence unit ("d:claude:3~codex:2"),
@@ -114,9 +129,14 @@ func Aggregate(in AggregateInput) Summary {
 	a.judgments()
 	a.differ()
 	if in.Ended {
-		a.check()
-		a.agree()
-		a.onlyOne()
+		// The units some judge called core first, exactly as when only they
+		// were shown; then the others, which take only what is left.
+		for _, core := range []bool{true, false} {
+			a.check(core)
+			a.agree(core)
+			a.onlyOne(core)
+		}
+		a.byCard()
 	}
 	a.keepKeys(in.Prev)
 	return a.summary()
@@ -809,10 +829,17 @@ func (a *aggState) pairEnded(x, y int) bool {
 	return len(st) > 0
 }
 
-// core reports whether any judge called unit u core: then it is shown,
-// unless an opposite has already put it on a 다른 말 item.
+// core reports whether any judge called unit u core. Since S5c it no longer
+// decides whether u is shown, only when its card is made: with the core
+// units, or after them.
 func (a *aggState) core(u int) bool {
 	return slices.ContainsFunc(a.ofUnit[u], func(k int) bool { return a.js[k].Core })
+}
+
+// shown reports whether unit u, which has a usable judgment, gets its card
+// in the pass for core units (core true) or in the pass for the others.
+func (a *aggState) shown(u int, core bool) bool {
+	return len(a.ofUnit[u]) > 0 && a.core(u) == core
 }
 
 // says reports whether some judgment of unit u has the label.
@@ -835,23 +862,25 @@ func (a *aggState) single(kind, prefix string, u int) aggItem {
 	return it
 }
 
-// check makes the 확인 필요 items: shown units with an enabled check that
-// counts.
-func (a *aggState) check() {
+// check makes the 확인 필요 items of the pass (core or not, see shown):
+// shown units with an enabled check that counts.
+func (a *aggState) check(core bool) {
 	for u := range a.units {
-		if !a.taken[u] && a.core(u) && a.isTagged(u) {
+		if !a.taken[u] && a.shown(u, core) && a.isTagged(u) {
 			a.taken[u] = true
 			a.items = append(a.items, a.single(CardCheck, "c:", u))
 		}
 	}
 }
 
-// agree makes the 같은 말 items, with more AIs first.
-func (a *aggState) agree() {
+// agree makes the 같은 말 items of the pass, with more AIs first. Any unit
+// left may join, so in the pass for core units one no judge called core
+// may join a core representative (as before S5c).
+func (a *aggState) agree(core bool) {
 	start := len(a.items)
 	joins := func(v int) bool { return !a.taken[v] && !a.isTagged(v) }
 	for r := range a.units {
-		if a.taken[r] || !a.core(r) || !a.says(r, LabelSame) {
+		if a.taken[r] || !a.shown(r, core) || !a.says(r, LabelSame) {
 			continue
 		}
 		a.taken[r] = true
@@ -892,15 +921,24 @@ func (a *aggState) agree() {
 	})
 }
 
-// onlyOne makes the 한 AI만 items: the shown units left, whose judgments
-// all say absent (an unsure absent too, unless numbersAbsent fired).
-func (a *aggState) onlyOne() {
+// onlyOne makes the 한 AI만 items of the pass: the shown units left, whose
+// judgments all say absent (an unsure absent too, unless numbersAbsent
+// fired).
+func (a *aggState) onlyOne(core bool) {
 	for u := range a.units {
-		if !a.taken[u] && a.core(u) {
+		if !a.taken[u] && a.shown(u, core) {
 			a.taken[u] = true
 			a.items = append(a.items, a.single(CardOnlyOne, "o:", u))
 		}
 	}
+}
+
+// byCard puts the items in CardOrder. Each card keeps the order its items
+// were made in: those of the pass for core units first.
+func (a *aggState) byCard() {
+	slices.SortStableFunc(a.items, func(p, q aggItem) int {
+		return cmp.Compare(slices.Index(CardOrder, p.kind), slices.Index(CardOrder, q.kind))
+	})
 }
 
 // keepKeys gives items the keys of in.Prev. An item keeps its own key when
@@ -1024,6 +1062,8 @@ func (a *aggState) summary() Summary {
 			st.State = StateNotCompared
 			s.Counts.NotCompared++
 		default:
+			// Not reached since S5c: once in.Ended every unit with a usable
+			// judgment is on a card.
 			st.State = StateHidden
 		}
 	}

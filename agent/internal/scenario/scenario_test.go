@@ -43,7 +43,8 @@ func TestMain(m *testing.M) {
 // The question and the keyed answers of the scenarios (fakecli rule
 // mode): Claude and Codex give different prices, all three the same
 // height, and only Claude a colour number. OpenCode's second sentence has
-// no number, so no judge calls it core.
+// no number, so no judge calls it core: since S5c it is on 한 AI만 after
+// Claude's colour (before, it was hidden).
 const question = "이 상자의 가격과 높이는 얼마인가요?"
 
 var answers = map[string]string{

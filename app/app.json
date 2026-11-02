@@ -15,7 +15,7 @@
     "android": {
       "package": "app.asksemble",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#FFAD85",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -41,6 +41,19 @@
         {
           "cameraPermission": "Asksemble uses the camera to scan the pairing QR code on your PC.",
           "recordAudioAndroid": false
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 112,
+          "resizeMode": "contain",
+          "backgroundColor": "#FCFAF8",
+          "dark": {
+            "image": "./assets/splash-icon.png",
+            "backgroundColor": "#151618"
+          }
         }
       ]
     ],
