@@ -5,7 +5,7 @@
 
 import * as Clipboard from 'expo-clipboard';
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Animated, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { agentName } from '@/api/agents';
 import { type AgentClient, CancelledError } from '@/api/client';
@@ -18,6 +18,7 @@ import { Spinner, StatusDot } from './controls';
 import { ago, folderName, sessionStatus, sessionTitle } from './format';
 import { Icon, IconButton } from './Icon';
 import { useSafeInsets } from './keyboard';
+import { useSheetRise } from './Sheet';
 import { themed, useTheme } from './theme';
 
 type Busy = null | 'open' | 'stop' | 'remove';
@@ -72,6 +73,7 @@ export function SessionSheet({
   }, [session?.id, canPreview, client]);
 
   useEffect(() => () => abort.current?.abort(), []);
+  const rise = useSheetRise(session?.id);
 
   if (!session) return null;
   const can = (c: string) => capabilities.length === 0 || capabilities.includes(c);
@@ -167,7 +169,7 @@ export function SessionSheet({
   const canRemove = can('remove');
 
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={close} statusBarTranslucent navigationBarTranslucent>
+    <Modal visible transparent animationType="fade" onRequestClose={close} statusBarTranslucent navigationBarTranslucent>
       <View style={s.screen}>
         <Pressable
           style={[StyleSheet.absoluteFill, { backgroundColor: th.scrim }]}
@@ -176,7 +178,7 @@ export function SessionSheet({
           accessibilityLabel={t('sheet.close')}
           testID="session-sheet-scrim"
         />
-        <View style={[s.sheet, { paddingBottom: 20 + insets.bottom }]} accessibilityViewIsModal testID="session-sheet">
+        <Animated.View style={[s.sheet, { paddingBottom: 20 + insets.bottom }, rise]} accessibilityViewIsModal testID="session-sheet">
           <View style={s.handle} />
           <ScrollView style={s.scroll} contentContainerStyle={s.body} keyboardShouldPersistTaps="handled">
             <View style={s.top}>
@@ -299,7 +301,7 @@ export function SessionSheet({
               </View>
             ) : null}
           </ScrollView>
-        </View>
+        </Animated.View>
       </View>
     </Modal>
   );
