@@ -1,5 +1,5 @@
-# Shared by e2e.ps1 and phone.ps1: finds the test phone over wireless
-# debugging and gets it ready. Dot-source it. Keep this file ASCII.
+# Shared by e2e.ps1 and phone.ps1: finds the test phone (USB first, else
+# wireless debugging) and gets it ready. Dot-source it. Keep this file ASCII.
 
 $android = 'D:\Android'
 $env:ANDROID_HOME = "$android\Sdk"
@@ -9,6 +9,8 @@ $agentDevice = "$android\agent-device\node_modules\.bin\agent-device.cmd" # 0.21
 # The last address the phone answered on. Wireless debugging keeps its port
 # until it is turned off or the phone restarts.
 $phoneAddrFile = "$android\phone-adb.txt"
+
+$noPhone = 'no phone: plug the test phone into the PC with USB debugging on (Allow, always from this computer), or turn on Wireless debugging on it (same Wi-Fi as the PC)'
 
 $serial = ''
 function Adb { & $adb -s $serial @args }
@@ -20,11 +22,19 @@ function Ready-Devices([bool]$emu) {
   }
 }
 
-# Finds the phone: already connected, else by mDNS (adb also connects to a
-# paired phone it sees there by itself), else the last address that worked.
-# The phone's VPN (Tailscale) can hide it from mDNS, hence the address file.
+# Finds the phone. USB first: the test phone stays plugged into the PC, and
+# USB debugging stays on through Wi-Fi drops and restarts. Android turns
+# wireless debugging off by itself whenever Wi-Fi drops or moves to another
+# access point, and its port changes each time it comes back on (11-02
+# 06:00: one Wi-Fi drop from the router turned it off, the log says
+# "Network disconnected. Disabling adbwifi."). Without USB: a phone already
+# connected over Wi-Fi, else by mDNS (adb also connects to a paired phone it
+# sees there by itself), else the last address that worked. The phone's VPN
+# (Tailscale) can hide it from mDNS, hence the address file.
 function Connect-Phone {
   $d = @(Ready-Devices $false)
+  $usb = @($d | Where-Object { $_ -notmatch ':\d+$' -and $_ -notmatch '_adb-tls-connect' })
+  if ($usb.Count) { return $usb[0] }
   if ($d.Count -eq 0) {
     $svc = & $adb mdns services | Select-String '_adb-tls-connect' | Select-Object -First 1
     if ($svc -and "$svc" -match '(\d+\.\d+\.\d+\.\d+:\d+)') { & $adb connect $Matches[1] | Out-Null }

@@ -1,8 +1,8 @@
 # E2E (Maestro, Android test phone or emulator)
 
-These flows drive the app in Expo Go on the test phone (wireless
-debugging) or the emulator (`-Emulator`) against the real PC agent and the
-real `claude`, in the test folder `rc-test` only. See `docs/testing.md`
+These flows drive the app in Expo Go on the test phone (USB debugging,
+wireless as a fallback) or the emulator (`-Emulator`) against the real PC
+agent and the real `claude`, in the test folder `rc-test` only. See `docs/testing.md`
 section 4.
 
 Run (PowerShell):
