@@ -11,6 +11,7 @@ import { t } from '@/i18n';
 
 import { IconButton } from './Icon';
 import { useSafeInsets } from './keyboard';
+import { modalBars } from './modalBars';
 import { themed, useTheme } from './theme';
 
 type SheetProps = {
@@ -55,7 +56,15 @@ function OpenSheet({ onClose, title, subtitle, children, scroll = true, testID }
   const s = styles(th);
   const insets = useSafeInsets();
   return (
-    <Modal transparent animationType="fade" visible onRequestClose={onClose} statusBarTranslucent navigationBarTranslucent>
+    <Modal
+      transparent
+      animationType="fade"
+      visible
+      onRequestClose={onClose}
+      onShow={() => modalBars(th.scheme)}
+      statusBarTranslucent
+      navigationBarTranslucent
+    >
       <View style={s.screen}>
         <Pressable
           style={[StyleSheet.absoluteFill, { backgroundColor: th.scrim }]}

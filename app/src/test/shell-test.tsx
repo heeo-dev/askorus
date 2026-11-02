@@ -8,7 +8,7 @@ import { userEvent } from '@testing-library/react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { act, renderHook, renderRouter, screen, waitFor } from 'expo-router/testing-library';
 import { useState } from 'react';
-import { Text, TextInput, View } from 'react-native';
+import { StatusBar, Text, TextInput, View } from 'react-native';
 
 import TabsLayout from '@/app/(tabs)/_layout';
 import RootLayout from '@/app/_layout';
@@ -150,6 +150,24 @@ test('an empty drawer says the questions go when the app closes, and it closes',
   expect(await screen.findByRole('button', { name: 'Pair with a PC' })).toBeTruthy();
   await user.press(screen.getByRole('button', { name: 'Close menu' }));
   await waitFor(() => expect(screen.queryByTestId('drawer')).toBeNull());
+});
+
+// R-64: on the S10 (Android 12) the drawer's window got white status bar
+// icons over its light panel; it sets the theme's look once it shows.
+test.each([
+  ['light', 'dark-content'],
+  ['dark', 'light-content'],
+] as const)('the drawer sets the %s theme’s status bar look', async (scheme, look) => {
+  mockScheme.value = scheme;
+  const set = jest.spyOn(StatusBar, 'setBarStyle').mockImplementation(() => undefined);
+  const user = userEvent.setup();
+  await renderRouter(routes, { initialUrl: '/' });
+  await user.press(await screen.findByRole('button', { name: 'Open menu' }));
+  let modal = (await screen.findByTestId('drawer')).parent;
+  while (modal && modal.props.onShow === undefined) modal = modal.parent;
+  set.mockClear();
+  await act(async () => modal?.props.onShow());
+  expect(set).toHaveBeenCalledWith(look);
 });
 
 test('the current PC and its sessions waiting for input: header dot, drawer rows, and where they lead', async () => {

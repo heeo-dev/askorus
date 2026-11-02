@@ -3,9 +3,12 @@
 // sheet moves; the scrim is outside the moving view.
 
 import { render, screen } from '@testing-library/react-native';
-import { Text } from 'react-native';
+import { StatusBar, Text } from 'react-native';
 
 import { Sheet } from './Sheet';
+
+const mockScheme = { value: 'light' as 'light' | 'dark' | null };
+jest.mock('react-native/Libraries/Utilities/useColorScheme', () => ({ __esModule: true, default: () => mockScheme.value }));
 
 test('the Modal fades and only the sheet slides', async () => {
   await render(
@@ -24,6 +27,32 @@ test('the Modal fades and only the sheet slides', async () => {
   while (node) {
     expect(node.props.testID).not.toBe('s');
     node = node.parent;
+  }
+});
+
+// R-64: on the S10 (Android 12) a Modal's window did not get the app's dark
+// status bar icons, so the light drawer showed white ones. A Modal sets the
+// theme's look again once it shows (StatusBar.setBarStyle reaches Modal
+// windows too).
+test.each([
+  ['light', 'dark-content'],
+  ['dark', 'light-content'],
+] as const)('an open sheet sets the %s theme’s status bar look', async (scheme, look) => {
+  mockScheme.value = scheme;
+  const set = jest.spyOn(StatusBar, 'setBarStyle').mockImplementation(() => undefined);
+  try {
+    await render(
+      <Sheet open onClose={() => undefined} testID="s">
+        <Text>body</Text>
+      </Sheet>,
+    );
+    let modal = screen.getByTestId('s').parent;
+    while (modal && modal.props.onShow === undefined) modal = modal.parent;
+    modal?.props.onShow();
+    expect(set).toHaveBeenCalledWith(look);
+  } finally {
+    set.mockRestore();
+    mockScheme.value = 'light';
   }
 });
 
