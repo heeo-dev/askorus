@@ -204,7 +204,7 @@ func TestSynthDirect(t *testing.T) {
 	}
 	nonce := nonceOf(req.Prompt)
 	for _, want := range []string{
-		"[Asksemble synthesis v1]", `ANSWER: {"ai":"Claude","text":"The number is NUM 1."}`, `ANSWER: {"ai":"OpenCode","text":"The number is NUM 2."}`,
+		"[Asksemble synthesis v2]", `ANSWER: {"ai":"Claude","text":"The number is NUM 1."}`, `ANSWER: {"ai":"OpenCode","text":"The number is NUM 2."}`,
 		`DIFFER: {"sides":[{"ais":["Claude","Codex"]`, `{"ais":["OpenCode"],"says":["The number is NUM 2."]}`, "\nCOMPARED.", "QUESTION: \"" + testQuestion + "\"",
 	} {
 		if !strings.Contains(req.Prompt, want) {

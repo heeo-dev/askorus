@@ -49,7 +49,7 @@ func synthCode(s compares.Synthesis) string {
 	return s.Error.Code
 }
 
-// The data lines a synth-v1 prompt may hold, each a prefix and JSON.
+// The data lines a synth-v2 prompt may hold, each a prefix and JSON.
 var synthPrefixes = []string{
 	"QUESTION: ", "EARLIER QUESTIONS (context only, do not answer them): ", "ANSWER: ", "DIFFER: ", "CHECK: ",
 }
