@@ -1,8 +1,9 @@
 // The combined answer's block (S5c, F-Ask-Comparing and F-Result-Expanded):
 // a header with the AIs that answered (a pile that opens the AI sheet),
-// the title and the times; while it is being made, its steps (comparing,
-// then writing) over grey lines; then the body, and a footnote with the
-// judging details button.
+// the title, the times and the judging details button (always at the
+// header's end, #3: at the foot after the steps it went unnoticed); while
+// it is being made, its steps (comparing, then writing) over grey lines;
+// then the body and a footnote.
 
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -63,6 +64,7 @@ export function CombinedAnswerCard({
             {meta}
           </Text>
         ) : null}
+        {infoButton ? <View style={[s.headInfo, !meta && s.pushRight]}>{infoButton}</View> : null}
       </View>
 
       {hasSteps ? (
@@ -70,7 +72,6 @@ export function CombinedAnswerCard({
           <View style={s.steps} accessibilityLiveRegion="polite">
             {steps?.map((st) => <Step key={st.key} step={st} />)}
           </View>
-          {infoButton ? <View style={s.stepsInfo}>{infoButton}</View> : null}
         </View>
       ) : null}
 
@@ -78,10 +79,9 @@ export function CombinedAnswerCard({
 
       {children}
 
-      {footnote || (info && !hasSteps) ? (
-        <View style={[s.foot, !hasSteps && info ? s.footButton : null]}>
-          <Text style={s.footText}>{footnote ?? ''}</Text>
-          {!hasSteps ? infoButton : null}
+      {footnote ? (
+        <View style={s.foot}>
+          <Text style={s.footText}>{footnote}</Text>
         </View>
       ) : null}
     </View>
@@ -128,9 +128,10 @@ const styles = themed((th) =>
     // The title keeps its room; the times give way (English 'answers 23 s · compared in 30 s' is long).
     title: { flexShrink: 0, maxWidth: '60%', fontSize: 14, fontWeight: '600', lineHeight: 20, color: th.text },
     meta: { marginLeft: 'auto', flexShrink: 1, minWidth: 0, textAlign: 'right', fontSize: 13, lineHeight: 18, color: th.caption, fontVariant: ['tabular-nums'] },
-    stepsRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 4, marginRight: -14 },
+    headInfo: { marginRight: -14 },
+    pushRight: { marginLeft: 'auto' },
+    stepsRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 4 },
     steps: { flex: 1, minWidth: 0, gap: 2 },
-    stepsInfo: { marginTop: -8 },
     step: { minHeight: 28, flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' },
     stepText: { fontSize: 14, fontWeight: '500', lineHeight: 20, color: th.text },
     doneText: { color: th.textSub },
@@ -139,7 +140,6 @@ const styles = themed((th) =>
     detail: { fontSize: 13, lineHeight: 18, color: th.caption },
     pendingText: { fontSize: 14, lineHeight: 20, color: th.caption },
     foot: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-    footButton: { marginTop: -12, marginBottom: -12, marginRight: -14 },
     footText: { flex: 1, fontSize: 13, lineHeight: 19.5, color: th.caption },
   }),
 );

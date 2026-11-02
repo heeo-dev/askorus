@@ -1,7 +1,7 @@
 // S5c: the shared pieces the rebuilt screens are made of, each as a person
 // (or a screen reader) meets it.
 
-import { act, render, screen, userEvent } from '@testing-library/react-native';
+import { act, render, screen, userEvent, within } from '@testing-library/react-native';
 import * as SystemUI from 'expo-system-ui';
 import { Keyboard, Platform, StyleSheet, Text } from 'react-native';
 import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
@@ -345,11 +345,13 @@ describe('the combined answer', () => {
     expect(screen.getByLabelText('Next step: Writing the combined answer…')).toBeTruthy();
     expect(screen.getByText('answers 12 s')).toBeTruthy();
     expect(screen.getByTestId('skeleton', { includeHiddenElements: true })).toBeTruthy();
-    await user.press(screen.getByRole('button', { name: 'Judging details' }));
+    // R-59 (#3): the details button is on the title row, not beside the steps.
+    const head = screen.getByRole('header', { name: 'Combined answer' }).parent!;
+    await user.press(within(head).getByRole('button', { name: 'Judging details' }));
     expect(info).toHaveBeenCalled();
   });
 
-  test('done: the body, then the footnote with the details button', async () => {
+  test('done: the body and the footnote; the details button stays on the title row', async () => {
     await render(
       <CombinedAnswerCard
         pile={{ agents: ['claude', 'codex'], label: 'AIs', onPress: () => undefined }}
@@ -362,7 +364,10 @@ describe('the combined answer', () => {
     );
     expect(screen.getByText('body')).toBeTruthy();
     expect(screen.getByText('An AI wrote this combined answer, so it can be wrong.')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Judging details' })).toBeTruthy();
+    // R-59 (#3): it moved to the foot once the steps were gone and went unseen.
+    const head = screen.getByRole('header', { name: 'Combined answer' }).parent!;
+    expect(within(head).getByRole('button', { name: 'Judging details' })).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: 'Judging details' })).toHaveLength(1);
     expect(screen.queryByTestId('skeleton', { includeHiddenElements: true })).toBeNull();
   });
 

@@ -347,6 +347,7 @@
   "compare.info": "Judging details",
   "compare.synth.writtenBy": "Combined answer written by",
   "compare.judgeCount": "Judgments: {n}",
+  "compare.judgeCountHelp": "Each judgment checks one AI's sentences against another AI's answer: same, different or not there. Every two answers are checked both ways, by an AI that wrote neither. The results mark what differs, what to check and what only one AI says, and go into the combined answer.",
   "compare.direction": "sentences → answer",
   "compare.judgeGroup": "Judged by {name}",
   "compare.requestShort": "{from} → {against}",

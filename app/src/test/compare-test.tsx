@@ -238,6 +238,8 @@ test('when one judge fails, the rest still show, the judging details say why, an
   const judges = within(await screen.findByTestId('judges-sheet'));
   expect(judges.getByRole('header', { name: 'Judging details' })).toBeTruthy();
   expect(judges.getByText('Judgments: 6')).toBeTruthy();
+  // #3: what a judgment is, under the count.
+  expect(judges.getByText(/^Each judgment checks one AI's sentences against another AI's answer/)).toBeTruthy();
   expect(judges.getByRole('header', { name: /^Judged by Codex(, |$)/ })).toBeTruthy();
   expect(judges.getAllByText(lost)).toHaveLength(2);
   expect(judges.getByLabelText(`Claude's sentences against OpenCode's answer, ${lost}`)).toBeTruthy();
