@@ -1,0 +1,72 @@
+[
+  {
+    "name": "the user's case: a 다음에 쓸 문장 section of code blocks",
+    "text": "앞바퀴 정렬과 헤드셋 베어링을 먼저 보세요.\n\n- 핸들이 한쪽으로 당기면 포크가 휘었을 수 있습니다.\n- 직진 중 흔들림은 헤드셋 유격 때문일 수 있습니다.\n\n**다음에 쓸 문장**\n```\n포크 휨 확인하는 법 알려줘\n```\n```\n헤드셋 유격 조이는 법 알려줘\n```\n",
+    "main": "앞바퀴 정렬과 헤드셋 베어링을 먼저 보세요.\n\n- 핸들이 한쪽으로 당기면 포크가 휘었을 수 있습니다.\n- 직진 중 흔들림은 헤드셋 유격 때문일 수 있습니다."
+  },
+  {
+    "name": "the same with CRLF",
+    "text": "앞바퀴 정렬과 헤드셋 베어링을 먼저 보세요.\r\n\r\n- 핸들이 한쪽으로 당기면 포크가 휘었을 수 있습니다.\r\n- 직진 중 흔들림은 헤드셋 유격 때문일 수 있습니다.\r\n\r\n**다음에 쓸 문장**\r\n```\r\n포크 휨 확인하는 법 알려줘\r\n```\r\n",
+    "main": "앞바퀴 정렬과 헤드셋 베어링을 먼저 보세요.\r\n\r\n- 핸들이 한쪽으로 당기면 포크가 휘었을 수 있습니다.\r\n- 직진 중 흔들림은 헤드셋 유격 때문일 수 있습니다."
+  },
+  {
+    "name": "a Markdown heading of suggested follow-ups with a list",
+    "text": "Use HTTPS everywhere.\n\n## Suggested follow-ups\n- How does TLS work?\n- What is HSTS?",
+    "main": "Use HTTPS everywhere."
+  },
+  {
+    "name": "a numbered heading with a colon",
+    "text": "본문입니다.\n\n### 3. 추천 질문:\n- 더 알려줘",
+    "main": "본문입니다."
+  },
+  {
+    "name": "a thematic break before the section goes with it",
+    "text": "본문입니다.\n\n---\n\n**Suggested follow-up questions**\n- a\n- b\n",
+    "main": "본문입니다."
+  },
+  {
+    "name": "a last paragraph that offers more (Korean)",
+    "text": "앞바퀴 정렬과 헤드셋 베어링을 먼저 보세요.\n\n- 핸들이 한쪽으로 당기면 포크가 휘었을 수 있습니다.\n- 직진 중 흔들림은 헤드셋 유격 때문일 수 있습니다.\n\n원하시면 점검 순서를 표로 정리해 드릴게요.",
+    "main": "앞바퀴 정렬과 헤드셋 베어링을 먼저 보세요.\n\n- 핸들이 한쪽으로 당기면 포크가 휘었을 수 있습니다.\n- 직진 중 흔들림은 헤드셋 유격 때문일 수 있습니다."
+  },
+  {
+    "name": "a last paragraph that offers more (English)",
+    "text": "The ball costs $0.05.\n\nIf you'd like, I can show the algebra step by step.",
+    "main": "The ball costs $0.05."
+  },
+  {
+    "name": "an offer and then a section: both go",
+    "text": "본문입니다.\n\n원하시면 더 자세히 알려 드릴게요.\n\n**다음에 쓸 문장**\n```\n더 알려줘\n```",
+    "main": "본문입니다."
+  },
+  {
+    "name": "advice that opens with a condition but offers nothing stays",
+    "text": "앞바퀴 정렬과 헤드셋 베어링을 먼저 보세요.\n\n- 핸들이 한쪽으로 당기면 포크가 휘었을 수 있습니다.\n- 직진 중 흔들림은 헤드셋 유격 때문일 수 있습니다.\n\n원하면 오른쪽 핸들을 먼저 점검하세요.",
+    "main": "앞바퀴 정렬과 헤드셋 베어링을 먼저 보세요.\n\n- 핸들이 한쪽으로 당기면 포크가 휘었을 수 있습니다.\n- 직진 중 흔들림은 헤드셋 유격 때문일 수 있습니다.\n\n원하면 오른쪽 핸들을 먼저 점검하세요."
+  },
+  {
+    "name": "a 다음 단계 section stays: a question can ask for it",
+    "text": "본문입니다.\n\n## 다음 단계\n- 포크를 교체합니다.",
+    "main": "본문입니다.\n\n## 다음 단계\n- 포크를 교체합니다."
+  },
+  {
+    "name": "a section followed by another heading stays",
+    "text": "본문입니다.\n\n## 다음 질문\n- a\n\n## 정리\n결론입니다.",
+    "main": "본문입니다.\n\n## 다음 질문\n- a\n\n## 정리\n결론입니다."
+  },
+  {
+    "name": "an answer that is only the section stays whole",
+    "text": "**다음에 쓸 문장**\n```\n더 알려줘\n```",
+    "main": "**다음에 쓸 문장**\n```\n더 알려줘\n```"
+  },
+  {
+    "name": "a heading-like line inside code is code",
+    "text": "예시 코드입니다.\n\n```python\n# 다음 질문\nprint(1)\n```",
+    "main": "예시 코드입니다.\n\n```python\n# 다음 질문\nprint(1)\n```"
+  },
+  {
+    "name": "a long line that only mentions one is a sentence",
+    "text": "본문입니다.\n\n다음 질문에 대해서는 아래와 같이 생각해 볼 수 있는데 그 이유를 길게 설명하면 다음과 같습니다:\n- 이유 하나",
+    "main": "본문입니다.\n\n다음 질문에 대해서는 아래와 같이 생각해 볼 수 있는데 그 이유를 길게 설명하면 다음과 같습니다:\n- 이유 하나"
+  }
+]

@@ -150,7 +150,8 @@ func BuildSynthTask(s Spec, items []Item, compared bool, name func(answerID stri
 		per = min(per, MaxSynthAnswersBytes/n)
 	}
 	for _, a := range ready {
-		t.Answers = append(t.Answers, SynthAnswer{AI: name(a.ID), Text: promptClip(a.Text, per)})
+		// Without its extras (#4): they are no part of what the AI answered.
+		t.Answers = append(t.Answers, SynthAnswer{AI: name(a.ID), Text: promptClip(a.Text[:ExtrasStart(a.Text)], per)})
 	}
 	if !compared {
 		return t

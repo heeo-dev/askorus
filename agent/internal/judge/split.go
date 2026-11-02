@@ -67,7 +67,8 @@ const (
 // are taken off, with the link lines after it up to a line without a
 // link; a link line that reads as a sentence of its own is a unit and the
 // block goes on. A unit that is only links or addresses (and a list
-// number) is left out too. A row's Context is the first 300 characters of
+// number) is left out too, and so is everything from the answer's trailing
+// extras on (ExtrasStart: messages to send next, a closing offer). A row's Context is the first 300 characters of
 // its table header, cells joined by " | "; a nested item's Context is the
 // first 120 characters of its parent's Text, number and all (or of the
 // bold numbered line its list follows).
@@ -100,7 +101,8 @@ func SplitAnswer(answerID, text string, maxUnits int) (units []Unit, tail []stri
 	if maxUnits <= 0 {
 		maxUnits = MaxUnits
 	}
-	s := &splitter{text: text, limit: splitLimit(text), id: answerID, maxUnits: maxUnits, cursor: splitCursor{s: text}}
+	// The answer's trailing extras (#4, ExtrasStart) are not read.
+	s := &splitter{text: text, limit: min(splitLimit(text), ExtrasStart(text)), id: answerID, maxUnits: maxUnits, cursor: splitCursor{s: text}}
 	pos := 0
 	if strings.HasPrefix(text, "\xef\xbb\xbf") {
 		pos = len("\xef\xbb\xbf")

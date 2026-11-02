@@ -601,3 +601,17 @@ func TestHandoffName(t *testing.T) {
 		t.Errorf("SynthRules = %q", SynthRules)
 	}
 }
+
+// R-61 (#4): an answer's trailing extras do not reach the combined answer.
+func TestSynthLeavesExtrasOut(t *testing.T) {
+	s, items := synthSpec()
+	body := s.Answers[2].Text
+	s.Answers[2].Text = body + "\n\n**다음에 쓸 문장**\n```\n배 시간표 알려줘\n```\n\n원하시면 요금도 알려 드릴게요."
+	task := BuildSynthTask(s, items, true, synthName)
+	if got := task.Answers[2].Text; got != body {
+		t.Errorf("OpenCode's answer in the task = %q, want %q", got, body)
+	}
+	if p := SynthPrompt(task, synthGoldenNonce); strings.Contains(p, "다음에 쓸 문장") || strings.Contains(p, "요금") {
+		t.Errorf("the prompt keeps the extras:\n%s", p)
+	}
+}
