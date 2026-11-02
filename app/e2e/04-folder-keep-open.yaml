@@ -6,6 +6,10 @@
 appId: host.exp.exponent
 ---
 - runFlow: 01-home-and-list.yaml
+# Under the short Running list the row is on the screen (see 01).
+- tapOn:
+    text: "Running"
+    waitToSettleTimeoutMs: 300
 - tapOn:
     text: "Keep folders open"
     waitToSettleTimeoutMs: 300
