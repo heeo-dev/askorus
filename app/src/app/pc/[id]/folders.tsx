@@ -1,17 +1,23 @@
-// Folders (F10): the PC's allowed folders, and for each one whether it is
-// kept open so the Claude app can start sessions there by itself.
+// Folders (F10; S5c restyle): the PC's allowed folders, and for each one
+// whether it is kept open so the Claude app can start sessions there by
+// itself; then the folders with recent conversations, which are saved to
+// the allowed list when kept open.
 
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { RefreshControl, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import type { AgentClient } from '@/api/client';
 import type { Folder } from '@/api/types';
 import { connect } from '@/connections/open';
 import { ConnectionStore } from '@/connections/store';
 import { errorText, has, t } from '@/i18n';
+import { SwitchRow } from '@/ui/controls';
 import { isHistory } from '@/ui/FolderPicker';
-import { type Theme, useTheme } from '@/ui/theme';
+import { TopBar } from '@/ui/Header';
+import { useSafeInsets } from '@/ui/keyboard';
+import { Group, SectionLabel } from '@/ui/List';
+import { themed, useTheme } from '@/ui/theme';
 
 const store = new ConnectionStore();
 
@@ -28,6 +34,7 @@ const followForMs = 60000;
 export default function Folders() {
   const th = useTheme();
   const s = styles(th);
+  const insets = useSafeInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [client, setClient] = useState<AgentClient | null>(null);
   const [folders, setFolders] = useState<Folder[] | null>(null);
@@ -104,77 +111,71 @@ export default function Folders() {
   const allowed = folders?.filter((f) => !isHistory(f)) ?? [];
   const recent = folders?.filter(isHistory) ?? [];
 
-  const card = (f: Folder) => {
+  const item = (f: Folder) => {
     const st = f.status?.state ?? 'off';
     const stateKey = `folders.state.${st}`;
+    const bad = st === 'failed' || st === 'untrusted';
     return (
-      <View key={f.id} style={s.card}>
-        <View style={s.top}>
-          <View style={s.names}>
-            <Text style={s.title}>{f.name || f.id}</Text>
-            <Text style={s.muted} numberOfLines={2}>
-              {f.path}
-            </Text>
-          </View>
-          <Switch
-            value={f.server.enabled}
-            onValueChange={(v) => toggle(f, v)}
-            disabled={!supported || st === 'external'}
-            accessibilityLabel={t('folders.keepOpen', { name: f.name || f.id })}
-          />
+      <View key={f.id}>
+        <SwitchRow
+          label={t('folders.keepOpen', { name: f.name || f.id })}
+          value={f.server.enabled}
+          onChange={(v) => toggle(f, v)}
+          disabled={!supported || st === 'external'}
+        />
+        <View style={s.lines}>
+          <Text style={s.path} numberOfLines={2}>
+            {f.path}
+          </Text>
+          <Text style={[s.state, bad && s.error]}>
+            {has(stateKey) ? t(stateKey) : st}
+            {st === 'running'
+              ? ` · ${t('folders.sessions', { n: f.status?.sessions ?? 0, max: f.status?.capacity ?? f.server.capacity ?? 0 })}`
+              : ''}
+          </Text>
+          {justOff[f.id] && !f.server.enabled ? <Text style={s.state}>{t('folders.justOff')}</Text> : null}
+          {rowError[f.id] ? <Text style={[s.state, s.error]}>{rowError[f.id]}</Text> : null}
         </View>
-        <Text style={st === 'failed' || st === 'untrusted' ? s.error : s.muted}>
-          {has(stateKey) ? t(stateKey) : st}
-          {st === 'running'
-            ? ` · ${t('folders.sessions', { n: f.status?.sessions ?? 0, max: f.status?.capacity ?? f.server.capacity ?? 0 })}`
-            : ''}
-        </Text>
-        {justOff[f.id] && !f.server.enabled ? <Text style={s.muted}>{t('folders.justOff')}</Text> : null}
-        {rowError[f.id] ? <Text style={s.error}>{rowError[f.id]}</Text> : null}
       </View>
     );
   };
 
   return (
-    <ScrollView
-      style={s.screen}
-      contentContainerStyle={s.body}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
-    >
-      <Text style={s.intro}>{t('folders.intro')}</Text>
-      {supported ? <Text style={s.muted}>{t('folders.offNote')}</Text> : null}
-      {!supported ? <Text style={s.muted}>{t('folders.notSupported')}</Text> : null}
-      {error ? <Text style={s.error}>{error}</Text> : null}
-      {folders?.length === 0 ? <Text style={s.muted}>{t('new.noFolders')}</Text> : null}
-      {allowed.map(card)}
-      {recent.length ? (
-        <>
-          <Text style={s.group}>{t('new.recentFolders')}</Text>
-          <Text style={s.muted}>{t('folders.recentHint')}</Text>
-        </>
-      ) : null}
-      {recent.map(card)}
-    </ScrollView>
+    <View style={s.screen}>
+      <TopBar title={t('folders.title')} onBack={() => router.back()} />
+      <ScrollView
+        style={s.screen}
+        contentContainerStyle={[s.body, { paddingBottom: 24 + insets.bottom }]}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} colors={[th.mark]} tintColor={th.mark} progressBackgroundColor={th.surface} />}
+      >
+        <Text style={s.intro}>{t('folders.intro')}</Text>
+        {supported ? <Text style={s.note}>{t('folders.offNote')}</Text> : <Text style={s.note}>{t('folders.notSupported')}</Text>}
+        {error ? <Text style={[s.note, s.error]}>{error}</Text> : null}
+        {folders?.length === 0 ? <Text style={s.note}>{t('new.noFolders')}</Text> : null}
+        {allowed.length ? <Group>{allowed.map(item)}</Group> : null}
+        {recent.length ? (
+          <View style={s.section}>
+            <SectionLabel text={t('new.recentFolders')} />
+            <Text style={s.hint}>{t('folders.recentHint')}</Text>
+            <Group>{recent.map(item)}</Group>
+          </View>
+        ) : null}
+      </ScrollView>
+    </View>
   );
 }
 
-const styles = (th: Theme) =>
+const styles = themed((th) =>
   StyleSheet.create({
     screen: { flex: 1, backgroundColor: th.bg },
-    body: { padding: 16, gap: 12 },
-    intro: { color: th.text, fontSize: 15, lineHeight: 22 },
-    card: {
-      backgroundColor: th.card,
-      borderColor: th.border,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderRadius: 12,
-      padding: 14,
-      gap: 6,
-    },
-    top: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-    names: { flex: 1, gap: 2 },
-    title: { color: th.text, fontSize: 16, fontWeight: '600' },
-    muted: { color: th.muted, fontSize: 13 },
-    error: { color: th.danger, fontSize: 14, lineHeight: 20 },
-    group: { color: th.text, fontSize: 15, fontWeight: '600', marginTop: 8 },
-  });
+    body: { gap: 14, paddingTop: 4, paddingHorizontal: 16 },
+    intro: { paddingHorizontal: 4, fontSize: 15, lineHeight: 22.5, color: th.text },
+    note: { paddingHorizontal: 4, fontSize: 13, lineHeight: 19.5, color: th.caption },
+    hint: { paddingHorizontal: 4, fontSize: 13, lineHeight: 19.5, color: th.caption },
+    section: { gap: 6, marginTop: 4 },
+    lines: { gap: 2, paddingLeft: 16, paddingRight: 72, paddingBottom: 12, marginTop: -6 },
+    path: { fontSize: 13, lineHeight: 18.2, color: th.caption },
+    state: { fontSize: 13, lineHeight: 18.2, color: th.textSub },
+    error: { color: th.danger },
+  }),
+);

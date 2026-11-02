@@ -185,6 +185,7 @@ func (s *Server) Handler() http.Handler {
 	route("GET", "/v1/comparisons/{id}", s.getComparison)
 	route("POST", "/v1/comparisons/{id}/retry", s.retryComparison)
 	route("POST", "/v1/comparisons/{id}/cancel", s.cancelComparison)
+	route("POST", "/v1/comparisons/{id}/synthesis", s.writeSynthesis)
 	route("GET", "/v1/folders", s.folders)
 	route("PUT", "/v1/folders/{id}/server", s.setFolderServer)
 	route("DELETE", "/v1/devices/self", s.forgetSelf)

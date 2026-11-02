@@ -39,7 +39,14 @@ Step 'agent: go vet (windows)' $agent 'go' @('vet', './...')
 $env:GOOS = 'linux'
 Step 'agent: go vet (linux)' $agent 'go' @('vet', './...')
 Remove-Item Env:GOOS
+# judge-eval (agent/cmd/judge-eval) is built only with -tags judgeeval, so
+# the steps above never see it.
+Step 'agent: go vet judgeeval (windows)' $agent 'go' @('vet', '-tags', 'judgeeval', './...')
+$env:GOOS = 'linux'
+Step 'agent: go vet judgeeval (linux)' $agent 'go' @('vet', '-tags', 'judgeeval', './...')
+Remove-Item Env:GOOS
 Step 'agent: unit + scenario tests' $agent 'go' @('test', '-count=1', './...') '^(ok|FAIL)'
+Step 'agent: judge-eval tests' $agent 'go' @('test', '-tags', 'judgeeval', '-count=1', './cmd/judge-eval/...') '^(ok|FAIL)'
 
 if (-not (Test-Path (Join-Path $app 'node_modules'))) { Step 'app: npm ci' $app 'npm' @('ci', '--no-audit', '--no-fund') }
 Step 'app: typecheck' $app 'npx' @('tsc', '--noEmit')

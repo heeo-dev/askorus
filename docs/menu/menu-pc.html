@@ -79,7 +79,7 @@ ol { margin: 0; padding-left: 1.2em; display: grid; gap: 8px; max-width: 120ch; 
 <div class="wrap">
   <header>
     <h1>Asksemble 두 입구와 메뉴 (PC 화면용)</h1>
-    <p class="lead">왼쪽에서 오른쪽으로 입구 → 모드 → 메뉴 → 고를 것 순서입니다. 각 칸은 한국어 다음에 영어를 적었습니다. 2026-10-29 확정(사용자).</p>
+    <p class="lead">왼쪽에서 오른쪽으로 입구 → 모드 → 메뉴 → 고를 것 순서입니다. 각 칸은 한국어 다음에 영어를 적었습니다. 2026-10-29 확정(사용자). 2026-11-02 화면 재구성(S5c, 사용자 결정 8)에 맞춰 고침: 아래 탭 대신 헤더 가운데 스위치와 서랍, 앱은 '한 번에'로 열림.</p>
   </header>
 
   <div class="legend">
@@ -101,7 +101,7 @@ ol { margin: 0; padding-left: 1.2em; display: grid; gap: 8px; max-width: 120ch; 
       <div class="node ent all link" style="grid-row: span 2">
         <span class="who">입구 1 · 모두 · Everyone</span>
         <b>한 번에</b><span class="en">All at once</span>
-        <span class="sub">PC가 있으면 자동, 없으면 공식 앱으로 넘기기</span>
+        <span class="sub">PC가 있으면 자동, 없으면 공식 앱으로 넘기기 · 앱의 첫 화면</span>
       </div>
 
       <div class="node mode all link">
@@ -111,18 +111,20 @@ ol { margin: 0; padding-left: 1.2em; display: grid; gap: 8px; max-width: 120ch; 
       </div>
       <div class="menus span-modes">
         <div class="menu"><div class="node all"><b>질문 입력</b> <span class="en">Ask a question</span></div>
-          <div class="choices"><span class="chip">빠르게 <span class="en">Quick</span></span><span class="chip">기본 <span class="en">Standard</span></span><span class="chip">깊게 <span class="en">Deep</span></span><span class="dash">·</span><span class="chip">Claude</span><span class="chip">Codex</span><span class="chip">OpenCode</span><span class="dash">길게 눌러 모델 고르기 · Long-press to pick a model</span></div></div>
-        <div class="menu"><div class="node all"><b>답 카드</b> <span class="en">Answers</span></div>
-          <div class="choices"><span class="dash">AI 탭에(둘 이상이면 정리 탭이 먼저), 모델 이름과 걸린 시간</span></div></div>
-        <div class="menu"><div class="node all"><b>비교</b> <span class="en">Compare</span></div>
-          <div class="choices"><span class="dash">정리 탭 · Summary · 답이 모이면 PC가 자동으로</span><span class="chip">다른 말 <span class="en">Differ</span></span><span class="chip">확인 필요 <span class="en">Check this</span></span><span class="chip">같은 말 <span class="en">Agree</span></span><span class="chip">한 AI만 <span class="en">Only one</span></span></div>
-          <div class="choices"><span class="chip">두 문장 나란히 보기 <span class="en">See both sentences</span></span><span class="chip">판정한 AI <span class="en">Judged by</span></span><span class="chip">비교하기 · 다시 비교 <span class="en">Compare · Compare again</span></span></div></div>
+          <div class="choices"><span class="dash">아래 입력 칸 · 최근 질문 <span class="en">Recent questions</span></span><span class="chip">빠르게 <span class="en">Quick</span></span><span class="chip">기본 <span class="en">Standard</span></span><span class="chip">깊게 <span class="en">Deep</span></span><span class="dash">·</span><span class="chip">답할 AI <span class="en">AIs to answer</span></span><span class="dash">겹친 아바타 → 시트: AI 켜고 끄기, ›로 모델 고르기 · Pick a model</span></div></div>
+        <div class="menu"><div class="node all"><b>답하는 중</b> <span class="en">Answering…</span></div>
+          <div class="choices"><span class="dash">AI마다 한 줄(모델·걸린 시간) · 다 모이면 비교</span></div></div>
+        <div class="menu"><div class="node all"><b>종합 답변</b> <span class="en">Combined answer</span></div>
+          <div class="choices"><span class="dash">질문 아래 맨 위 카드 · 비교하는 중 n/6 → 종합 답변 쓰는 중 → AI 하나가 모든 답을 모아 씀</span><span class="chip">AI마다 다릅니다 ▾ <span class="en">The AIs differ ▾</span></span><span class="chip">판정 정보 ⓘ <span class="en">Judging details</span></span><span class="chip">종합 답변 쓰기 · 다시 쓰기 <span class="en">Write a combined answer · Write again</span></span></div></div>
+        <div class="menu"><div class="node all"><b>AI별 답</b> <span class="en">Answers by AI</span></div>
+          <div class="choices"><span class="dash">옆으로 넘기는 카드 → 답 시트</span><span class="chip">복사 <span class="en">Copy</span></span><span class="chip">이 AI에게만 <span class="en">Only this AI</span></span><span class="chip">Claude 앱에서 이어서 하기 <span class="en">Continue in the Claude app</span></span></div></div>
+        <div class="menu"><div class="node all"><b>근거</b> <span class="en">Evidence</span></div>
+          <div class="choices"><span class="dash">종합 답변 아래 네 칸으로 접힘 → 네 절 · 판정한 문장 모두(S5c)</span><span class="chip">다른 말 <span class="en">Differ</span></span><span class="chip">확인 필요 <span class="en">Check this</span></span><span class="chip">같은 말 <span class="en">Agree</span></span><span class="chip">한 AI만 <span class="en">Only one</span></span></div>
+          <div class="choices"><span class="chip">두 문장 나란히 보기 <span class="en">See both sentences</span></span><span class="chip">비교하기 · 다시 비교 <span class="en">Compare · Compare again</span></span></div></div>
         <div class="menu"><div class="node all"><b>이어서 묻기</b> <span class="en">Follow up</span></div>
           <div class="choices"><span class="chip">모두에게 <span class="en">Everyone</span></span><span class="chip">이 AI에게만 <span class="en">Only this AI</span></span><span class="chip">더 따져 보기 <span class="en">Cross-check</span></span></div></div>
-        <div class="menu"><div class="node all"><b>Claude 앱에서 이어서 하기</b> <span class="en">Continue in the Claude app</span></div>
-          <div class="choices"><span class="dash">Claude 답 카드에만 · 내 PC의 '세션 시트'와 같은 Claude 대화를 연다</span></div></div>
         <div class="menu"><div class="node all"><b>기록</b> <span class="en">History</span></div>
-          <div class="choices"><span class="dash">폰에만 저장 · 질문 하나에 세 AI의 답이 묶임</span></div></div>
+          <div class="choices"><span class="dash">서랍에 오늘·어제·날짜별 · 지금은 앱을 켠 동안만, 폰에 저장은 P2-6</span></div></div>
       </div>
 
       <div class="node mode all link">
@@ -143,20 +145,20 @@ ol { margin: 0; padding-left: 1.2em; display: grid; gap: 8px; max-width: 120ch; 
       <div class="node ent dev link" style="grid-row: span 2">
         <span class="who">입구 2 · 개발자 · Developers</span>
         <b>내 PC</b><span class="en">My PCs</span>
-        <span class="sub">PC의 코딩 AI를 폰에서 켜고 이어 쓰기 · 지금 첫 화면</span>
+        <span class="sub">PC의 코딩 AI를 폰에서 켜고 이어 쓰기 · 입력을 기다리는 세션이 있으면 스위치에 점</span>
       </div>
 
       <div class="node mode dev link">
         <b>원격 세션 <span class="en">Remote sessions</span> <span class="ph p1">P1</span> <span class="ph p3">P3</span></b>
-        <div class="sub">PC를 고르면 그 PC의 세션 목록 · P3에서 Codex·OpenCode 추가</div>
+        <div class="sub">고른 PC 하나의 세션(⇅ 다른 PC 고르기) · 세션 검색 · P3에서 Codex·OpenCode 추가</div>
       </div>
       <div class="menus span-modes">
         <div class="menu"><div class="node dev"><b>세션</b> <span class="en">Sessions</span></div>
           <div class="choices"><span class="chip">전체 <span class="en">All</span></span><span class="chip">실행 중 <span class="en">Running</span></span><span class="chip">멈춤 <span class="en">Stopped</span></span><span class="chip">터미널 <span class="en">Terminal</span></span><span class="chip">기록만 <span class="en">History only</span></span><span class="chip">묻기 대화 <span class="en">Ask chats</span> <span class="ph p2">P2</span></span></div></div>
         <div class="menu"><div class="node dev"><b>세션 시트</b> <span class="en">Session</span></div>
-          <div class="choices"><span class="dash">최근 대화 · Recent conversation</span><span class="chip">Claude 앱에서 열기 <span class="en">Open in the Claude app</span></span><span class="chip">멈추기 <span class="en">Stop</span></span><span class="chip">지우기 <span class="en">Remove</span></span></div></div>
+          <div class="choices"><span class="dash">최근 대화 · Recent conversation</span><span class="chip">Claude 앱에서 열기 <span class="en">Open in the Claude app</span></span><span class="chip">멈추기 <span class="en">Stop</span></span><span class="chip">지우기 <span class="en">Remove</span></span><span class="chip">PC에서 이어 볼 명령 복사 <span class="en">Copy the command to continue on the PC</span></span></div></div>
         <div class="menu"><div class="node dev"><b>새 세션</b> <span class="en">New session</span></div>
-          <div class="choices"><span class="dash">폴더 · 이름 · 모델 · 노력 수준</span></div></div>
+          <div class="choices"><span class="dash">폴더 · 이름 · 고급(모델 · 노력 수준) <span class="en">Advanced</span></span></div></div>
         <div class="menu"><div class="node dev"><b>폴더</b> <span class="en">Folders</span></div>
           <div class="choices"><span class="chip">열어 두기 <span class="en">Keep open</span></span></div></div>
       </div>
@@ -176,9 +178,13 @@ ol { margin: 0; padding-left: 1.2em; display: grid; gap: 8px; max-width: 120ch; 
 
       <div class="sep"></div>
 
+      <div class="node ent base"><span class="who" style="color:var(--muted)">공통 · Shared</span><b>서랍</b><span class="en">Menu</span></div>
+      <div class="node base" style="grid-column: 2 / 5; align-self: center">
+        <div class="sub" style="color:var(--ink)">헤더 왼쪽 ☰ · 두 입구는 헤더 가운데 스위치 [한 번에 | 내 PC] · 기록(오늘·어제·날짜) · 내 PC(연결 상태, 입력 기다리는 세션 → 그 세션 시트) · 설정 · 공식 제품 아님</div>
+      </div>
       <div class="node ent base"><span class="who" style="color:var(--muted)">공통 · Shared</span><b>설정</b><span class="en">Settings</span> <span class="ph p1">P1</span></div>
       <div class="node base" style="grid-column: 2 / 5; align-self: center">
-        <div class="sub" style="color:var(--ink)">PC 목록과 끊기 · 연결 진단 · 새 세션 기본값 · AI 연결(내 PC · 공식 앱으로 넘기기) <span class="ph p2">P2</span> · 묻기 기본 단계 <span class="ph p2">P2</span> · 비교: 답이 모이면 자동으로 비교 <span class="en">Compare answers automatically</span> <span class="ph p2">P2</span> · 공식 제품 아님</div>
+        <div class="sub" style="color:var(--ink)">짝 맺은 PC(연결 진단·끊기) · 새 세션 기본값 · PC와 짝 맺기(QR 찍기, 링크 붙여 넣기) · 묻기: 기본 단계 <span class="ph p2">P2</span> · 비교와 종합 답변 <span class="en">Comparison and combined answer</span>: 답이 모이면 자동으로 비교, 비교가 끝나면 종합 답변 쓰기, 종합 답변을 쓰는 AI <span class="ph p2">P2</span> · 화면: 테마 시스템·다크·라이트 <span class="en">Theme</span> · 정보 → 앱 정보(로고, Ask, assemble., 버전, 'AI 회사의 공식 제품이 아닙니다.') · AI 연결(내 PC · 공식 앱으로 넘기기)은 P2-4</div>
       </div>
     </div>
   </section>
@@ -196,8 +202,12 @@ ol { margin: 0; padding-left: 1.2em; display: grid; gap: 8px; max-width: 120ch; 
           <tr><td class="where">code</td><td class="pick">코딩하기</td><td class="alt">코드 맡기기 · 코드 고치기</td><td class="en2">Code</td><td>개발자에게 바로 읽힌다. 개발자 입구에만 있다.</td></tr>
           <tr><td class="where">묻기 단계</td><td class="pick">빠르게 · 기본 · 깊게</td><td class="alt">가볍게 · 보통 · 꼼꼼히</td><td class="en2">Quick · Standard · Deep</td><td>지금 정한 이름. 영어 'Default'는 설정값처럼 읽혀 'Standard'로.</td></tr>
           <tr><td class="where">비교 결과</td><td class="pick">다른 말 · 확인 필요 · 같은 말 · 한 AI만</td><td class="alt">일치 · 차이 · 단독 · 검토 필요</td><td class="en2">Differ · Check this · Agree · Only one</td><td>설계의 쉬운 말 원칙대로 한자어(일치·단독)를 피했다. 카드도 이 순서다(직접 확인할 곳부터, 2026-10-31).</td></tr>
-          <tr><td class="where">비교 탭</td><td class="pick">정리</td><td class="alt">—</td><td class="en2">Summary</td><td>AI 탭들 맨 앞에 둔다. 카드는 AI 원문 문장만 보여 준다.</td></tr>
-          <tr><td class="where">판정 표시</td><td class="pick">판정한 AI</td><td class="alt">—</td><td class="en2">Judged by</td><td>어느 AI가 비교했는지 정리 탭 바닥글과 AI 탭에 적는다.</td></tr>
+          <tr><td class="where">근거</td><td class="pick">근거</td><td class="alt">근거 카드 · 정리</td><td class="en2">Evidence</td><td>종합 답변 아래 네 칸(다른 말·확인 필요·같은 말·한 AI만)으로 접히고 누르면 네 절이 된다. 카드는 AI 원문 문장만 보여 준다. S5c에서 '정리' 탭과 AI 탭이 없어지고 한 흐름이 됐다.</td></tr>
+          <tr><td class="where">AI별 답</td><td class="pick">AI별 답</td><td class="alt">—</td><td class="en2">Answers by AI</td><td>옆으로 넘기는 카드. 누르면 그 AI의 답 전체(시트).</td></tr>
+          <tr><td class="where">서랍</td><td class="pick">메뉴</td><td class="alt">—</td><td class="en2">Menu</td><td>☰ 버튼. 기록, 내 PC, 설정. 두 입구는 헤더 가운데 스위치로 오간다(S5c).</td></tr>
+          <tr><td class="where">종합 답변</td><td class="pick">종합 답변</td><td class="alt">정리본 · 모은 답</td><td class="en2">Combined answer</td><td>질문 아래 맨 위 카드. AI 하나가 모든 답과 비교 결과로 쓴 글이고, 갈린 곳은 고르지 않고 'AI마다 다릅니다' 강조를 눌러 AI마다 본다(2026-11-01 사용자 결정 7·8). 근거는 아래에 네 칸으로 접힌다.</td></tr>
+          <tr><td class="where">판정 표시</td><td class="pick">판정 정보</td><td class="alt">판정한 AI</td><td class="en2">Judging details</td><td>종합 답변 카드의 ⓘ. 종합 답변을 쓴 AI, 판정 AI별 요청(문장 → 답)과 시간, 주의 문구를 한 시트에.</td></tr>
+          <tr><td class="where">테마</td><td class="pick">시스템 · 다크 · 라이트</td><td class="alt">—</td><td class="en2">System · Dark · Light</td><td>다크·라이트 살구 한 쌍, 기본은 폰 설정을 따른다(S5c).</td></tr>
           <tr><td class="where">후속 질문</td><td class="pick">이어서 묻기</td><td class="alt">더 묻기 · 후속 질문</td><td class="en2">Follow up</td><td>'후속'보다 쉬운 말.</td></tr>
           <tr><td class="where">서로 검토</td><td class="pick">더 따져 보기</td><td class="alt">서로 검토 · 교차 확인</td><td class="en2">Cross-check</td><td>설계에 이미 쓴 이름.</td></tr>
           <tr><td class="where">목록 칩</td><td class="pick">묻기 대화</td><td class="alt">묻기 기록 · 한 번에 묻기</td><td class="en2">Ask chats</td><td>Phase 1 목록 안에서 세션이 아니라 대화로 읽히게.</td></tr>
@@ -213,7 +223,9 @@ ol { margin: 0; padding-left: 1.2em; display: grid; gap: 8px; max-width: 120ch; 
       <li><b>work를 '일 맡기기'로 할지 '일하기'로 할지:</b> '일 맡기기'로 확정. 영어는 Work.</li>
       <li><b>영어 'All at once'가 탭 이름으로 긴지:</b> 'All at once'로 확정.</li>
       <li><b>묻기와 내 PC의 연결:</b> 묻기의 'Claude 앱에서 이어서 하기'는 내 PC의 세션 시트와 같은 Claude 대화를 엽니다.</li>
-      <li><b>비교 카드 순서:</b> 다른 말 → 확인 필요 → 같은 말 → 한 AI만(2026-10-31). 확인 필요는 판정이 확실하지 않은 문장을 모은 카드입니다.</li>
+      <li><b>비교 카드 순서:</b> 다른 말 → 확인 필요 → 같은 말 → 한 AI만(2026-10-31). 확인 필요는 숫자가 어긋나는 등 직접 봐야 할 문장을 모은 카드입니다('확실하지 않음' 표시만으로는 넣지 않음, 2026-11-01 판정 검증 뒤 사용자 결정).</li>
+      <li><b>종합 답변:</b> 질문 아래 맨 위에 둡니다(2026-11-01). 근거는 그 아래 네 칸으로 접히고, 종합 답변이 없을 때(끔·실패·옛 에이전트)는 펼쳐 둡니다. 쓰는 AI는 설정에서 고릅니다(기본 Claude).</li>
+      <li><b>화면 재구성(S5c, 2026-11-01 사용자 결정 8):</b> 대화 흐름(B), 아래 탭 대신 헤더 가운데 [한 번에 | 내 PC] 스위치와 ☰ 서랍, 앱은 '한 번에'로 열림, 다크·라이트 살구 테마(기본은 폰 설정), 근거에는 판정한 문장을 모두 싣습니다(핵심 문장만이 아님). 처음 연결은 QR이 주 경로, 링크 붙여 넣기가 다음 경로입니다.</li>
     </ol>
     <p class="note" style="margin-top:12px">휴대폰용: menu-mobile.html</p>
   </section>

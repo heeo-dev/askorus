@@ -38,10 +38,15 @@ export function has(key: string): key is MessageKey {
   return key in ko;
 }
 
-/** label turns an agent code (state, badge) into words; unknown codes show as they are. */
-export function label(prefix: 'state' | 'badge' | 'tool', code: string): string {
+/**
+ * label turns an agent code (state, badge, tool) into words; unknown codes
+ * show as they are. An activity (S5c) shows only when it has words (now
+ * only 'blocked', waiting for input): an unknown one shows nothing.
+ */
+export function label(prefix: 'state' | 'badge' | 'tool' | 'activity', code: string): string {
   const key = `${prefix}.${code}`;
-  return has(key) ? t(key) : code;
+  if (has(key)) return t(key);
+  return prefix === 'activity' ? '' : code;
 }
 
 /** errorText explains a failed call in the person's language. */

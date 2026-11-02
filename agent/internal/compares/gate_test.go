@@ -124,12 +124,56 @@ func TestOverrideReachesJudge(t *testing.T) {
 func TestJudgingInfo(t *testing.T) {
 	g := Gate{}
 	ji := g.Judging()
-	if ji.Engine != "pc" || ji.Shape != judge.ShapeDirected || ji.Labels != judge.LabelsV1 || ji.Rules != judge.Rules || !slices.Equal(ji.Checks, []string{judge.CheckUnsure}) || ji.Verified != nil || ji.TypicalMs != 0 {
+	// S6 (11-01 user decision 4): verified on 2026-11-01 with these CLI
+	// versions, and the median wall time of a comparison at the quick tier.
+	if ji.Engine != "pc" || ji.Shape != judge.ShapeDirected || ji.Labels != judge.LabelsV1 || ji.Rules != judge.Rules ||
+		!slices.Equal(ji.Checks, []string{judge.CheckUnsure, judge.CheckNumberMismatch, judge.CheckNumbersAbsent}) || ji.Verified == nil || ji.TypicalMs != 40444 {
 		t.Errorf("Judging = %+v", ji)
 	}
 	b, _ := json.Marshal(ji)
-	if string(b) != `{"engine":"pc","shape":"directed","labels":"v1","rules":"judge-v1","checks":["unsure"]}` {
-		t.Errorf("JSON = %s", b)
+	want := `{"engine":"pc","shape":"directed","labels":"v1","rules":"judge-v1","checks":["unsure","numberMismatch","numbersAbsent"],` +
+		`"verified":{"date":"2026-11-01","versions":{"claude":"2.1.316","codex":"0.164.0","opencode":"2.2.1"}},"typicalMs":40444}`
+	if string(b) != want {
+		t.Errorf("JSON = %s\nwant %s", b, want)
+	}
+	// Each call gives its own copy: changing one changes neither the next
+	// nor JudgingVerified.
+	ji.Verified.Versions["claude"] = "x"
+	ji.Verified.Date = "x"
+	if again := g.Judging(); again.Verified.Versions["claude"] != "2.1.316" || again.Verified.Date != "2026-11-01" || JudgingVerified.Versions["claude"] != "2.1.316" {
+		t.Errorf("Judging shares JudgingVerified: %+v", again.Verified)
+	}
+	// The verification and typicalMs are only for what S6 measured
+	// (S6R-3): the adapters' own judge models and the default checks, in
+	// any order. judge.off, perAI and maxUnits (at most the 40 measured)
+	// keep them.
+	for _, s := range []config.JudgeConfig{
+		{Off: true, MaxUnits: 40, PerAI: 1},
+		{Checks: []string{judge.CheckNumbersAbsent, judge.CheckUnsure, judge.CheckNumberMismatch}},
+	} {
+		g.Settings = s
+		if ji := g.Judging(); ji.Verified == nil || ji.TypicalMs != TypicalMs {
+			t.Errorf("with %+v: %+v", s, ji)
+		}
+	}
+	// A judge model or a set of checks of agent.json was never measured:
+	// no verified and no typicalMs, so the phone keeps its 'not measured
+	// yet' footer and shows no time.
+	for _, s := range []config.JudgeConfig{
+		{Models: map[string]core.AskModel{"claude": {Model: "opus", Effort: "high"}}},
+		{Models: map[string]core.AskModel{"codex": {Effort: "low"}}},
+		{Checks: []string{judge.CheckUnsure}},
+		{Checks: []string{judge.CheckNoEvidence}},
+		{Checks: []string{judge.CheckUnsure, judge.CheckNumberMismatch, judge.CheckNumbersAbsent, judge.CheckNoEvidence}},
+	} {
+		g.Settings = s
+		ji := g.Judging()
+		if ji.Verified != nil || ji.TypicalMs != 0 || !slices.Equal(ji.Checks, s.ChecksOrDefault()) {
+			t.Errorf("with %+v: %+v", s, ji)
+		}
+		if b, _ := json.Marshal(ji); strings.Contains(string(b), "verified") || strings.Contains(string(b), "typicalMs") {
+			t.Errorf("with %+v: JSON %s", s, b)
+		}
 	}
 	g.Settings = config.JudgeConfig{Checks: []string{judge.CheckNoEvidence, judge.CheckNumberMismatch}}
 	if ji := g.Judging(); !slices.Equal(ji.Checks, g.Settings.Checks) {
@@ -224,5 +268,90 @@ func TestAnnounce(t *testing.T) {
 	}
 	if !slices.Equal(got, names) {
 		t.Errorf("Engines = %v, Announce %v", got, names)
+	}
+}
+
+// Gate.Writer: the judge gate first, then Synthesizer and Asker, the tier
+// model and its company.
+func TestGateWriter(t *testing.T) {
+	ctx := context.Background()
+	cl := newWriter("claude", "anthropic", "Claude")
+	cl.fams = map[string]string{"claude-deep": ""}
+	g := testGate(t, cl)
+	w, why := g.Writer(cl, cl.Info(ctx), core.TierQuick)
+	if why != "" || w.Synth == nil || w.Judger == nil || w.Cleaner != nil || w.Model != "claude-quick" || w.Effort != "low" || w.Family != "anthropic" || w.Agent != "claude" {
+		t.Fatalf("writer: %+v %q", w, why)
+	}
+	for _, tier := range []string{"", "fast", core.TierStandard} {
+		if w, why := g.Writer(cl, cl.Info(ctx), tier); why != "" || w.Model != "claude-standard" {
+			t.Errorf("tier %q: %+v %q", tier, w, why)
+		}
+	}
+	if w, why := g.Writer(cl, cl.Info(ctx), core.TierDeep); why != WhyNoFamily || w.Synth != nil || w.Judger != nil {
+		t.Errorf("unknown company: %+v %q", w, why)
+	}
+	// The judge gate's reasons come first.
+	off := g
+	off.Settings.Off = true
+	if w, why := off.Writer(cl, cl.Info(ctx), core.TierQuick); why != WhyOff || w.Synth != nil {
+		t.Errorf("off: %+v %q", w, why)
+	}
+	cl.setAvailable(false)
+	if _, why := g.Writer(cl, cl.Info(ctx), core.TierQuick); why != WhyUnavailable {
+		t.Errorf("unavailable: %q", why)
+	}
+	cl.setAvailable(true)
+	// A judge that cannot write, or has no tier model.
+	judgeOnly := newFake("codex", "openai")
+	if _, why := testGate(t, judgeOnly).Writer(judgeOnly, judgeOnly.Info(ctx), core.TierQuick); why != WhyCannotWrite {
+		t.Errorf("judge only: %q", why)
+	}
+	asker := askerAI{fakeAI: newFake("codex", "openai"), tiers: map[string]core.AskModel{core.TierStandard: {Model: "gpt"}}}
+	if _, why := testGate(t, asker).Writer(asker, asker.Info(ctx), core.TierQuick); why != WhyCannotWrite {
+		t.Errorf("asks but does not write: %q", why)
+	}
+	cl.tiers = map[string]core.AskModel{core.TierStandard: {Effort: "medium"}}
+	if _, why := g.Writer(cl, cl.Info(ctx), core.TierStandard); why != WhyCannotWrite {
+		t.Errorf("no tier model: %q", why)
+	}
+	// The cleaner comes with the engine.
+	oc := cleanerWriter{newWriter("opencode", "deepseek", "OpenCode")}
+	if w, why := testGate(t, oc).Writer(oc, oc.Info(ctx), core.TierQuick); why != "" || w.Cleaner == nil {
+		t.Errorf("opencode: %+v %q", w, why)
+	}
+}
+
+// Announce gives synthesize to an AI that judges and can ask and write,
+// never on its own say, and judge.off takes both away.
+func TestAnnounceSynthesize(t *testing.T) {
+	cl := newWriter("claude", "anthropic", "Claude")
+	cl.caps = []core.Capability{core.CapAsk, core.CapSynthesize} // it names synthesize itself
+	old := newWriter("codex", "openai", "Codex")
+	old.version = "0.9.0"
+	old.caps = []core.Capability{core.CapAsk, core.CapSynthesize}
+	judgeOnly := askerAI{fakeAI: newFake("opencode", "deepseek"), tiers: map[string]core.AskModel{core.TierStandard: {Model: "x"}}}
+	judgeOnly.caps = []core.Capability{core.CapAsk}
+	ais := []core.Adapter{cl, old, judgeOnly}
+	g := testGate(t, ais...)
+	g.MinVersions["codex"] = "1.0.0"
+	infos, _ := Announce(context.Background(), ais, g)
+	if !slices.Equal(infos[0].Capabilities, []core.Capability{core.CapAsk, core.CapJudge, core.CapSynthesize}) {
+		t.Errorf("claude: %v", infos[0].Capabilities)
+	}
+	if slices.Contains(infos[1].Capabilities, core.CapSynthesize) || slices.Contains(infos[1].Capabilities, core.CapJudge) {
+		t.Errorf("an old AI that names synthesize itself: %v", infos[1].Capabilities)
+	}
+	if !slices.Contains(infos[2].Capabilities, core.CapJudge) || slices.Contains(infos[2].Capabilities, core.CapSynthesize) {
+		t.Errorf("a judge that cannot write: %v", infos[2].Capabilities)
+	}
+	if len(cl.caps) != 2 || len(old.caps) != 2 {
+		t.Errorf("the adapters' own lists changed: %v %v", cl.caps, old.caps)
+	}
+	g.Settings.Off = true
+	infos, _ = Announce(context.Background(), ais, g)
+	for _, info := range infos {
+		if slices.Contains(info.Capabilities, core.CapSynthesize) || slices.Contains(info.Capabilities, core.CapJudge) {
+			t.Errorf("off: %v", info.Capabilities)
+		}
 	}
 }

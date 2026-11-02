@@ -1,30 +1,31 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { StyleSheet, useColorScheme, View } from 'react-native';
 
-import { t } from '@/i18n';
-import { useTheme } from '@/ui/theme';
+import { palettes, resolveScheme, ThemeProvider, useTheme, useThemeChoice } from '@/ui/theme';
 
 // The two entrances are tabs (extension principle 9, see (tabs)/_layout);
-// the screens they open stack on top of them.
+// the screens they open stack on top of them. Every screen draws its own
+// top (Header or TopBar, S5c), so the stack shows no header.
 export default function RootLayout() {
+  return (
+    <ThemeProvider>
+      <Root />
+    </ThemeProvider>
+  );
+}
+
+function Root() {
   const th = useTheme();
+  const { ready } = useThemeChoice();
+  const system = useColorScheme();
   return (
     <>
-      <StatusBar style="auto" />
-      <Stack
-        screenOptions={{
-          headerStyle: { backgroundColor: th.card },
-          headerTintColor: th.text,
-          contentStyle: { backgroundColor: th.bg },
-        }}
-      >
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="pair" options={{ title: t('pair.title') }} />
-        <Stack.Screen name="settings" options={{ title: t('settings.title') }} />
-        <Stack.Screen name="pc/[id]/index" options={{ title: '' }} />
-        <Stack.Screen name="pc/[id]/new" options={{ title: t('new.title') }} />
-        <Stack.Screen name="pc/[id]/folders" options={{ title: t('folders.title') }} />
-      </Stack>
+      <StatusBar style={th.scheme === 'dark' ? 'light' : 'dark'} />
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: th.bg } }} />
+      {/* Until the saved theme is read, the phone's background covers the
+          screens, so a dark choice never flashes light (the stack stays mounted). */}
+      {ready ? null : <View style={[StyleSheet.absoluteFill, { backgroundColor: palettes[resolveScheme('system', system)].bg }]} />}
     </>
   );
 }

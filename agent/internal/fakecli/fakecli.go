@@ -2,7 +2,8 @@
 // docs/testing.md). A test binary that calls Main from its TestMain acts
 // as the AI programs: it picks the AI from ASKSEMBLE_FAKECLI, and what to
 // do from the shape of its arguments, the way the adapters build them:
-// --version, an ask, a judge, and OpenCode's session list and delete. Every
+// --version, an ask, a judge, a combined-answer writer (synth.go), and
+// OpenCode's session list and delete. Every
 // call but --version is recorded with its arguments, folder, the
 // environment the adapters set and stdin, so a test can check that the
 // question went on stdin and never into an argument.
@@ -28,6 +29,10 @@
 //	                           "codex=usage_limit,claude=prose_once"; _once
 //	                           is only that AI's first judge call, later
 //	                           ones follow rule (see Modes)
+//	ASKSEMBLE_FAKE_SYNTH       combined-answer writer mode, set like
+//	                           ASKSEMBLE_FAKE_JUDGE: "prose", or per AI
+//	                           "claude=usage_limit_once"; ok by default
+//	                           (see SynthModes)
 //	ASKSEMBLE_FAKECLI_SLEEP    how long mode slow waits (default 60s)
 //	ASKSEMBLE_FAKECLI_VERSION  "0.163.0" for every AI or "codex=0.163.0";
 //	                           default the tested minimum of each AI
@@ -483,7 +488,7 @@ func setEnv(t testing.TB, role string) {
 	t.Setenv(EnvRole, role)
 	t.Setenv(EnvRecord, t.TempDir())
 	t.Setenv(EnvState, t.TempDir())
-	for _, k := range []string{EnvJudge, EnvSleep, EnvVersion, EnvFail, EnvAnswers, EnvAsk} {
+	for _, k := range []string{EnvJudge, EnvSynth, EnvSleep, EnvVersion, EnvFail, EnvAnswers, EnvAsk} {
 		t.Setenv(k, "")
 	}
 }

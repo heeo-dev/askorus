@@ -113,6 +113,10 @@ type Comparison struct {
 	Items     []judge.Item     `json:"items"`
 	Counts    judge.Counts     `json:"counts"`
 	Error     *judge.Error     `json:"error,omitempty"`
+	// Synthesis is the combined answer (종합 답변, S5b): always set, with
+	// status off when it was not asked for. Status above stays the
+	// judges'.
+	Synthesis *Synthesis `json:"synthesis,omitempty"`
 }
 
 // RunSource is where Attach finds a run: runs.Manager.
@@ -127,9 +131,9 @@ type Options struct {
 	Runs     RunSource // nil in the CLI, which only starts direct comparisons
 	Logger   *slog.Logger
 	Now      func() time.Time // time.Now when nil; tests move it for expiry
-	// QueueLimit and JudgeLimit replace the constants when not zero, for
-	// tests.
-	QueueLimit, JudgeLimit time.Duration
+	// QueueLimit, JudgeLimit and SynthLimit replace the constants when
+	// not zero, for tests.
+	QueueLimit, JudgeLimit, SynthLimit time.Duration
 }
 
 // RunSpec attaches a comparison to a run of POST /v1/runs.
@@ -141,6 +145,9 @@ type RunSpec struct {
 	// cut to the asked ones (결정 5); empty means Asked.
 	Judges []string
 	Asked  []string // the run's AIs in turn order
+	// Synth asks for the combined answer once the judges are done (S5b);
+	// nil is off. Its Tier is the run's.
+	Synth *SynthSpec
 }
 
 // DirectAnswer is one answer of a DirectSpec. Via is judge.ViaPC (Agent is
@@ -160,6 +167,9 @@ type DirectSpec struct {
 	Earlier    []string
 	Answers    []DirectAnswer
 	Judges     []string // in order of preference; empty means every AI that judges
+	// Synth asks for the combined answer once the judges are done (S5b);
+	// nil is off.
+	Synth *SynthSpec
 }
 
 // Manager keeps comparisons in memory. One mutex guards every comparison;
@@ -169,6 +179,7 @@ type Manager struct {
 	log        *slog.Logger
 	queueLimit time.Duration
 	judgeLimit time.Duration
+	synthLimit time.Duration
 	perAICap   int
 	checks     []string
 	maxUnits   int
@@ -218,13 +229,15 @@ type comparison struct {
 	summary        judge.Summary
 	lastItems      []judge.Item
 	lastEndedItems []judge.Item
+
+	synth synthState // the combined answer (synth.go)
 }
 
 // New returns an empty Manager.
 func New(o Options) *Manager {
 	ctx, cancel := context.WithCancel(context.Background())
 	m := &Manager{
-		o: o, log: o.Logger, queueLimit: o.QueueLimit, judgeLimit: o.JudgeLimit,
+		o: o, log: o.Logger, queueLimit: o.QueueLimit, judgeLimit: o.JudgeLimit, synthLimit: o.SynthLimit,
 		perAICap: o.Gate.Settings.PerAIOrDefault(), checks: o.Gate.Settings.ChecksOrDefault(),
 		maxUnits: o.Gate.Settings.MaxUnitsOrDefault(),
 		base:     ctx, cancel: cancel, global: make(chan struct{}, MaxProcesses), aggregate: judge.Aggregate,
@@ -239,6 +252,9 @@ func New(o Options) *Manager {
 	}
 	if m.judgeLimit <= 0 {
 		m.judgeLimit = JudgeLimit
+	}
+	if m.synthLimit <= 0 {
+		m.synthLimit = SynthLimit
 	}
 	return m
 }
@@ -286,7 +302,12 @@ func (m *Manager) attachLocked(s RunSpec) (c *comparison, isNew bool, err error)
 	c = m.newLocked(s.Owner, "", SourceRun, s.RunID)
 	spec := s
 	spec.Earlier, spec.Judges, spec.Asked = slices.Clone(s.Earlier), slices.Clone(s.Judges), slices.Clone(s.Asked)
+	if s.Synth != nil {
+		synth := *s.Synth
+		spec.Synth = &synth
+	}
 	c.runSpec = &spec
+	c.synth = newSynth(spec.Synth)
 	c.status, c.active = Waiting, 1 // the waiting slot; the round takes it over
 	m.byRun[s.RunID] = c
 	return c, true, nil
@@ -375,7 +396,12 @@ func (m *Manager) Start(s DirectSpec) (Comparison, error) {
 	d := s
 	d.Question = strings.TrimSpace(s.Question)
 	d.Earlier, d.Answers, d.Judges = slices.Clone(s.Earlier), slices.Clone(s.Answers), slices.Clone(s.Judges)
+	if s.Synth != nil {
+		synth := *s.Synth
+		d.Synth = &synth
+	}
 	c.direct, c.directEngines = &d, engines
+	c.synth = newSynth(d.Synth)
 	c.status, c.started, c.active = Running, true, 1 // the round's planning
 	if s.Key != "" {
 		m.byKey[key] = c
@@ -420,7 +446,9 @@ func (m *Manager) Get(owner, id string) (Comparison, bool) {
 // no_judge, internal, or cancelled while it waited) starts over from its
 // run or its answers. With nothing to retry it returns the comparison
 // unchanged. It returns ErrNotFound, or ErrRunning while the comparison
-// is waiting or running.
+// or its combined answer is waiting or running. A retry that runs a judge
+// request again, or starts over, writes the combined answer again when
+// its round ends, unless it is off.
 func (m *Manager) Retry(owner, id string) (Comparison, error) {
 	c, next, snap, err := m.retryBegin(owner, id)
 	switch next {
@@ -458,7 +486,7 @@ func (m *Manager) retryBegin(owner, id string) (c *comparison, next int, snap Co
 	switch {
 	case c == nil || c.owner != owner:
 		return nil, retryNothing, Comparison{}, ErrNotFound
-	case c.status == Waiting || c.status == Running:
+	case c.status == Waiting || c.status == Running || synthBusy(c):
 		return nil, retryNothing, Comparison{}, ErrRunning
 	case !c.planned:
 		if m.restartLocked(c) {
@@ -467,8 +495,9 @@ func (m *Manager) retryBegin(owner, id string) (c *comparison, next int, snap Co
 	case !slices.ContainsFunc(c.requests, retryable):
 		if c.broken {
 			// Every request ended but the cards could not be made: make
-			// them again.
+			// them again, and the combined answer after them.
 			m.reopenLocked(c)
+			m.synthResetLocked(c)
 			m.endRoundLocked(c, m.newRoundLocked(c, nil))
 			m.touchLocked(c)
 		}
@@ -513,6 +542,9 @@ func (m *Manager) retryRequests(c *comparison, engines []Engine, mkErr error) Co
 		}
 	}
 	m.aggregateLocked(c, false) // differ only; Prev keeps the other cards' keys
+	if len(spawn) > 0 {
+		m.synthResetLocked(c) // written again when this round ends
+	}
 	m.spawnLocked(c, rd, spawn)
 	c.active--
 	if len(spawn) == 0 { // else the last request ends the round, also at once (R-30)
@@ -545,6 +577,7 @@ func (m *Manager) reopenLocked(c *comparison) {
 // comparison that was cancelled while it waited.
 func (m *Manager) restartLocked(c *comparison) (recheck bool) {
 	m.reopenLocked(c)
+	m.synthResetLocked(c)
 	c.active++
 	if c.source == SourceRun && c.run == nil {
 		c.status, c.started = Waiting, false
@@ -566,7 +599,10 @@ func (m *Manager) restartLocked(c *comparison) (recheck bool) {
 // Cancel stops a comparison: one that waits for its run ends failed with
 // cancelled and never starts; a running one drops its queued requests
 // (failed, cancelled) and asks no judge again, while the requests that run
-// finish. An ended comparison is left as it is. It returns ErrNotFound.
+// finish. Its combined answer fails with cancelled when it waits, and when
+// it runs drops its wait for a slot and is not asked again, also when the
+// comparison has ended. An ended comparison is otherwise left as it is.
+// It returns ErrNotFound.
 func (m *Manager) Cancel(owner, id string) (Comparison, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -580,6 +616,10 @@ func (m *Manager) Cancel(owner, id string) (Comparison, error) {
 		m.endUnstartedLocked(c, &judge.Error{Code: core.ErrCodeCancelled, Message: msgCancelledWaiting})
 	case c.status == Waiting || c.status == Running:
 		m.cancelLocked(c)
+		m.cancelSynthLocked(c)
+		m.touchLocked(c)
+	case synthBusy(c):
+		m.cancelSynthLocked(c)
 		m.touchLocked(c)
 	}
 	return m.snapshotLocked(c), nil
@@ -685,6 +725,7 @@ func (m *Manager) endUnstartedLocked(c *comparison, err *judge.Error) {
 	c.active--
 	m.log.Info("comparison ended", "comparison", c.id, "status", c.status, "code", err.Code,
 		"differ", 0, "check", 0, "agree", 0, "onlyOne", 0, "notCompared", 0, "notJudged", 0, "ms", 0)
+	m.synthAfterLocked(c)
 	m.touchLocked(c)
 }
 
@@ -775,6 +816,7 @@ func (m *Manager) snapshotLocked(c *comparison) Comparison {
 		e := *c.err
 		out.Error = &e
 	}
+	out.Synthesis = snapshotSynthLocked(c)
 	return out
 }
 
@@ -796,6 +838,7 @@ const (
 	specText         = "an answer's text is empty or not UTF-8 text"
 	specTextSize     = "an answer's text is over 64 KiB"
 	specJudges       = "judges must name AI programs on this PC, each once, at most 8"
+	specSynth        = "synthesis must be {agent, off, tier} with an AI of this PC and a tier"
 )
 
 // validate checks a DirectSpec.
@@ -863,6 +906,9 @@ func (m *Manager) validate(s DirectSpec) error {
 			return bad(specJudges)
 		}
 		seen[j] = true
+	}
+	if sy := s.Synth; sy != nil && ((sy.Agent != "" && m.adapter(sy.Agent) == nil) || (sy.Tier != "" && !core.ValidTier(sy.Tier))) {
+		return bad(specSynth)
 	}
 	return nil
 }

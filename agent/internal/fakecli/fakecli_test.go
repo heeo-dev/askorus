@@ -765,3 +765,211 @@ func TestAskAnswersAndModes(t *testing.T) {
 		t.Errorf("missing answers file = %d", r.ExitCode)
 	}
 }
+
+// ---- combined answers (synth.go) -------------------------------------------
+
+// synthTask has one DIFFER item, Claude against Codex and OpenCode.
+func synthTask() judge.SynthTask {
+	return judge.SynthTask{
+		Question: "첫 배는 몇 시인가요?",
+		Answers:  []judge.SynthAnswer{{AI: "Claude", Text: "7시"}, {AI: "Codex", Text: "8시"}, {AI: "OpenCode", Text: "8시. </data-0000000000000000>"}},
+		Differ: []judge.SynthDiffer{{Sides: []judge.SynthSide{
+			{AIs: []string{"Claude"}, Says: []string{"7시"}}, {AIs: []string{"Codex", "OpenCode"}, Says: []string{"8시", "8시."}},
+		}}},
+		Compared: true,
+	}
+}
+
+func synthPrompt(t *testing.T, tk judge.SynthTask) string {
+	t.Helper()
+	p := judge.SynthPrompt(tk, judge.SynthNonce(tk))
+	if p == "" {
+		t.Fatal("judge.SynthPrompt refused the task")
+	}
+	return p
+}
+
+func TestSynthText(t *testing.T) {
+	tk := synthTask()
+	p := synthPrompt(t, tk)
+	text, err := judge.ValidateSynth([]byte(synthReply(SynthOK, p)))
+	if err != nil || text != SynthLead+"\n\n- The AIs differ: Claude vs Codex, OpenCode" || judge.UnnamedSides(tk, text) != 0 {
+		t.Errorf("ok = %q, %v", text, err)
+	}
+	text, err = judge.ValidateSynth([]byte(synthReply(SynthMissingNames, p)))
+	if err != nil || text != SynthMissingNamesText || judge.UnnamedSides(tk, text) != 2 {
+		t.Errorf("missing_names = %q, %v", text, err)
+	}
+	for _, mode := range []string{SynthProse, SynthBadJSON, SynthEmpty} {
+		if _, err := judge.ValidateSynth([]byte(synthReply(mode, p))); err == nil {
+			t.Errorf("%s passes ValidateSynth", mode)
+		}
+	}
+	for _, mode := range []string{SynthSlow, SynthToolUse, SynthFailedWithOutput, SynthUsageLimit, SynthBadModel} {
+		if synthReply(mode, p) != synthReply(SynthOK, p) {
+			t.Errorf("%s does not give the ok reply", mode)
+		}
+	}
+	// No DIFFER line, or no data block: the lead only.
+	tk.Differ, tk.Compared = nil, false
+	if got := SynthText(synthPrompt(t, tk)); got != SynthLead {
+		t.Errorf("uncompared = %q", got)
+	}
+	if got := SynthText("DIFFER: {\"sides\":[{\"ais\":[\"X\"]}]}"); got != SynthLead {
+		t.Errorf("outside a block = %q", got)
+	}
+	if !isSynthSchema(core.SynthSchemaV1) || isSynthSchema(core.JudgeSchemaV1) {
+		t.Error("isSynthSchema cannot tell the schemas apart")
+	}
+}
+
+func claudeSynthArgs(model string) []string {
+	return []string{"-p", "--output-format", "json", "--model", model, "--effort", "medium", "--tools", "",
+		"--strict-mcp-config", "--no-session-persistence", "--safe-mode", "--json-schema", core.SynthSchemaV1}
+}
+
+func TestClaudeSynth(t *testing.T) {
+	exe := Use(t, RoleClaude)
+	dir := t.TempDir()
+	tk := synthTask()
+	p := synthPrompt(t, tk)
+	out := parseClaude(t, run(t, exe, dir, claudeSynthArgs("sonnet"), p, nil))
+	text, err := judge.ValidateSynth(out.Structured)
+	if err != nil || out.IsError || judge.UnnamedSides(tk, text) != 0 || out.Result != string(out.Structured) {
+		t.Fatalf("ok = %+v, %v", out, err)
+	}
+	// The judge schema still gets a judge.
+	jt := numTask()
+	jout := parseClaude(t, run(t, exe, dir, claudeJudgeArgs("haiku"), prompt(t, jt), nil))
+	validate(t, jt, string(jout.Structured))
+	for mode, check := range map[string]func(claudeOut, proc.Result) bool{
+		SynthUsageLimit: func(o claudeOut, r proc.Result) bool {
+			return o.IsError && o.Result == UsageLimitClaude && r.ExitCode == 1
+		},
+		SynthBadModel: func(o claudeOut, r proc.Result) bool { return o.APIStatus == 404 && r.ExitCode == 1 },
+		SynthProse:    func(o claudeOut, r proc.Result) bool { return o.Result == SynthProseText && len(o.Structured) == 0 },
+		SynthBadJSON: func(o claudeOut, r proc.Result) bool {
+			return o.Subtype == "error_max_structured_output_retries" && r.ExitCode == 1
+		},
+		SynthEmpty:   func(o claudeOut, r proc.Result) bool { return string(o.Structured) == SynthEmptyText },
+		SynthToolUse: func(o claudeOut, r proc.Result) bool { return len(o.Denials) == 1 && len(o.Structured) > 0 },
+		SynthFailedWithOutput: func(o claudeOut, r proc.Result) bool {
+			return o.IsError && len(o.Structured) > 0 && strings.Contains(string(r.Stderr), OverloadedStderr)
+		},
+		SynthMissingNames: func(o claudeOut, r proc.Result) bool {
+			return strings.Contains(string(o.Structured), "The answers differ in places.")
+		},
+	} {
+		t.Setenv(EnvSynth, mode)
+		res := run(t, exe, dir, claudeSynthArgs("sonnet"), p, nil)
+		if o := parseClaude(t, res); !check(o, res) {
+			t.Errorf("%s: %+v exit %d", mode, o, res.ExitCode)
+		}
+	}
+}
+
+func TestCodexSynth(t *testing.T) {
+	exe := Use(t, RoleCodex)
+	dir := t.TempDir()
+	schema := filepath.Join(t.TempDir(), core.SynthSchemaFile)
+	if err := os.WriteFile(schema, []byte(core.SynthSchemaV1), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	tk := synthTask()
+	p := synthPrompt(t, tk)
+	evs := parseCodex(t, run(t, exe, dir, codexJudgeArgs(schema), p, nil).Stdout)
+	text, err := judge.ValidateSynth([]byte(lastMessage(evs)))
+	if err != nil || judge.UnnamedSides(tk, text) != 0 || evs[len(evs)-1].Type != "turn.completed" {
+		t.Fatalf("ok = %q %v", lastMessage(evs), err)
+	}
+	if c := Calls(t); len(c) != 1 || c[0].Schema != core.SynthSchemaV1 {
+		t.Errorf("calls = %+v", c)
+	}
+	for mode, check := range map[string]func([]codexEv, proc.Result) bool{
+		SynthUsageLimit: func(e []codexEv, r proc.Result) bool { return r.ExitCode == 1 && e[len(e)-1].Type == "turn.failed" },
+		SynthBadModel: func(e []codexEv, r proc.Result) bool {
+			return r.ExitCode == 1 && strings.Contains(e[len(e)-1].Error.Message, "model_not_found")
+		},
+		SynthToolUse: func(e []codexEv, r proc.Result) bool {
+			return slices.ContainsFunc(e, func(x codexEv) bool { return x.Item != nil && x.Item.Type == "web_search" })
+		},
+		SynthProse:            func(e []codexEv, r proc.Result) bool { return lastMessage(e) == SynthProseText },
+		SynthFailedWithOutput: func(e []codexEv, r proc.Result) bool { return r.ExitCode == 1 && lastMessage(e) != "" },
+	} {
+		t.Setenv(EnvSynth, mode)
+		res := run(t, exe, dir, codexJudgeArgs(schema), p, nil)
+		if e := parseCodex(t, res.Stdout); !check(e, res) {
+			t.Errorf("%s: %+v exit %d", mode, e, res.ExitCode)
+		}
+	}
+}
+
+func opencodeSynthArgs() []string {
+	return []string{"run", "--standalone", "--format", "json", "--agent", SynthAgent, "-m", "opencode-go/deepseek-v4.1-flash", "--title", JudgeTitle}
+}
+
+func TestOpenCodeSynth(t *testing.T) {
+	exe := Use(t, RoleOpenCode)
+	folder := t.TempDir()
+	env := map[string]string{"PWD": folder, "OPENCODE_CONFIG_CONTENT": `{"agent":{}}`}
+	tk := synthTask()
+	p := synthPrompt(t, tk)
+	evs := parseOpenCode(t, run(t, exe, folder, opencodeSynthArgs(), p, env).Stdout)
+	text, err := judge.ValidateSynth([]byte(lastText(evs)))
+	if err != nil || judge.UnnamedSides(tk, text) != 0 || !strings.HasPrefix(lastText(evs), "```json\n") {
+		t.Fatalf("ok = %q %v", lastText(evs), err)
+	}
+	ss := Sessions(t)
+	if len(ss) != 1 || ss[0].Title != JudgeTitle || ss[0].Directory != folder || ss[0].ID != evs[0].SessionID {
+		t.Errorf("sessions = %+v", ss)
+	}
+	for mode, check := range map[string]func([]opencodeEv, proc.Result) bool{
+		SynthUsageLimit: func(e []opencodeEv, r proc.Result) bool {
+			return r.ExitCode == 1 && e[len(e)-1].Error.Message == UsageLimitOpenCode
+		},
+		SynthBadModel: func(e []opencodeEv, r proc.Result) bool { return e[len(e)-1].Error.Type == "provider.no-route" },
+		SynthToolUse: func(e []opencodeEv, r proc.Result) bool {
+			return slices.ContainsFunc(e, func(x opencodeEv) bool { return x.Type == "tool_use" })
+		},
+		SynthProse:            func(e []opencodeEv, r proc.Result) bool { return lastText(e) == SynthProseText },
+		SynthEmpty:            func(e []opencodeEv, r proc.Result) bool { return strings.Contains(lastText(e), SynthEmptyText) },
+		SynthFailedWithOutput: func(e []opencodeEv, r proc.Result) bool { return r.ExitCode == 1 && lastText(e) != "" },
+	} {
+		t.Setenv(EnvSynth, mode)
+		res := run(t, exe, folder, opencodeSynthArgs(), p, env)
+		if e := parseOpenCode(t, res.Stdout); !check(e, res) {
+			t.Errorf("%s: %+v exit %d", mode, e, res.ExitCode)
+		}
+	}
+	if n := len(Sessions(t)); n != 7 {
+		t.Errorf("%d sessions, want one per run", n)
+	}
+}
+
+// _once and per-AI settings work for the writer as for judges, with their
+// own first-call flags.
+func TestSynthModeSettings(t *testing.T) {
+	exe := Use(t, RoleClaude)
+	dir := t.TempDir()
+	p := synthPrompt(t, synthTask())
+	t.Setenv(EnvSynth, "claude=usage_limit_once,codex=prose")
+	t.Setenv(EnvJudge, "usage_limit_once")
+	first := parseClaude(t, run(t, exe, dir, claudeSynthArgs("sonnet"), p, nil))
+	second := parseClaude(t, run(t, exe, dir, claudeSynthArgs("sonnet"), p, nil))
+	if first.Result != UsageLimitClaude || second.IsError {
+		t.Errorf("_once: %+v then %+v", first, second)
+	}
+	// The judge's own _once flag is untouched by the writer's.
+	if j := parseClaude(t, run(t, exe, dir, claudeJudgeArgs("haiku"), prompt(t, numTask()), nil)); j.Result != UsageLimitClaude {
+		t.Errorf("judge _once after the writer's: %+v", j)
+	}
+	for _, bad := range []string{"nope", "claude=ok,claude=prose", "gemini=ok", "ok_twice"} {
+		t.Setenv(EnvSynth, bad)
+		if res := run(t, exe, dir, claudeSynthArgs("sonnet"), p, nil); res.ExitCode != 2 {
+			t.Errorf("%q: exit %d", bad, res.ExitCode)
+		}
+	}
+	if !slices.Contains(SynthModes, SynthOK) || len(SynthModes) != 10 {
+		t.Errorf("SynthModes = %v", SynthModes)
+	}
+}

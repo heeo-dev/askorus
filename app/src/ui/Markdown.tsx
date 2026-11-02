@@ -23,6 +23,7 @@ import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from
 
 import * as i18n from '@/i18n';
 
+import { lettersOrDigits, korean, mathAt, type MathToken, prose } from './inlineMath';
 import { MathBlock, drawable } from './MathBlock';
 import { texToUnicode } from './tex';
 import { type Theme, useTheme } from './theme';
@@ -143,70 +144,9 @@ const footnoteRef: TokenizerExtension = {
   },
 };
 
-// Math: "$$…$$" or "\[…\]" on lines of their own is a formula (display);
-// "$…$", "\(…\)" and the same marks inside a line are math in the text.
-// "$" is also money and shell, so a "$" opens math only before a non-space
-// and not right after a digit or "$" ("5$", "$$$"), and the first "$" after
-// it must close it: after a non-space that is not an opening bracket or a
-// currency ("(US$)"), and not before a digit or "$" (pandoc's rule, so
-// "$5에서 $10" stays money). Math stops at a backtick (code binds tighter:
-// "$20 … `$HOME`"); a number followed by Korean ("$20이고") is money, and
-// so is a run of English words ("$10 and Pro is 20$"). "$$" in a line needs
-// letters or digits too, so "($$)" and "$$ is the PID" stay. "\(…\)" needs
-// a command, an operator or a short name like x, and "\[…\]" in a line a
-// command or "^": a backslash before a bracket is also Markdown's way to
-// write the bracket ("\[options\]", "\(optional\)", "\[Y/n\]").
-type MathToken = { type: 'math'; raw: string; text: string; display: boolean };
-
-const maxInlineMath = 2000; // characters; also keeps every scan short
-// "$x$", "$5$", "$α$", "$넓이$": something to show, not only marks ("$–$")
-const mathy = (tex: string) => /[A-Za-z0-9Ͱ-Ͽ가-힣\\^_=+<>*/|]/.test(tex);
-const lettersOrDigits = (tex: string) => /[A-Za-z0-9Ͱ-Ͽ]/.test(tex);
-// what is left of TeX once commands and \text{…} are taken out
-const bare = (tex: string) => tex.replace(/\\(?:text\w*|math\w*|operatorname|mbox)\s*\{[^{}]*\}/g, ' ').replace(/\\[A-Za-z]+/g, ' ');
-const prose = (tex: string) => /(?:^|[\s(])[A-Za-z]{2,}\s+[A-Za-z]{2,}\s+[A-Za-z]{2,}(?=[\s),.;:]|$)/.test(bare(tex));
-const korean = (tex: string) => /[가-힣]/.test(bare(tex));
-const currency = /[\s(](?:US|HK|NT|NZ|AU|CA|SG)$/;
-
-// mathAt reads math that starts at src[at], or gives null; prev is the character before it.
-function mathAt(src: string, at: number, prev: string): MathToken | null {
-  if (src[at] === '\\') {
-    const open = src[at + 1];
-    const close = open === '(' ? ')' : open === '[' ? ']' : '';
-    if (!close) return null;
-    for (let i = at + 2; i < src.length && i - at <= maxInlineMath; i++) {
-      if (src[i] === '`') return null; // code binds tighter
-      if (src[i] !== '\\') continue;
-      if (src[i + 1] === '\\') {
-        i++; // "\\", a line break, as in "\\[4pt]"
-        continue;
-      }
-      if (src[i + 1] === open) return null; // a second opening first: not this one
-      if (src[i + 1] !== close) continue;
-      const text = src.slice(at + 2, i).trim();
-      const ok = open === '(' ? /[\\^_=+<>]/.test(text) || /^[A-Za-z0-9]{1,3}$/.test(text) : /\\[A-Za-z]|\^/.test(text);
-      return ok ? { type: 'math', raw: src.slice(at, i + 2), text, display: open === '[' } : null;
-    }
-    return null;
-  }
-  if (src[at] !== '$' || /[\d$]/.test(prev)) return null;
-  const n = src[at + 1] === '$' ? 2 : 1;
-  if (!src[at + n] || /[\s$]/.test(src[at + n])) return null;
-  for (let i = at + n; i < src.length && i - at <= maxInlineMath; i++) {
-    if (src[i] === '\\') i++;
-    else if (src[i] === '`') return null;
-    else if (src[i] === '$') {
-      if (n === 2 && src[i + 1] !== '$') return null;
-      const text = src.slice(at + n, i);
-      if (/[\s([{]$/.test(text) || currency.test(text) || /[\d$]/.test(src[i + n] ?? '')) return null;
-      // "**$HOME** and **$PATH**": the next bold's marks, not the end of math
-      if (/\s[*_]+$/.test(text) || /^[*_]+\s/.test(text) || prose(text)) return null;
-      if (n === 2 ? !lettersOrDigits(text) || korean(text) : !mathy(text) || /^[\d,.]+\s*[가-힣]/.test(text)) return null;
-      return { type: 'math', raw: src.slice(at, i + n), text: text.trim(), display: n === 2 };
-    }
-  }
-  return null;
-}
+// Math: formulas on lines of their own are read here (blockMathAt); math
+// inside a line follows the rules in inlineMath.ts (mathAt), which the
+// agent's units share (docs/judge/testdata/inline-math.json).
 
 const mathInline: TokenizerExtension = {
   name: 'mathInline',
@@ -537,8 +477,13 @@ const mathBudget = { count: 40, chars: 12_000 };
 
 type Ctx = { s: ReturnType<typeof styles>; notes: Map<string, number>; depth: number; math: { count: number; chars: number } };
 
-export function Markdown({ text }: { text: string }) {
-  const s = styles(useTheme());
+/**
+ * Markdown draws an answer. size 'synth' is the combined answer's larger
+ * reading size (16/26, F-Result-Expanded); 'body' (15/22) everything else.
+ */
+export function Markdown({ text, size = 'body' }: { text: string; size?: 'body' | 'synth' }) {
+  const th = useTheme();
+  const s = useMemo(() => styles(th, size), [th, size]);
   return (
     <AsText text={text} style={s.body}>
       <Drawn text={text} s={s} />
@@ -891,10 +836,10 @@ function inline(tokens: Token[] | undefined, c: Ctx, depth = 0): ReactNode[] {
   });
 }
 
-const styles = (th: Theme) =>
+const styles = (th: Theme, size: 'body' | 'synth' = 'body') =>
   StyleSheet.create({
-    root: { gap: 8 },
-    body: { color: th.text, fontSize: 15, lineHeight: 22 },
+    root: { gap: size === 'synth' ? 10 : 8 },
+    body: size === 'synth' ? { color: th.text, fontSize: 16, lineHeight: 26 } : { color: th.text, fontSize: 15, lineHeight: 22 },
     heading: { fontWeight: '700', marginTop: 2 },
     h1: { fontSize: 18, lineHeight: 25 },
     h3: { fontSize: 16 },

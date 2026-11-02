@@ -1,4 +1,4 @@
-import { AgentClient, AgentError, NetworkError, baseUrl, normalizeCode } from './client';
+import { AgentClient, AgentError, CancelledError, NetworkError, baseUrl, comparisonPolling, normalizeCode } from './client';
 
 type Call = { url: string; method: string; headers: Record<string, string>; body?: unknown };
 
@@ -210,4 +210,203 @@ test('an ask without a clientRunId is not sent twice, and agent errors keep thei
   const d = new AgentClient(base, { token: 'tok', fetch: g.fn, sleep: noSleep });
   await expect(d.startRun({ mode: 'ask', prompt: 'q', clientRunId: 'k' })).rejects.toMatchObject({ code: 'too_many_runs' });
   expect(g.calls).toHaveLength(1);
+});
+
+// P2-3: answer comparisons.
+const cmp = (status: string, over: Record<string, unknown> = {}) => ({
+  comparisonId: 'c1',
+  status,
+  source: 'run',
+  engine: 'pc',
+  answers: [],
+  requests: [],
+  judgments: [],
+  items: [],
+  counts: { differ: 0, check: 0, agree: 0, onlyOne: 0, notCompared: 0, notJudged: 0 },
+  ...(status === 'waiting' || status === 'running' ? { pollAfterMs: 1000 } : {}),
+  ...over,
+});
+const paths = (calls: Call[]) => calls.map((x) => `${x.method} ${x.url.replace(base, '')}`);
+
+test('an ask carries its compare, and the run comparison comes back', async () => {
+  const f = fakeFetch([
+    json(202, { ...run('running', []), comparisonId: 'c1', compareError: { code: 'too_many_comparisons', message: 'busy' } }),
+  ]);
+  const c = new AgentClient(base, { token: 'tok', fetch: f.fn, sleep: noSleep });
+  const r = await c.startRun({ mode: 'ask', prompt: 'q', clientRunId: 'k', compare: { earlier: ['first'], judges: ['claude', 'codex'] } });
+  expect((f.calls[0].body as { compare: unknown }).compare).toEqual({ earlier: ['first'], judges: ['claude', 'codex'] });
+  expect(r.comparisonId).toBe('c1');
+  expect(r.compareError).toEqual({ code: 'too_many_comparisons', message: 'busy' });
+});
+
+test('a comparison is asked for at once, then as often as the PC says, until it is final', async () => {
+  const f = fakeFetch([
+    json(200, cmp('waiting', { pollAfterMs: 250 })),
+    json(200, cmp('running', { pollAfterMs: 400 })),
+    json(200, cmp('done')),
+  ]);
+  const waits: number[] = [];
+  const c = new AgentClient(base, { token: 'tok', fetch: f.fn, sleep: async (ms) => void waits.push(ms) });
+  const seen: string[] = [];
+  const s = await c.waitComparison('c1', { onUpdate: (x) => seen.push(x.status) });
+  expect(s.status).toBe('done');
+  expect(seen).toEqual(['waiting', 'running', 'done']);
+  expect(waits).toEqual([250, 400]);
+  expect(paths(f.calls)).toEqual(['GET /v1/comparisons/c1', 'GET /v1/comparisons/c1', 'GET /v1/comparisons/c1']);
+});
+
+test('a final comparison is asked for once; an unknown status polls only while the PC asks to', async () => {
+  const f = fakeFetch([json(200, cmp('failed', { error: { code: 'no_judge' } }))]);
+  const c = new AgentClient(base, { fetch: f.fn, sleep: noSleep });
+  expect((await c.waitComparison('c1')).error?.code).toBe('no_judge');
+  expect(f.calls).toHaveLength(1);
+
+  const g = fakeFetch([json(200, cmp('paused', { pollAfterMs: 5 })), json(200, cmp('archived'))]);
+  const waits: number[] = [];
+  const d = new AgentClient(base, { fetch: g.fn, sleep: async (ms) => void waits.push(ms) });
+  expect((await d.waitComparison('c1')).status).toBe('archived');
+  expect(waits).toEqual([5]);
+  // Running with no pollAfterMs still polls, once a second.
+  const h = fakeFetch([json(200, cmp('running', { pollAfterMs: undefined })), json(200, cmp('done'))]);
+  const waits2: number[] = [];
+  await new AgentClient(base, { fetch: h.fn, sleep: async (ms) => void waits2.push(ms) }).waitComparison('c1');
+  expect(waits2).toEqual([1000]);
+});
+
+test('waiting for a comparison survives 30 dropped polls in a row, not 31', async () => {
+  const ok = fakeFetch([...Array.from({ length: 30 }, dropped), json(200, cmp('done'))]);
+  const waits: number[] = [];
+  const c = new AgentClient(base, { fetch: ok.fn, sleep: async (ms) => void waits.push(ms) });
+  expect((await c.waitComparison('c1')).status).toBe('done');
+  expect(ok.calls).toHaveLength(31);
+  expect(waits).toEqual(Array.from({ length: 30 }, () => 1000));
+
+  // Misses count again from zero after an answer.
+  const reset = fakeFetch([
+    ...Array.from({ length: 30 }, dropped),
+    json(200, cmp('running')),
+    ...Array.from({ length: 30 }, dropped),
+    json(200, cmp('done')),
+  ]);
+  expect((await new AgentClient(base, { fetch: reset.fn, sleep: noSleep }).waitComparison('c1')).status).toBe('done');
+
+  const lost = fakeFetch(Array.from({ length: 31 }, dropped));
+  await expect(new AgentClient(base, { fetch: lost.fn, sleep: noSleep }).waitComparison('c1')).rejects.toBeInstanceOf(NetworkError);
+  expect(lost.calls).toHaveLength(31);
+});
+
+test('a comparison the PC no longer has keeps its code, and cancelling stops waiting', async () => {
+  const f = fakeFetch([json(404, { error: { code: 'comparison_not_found', message: 'gone' } })]);
+  const err = await new AgentClient(base, { fetch: f.fn, sleep: noSleep }).waitComparison('c1').catch((e) => e);
+  expect(err).toBeInstanceOf(AgentError);
+  expect(err.code).toBe('comparison_not_found');
+  expect(err.status).toBe(404);
+
+  const g = fakeFetch([json(200, cmp('running'))]);
+  const ctl = new AbortController();
+  const c = new AgentClient(base, {
+    fetch: g.fn,
+    sleep: async (_ms, signal) => {
+      ctl.abort();
+      if (signal?.aborted) throw new CancelledError();
+    },
+  });
+  await expect(c.waitComparison('c1', { signal: ctl.signal })).rejects.toBeInstanceOf(CancelledError);
+  expect(g.calls).toHaveLength(1);
+});
+
+test('a dropped comparison request is sent again with the same clientComparisonId, at most three times', async () => {
+  const body = { clientComparisonId: 'k1', question: 'q', answers: [{ id: 'claude', agent: 'claude', via: 'pc' as const, text: 'a' }] };
+  const f = fakeFetch([dropped(), dropped(), json(202, cmp('waiting', { source: 'direct' }))]);
+  const waits: number[] = [];
+  const c = new AgentClient(base, { token: 'tok', fetch: f.fn, sleep: async (ms) => void waits.push(ms) });
+  expect((await c.startComparison(body)).source).toBe('direct');
+  expect(paths(f.calls)).toEqual(['POST /v1/comparisons', 'POST /v1/comparisons', 'POST /v1/comparisons']);
+  expect(f.calls.map((x) => x.body)).toEqual([body, body, body]);
+  expect(waits).toEqual([1000, 1000]);
+
+  const g = fakeFetch([dropped(), dropped(), dropped()]);
+  await expect(new AgentClient(base, { fetch: g.fn, sleep: noSleep }).startComparison(body)).rejects.toBeInstanceOf(NetworkError);
+  expect(g.calls).toHaveLength(3);
+
+  const h = fakeFetch([dropped()]);
+  const noKey = { question: body.question, answers: body.answers };
+  await expect(new AgentClient(base, { fetch: h.fn, sleep: noSleep }).startComparison(noKey)).rejects.toBeInstanceOf(NetworkError);
+  expect(h.calls).toHaveLength(1);
+
+  const i = fakeFetch([json(429, { error: { code: 'too_many_comparisons', message: 'busy' } })]);
+  await expect(new AgentClient(base, { fetch: i.fn, sleep: noSleep }).startComparison(body)).rejects.toMatchObject({
+    code: 'too_many_comparisons',
+  });
+  expect(i.calls).toHaveLength(1);
+});
+
+test('comparison, retry and cancel use their method and an encoded id', async () => {
+  const f = fakeFetch([
+    json(200, cmp('done')),
+    json(202, cmp('running')),
+    json(409, { error: { code: 'comparison_running', message: 'still running' } }),
+    json(200, cmp('failed', { error: { code: 'cancelled' } })),
+  ]);
+  const c = new AgentClient(base, { token: 'tok', fetch: f.fn, sleep: noSleep });
+  await c.comparison('c 1/x');
+  expect((await c.retryComparison('c 1/x')).status).toBe('running');
+  const err = await c.retryComparison('c 1/x').catch((e) => e);
+  expect(err).toBeInstanceOf(AgentError);
+  expect(err.code).toBe('comparison_running');
+  expect(err.status).toBe(409);
+  expect((await c.cancelComparison('c 1/x')).error?.code).toBe('cancelled');
+  expect(paths(f.calls)).toEqual([
+    'GET /v1/comparisons/c%201%2Fx',
+    'POST /v1/comparisons/c%201%2Fx/retry',
+    'POST /v1/comparisons/c%201%2Fx/retry',
+    'POST /v1/comparisons/c%201%2Fx/cancel',
+  ]);
+  expect(f.calls[1].body).toBeUndefined();
+});
+
+// S5b: the combined answer.
+test('writeSynthesis posts the writer, or an empty body, to the encoded id', async () => {
+  const waiting = cmp('done', { pollAfterMs: 1000, synthesis: { status: 'waiting', agent: 'codex', judged: false } });
+  const f = fakeFetch([
+    json(202, waiting),
+    json(202, cmp('done', { synthesis: { status: 'done', agent: 'claude', text: 'x', judged: true } })),
+    json(409, { error: { code: 'comparison_running', message: 'still running' } }),
+    json(404, { error: { code: 'comparison_not_found', message: 'gone' } }),
+  ]);
+  const c = new AgentClient(base, { token: 'tok', fetch: f.fn, sleep: noSleep });
+  expect((await c.writeSynthesis('c 1/x', 'codex')).synthesis).toEqual({ status: 'waiting', agent: 'codex', judged: false });
+  expect((await c.writeSynthesis('c1')).synthesis?.status).toBe('done');
+  expect(await c.writeSynthesis('c1', '').catch((e) => [e.code, e.status])).toEqual(['comparison_running', 409]);
+  expect(await c.writeSynthesis('c1').catch((e) => [e.code, e.status])).toEqual(['comparison_not_found', 404]);
+  expect(paths(f.calls)).toEqual([
+    'POST /v1/comparisons/c%201%2Fx/synthesis',
+    'POST /v1/comparisons/c1/synthesis',
+    'POST /v1/comparisons/c1/synthesis',
+    'POST /v1/comparisons/c1/synthesis',
+  ]);
+  expect(f.calls.map((x) => x.body)).toEqual([{ agent: 'codex' }, {}, {}, {}]);
+  expect(f.calls[0].headers['Content-Type']).toBe('application/json');
+});
+
+test('a done comparison whose combined answer is still being written is waited for', async () => {
+  const f = fakeFetch([
+    json(200, cmp('done', { pollAfterMs: 300, synthesis: { status: 'running', agent: 'claude', judged: true } })),
+    json(200, cmp('done', { synthesis: { status: 'done', agent: 'claude', text: 'All in one.', judged: true } })),
+  ]);
+  const waits: number[] = [];
+  const s = await new AgentClient(base, { fetch: f.fn, sleep: async (ms) => void waits.push(ms) }).waitComparison('c1');
+  expect(s.synthesis?.text).toBe('All in one.');
+  expect(waits).toEqual([300]);
+  expect(f.calls).toHaveLength(2);
+});
+
+test('comparisonPolling: waiting or running, or whatever the PC still wants polled', () => {
+  expect(comparisonPolling({ status: 'waiting' })).toBe(true);
+  expect(comparisonPolling({ status: 'running' })).toBe(true);
+  expect(comparisonPolling({ status: 'done' })).toBe(false);
+  expect(comparisonPolling({ status: 'failed' })).toBe(false);
+  expect(comparisonPolling({ status: 'later', pollAfterMs: 1 })).toBe(true);
+  expect(comparisonPolling({ status: 'later', pollAfterMs: 0 })).toBe(false);
+  expect(comparisonPolling({ status: 'later' })).toBe(false);
 });

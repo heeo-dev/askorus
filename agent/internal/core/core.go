@@ -54,12 +54,16 @@ const (
 	// an AI whose CLI is at least the version the judge command was tested
 	// with, when judging is on and the judge folder exists.
 	CapJudge Capability = "judge"
+	// CapSynthesize: the AI writes combined answers (종합 답변, P2-3 S5b).
+	// It is announced for an AI that judges and can ask: the writer runs
+	// its ask tier model with the judge's locked-down command.
+	CapSynthesize Capability = "synthesize"
 )
 
 // AllCapabilities lists every name the API knows, implemented or not.
 var AllCapabilities = []Capability{
 	CapList, CapStart, CapResume, CapStop, CapRemove,
-	CapOpenOfficial, CapServe, CapPreview, CapAsk, CapTUI, CapChat, CapJudge,
+	CapOpenOfficial, CapServe, CapPreview, CapAsk, CapTUI, CapChat, CapJudge, CapSynthesize,
 }
 
 // OpenModeOfficial opens a session in the AI's official app (principle 6).

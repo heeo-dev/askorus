@@ -1,0 +1,56 @@
+<!doctype html>
+<!--
+  The wordmark (design board F-Brand-Wordmark): 'Ask' + 'semble' in Noto
+  Sans KR 800, letter-spacing -0.025em, one line, no gap, only the colour
+  changes; line-height 1.1 as on F-Brand-Splash-Final. Dark: #FFAD85 +
+  #EDEBE7. Light: #DD5A26 + #1D1A17.
+  scripts/render-brand.mjs fills {{font}} (the PC's NotoSansKR-VF.ttf as a
+  data URL, so no other font can stand in), {{size}} (font px), {{ask}},
+  {{semble}} (colours) and {{left}}/{{top}} (where the text sits). The
+  script below writes the text box, whether the font loaded and the width
+  at weight 300 (the variable weight axis is in use when it differs) into
+  <html data-measure>, which the --dump-dom pass reads.
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+@font-face { font-family: 'AsksembleWord'; src: url("{{font}}") format('truetype'); font-weight: 100 900; }
+html, body { margin: 0; background: transparent; overflow: hidden; }
+#word {
+  position: absolute; left: {{left}}px; top: {{top}}px; margin: 0;
+  font-family: 'AsksembleWord'; font-weight: 800; font-size: {{size}}px; line-height: 1.1;
+  letter-spacing: -0.025em; white-space: nowrap; display: inline-block;
+}
+#thin {
+  position: absolute; left: 0; top: 0; visibility: hidden; margin: 0;
+  font-family: 'AsksembleWord'; font-weight: 300; font-size: {{size}}px; line-height: 1.1;
+  letter-spacing: -0.025em; white-space: nowrap; display: inline-block;
+}
+</style>
+</head>
+<body>
+<p id="word" lang="en"><span style="color: {{ask}};">Ask</span><span style="color: {{semble}};">semble</span></p>
+<p id="thin" lang="en" aria-hidden="true">Asksemble</p>
+<script>
+(async () => {
+  const want = '800 {{size}}px "AsksembleWord"';
+  let faces = 0;
+  try {
+    faces = (await document.fonts.load(want, 'Asksemble')).length;
+  } catch (e) {
+    faces = -1;
+  }
+  const box = document.getElementById('word').getBoundingClientRect();
+  const thin = document.getElementById('thin').getBoundingClientRect();
+  document.documentElement.dataset.measure = JSON.stringify({
+    faces,
+    loaded: document.fonts.check(want, 'Asksemble'),
+    width: box.width,
+    height: box.height,
+    thinWidth: thin.width,
+  });
+})();
+</script>
+</body>
+</html>

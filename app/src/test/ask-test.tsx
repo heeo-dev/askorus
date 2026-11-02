@@ -1,15 +1,26 @@
-// P2-2: the 한 번에 묻기 tab against a pretend agent that answers asks.
+// S5c: the 한 번에 screen ('/', where the app opens) against a pretend agent:
+// no PC, an older agent, the empty screen (what happens to a question,
+// recent questions, the AI picker and the tier), questions that are not
+// compared (a PC whose AIs do not judge, a follow-up to one AI), New
+// question, the drawer's history and reopening, another PC, and Korean.
+// Every user event is awaited (R-07). The shell reads GET /v1/sessions
+// now and then, so those calls are never counted exactly.
 
-import { userEvent } from '@testing-library/react-native';
+import { act, userEvent, within } from '@testing-library/react-native';
 import * as Clipboard from 'expo-clipboard';
 import { renderRouter, screen, waitFor } from 'expo-router/testing-library';
 import { Linking } from 'react-native';
 
+import { conversations } from '@/ask/conversations';
+import { defaultAskPrefs, loadAskPrefs, saveAskPrefs, type AskPrefs } from '@/ask/prefs';
 import { ConnectionStore } from '@/connections/store';
+import { setLang, t } from '@/i18n';
 import { FakeAgent, HOST, PORT, TOKEN } from '@/test/fakeAgent';
+import { pickPC } from '@/ui/shell/pcs';
 
 let agent: FakeAgent;
 const appDir = './src/app';
+type User = ReturnType<typeof userEvent.setup>;
 
 beforeEach(() => {
   agent = new FakeAgent();
@@ -17,102 +28,216 @@ beforeEach(() => {
   globalThis.fetch = agent.fetch;
 });
 
-afterEach(() => jest.restoreAllMocks());
-
-async function pairedPC(name = 'DESKTOP-TEST', host = HOST, token = TOKEN) {
-  return new ConnectionStore().add(
-    { kind: 'pc', name, host, port: PORT, deviceId: 'dev-1', deviceName: 'Test Phone', pairedAt: 'x' },
-    token,
-  );
-}
-
-async function ask(user: ReturnType<typeof userEvent.setup>, question: string, button = 'Ask') {
-  await user.type(await screen.findByLabelText('Ask a question'), question);
-  await user.press(screen.getByRole('button', { name: button }));
-}
-
-test('with no PC it says the PC answers and offers pairing', async () => {
-  await renderRouter(appDir, { initialUrl: '/ask' });
-  expect(await screen.findByText("Your PC's AIs answer the questions.")).toBeTruthy();
-  expect(screen.getByText('Pair with a PC')).toBeTruthy();
+afterEach(() => {
+  setLang('en');
+  jest.restoreAllMocks();
 });
 
-test('an agent without asks says to update it', async () => {
+async function pairedPC(name = 'DESKTOP-TEST', host = HOST) {
+  return new ConnectionStore().add({ kind: 'pc', name, host, port: PORT, deviceId: 'dev-1', deviceName: 'Test Phone', pairedAt: 'x' }, TOKEN);
+}
+
+async function open(prefs: Partial<AskPrefs> = {}) {
+  const user = userEvent.setup();
+  await pairedPC();
+  if (Object.keys(prefs).length) await saveAskPrefs({ ...defaultAskPrefs, ...prefs });
+  const r = await renderRouter(appDir, { initialUrl: '/' });
+  return { user, r };
+}
+
+async function ask(user: User, question: string) {
+  await user.type(await screen.findByLabelText('Ask a question'), question);
+  await user.press(screen.getByRole('button', { name: 'Ask' }));
+}
+
+async function follow(user: User, question: string, field = 'Follow up', send = 'Send') {
+  await user.type(screen.getByLabelText(field), question);
+  await user.press(screen.getByRole('button', { name: send }));
+}
+
+const close = () => screen.getByRole('button', { name: 'Close' });
+
+test('with no PC it says the PC answers and offers pairing', async () => {
+  const user = userEvent.setup();
+  const r = await renderRouter(appDir, { initialUrl: '/' });
+  expect(await screen.findByText("Your PC's AIs answer the questions.")).toBeTruthy();
+  expect(screen.getByText(/^Pair a PC first/)).toBeTruthy();
+  expect(screen.getByRole('tab', { name: 'All at once' })).toBeSelected();
+  await user.press(screen.getByRole('button', { name: 'Pair with a PC' }));
+  await waitFor(() => expect(r.getPathname()).toBe('/pair'));
+});
+
+test('an agent without asks says to update it; one with no AI that can answer says so', async () => {
   agent = new FakeAgent(); // no ask capability
   globalThis.fetch = agent.fetch;
-  await pairedPC();
-  await renderRouter(appDir, { initialUrl: '/ask' });
+  const { r } = await open();
   expect(await screen.findByText(/does not know asks yet/)).toBeTruthy();
+  expect(screen.queryByLabelText('Ask a question')).toBeNull();
+  await r.unmount();
+
+  agent = new FakeAgent();
+  agent.enableAsk();
+  agent.capabilities = agent.capabilities.filter((c) => c !== 'ask');
+  agent.askAgents = agent.askAgents.map((a) => ({ ...a, available: false }));
+  globalThis.fetch = agent.fetch;
+  await renderRouter(appDir, { initialUrl: '/' });
+  expect(await screen.findByText(/^No AI on this PC can answer right now/)).toBeTruthy();
   expect(screen.queryByLabelText('Ask a question')).toBeNull();
 });
 
-test('one question goes to every AI; answers show as each AI finishes', async () => {
-  agent.runLimit = 1;
-  const user = userEvent.setup();
-  await pairedPC();
-  await renderRouter(appDir, { initialUrl: '/ask' });
-  await ask(user, '대한민국의 수도는?');
+test('the empty screen asks what to ask and says where a question goes', async () => {
+  await open();
+  expect(await screen.findByRole('header', { name: 'What would you like to ask?' })).toBeTruthy();
+  // This PC's AIs do not judge: the plain intro, nothing about companies.
+  expect(screen.getByText('One question goes to every AI turned on, at once.')).toBeTruthy();
+  expect(screen.queryByText(/company receives/)).toBeNull();
+  expect(screen.queryByText('Recent questions')).toBeNull();
+  expect(screen.getByRole('button', { name: 'AIs to answer: 3 (Claude, Codex, OpenCode). Pick' })).toBeTruthy();
+  expect(screen.getByRole('radio', { name: 'Standard' })).toBeChecked();
+  expect(screen.getByRole('button', { name: 'Ask' })).toBeDisabled();
+  // No question yet: no New question button.
+  expect(screen.queryByRole('button', { name: 'New question' })).toBeNull();
+});
 
-  // Claude has answered, the other two are still at it.
+test('on a PC whose AIs judge and write, the intro says the companies get the answers (R-34)', async () => {
+  agent.enableJudge();
+  agent.enableSynth();
+  await open();
+  expect(await screen.findByText(/^One question goes to every AI turned on, at once\. Once the answers are in, the AIs judge/)).toBeTruthy();
+  expect(screen.getByText(/the judging AI's company receives the question and the other AIs' answers\.$/)).toBeTruthy();
+  expect(screen.getByText(/^Once the answers are compared, one AI writes a combined answer/)).toBeTruthy();
+});
+
+test('the AI picker turns AIs on and off and picks a model; they and the tier go with the question and stay', async () => {
+  const { user, r } = await open();
+  await user.press(await screen.findByRole('button', { name: 'AIs to answer: 3 (Claude, Codex, OpenCode). Pick' }));
+  expect(await screen.findByRole('header', { name: 'AIs to answer' })).toBeTruthy();
+  expect(screen.getByText('My PC: DESKTOP-TEST')).toBeTruthy();
+  expect(screen.getByText('sonnet')).toBeTruthy(); // Claude's model for the tier
+  // Each row is the AI's switch, with its state (UX-9); the small switch in
+  // it is not a second control with the same name, the › is its own button.
+  expect(screen.getAllByRole('switch').map((x) => x.props.accessibilityLabel)).toEqual(['Claude, sonnet', 'Codex, codex-std', 'OpenCode, opencode-std']);
+  expect(screen.queryByRole('button', { name: 'OpenCode, opencode-std' })).toBeNull();
+  await user.press(screen.getByRole('switch', { name: 'Codex, codex-std' }));
+  expect(screen.getByRole('switch', { name: 'Codex, codex-std' })).not.toBeChecked();
+  // The small switch turns it too (hidden from screen readers: the row says it).
+  const small = (agent: string) => screen.getByTestId(`switch-${agent}`, { includeHiddenElements: true });
+  await user.press(small('opencode'));
+  expect(screen.getByRole('switch', { name: 'OpenCode, opencode-std' })).not.toBeChecked();
+  // The last AI that is on stays on (UX-10): a question always has an AI to go to.
+  await user.press(screen.getByRole('switch', { name: 'Claude, sonnet' }));
+  expect(screen.getByRole('switch', { name: 'Claude, sonnet' })).toBeChecked();
+  await user.press(small('claude'));
+  expect(screen.getByRole('switch', { name: 'Claude, sonnet' })).toBeChecked();
+  await user.press(screen.getByRole('switch', { name: 'OpenCode, opencode-std' }));
+  expect(screen.getByRole('switch', { name: 'OpenCode, opencode-std' })).toBeChecked();
+
+  // A model for Claude: the model sheet, then back to the picker.
+  await user.press(screen.getByRole('button', { name: 'Claude model' }));
+  expect(await screen.findByRole('header', { name: 'Claude model' })).toBeTruthy();
+  expect(screen.getByRole('radio', { name: 'By tier' })).toBeChecked();
+  expect(screen.getByText('Quick haiku · Standard sonnet · Deep opus')).toBeTruthy();
+  await user.press(screen.getByRole('radio', { name: 'opus' }));
+  expect(await screen.findByRole('header', { name: 'AIs to answer' })).toBeTruthy();
+  expect(screen.getByRole('switch', { name: 'Claude, opus' })).toBeChecked();
+  await user.press(close());
+  await waitFor(() => expect(screen.queryByTestId('ai-sheet')).toBeNull());
+
+  expect(screen.getByRole('button', { name: 'AIs to answer: 2 (Claude, OpenCode). Pick' })).toBeTruthy();
+  await user.press(screen.getByRole('radio', { name: 'Deep' }));
+  await ask(user, 'q1');
+  expect(await screen.findByText('opencode says: q1')).toBeTruthy();
+  expect(agent.runRequests()[0]).toMatchObject({ tier: 'deep', agents: [{ agent: 'claude', model: 'opus' }, { agent: 'opencode' }] });
+  expect(await loadAskPrefs()).toMatchObject({ tier: 'deep', off: ['codex'], models: { claude: 'opus' } });
+
+  // Kept for next time; a long press on a row opens its model too.
+  await r.unmount();
+  const user2 = userEvent.setup();
+  await renderRouter(appDir, { initialUrl: '/' });
+  expect(await screen.findByRole('radio', { name: 'Deep' })).toBeChecked();
+  await user2.press(screen.getByRole('button', { name: 'AIs to answer: 2 (Claude, OpenCode). Pick' }));
+  expect(await screen.findByRole('switch', { name: 'Codex, codex-deep' })).not.toBeChecked();
+  await user2.longPress(screen.getByRole('switch', { name: 'Claude, opus' }));
+  expect(await screen.findByRole('radio', { name: 'opus' })).toBeChecked();
+  await user2.press(screen.getByRole('radio', { name: 'By tier' }));
+  expect(await screen.findByRole('switch', { name: 'Claude, opus' })).toBeTruthy(); // Deep by tier is opus too
+  await waitFor(async () => expect((await loadAskPrefs()).models).toEqual({}));
+});
+
+test('with every AI turned off (kept from before), the picker says so and turning one on is enough (UX-10)', async () => {
+  const { user } = await open({ off: ['claude', 'codex', 'opencode'] });
+  await user.type(await screen.findByLabelText('Ask a question'), 'q');
+  expect(screen.getByRole('button', { name: 'Ask' })).toBeDisabled();
+  await user.press(screen.getByRole('button', { name: 'No AI is on to answer. Pick' }));
+  await user.press(await screen.findByRole('switch', { name: 'Codex, codex-std' }));
+  expect(screen.getByRole('switch', { name: 'Codex, codex-std' })).toBeChecked();
+  await user.press(close());
+  expect(await screen.findByRole('button', { name: 'AIs to answer: 1 (Codex). Pick' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Ask' })).toBeEnabled();
+});
+
+test('an AI the PC cannot use is dimmed in the picker and never asked', async () => {
+  agent.askAgents[1] = { agent: 'opencode', available: false, capabilities: [], notices: ['opencode_not_found'] };
+  const { user } = await open();
+  await user.press(await screen.findByRole('button', { name: 'AIs to answer: 2 (Claude, Codex). Pick' }));
+  expect(await screen.findByRole('switch', { name: 'OpenCode, This AI cannot answer on this PC right now.' })).toBeDisabled();
+  expect(screen.getByText('This AI cannot answer on this PC right now.')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'OpenCode model' })).toBeNull();
+  await user.press(close());
+  await ask(user, 'q');
+  await screen.findByText('codex says: q');
+  expect(agent.runRequests()[0].agents).toEqual([{ agent: 'claude' }, { agent: 'codex' }]);
+});
+
+test('a question no AI compares shows each answer in full as it comes, with its model and time', async () => {
+  agent.runLimit = 1;
+  const { user } = await open();
+  await ask(user, '대한민국의 수도는?');
   expect(await screen.findByText('claude says: 대한민국의 수도는?')).toBeTruthy();
+  expect(screen.getByText('대한민국의 수도는?')).toBeTruthy(); // the question bubble
   await waitFor(() => expect(screen.getAllByText('Answering…')).toHaveLength(2));
-  expect(screen.getByRole('button', { name: 'Follow up' })).toBeDisabled();
+  expect(screen.getByText('codex-standard · Answering…')).toBeTruthy();
+  // The follow-up waits for every answer, and says so.
+  const send = screen.getByRole('button', { name: 'Send' });
+  expect(send).toBeDisabled();
+  expect(send.props.accessibilityHint).toBe('You can send once every answer is in.');
 
   agent.runLimit = Infinity;
   expect(await screen.findByText('opencode says: 대한민국의 수도는?')).toBeTruthy();
-  expect(screen.getByText('codex says: 대한민국의 수도는?')).toBeTruthy();
   expect(screen.queryByText('Answering…')).toBeNull();
-  expect(screen.getAllByText(/^1\.2 s · \w+-standard$/)).toHaveLength(3); // time, then model
-
+  expect(screen.getAllByText(/^\w+-standard · 1\.2 s$/)).toHaveLength(3); // model, then time
+  expect(screen.getByLabelText("Codex's answer")).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Send' }).props.accessibilityHint).toBeUndefined();
   const [req] = agent.runRequests();
   expect(req).toMatchObject({ mode: 'ask', prompt: '대한민국의 수도는?', tier: 'standard' });
   expect(req.agents).toEqual([{ agent: 'claude' }, { agent: 'codex' }, { agent: 'opencode' }]);
+  expect(req.compare).toBeUndefined();
   expect(req.clientRunId).toMatch(/^[0-9a-f-]{36}$/);
-  expect(screen.getByText('대한민국의 수도는?')).toBeTruthy(); // the question bubble
 });
 
-test('the tier, the AIs turned on and a picked model go with the question and stay for next time', async () => {
-  const user = userEvent.setup();
-  await pairedPC();
-  await renderRouter(appDir, { initialUrl: '/ask' });
-  await user.press(await screen.findByRole('radio', { name: 'Deep' }));
-  await user.press(screen.getByRole('switch', { name: 'Codex' })); // off
-  await user.longPress(screen.getByRole('switch', { name: 'Claude' }));
-  expect(await screen.findByText('Claude model')).toBeTruthy();
-  await user.press(screen.getByRole('radio', { name: 'opus' }));
-  expect(await screen.findByText('Claude · opus')).toBeTruthy();
-  await ask(user, 'q1');
-  await screen.findByText('opencode says: q1');
-  expect(agent.runRequests()[0]).toMatchObject({ tier: 'deep', agents: [{ agent: 'claude', model: 'opus' }, { agent: 'opencode' }] });
-
-  await renderRouter(appDir, { initialUrl: '/ask' });
-  expect(await screen.findByRole('radio', { name: 'Deep' })).toBeChecked();
-  expect(screen.getByRole('switch', { name: 'Codex' })).not.toBeChecked();
-  expect(screen.getByText('Claude · opus')).toBeTruthy();
-
-  // Back to answering by tier.
-  await user.longPress(screen.getByRole('switch', { name: 'Claude' }));
-  await user.press(await screen.findByRole('radio', { name: 'By tier' }));
-  expect(await screen.findByText('Claude')).toBeTruthy();
-});
-
-test('follow-ups carry each AI on its own conversation; "Only this AI" asks just that one', async () => {
-  const user = userEvent.setup();
-  await pairedPC();
-  await renderRouter(appDir, { initialUrl: '/ask' });
+test('follow-ups carry each AI on its own conversation; Only this AI asks just that one, with its chip', async () => {
+  const { user } = await open();
   await ask(user, 'first');
   await screen.findByText('opencode says: first');
 
-  const codexCard = screen.getByLabelText("Codex's answer");
-  await user.press(screen.getAllByText('Only this AI')[1]);
-  expect(screen.getByText('Only Codex ✕')).toBeTruthy();
-  expect(codexCard).toBeTruthy();
-  await ask(user, 'only you', 'Follow up');
+  await user.press(screen.getAllByRole('button', { name: 'Only this AI' })[1]);
+  expect(screen.getByText('Only Codex')).toBeTruthy();
+  expect(screen.getByLabelText('Ask Codex a follow-up')).toBeTruthy();
+  await follow(user, 'only you', 'Ask Codex a follow-up', 'Send to Codex');
   await screen.findByText('codex says: only you');
   expect(agent.runRequests()[1].agents).toEqual([{ agent: 'codex', session: 'codex:s-1' }]);
+  // After sending, the next one goes to everyone again.
+  expect(screen.queryByText('Only Codex')).toBeNull();
+
+  // The chip can be cancelled before sending.
+  await user.press(screen.getAllByRole('button', { name: 'Only this AI' })[0]);
+  expect(screen.getByText('Only Claude')).toBeTruthy();
+  await user.press(screen.getByRole('button', { name: 'Stop asking only Claude' }));
+  expect(screen.queryByText('Only Claude')).toBeNull();
+  expect(screen.getByLabelText('Follow up')).toBeTruthy();
 
   // Back to everyone: each AI goes on with its latest conversation.
-  await ask(user, 'all again', 'Follow up');
+  await follow(user, 'all again');
   await screen.findByText('opencode says: all again');
   expect(agent.runRequests()[2].agents).toEqual([
     { agent: 'claude', session: 'claude:s-1' },
@@ -122,7 +247,7 @@ test('follow-ups carry each AI on its own conversation; "Only this AI" asks just
 
   // A new question starts new conversations.
   await user.press(screen.getByRole('button', { name: 'New question' }));
-  expect(screen.queryByText('first')).toBeNull();
+  expect(screen.queryByText('opencode says: first')).toBeNull();
   await ask(user, 'fresh');
   await screen.findByText('opencode says: fresh');
   expect(agent.runRequests()[3].agents).toEqual([{ agent: 'claude' }, { agent: 'codex' }, { agent: 'opencode' }]);
@@ -130,85 +255,120 @@ test('follow-ups carry each AI on its own conversation; "Only this AI" asks just
 
 test('answers are drawn from their Markdown; copy keeps the Markdown', async () => {
   agent.askReplies.claude = '수도는 **서울**입니다.\n\n- 인구: 약 930만';
-  const user = userEvent.setup();
-  await pairedPC();
-  await renderRouter(appDir, { initialUrl: '/ask' });
+  const { user } = await open();
   await ask(user, 'q');
   await screen.findByText('opencode says: q');
   expect(screen.queryByText(/\*\*/)).toBeNull();
   expect(screen.getByText('서울')).toHaveStyle({ fontWeight: '700' });
   expect(screen.getByText('인구: 약 930만')).toBeTruthy();
-  await user.press(screen.getAllByText('Copy')[0]);
+  await user.press(screen.getAllByRole('button', { name: 'Copy' })[0]);
   expect(Clipboard.setStringAsync).toHaveBeenCalledWith('수도는 **서울**입니다.\n\n- 인구: 약 930만');
+  expect(await screen.findByText('Copied.')).toBeTruthy();
 });
 
 test('an AI that fails says why while the others answer', async () => {
   agent.askReplies.codex = { code: 'ask_failed', message: 'usage limit reached' };
   agent.askReplies.opencode = { code: 'ask_timeout' };
-  const user = userEvent.setup();
-  await pairedPC();
-  await renderRouter(appDir, { initialUrl: '/ask' });
+  const { user } = await open();
   await ask(user, 'q');
   expect(await screen.findByText('claude says: q')).toBeTruthy();
   expect(await screen.findByText('The AI reported an error.\nusage limit reached')).toBeTruthy();
   expect(screen.getByText('No answer within 3 minutes.')).toBeTruthy();
+  expect(screen.getAllByRole('button', { name: 'Copy' })).toHaveLength(1); // only an answer can be copied
 });
 
 test('a refused run says why, and trying again sends the same run', async () => {
   agent.runError = { status: 429, code: 'too_many_runs' };
-  const user = userEvent.setup();
-  await pairedPC();
-  await renderRouter(appDir, { initialUrl: '/ask' });
+  const { user } = await open();
   await ask(user, 'q');
   expect(await screen.findByText(/The PC is answering other questions/)).toBeTruthy();
+  expect(screen.queryByText('Did not answer')).toBeNull(); // the turn says why once
   agent.runError = null;
   await user.press(screen.getByRole('button', { name: 'Try again' }));
   expect(await screen.findByText('claude says: q')).toBeTruthy();
   const [a, b] = agent.runRequests();
   expect(b.clientRunId).toBe(a.clientRunId);
+  expect(screen.queryByText(/The PC is answering other questions/)).toBeNull();
 });
 
 test("Claude's answer continues in the Claude app; any answer copies", async () => {
-  const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
-  const user = userEvent.setup();
-  await pairedPC();
-  await renderRouter(appDir, { initialUrl: '/ask' });
+  const openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
+  const { user } = await open();
   await ask(user, 'q');
   await screen.findByText('opencode says: q');
-  expect(screen.getAllByText('Continue in the Claude app')).toHaveLength(1); // Claude's card only
+  expect(screen.getAllByRole('button', { name: 'Continue in the Claude app' })).toHaveLength(1); // Claude's only
 
-  await user.press(screen.getByText('Continue in the Claude app'));
-  await waitFor(() => expect(open).toHaveBeenCalledWith(agent.remoteUrl));
+  await user.press(screen.getByRole('button', { name: 'Continue in the Claude app' }));
+  await waitFor(() => expect(openURL).toHaveBeenCalledWith(agent.remoteUrl));
   expect(agent.callsTo('POST', `/v1/sessions/${encodeURIComponent('claude:s-1')}/open`)).toHaveLength(1);
 
-  await user.press(screen.getAllByText('Copy')[1]);
+  await user.press(screen.getAllByRole('button', { name: 'Copy' })[1]);
   expect(Clipboard.setStringAsync).toHaveBeenCalledWith('codex says: q');
   expect(await screen.findByText('Copied.')).toBeTruthy();
 });
 
 test('the ask folder that needs trusting is explained when continuing in the Claude app', async () => {
-  const user = userEvent.setup();
-  await pairedPC();
-  await renderRouter(appDir, { initialUrl: '/ask' });
+  const { user } = await open();
   await ask(user, 'q');
   await screen.findByText('opencode says: q');
   agent.openError = { code: 'workspace_not_trusted', message: 'C:\\Users\\me\\AppData\\Local\\Asksemble\\ask' };
-  await user.press(screen.getByText('Continue in the Claude app'));
+  await user.press(screen.getByRole('button', { name: 'Continue in the Claude app' }));
   expect(await screen.findByText(/trust the ask folder on the PC once: in a PC terminal, go to C:\\Users\\me\\AppData\\Local\\Asksemble\\ask/)).toBeTruthy();
 });
 
-test('an AI the PC cannot use is dimmed and never asked', async () => {
-  agent.askAgents[1] = { agent: 'opencode', available: false, capabilities: [], notices: ['opencode_not_found'] };
-  const user = userEvent.setup();
-  await pairedPC();
-  await renderRouter(appDir, { initialUrl: '/ask' });
-  expect(await screen.findByRole('switch', { name: 'OpenCode' })).toBeDisabled();
-  await ask(user, 'q');
-  await screen.findByText('codex says: q');
-  expect(agent.runRequests()[0].agents).toEqual([{ agent: 'claude' }, { agent: 'codex' }]);
+test('New question keeps the conversation for this run: recent questions and the drawer bring it back', async () => {
+  const { user } = await open();
+  await ask(user, 'How tall is Everest?');
+  await screen.findByText('opencode says: How tall is Everest?');
+  expect(conversations.current()?.title).toBe('How tall is Everest?');
+
+  await user.press(screen.getByRole('button', { name: 'New question' }));
+  expect(await screen.findByText('Recent questions')).toBeTruthy();
+  expect(conversations.current()).toBeNull();
+  expect(conversations.list().map((c) => [c.title, c.turns.length])).toEqual([['How tall is Everest?', 1]]);
+  // A recent question fills the box.
+  await user.press(screen.getByRole('button', { name: 'How tall is Everest?' }));
+  expect(screen.getByLabelText('Ask a question').props.value).toBe('How tall is Everest?');
+  await user.clear(screen.getByLabelText('Ask a question'));
+  await ask(user, 'Coffee per day?');
+  await screen.findByText('opencode says: Coffee per day?');
+
+  // The drawer: the current one first, the earlier one under today; opening it keeps this one.
+  await user.press(screen.getByRole('button', { name: 'Open menu' }));
+  expect(await screen.findByRole('button', { name: 'Coffee per day?' })).toBeSelected();
+  await user.press(screen.getByRole('button', { name: 'How tall is Everest?' }));
+  expect(await screen.findByText('opencode says: How tall is Everest?')).toBeTruthy();
+  expect(screen.queryByText('opencode says: Coffee per day?')).toBeNull();
+  expect(conversations.current()?.title).toBe('How tall is Everest?');
+  expect(conversations.list().map((c) => c.title)).toEqual(['Coffee per day?', 'How tall is Everest?']);
+
+  // It carries on: the follow-up goes on with that conversation's sessions.
+  await follow(user, 'And K2?');
+  await screen.findByText('opencode says: And K2?');
+  expect(agent.runRequests()[2].agents).toEqual([
+    { agent: 'claude', session: 'claude:s-1' },
+    { agent: 'codex', session: 'codex:s-1' },
+    { agent: 'opencode', session: 'opencode:s-1' },
+  ]);
 });
 
-test('with two PCs the person picks which one answers', async () => {
+test('a conversation left while its answers were coming is followed again when reopened', async () => {
+  agent.runLimit = 1;
+  const { user } = await open();
+  await ask(user, 'slow one');
+  await screen.findByText('claude says: slow one');
+  await user.press(screen.getByRole('button', { name: 'New question' }));
+  const posts = agent.runRequests().length;
+  agent.runLimit = Infinity;
+
+  await user.press(screen.getByRole('button', { name: 'Open menu' }));
+  await user.press(within(await screen.findByTestId('drawer')).getByRole('button', { name: 'slow one' }));
+  expect(await screen.findByText('opencode says: slow one', {}, { timeout: 5000 })).toBeTruthy();
+  expect(agent.runRequests()).toHaveLength(posts); // followed by its run id, not asked again
+  expect(screen.queryByText('Answering…')).toBeNull();
+});
+
+test('the questions go to the current PC; a conversation stays with the PC it was asked on', async () => {
   const laptop = new FakeAgent();
   laptop.enableAsk();
   const laptopHost = 'laptop.tail0.ts.net';
@@ -217,38 +377,44 @@ test('with two PCs the person picks which one answers', async () => {
     if (url.hostname === laptopHost) return laptop.fetch(`https://${HOST}:${PORT}${url.pathname}${url.search}`, init);
     return agent.fetch(u, init);
   }) as typeof fetch;
-  await pairedPC();
-  await pairedPC('LAPTOP', laptopHost, TOKEN);
   const user = userEvent.setup();
-  await renderRouter(appDir, { initialUrl: '/ask' });
-  await user.press(await screen.findByRole('radio', { name: 'LAPTOP' }));
-  await ask(user, 'q');
-  await screen.findByText('opencode says: q');
+  await pairedPC();
+  const lap = await pairedPC('LAPTOP', laptopHost);
+  await renderRouter(appDir, { initialUrl: '/' });
+  await ask(user, 'on the desktop');
+  await screen.findByText('opencode says: on the desktop');
+  expect(agent.runRequests()).toHaveLength(1);
+
+  // 내 PC picks the laptop: this conversation is kept, a new one starts there.
+  await act(() => pickPC(lap.id));
+  expect(await screen.findByRole('header', { name: 'What would you like to ask?' }, { timeout: 5000 })).toBeTruthy();
+  expect(conversations.list().map((c) => c.title)).toEqual(['on the desktop']);
+  await user.press(await screen.findByRole('button', { name: /^AIs to answer: 3/ }));
+  expect(await screen.findByText('My PC: LAPTOP')).toBeTruthy();
+  await user.press(close());
+  await ask(user, 'on the laptop');
+  await screen.findByText('opencode says: on the laptop');
   expect(laptop.runRequests()).toHaveLength(1);
-  expect(agent.runRequests()).toHaveLength(0);
+  expect(agent.runRequests()).toHaveLength(1);
 });
 
-test('Settings sets the default tier the ask screen starts with', async () => {
-  const user = userEvent.setup();
-  await pairedPC();
-  await renderRouter(appDir, { initialUrl: '/settings' });
-  await user.press(await screen.findByRole('radio', { name: 'Quick' }));
-  await renderRouter(appDir, { initialUrl: '/ask' });
-  expect(await screen.findByRole('radio', { name: 'Quick' })).toBeChecked();
-});
-
-test('Ask chats on My PCs shows only asks; the other chips leave them out', async () => {
-  const user = userEvent.setup();
-  const c = await pairedPC();
-  await renderRouter(appDir, { initialUrl: '/ask' });
-  await ask(user, 'What is TLS?');
-  await screen.findByText('opencode says: What is TLS?');
-  agent.sessions = [...agent.sessions, { ...agent.sessions[0], id: 'claude:code', title: 'Fix the login bug', badges: [] }];
-
-  await renderRouter(appDir, { initialUrl: `/pc/${c.id}` });
-  expect(await screen.findByText('Fix the login bug')).toBeTruthy();
-  expect(screen.queryByText('What is TLS?')).toBeNull();
-  await user.press(screen.getByRole('button', { name: 'Ask chats' }));
-  expect(await screen.findByText('What is TLS?')).toBeTruthy();
-  expect(screen.queryByText('Fix the login bug')).toBeNull();
+test('in Korean the screen reads in Korean', async () => {
+  setLang('ko');
+  const { user } = await open();
+  expect(await screen.findByRole('header', { name: '무엇을 물어볼까요?' })).toBeTruthy();
+  expect(screen.getByText('질문 하나를 켜 둔 AI 모두에게 한 번에 묻습니다.')).toBeTruthy();
+  expect(screen.getByRole('button', { name: '답할 AI 3개: Claude, Codex, OpenCode. 고르기' })).toBeTruthy();
+  expect(screen.getByRole('radio', { name: '기본' })).toBeChecked();
+  await user.type(screen.getByLabelText(t('ask.placeholder')), 'q');
+  await user.press(screen.getByRole('button', { name: '묻기' }));
+  await screen.findByText('opencode says: q');
+  expect(screen.getAllByText(/^\w+-standard · 1\.2초$/)).toHaveLength(3);
+  expect(screen.getAllByRole('button', { name: '이 AI에게만' })).toHaveLength(3);
+  expect(screen.getByLabelText('이어서 묻기')).toBeTruthy();
+  await user.press(screen.getAllByRole('button', { name: '이 AI에게만' })[1]);
+  expect(screen.getByText('Codex에게만')).toBeTruthy();
+  expect(screen.getByLabelText('Codex에게 이어서 묻기')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Codex에게 보내기' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Codex에게만 묻기 취소' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: '새 질문' })).toBeTruthy();
 });

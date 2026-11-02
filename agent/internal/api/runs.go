@@ -26,8 +26,8 @@ const (
 	CodeAgentNoAsk    = "agent_cannot_ask"
 	CodeAskFolder     = "ask_folder_unavailable"
 	CodeBadSessionRef = "bad_session"
-	// compareError of POST /v1/runs: compare was not {earlier, judges}
-	// within its limits. The ask runs all the same (P2-3).
+	// compareError of POST /v1/runs: compare was not {earlier, judges,
+	// synthesis} within its limits. The ask runs all the same (P2-3).
 	CodeBadCompare = "bad_compare"
 )
 
@@ -76,11 +76,21 @@ type RunRequest struct {
 // RunCompare is RunRequest.compare. Earlier are the earlier questions of a
 // follow-up, oldest first, at most 3 of 4 KiB; judges are the AIs that may
 // judge, in order of preference, at most 8: the agent keeps those that
-// were asked (결정 5), and every asked AI when none of them was. Unknown
-// fields are ignored (principle 4).
+// were asked (결정 5), and every asked AI when none of them was. Synthesis
+// asks for the combined answer once the judges are done (S5b); absent is
+// off. Unknown fields are ignored (principle 4).
 type RunCompare struct {
-	Earlier []string `json:"earlier,omitempty"`
-	Judges  []string `json:"judges,omitempty"`
+	Earlier   []string      `json:"earlier,omitempty"`
+	Judges    []string      `json:"judges,omitempty"`
+	Synthesis *RunSynthesis `json:"synthesis,omitempty"`
+}
+
+// RunSynthesis is RunCompare.synthesis: {"agent": "claude"}, the AI that
+// should write the combined answer ("" lets the agent pick among the
+// asked AIs), or {"off": true}. The tier is the run's.
+type RunSynthesis struct {
+	Agent string `json:"agent,omitempty"`
+	Off   bool   `json:"off,omitempty"`
 }
 
 // RunStatus is the answer to POST /v1/runs (202) and GET /v1/runs/{runId}.
@@ -97,7 +107,7 @@ type RunStatus struct {
 
 // Fixed messages of compareError.
 const (
-	msgBadCompare  = "compare must be {earlier, judges}: at most 3 earlier questions of 4 KiB each, and at most 8 AI programs of this PC, each named once"
+	msgBadCompare  = "compare must be {earlier, judges, synthesis}: at most 3 earlier questions of 4 KiB each, at most 8 AI programs of this PC, each named once, and a synthesis {agent, off} with an AI of this PC"
 	msgNeedTwo     = "a comparison needs answers from at least two AIs"
 	msgTooManyCmp  = "the PC is still comparing other answers"
 	msgCompareFail = "the agent could not make the comparison"
@@ -134,6 +144,9 @@ func (s *Server) parseCompare(raw json.RawMessage) (*RunCompare, *judge.Error) {
 		}
 		seen[j] = true
 	}
+	if sy := c.Synthesis; sy != nil && sy.Agent != "" && (!agentNameRe.MatchString(sy.Agent) || s.adapterFor(sy.Agent) == nil) {
+		return nil, bad
+	}
 	return &c, nil
 }
 
@@ -157,10 +170,14 @@ func (s *Server) attachCompare(owner, question string, run runs.Run, targets []R
 	if len(judges) == 0 {
 		judges = asked
 	}
-	_, err := s.compares.Attach(compares.RunSpec{
+	spec := compares.RunSpec{
 		Owner: owner, RunID: run.ID, Question: question,
 		Earlier: c.Earlier, Judges: judges, Asked: asked,
-	})
+	}
+	if sy := c.Synthesis; sy != nil {
+		spec.Synth = &compares.SynthSpec{Off: sy.Off, Agent: sy.Agent, Tier: run.Tier}
+	}
+	_, err := s.compares.Attach(spec)
 	switch {
 	case err == nil:
 		return nil
@@ -328,8 +345,9 @@ func (s *Server) startRun(w http.ResponseWriter, r *http.Request) {
 		if cmpErr != nil {
 			compareCode = cmpErr.Code
 		}
+		synth := cmp != nil && cmpErr == nil && cmp.Synthesis != nil && !cmp.Synthesis.Off
 		s.o.Logger.Info("run started", "mode", req.Mode, "tier", tier, "agents", strings.Join(names, ","), "followUp", followUp,
-			"compare", cmp != nil || cmpErr != nil, "compareCode", compareCode)
+			"compare", cmp != nil || cmpErr != nil, "compareCode", compareCode, "synthesis", synth)
 	}
 	st := s.runStatus(owner, run)
 	st.CompareError = cmpErr

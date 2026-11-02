@@ -240,10 +240,12 @@ func TestCompareWithEveryCard(t *testing.T) {
 		"    ↔ [codex] 가격은 p=2입니다.",
 		"== Agree / 같은 말 (1)",
 		"[claude, codex, opencode] 높이는 h=5입니다. (+2 more / 2개 더)",
-		"== Only one / 한 AI만 (1)",
-		"  - [claude] 색 번호는 c=9입니다.",
+		// OpenCode's "오늘은 맑습니다." has no number, so no judge calls it
+		// core; since S5c it is shown after the core claims.
+		"== Only one / 한 AI만 (2)",
+		"  - [claude] 색 번호는 c=9입니다.\n  - [opencode] 오늘은 맑습니다.",
 		"== Judged by / 판정한 AI (6)",
-		"differ 1 · check this 0 · agree 1 · only one 1",
+		"differ 1 · check this 0 · agree 1 · only one 2",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("output lacks %q:\n%s", want, got)
@@ -569,5 +571,222 @@ func TestPrintItem(t *testing.T) {
 		"    not compared with codex, gemini / codex, gemini 답과는 비교하지 못했습니다\n"
 	if out.String() != want {
 		t.Errorf("printItem =\n%s\nwant\n%s", out.String(), want)
+	}
+}
+
+// ---- combined answers (-synth, S5b) -------------------------------------------
+
+// fakeWriterAI is a fakeJudgeAI that also writes combined answers: by
+// default fakecli's ok text, which names every DIFFER side.
+type fakeWriterAI struct {
+	*fakeJudgeAI
+	write func(ctx context.Context, req core.SynthRequest) (core.SynthResult, error)
+	smu   sync.Mutex
+	reqs  []core.SynthRequest
+}
+
+func (f *fakeWriterAI) DisplayName() string { return strings.ToUpper(f.name[:1]) + f.name[1:] }
+
+func (f *fakeWriterAI) Synthesize(ctx context.Context, req core.SynthRequest) (core.SynthResult, error) {
+	f.smu.Lock()
+	f.reqs = append(f.reqs, req)
+	f.smu.Unlock()
+	if f.write != nil {
+		return f.write(ctx, req)
+	}
+	b, _ := json.Marshal(map[string]string{"answer": fakecli.SynthText(req.Prompt)})
+	return core.SynthResult{Output: b, Model: req.Model}, nil
+}
+
+func (f *fakeWriterAI) synthCalls() []core.SynthRequest {
+	f.smu.Lock()
+	defer f.smu.Unlock()
+	return slices.Clone(f.reqs)
+}
+
+func threeWriterAIs() []*fakeWriterAI {
+	var out []*fakeWriterAI
+	for _, a := range threeAIs() {
+		a.tiers[core.TierDeep] = core.AskModel{Model: a.name + "-deep", Effort: "high"}
+		out = append(out, &fakeWriterAI{fakeJudgeAI: a})
+	}
+	return out
+}
+
+func writersOf(ais []*fakeWriterAI) []core.Adapter {
+	out := make([]core.Adapter, len(ais))
+	for i, a := range ais {
+		out[i] = a
+	}
+	return out
+}
+
+func TestCompareWithSynthesis(t *testing.T) {
+	ais := threeWriterAIs()
+	ais[1].write = func(_ context.Context, req core.SynthRequest) (core.SynthResult, error) {
+		text := "# 가격\n\r\nClaude는 NUM 1, Codex는 NUM 2라고 합니다.\x1b[2J\r끝\u2028."
+		b, _ := json.Marshal(map[string]string{"answer": text})
+		return core.SynthResult{Output: b, Model: req.Model}, nil
+	}
+	var out bytes.Buffer
+	s := spec(pcAnswer("claude", "sonnet", "가격은 NUM 1입니다."), pcAnswer("codex", "gpt-6.1-terra", "가격은 NUM 2입니다."))
+	s.Synth = &compares.SynthSpec{Agent: "codex", Tier: core.TierDeep}
+	if err := compareWith(context.Background(), writersOf(ais), testGate(t), s, &out, false); err != nil {
+		t.Fatalf("compareWith: %v\n%s", err, out.String())
+	}
+	got := out.String()
+	head := "\n== Combined answer / 종합 답변 (Codex codex-deep"
+	i := strings.Index(got, head)
+	if i < 0 || i < strings.Index(got, "differ 1 · check this 0") {
+		t.Fatalf("no combined answer after the cards:\n%s", got)
+	}
+	want := ")\n# 가격\n\nClaude는 NUM 1, Codex는 NUM 2라고 합니다. [2J\n끝 .\n"
+	if !strings.Contains(got[i:], want) {
+		t.Errorf("combined answer section:\n%q\nwant %q", got[i:], want)
+	}
+	if strings.Contains(got, "\x1b") || strings.Contains(got, "\r") || strings.Contains(got, "\u2028") {
+		t.Errorf("a control character reached the terminal: %q", got)
+	}
+	if strings.Contains(got, "; not compared / 비교 결과 없이") || strings.Contains(got, "빠졌을 수") {
+		t.Errorf("notes that do not belong:\n%s", got)
+	}
+	if calls := ais[1].synthCalls(); len(calls) != 1 || calls[0].Model != "codex-deep" || calls[0].Effort != "high" {
+		t.Errorf("synth calls = %+v", calls)
+	}
+	// Without -synth: no section and no call.
+	out.Reset()
+	s.Synth = nil
+	if err := compareWith(context.Background(), writersOf(ais), testGate(t), s, &out, false); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out.String(), "Combined answer") || len(ais[1].synthCalls()) != 1 {
+		t.Errorf("off:\n%s", out.String())
+	}
+}
+
+// Notes: written without the comparison's results, and names missing.
+func TestCompareWithSynthesisNotes(t *testing.T) {
+	ais := threeWriterAIs()
+	ais[2].judge = func(context.Context, core.JudgeRequest) (core.JudgeResult, error) {
+		return core.JudgeResult{}, core.Fail(core.ErrCodeJudgeFailed, "limit")
+	}
+	var out bytes.Buffer
+	s := spec(pcAnswer("claude", "sonnet", "가격은 NUM 1입니다."), pcAnswer("codex", "gpt-6.1-terra", "가격은 NUM 2입니다."))
+	s.Synth = &compares.SynthSpec{Agent: "claude"}
+	err := compareWith(context.Background(), writersOf(ais), testGate(t), s, &out, false)
+	if err == nil || !strings.Contains(err.Error(), "the comparison failed (judge_failed)") {
+		t.Fatalf("err = %v", err)
+	}
+	if got := out.String(); !strings.Contains(got, "== Combined answer / 종합 답변 (Claude Code claude-standard") ||
+		!strings.Contains(got, "; not compared / 비교 결과 없이)\n"+fakecli.SynthLead+"\n") {
+		t.Errorf("uncompared:\n%s", out.String())
+	}
+
+	ais = threeWriterAIs()
+	ais[0].write = func(_ context.Context, req core.SynthRequest) (core.SynthResult, error) {
+		return core.SynthResult{Output: []byte(`{"answer":"The prices differ."}`), Model: req.Model}, nil
+	}
+	out.Reset()
+	if err := compareWith(context.Background(), writersOf(ais), testGate(t), s, &out, false); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"(some places where the AIs differ may be missing from the combined answer: check the Differ card above)",
+		"(갈린 곳 일부가 종합 답변에 빠졌을 수 있습니다. 위의 다른 말 카드에서 확인하세요)",
+	} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("output lacks %q:\n%s", want, out.String())
+		}
+	}
+}
+
+// A combined answer that failed prints its code and message and is an
+// error; -json carries the synthesis.
+func TestCompareWithSynthesisFailedAndJSON(t *testing.T) {
+	ais := threeWriterAIs()
+	ais[0].write = func(_ context.Context, req core.SynthRequest) (core.SynthResult, error) {
+		return core.SynthResult{Model: req.Model}, core.Fail(core.ErrCodeJudgeFailed, fakecli.UsageLimitClaude+"\x1b[31m")
+	}
+	var out bytes.Buffer
+	s := spec(pcAnswer("claude", "sonnet", "가격은 NUM 1입니다."), pcAnswer("codex", "gpt-6.1-terra", "가격은 NUM 2입니다."))
+	s.Synth = &compares.SynthSpec{Agent: "claude"}
+	err := compareWith(context.Background(), writersOf(ais), testGate(t), s, &out, false)
+	if err == nil || !strings.Contains(err.Error(), "the combined answer failed (judge_failed): "+fakecli.UsageLimitClaude) ||
+		!strings.Contains(err.Error(), "종합 답변을 쓰지 못했습니다 (judge_failed)") || strings.Contains(err.Error(), "\x1b") {
+		t.Fatalf("err = %v", err)
+	}
+	if !strings.Contains(out.String(), "  failed / 실패: judge_failed "+fakecli.UsageLimitClaude) {
+		t.Errorf("output:\n%s", out.String())
+	}
+
+	ais = threeWriterAIs()
+	out.Reset()
+	if err := compareWith(context.Background(), writersOf(ais), testGate(t), s, &out, true); err != nil {
+		t.Fatal(err)
+	}
+	var c compares.Comparison
+	if err := json.Unmarshal(out.Bytes(), &c); err != nil {
+		t.Fatalf("not JSON: %v\n%s", err, out.String())
+	}
+	if c.Synthesis == nil || c.Synthesis.Status != compares.SynthDone || c.Synthesis.Agent != "claude" || !strings.HasPrefix(c.Synthesis.Text, fakecli.SynthLead) {
+		t.Errorf("synthesis = %+v", c.Synthesis)
+	}
+	if strings.Contains(out.String(), "Combined answer") {
+		t.Error("the JSON has the text section")
+	}
+}
+
+// The compare limit covers the combined answer too.
+func TestCompareWithSynthesisLimit(t *testing.T) {
+	old := compareLimit
+	t.Cleanup(func() { compareLimit = old })
+	compareLimit = 200 * time.Millisecond
+	ais := threeWriterAIs()
+	ais[0].write = func(ctx context.Context, req core.SynthRequest) (core.SynthResult, error) {
+		<-ctx.Done()
+		return core.SynthResult{}, core.Fail(core.ErrCodeJudgeTimeout, "")
+	}
+	s := spec(pcAnswer("claude", "sonnet", "가격은 NUM 1입니다."), pcAnswer("codex", "gpt-6.1-terra", "가격은 NUM 2입니다."))
+	s.Synth = &compares.SynthSpec{Agent: "claude"}
+	err := compareWith(context.Background(), writersOf(ais), testGate(t), s, &bytes.Buffer{}, false)
+	if err == nil || !strings.Contains(err.Error(), "did not end within") {
+		t.Errorf("err = %v", err)
+	}
+}
+
+func TestCompareSynthFlags(t *testing.T) {
+	base := []string{"-q", "q.txt", "-answer", "claude=a.txt", "-answer", "codex=b.txt"}
+	f, err := parseCompareFlags(base)
+	if err != nil || f.synth != nil {
+		t.Fatalf("no -synth: %+v %v", f.synth, err)
+	}
+	f, err = parseCompareFlags(append(slices.Clone(base), "-synth"))
+	if err != nil || f.synth == nil || *f.synth != (compares.SynthSpec{Agent: "claude", Tier: core.TierStandard}) {
+		t.Fatalf("-synth: %+v %v", f.synth, err)
+	}
+	f, err = parseCompareFlags(append(slices.Clone(base), "-synth", "-writer", "opencode", "-tier", "deep"))
+	if err != nil || f.synth == nil || *f.synth != (compares.SynthSpec{Agent: "opencode", Tier: core.TierDeep}) {
+		t.Fatalf("-writer -tier: %+v %v", f.synth, err)
+	}
+	for name, args := range map[string][]string{
+		"writer without synth": {"-writer", "codex"},
+		"tier without synth":   {"-tier", "quick"},
+		"unknown writer":       {"-synth", "-writer", "gemini"},
+		"bad tier":             {"-synth", "-tier", "fast"},
+	} {
+		if _, err := parseCompareFlags(append(slices.Clone(base), args...)); err == nil {
+			t.Errorf("%s accepted", name)
+		}
+	}
+	for _, want := range []string{"[-synth [-writer AI] [-tier quick|standard|deep]]"} {
+		if !strings.Contains(compareUsageEn, want) || !strings.Contains(compareUsageKo, want) {
+			t.Errorf("usage lacks %s", want)
+		}
+	}
+}
+
+func TestTerminalLines(t *testing.T) {
+	if got := terminalLines("a\r\nb\rc\n\td\x1b[0m\u2029e\u0085"); got != "a\nb\nc\n d [0m e " {
+		t.Errorf("terminalLines = %q", got)
 	}
 }

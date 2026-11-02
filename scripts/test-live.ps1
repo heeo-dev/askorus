@@ -31,13 +31,28 @@
 #   judge calls per AI (Codex: 2 asks, 2 judges). The asks stay there as
 #   history, like LT-05's; the judges keep nothing.
 #
+# LT-08, combined answers (P2-3 S5b, agent/internal/live/synth_live_test.go):
+#   each adapter's Synthesize once with the real claude, codex and opencode
+#   on the quick tier's ask model (one Codex call; one more only when an
+#   output is refused and written again), in the judge folder
+#   %LOCALAPPDATA%\Asksemble\ask\judge\live. LT-06a's three answers, one
+#   with an injection, and one fixed differ item (Claude vs Codex and
+#   OpenCode). The combined answer must be valid and name both sides. No
+#   Claude transcript, Codex rollout or thread history may hold its
+#   marker, OpenCode's conversation is deleted, and its session list (read
+#   only) shows none left. Codex's synth schema goes to a temporary folder
+#   of the test (R-30). A connection to the test listener, a tool, or the
+#   secret marker anywhere fails it: then stop and ask the user.
+#
 # One full run judges with Codex about 6 times (LT-06a 2, LT-06b 2,
-# LT-07 2) and asks Codex 5 times (LT-05 3, LT-07 2).
+# LT-07 2), writes one combined answer with Codex (LT-08 1) and asks Codex
+# 5 times (LT-05 3, LT-07 2).
 #
 #   powershell -NoProfile -File scripts\test-live.ps1              # every LT
 #   powershell -NoProfile -File scripts\test-live.ps1 -Run LT06a   # only LT-06a
 #   powershell -NoProfile -File scripts\test-live.ps1 -Run LT06b   # only LT-06b
 #   powershell -NoProfile -File scripts\test-live.ps1 -Run LT07    # only LT-07
+#   powershell -NoProfile -File scripts\test-live.ps1 -Run LT08    # only LT-08
 param([string]$Run)
 $go = 'C:\Users\me\sdk\go1.27.3\bin'
 if (Test-Path $go) { $env:Path = "$go;" + $env:Path }

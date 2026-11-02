@@ -1,6 +1,8 @@
 # E2E-02..04: start a session in rc-test, stop it, open it again, remove it.
 # The real claude runs these; only the rc-test folder is used. Waits on
-# claude are long; waits on the app and the agent are short.
+# claude are long; waits on the app and the agent are short. Since S5c the
+# new session button is My PC's round "New session" button, and the session
+# sheet holds Open in the Claude app, Stop and Remove.
 appId: host.exp.exponent
 env:
   NAME: e2e-${new Date().getTime()}
@@ -9,7 +11,7 @@ env:
 
 # E2E-02 new session
 - tapOn:
-    text: "\\+ New session"
+    text: "New session"
     waitToSettleTimeoutMs: 300
 - extendedWaitUntil:
     visible: "rc-test"
@@ -33,7 +35,7 @@ env:
     timeout: 60000
 - openLink: exp://${MAESTRO_HOST}:8081
 - extendedWaitUntil:
-    visible: "\\+ New session"
+    visible: "New session"
     timeout: 10000
 - extendedWaitUntil:
     visible: ${NAME}

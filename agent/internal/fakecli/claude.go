@@ -8,10 +8,13 @@ import (
 	"strings"
 )
 
-// claudeMain plays claude: -p with --json-schema is a judge, -p without
-// it an ask, and `agents --json --all` lists no running session.
+// claudeMain plays claude: -p with the synth schema as --json-schema is
+// a combined-answer writer, -p with any other --json-schema a judge, -p
+// without it an ask, and `agents --json --all` lists no running session.
 func claudeMain(c *Call) int {
 	switch {
+	case len(c.Args) > 0 && c.Args[0] == "-p" && isSynthSchema(flagValue(c.Args, "--json-schema")):
+		return claudeSynth(c)
 	case len(c.Args) > 0 && c.Args[0] == "-p" && slices.Contains(c.Args, "--json-schema"):
 		return claudeJudge(c)
 	case len(c.Args) > 0 && c.Args[0] == "-p":

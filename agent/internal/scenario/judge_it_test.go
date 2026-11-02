@@ -79,7 +79,8 @@ func sameSet(a, b []string) bool {
 
 // checkCards checks the cards of the three keyed answers: Claude and
 // Codex differ on the price, all three agree on the height, only Claude
-// gives a colour, and every unit is the AI's own words.
+// gives a colour, OpenCode's sentence no judge called core comes after it
+// on 한 AI만 (S5c), and every unit is the AI's own words.
 func checkCards(t *testing.T, c api.ComparisonStatus) {
 	t.Helper()
 	differ := itemsOf(c, judge.CardDiffer)
@@ -99,13 +100,13 @@ func checkCards(t *testing.T, c api.ComparisonStatus) {
 		t.Errorf("agree = %+v", agree)
 	}
 	only := itemsOf(c, judge.CardOnlyOne)
-	if len(only) != 1 || !slices.Equal(unitsOf(only[0]), []string{"claude:3"}) {
+	if len(only) != 2 || !slices.Equal(unitsOf(only[0]), []string{"claude:3"}) || !slices.Equal(unitsOf(only[1]), []string{"opencode:2"}) {
 		t.Errorf("onlyOne = %+v", only)
 	}
 	if n := len(itemsOf(c, judge.CardCheck)); n != 0 {
 		t.Errorf("%d check items", n)
 	}
-	if c.Counts.Differ != 1 || c.Counts.Agree != 1 || c.Counts.OnlyOne != 1 || c.Counts.Check != 0 || c.Counts.NotCompared != 0 {
+	if c.Counts.Differ != 1 || c.Counts.Agree != 1 || c.Counts.OnlyOne != 2 || c.Counts.Check != 0 || c.Counts.NotCompared != 0 {
 		t.Errorf("counts = %+v", c.Counts)
 	}
 	unitText(t, c)
@@ -167,7 +168,8 @@ func TestIT12Compare(t *testing.T) {
 		t.Errorf("capabilities %v, reserved %v", info.Capabilities, info.Reserved)
 	}
 	if j := info.Judging; j == nil || j.Engine != compares.EngineName || j.Shape != judge.ShapeDirected || j.Labels != judge.LabelsV1 ||
-		j.Rules != judge.Rules || !slices.Equal(j.Checks, []string{judge.CheckUnsure}) {
+		j.Rules != judge.Rules || !slices.Equal(j.Checks, judge.DefaultChecks) || j.Verified == nil ||
+		j.Verified.Date != compares.JudgingVerified.Date || j.TypicalMs != compares.TypicalMs {
 		t.Errorf("judging = %+v", info.Judging)
 	}
 	if !strings.Contains(string(body), `"integrations":[]`) {
@@ -532,22 +534,34 @@ func TestIT13Failures(t *testing.T) {
 		r.waitIdle(d.ID)
 	})
 
-	t.Run("claude unsure goes to check", func(t *testing.T) {
-		r := newRig(t, func(o *rigOptions) { o.env = map[string]string{fakecli.EnvJudge: "claude=unsure"} })
+	// S6 (11-01 user decision 2): claude, unsure of everything, judges
+	// Codex's and OpenCode's answers. Their heights agree (same, unsure) but
+	// their visitor counts do not fit, so numberMismatch sends both to 확인
+	// 필요 with that reason, not unsure. Codex's price, judged absent and
+	// unsure, stays where OpenCode's sure opposite put it (다른 말). With
+	// the keyed answers, where no numbers clash, an unsure same is 같은 말.
+	t.Run("claude unsure goes to check only where numbers do not fit", func(t *testing.T) {
+		mixed := map[string]string{
+			fakecli.RoleClaude:   answers[fakecli.RoleClaude],
+			fakecli.RoleCodex:    "가격은 NUM p=2입니다. 높이는 NUM h=5이고 관람객은 약 970만 명 안팎입니다.",
+			fakecli.RoleOpenCode: "높이는 NUM h=5이고 관람객은 약 956만 명입니다.",
+		}
+		r := newRig(t, func(o *rigOptions) {
+			o.env = map[string]string{fakecli.EnvJudge: "claude=unsure"}
+			o.answers = mixed
+		})
 		r.addDevice()
 		_, c, _ := r.compareRun(map[string]any{})
 		check := itemsOf(c, judge.CardCheck)
-		if len(check) == 0 {
-			t.Fatalf("no check item: %+v", c.Items)
-		}
-		onCheck := map[string]bool{}
+		var onCheck []string
 		for _, it := range check {
-			if !slices.Contains(it.Check, judge.CheckUnsure) {
-				t.Errorf("check item %s: %v", it.Key, it.Check)
+			if !slices.Equal(it.Check, []string{judge.CheckNumberMismatch}) {
+				t.Errorf("check item %s: %v, want numberMismatch only", it.Key, it.Check)
 			}
-			for _, u := range unitsOf(it) {
-				onCheck[u] = true
-			}
+			onCheck = append(onCheck, unitsOf(it)...)
+		}
+		if !sameSet(onCheck, []string{"codex:2", "opencode:1"}) {
+			t.Errorf("on check: %v, items %+v", onCheck, c.Items)
 		}
 		onDiffer := map[string]bool{}
 		for _, it := range itemsOf(c, judge.CardDiffer) {
@@ -564,13 +578,22 @@ func TestIT13Failures(t *testing.T) {
 			if !j.Unsure || !slices.Contains(j.Flags, judge.CheckUnsure) {
 				t.Errorf("claude judgment %+v", j)
 			}
-			if j.Core && !onCheck[j.Unit] && !onDiffer[j.Unit] {
-				t.Errorf("%s, judged unsure by claude, is on no check card", j.Unit)
+			if j.Label == judge.LabelSame && (!slices.Contains(j.Flags, judge.CheckNumberMismatch) || !slices.Contains(onCheck, j.Unit)) {
+				t.Errorf("%s, same and unsure with other numbers, is not on 확인 필요: %+v", j.Unit, j)
+			}
+			if j.Label == judge.LabelAbsent && j.Core && !onDiffer[j.Unit] {
+				t.Errorf("%s, absent and unsure, left 다른 말: %+v", j.Unit, j)
 			}
 		}
 		if judged == 0 {
 			t.Error("claude judged nothing")
 		}
+
+		// The keyed answers: every number fits, so nothing needs a look.
+		r2 := newRig(t, func(o *rigOptions) { o.env = map[string]string{fakecli.EnvJudge: "claude=unsure"} })
+		r2.addDevice()
+		_, c2, _ := r2.compareRun(map[string]any{})
+		checkCards(t, c2)
 	})
 
 	t.Run("a bad compare still asks", func(t *testing.T) {

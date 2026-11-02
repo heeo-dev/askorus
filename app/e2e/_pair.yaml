@@ -1,10 +1,14 @@
 # Pairs the app on the device with the agent using the link the PC prints
 # in the environment variable MAESTRO_LINK (a -e argument would break on the
 # "&" in the link through maestro.bat). A person allows it on the PC.
+# Since S5c the QR is the main way and the link is behind "Paste the link
+# instead"; after pairing the app shows My PCs with the new PC.
 appId: host.exp.exponent
 ---
 - runFlow: _open-app.yaml
+- tapOn: "My PCs"
 - tapOn: "Pair with a PC"
+- tapOn: "Paste the link instead"
 - tapOn: "asksemble://pair?…"
 - inputText: ${MAESTRO_LINK}
 - tapOn: "Pair with this link"

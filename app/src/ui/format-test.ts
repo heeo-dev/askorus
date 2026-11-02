@@ -1,6 +1,6 @@
 import { setLang } from '@/i18n';
 
-import { ago, folderName, sessionTitle } from './format';
+import { ago, folderName, sessionStatus, sessionTitle } from './format';
 
 const now = new Date('2026-10-27T12:00:00Z');
 const before = (ms: number) => new Date(now.getTime() - ms).toISOString();
@@ -28,4 +28,16 @@ test('sessionTitle falls back to name, last prompt, then a placeholder', () => {
   expect(sessionTitle({ title: '', name: 'N' })).toBe('N');
   expect(sessionTitle({ title: '', lastPrompt: 'hello' })).toBe('hello');
   expect(sessionTitle({ title: '' })).toBe('(untitled)');
+});
+
+test('sessionStatus puts waiting for input first, then running, then a ring (S5c)', () => {
+  setLang('en');
+  expect(sessionStatus({ state: 'running', activity: 'blocked' })).toEqual({ kind: 'waiting', text: 'Waiting for input' });
+  expect(sessionStatus({ state: 'running', activity: 'busy' })).toEqual({ kind: 'running', text: 'Running' });
+  expect(sessionStatus({ state: 'stopped' })).toEqual({ kind: 'stopped', text: 'Stopped' });
+  expect(sessionStatus({ state: 'terminal' })).toEqual({ kind: 'stopped', text: 'Terminal' });
+  expect(sessionStatus({ state: 'brand-new' })).toEqual({ kind: 'stopped', text: 'brand-new' }); // an unknown state shows its code
+  setLang('ko');
+  expect(sessionStatus({ state: 'running', activity: 'blocked' }).text).toBe('입력 기다림');
+  setLang('en');
 });

@@ -81,8 +81,11 @@ Usage / 사용법:
       ask several AIs at once, answer only (web search on, no file writes)
       여러 AI에게 한 번에 묻습니다 (답만, 웹 검색 켬, 파일 쓰기 없음)
   asksemble-agent compare -q FILE -answer AI=FILE ... [-model AI=MODEL] [-earlier FILE] [-judges A,B] [-json]
+          [-synth [-writer AI] [-tier quick|standard|deep]]
       split the answers into sentences and have the AIs judge each other's (the judging AI's company receives the question and the answers)
       답을 문장으로 나눠 AI끼리 판정합니다 (판정하는 AI의 회사가 질문과 답을 받습니다)
+      -synth: then one AI writes a combined answer (its company receives the question, every answer and the results)
+      -synth: 그다음 AI 하나가 종합 답변을 씁니다 (그 AI의 회사가 질문, 모든 답, 비교 결과를 받습니다)
   asksemble-agent stop SESSION_ID
       stop a background session
       백그라운드 세션을 멈춥니다

@@ -2,6 +2,8 @@
 // codes only; the screens pick the words (N9).
 
 import type {
+  Comparison,
+  ComparisonRequest,
   FolderList,
   Info,
   Job,
@@ -241,6 +243,72 @@ export class AgentClient {
     return cur;
   }
 
+  /** One answer comparison (P2-3). 404 comparison_not_found: gone from the PC (30 min, restart). */
+  comparison(id: string, signal?: AbortSignal) {
+    return this.request<Comparison>('GET', `comparisons/${encodeURIComponent(id)}`, undefined, signal);
+  }
+
+  /**
+   * Asks for a comparison at once and then until it is final, handing each
+   * state to onUpdate so the cards fill in as judges finish. It keeps
+   * asking while the PC says so (pollAfterMs), also for a status this app
+   * does not know yet. Dropped requests are retried like waitRun; agent
+   * errors (404) and cancelling end it.
+   */
+  async waitComparison(id: string, wait: WaitOptions & { onUpdate?: (c: Comparison) => void } = {}): Promise<Comparison> {
+    let misses = 0;
+    for (;;) {
+      let cur: Comparison;
+      try {
+        cur = await this.comparison(id, wait.signal);
+      } catch (e) {
+        if (!(e instanceof NetworkError) || misses++ >= maxMisses) throw e;
+        await this.sleep(1000, wait.signal);
+        continue;
+      }
+      misses = 0;
+      wait.onUpdate?.(cur);
+      if (!comparisonPolling(cur)) return cur;
+      await this.sleep(cur.pollAfterMs || 1000, wait.signal);
+    }
+  }
+
+  /**
+   * Compares answers the phone sends (POST /v1/comparisons). Like startRun,
+   * a dropped request is sent again only with a clientComparisonId, so the
+   * PC makes one comparison.
+   */
+  async startComparison(req: ComparisonRequest, signal?: AbortSignal): Promise<Comparison> {
+    for (let tries = 0; ; tries++) {
+      try {
+        return await this.request<Comparison>('POST', 'comparisons', req, signal);
+      } catch (e) {
+        if (!(e instanceof NetworkError) || !req.clientComparisonId || tries >= 2) throw e;
+        await this.sleep(1000, signal);
+      }
+    }
+  }
+
+  /** Judges the failed pairs again (202). 409 comparison_running while it still runs. */
+  retryComparison(id: string, signal?: AbortSignal) {
+    return this.request<Comparison>('POST', `comparisons/${encodeURIComponent(id)}/retry`, undefined, signal);
+  }
+
+  /**
+   * Writes a comparison's combined answer (S5b), again after it failed or
+   * when it was off (202). agent is the AI the person picked; left out, the
+   * PC picks. One already written comes back unchanged. 409
+   * comparison_running while the judging or the writing still runs.
+   */
+  writeSynthesis(id: string, agent?: string, signal?: AbortSignal) {
+    return this.request<Comparison>('POST', `comparisons/${encodeURIComponent(id)}/synthesis`, agent ? { agent } : {}, signal);
+  }
+
+  /** Stops a comparison: queued judgments are dropped, running ones finish. */
+  cancelComparison(id: string) {
+    return this.request<Comparison>('POST', `comparisons/${encodeURIComponent(id)}/cancel`);
+  }
+
   /** Unpairs this phone on the PC, so its token stops working there. */
   forgetSelf() {
     return this.request<{ deviceId: string; removed: boolean }>('DELETE', 'devices/self');
@@ -311,6 +379,15 @@ export class AgentClient {
 }
 
 const deviceNameFallback = 'phone';
+
+/**
+ * comparisonPolling: a comparison is asked for again while it waits or
+ * runs, and also while the PC still asks to be polled (pollAfterMs): its
+ * combined answer is still being written (S5b), or a newer status.
+ */
+export function comparisonPolling(c: Pick<Comparison, 'status' | 'pollAfterMs'>): boolean {
+  return c.status === 'waiting' || c.status === 'running' || (c.pollAfterMs ?? 0) > 0;
+}
 
 /** Codes may be typed with dashes or spaces. */
 export function normalizeCode(code: string): string {

@@ -43,7 +43,8 @@ func TestMain(m *testing.M) {
 // The question and the keyed answers of the scenarios (fakecli rule
 // mode): Claude and Codex give different prices, all three the same
 // height, and only Claude a colour number. OpenCode's second sentence has
-// no number, so no judge calls it core.
+// no number, so no judge calls it core: since S5c it is on 한 AI만 after
+// Claude's colour (before, it was hidden).
 const question = "이 상자의 가격과 높이는 얼마인가요?"
 
 var answers = map[string]string{
@@ -264,27 +265,43 @@ func (r *rig) waitRun(id string) api.RunStatus {
 	return api.RunStatus{}
 }
 
-// waitComparison asks for a comparison until it has ended and returns it
-// with the body of the last GET.
+// waitComparison asks for a comparison until it has ended, its combined
+// answer too (S5b), and returns it with the body of the last GET.
 func (r *rig) waitComparison(id string) (api.ComparisonStatus, []byte) {
 	r.t.Helper()
 	deadline := time.Now().Add(90 * time.Second)
 	for time.Now().Before(deadline) {
 		var c api.ComparisonStatus
 		b := r.callJSON("GET", "/v1/comparisons/"+id, nil, 200, &c)
-		if c.Status != compares.Waiting && c.Status != compares.Running {
+		if c.Status != compares.Waiting && c.Status != compares.Running && !synthBusy(c) {
 			if c.PollAfterMs != 0 {
 				r.t.Errorf("an ended comparison has pollAfterMs %d", c.PollAfterMs)
 			}
 			return c, b
 		}
 		if c.PollAfterMs != compares.PollMs {
-			r.t.Errorf("a %s comparison has pollAfterMs %d", c.Status, c.PollAfterMs)
+			r.t.Errorf("a %s comparison (combined answer %s) has pollAfterMs %d", c.Status, synthStatus(c), c.PollAfterMs)
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
 	r.t.Fatal("comparison still running after 90 s")
 	return api.ComparisonStatus{}, nil
+}
+
+// synthBusy reports whether the comparison's combined answer waits or is
+// being written.
+func synthBusy(c api.ComparisonStatus) bool {
+	st := synthStatus(c)
+	return st == compares.SynthWaiting || st == compares.SynthRunning
+}
+
+// synthStatus is the status of the comparison's combined answer, "" when
+// the snapshot has none.
+func synthStatus(c api.ComparisonStatus) string {
+	if c.Synthesis == nil {
+		return ""
+	}
+	return c.Synthesis.Status
 }
 
 // waitIdle waits until nothing of the comparison runs, OpenCode's
@@ -323,15 +340,20 @@ func (r *rig) compareRun(compare any) (api.RunStatus, api.ComparisonStatus, []by
 const (
 	kindAsk    = "ask"
 	kindJudge  = "judge"
+	kindSynth  = "synth"  // a combined-answer writer (S5b)
 	kindList   = "list"   // OpenCode session list
 	kindDelete = "delete" // OpenCode session delete
 	kindOther  = "other"  // claude agents
 )
 
+// kindOf is what a recorded call was. A writer's command is a judge's
+// with another schema or agent, so it is told apart first.
 func kindOf(c fakecli.Call) string {
 	switch c.Role {
 	case fakecli.RoleClaude:
 		switch {
+		case flag(c.Args, "--json-schema") == core.SynthSchemaV1:
+			return kindSynth
 		case slices.Contains(c.Args, "--json-schema"):
 			return kindJudge
 		case len(c.Args) > 0 && c.Args[0] == "-p":
@@ -339,6 +361,8 @@ func kindOf(c fakecli.Call) string {
 		}
 	case fakecli.RoleCodex:
 		switch {
+		case slices.Contains(c.Args, "--output-schema") && filepath.Base(flag(c.Args, "--output-schema")) == core.SynthSchemaFile:
+			return kindSynth
 		case slices.Contains(c.Args, "--output-schema"):
 			return kindJudge
 		case slices.Contains(c.Args, "exec"):
@@ -346,6 +370,8 @@ func kindOf(c fakecli.Call) string {
 		}
 	case fakecli.RoleOpenCode:
 		switch {
+		case len(c.Args) > 0 && c.Args[0] == "run" && flag(c.Args, "--agent") == fakecli.SynthAgent:
+			return kindSynth
 		case len(c.Args) > 0 && c.Args[0] == "run" && flag(c.Args, "--agent") == fakecli.JudgeAgent:
 			return kindJudge
 		case len(c.Args) > 0 && c.Args[0] == "run":

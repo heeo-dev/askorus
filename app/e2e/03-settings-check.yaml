@@ -1,12 +1,18 @@
 # E2E-06: the connection check in settings passes every step.
-# Settings is opened by its link: in Expo Go a floating tools button sits
-# over the header's "Settings" (the built app has no such button). The link
-# does not reload the app, so the developer menu (closed by _open-app) does
-# not come back.
+# Settings is opened by its link (the app reaches it from the drawer). The
+# link does not reload the app, so the developer menu (closed by _open-app)
+# does not come back. Since S5c the check is in the PC's sheet: tap the
+# paired PC's row (its state line says Connected) first.
 appId: host.exp.exponent
 ---
 - runFlow: _open-app.yaml
 - openLink: exp://${MAESTRO_HOST}:8081/--/settings
+- extendedWaitUntil:
+    visible: "Connected"
+    timeout: 10000
+- tapOn:
+    text: "Connected"
+    waitToSettleTimeoutMs: 300
 - extendedWaitUntil:
     visible: "Check connection"
     timeout: 10000

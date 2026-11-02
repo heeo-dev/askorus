@@ -1,8 +1,10 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 
 	"github.com/asksemble/asksemble/agent/internal/compares"
@@ -51,13 +53,44 @@ type ComparisonRequest struct {
 	Earlier            []string           `json:"earlier,omitempty"`
 	Answers            []ComparisonAnswer `json:"answers"`
 	Judges             []string           `json:"judges,omitempty"`
+	// Synthesis asks for the combined answer once the judges are done
+	// (S5b); absent is off.
+	Synthesis *ComparisonSynthesis `json:"synthesis,omitempty"`
 }
+
+// ComparisonSynthesis is ComparisonRequest.synthesis: the AI that should
+// write ("" lets the agent pick among the answers' AIs and the judges),
+// off, and the ask tier whose model writes ("" is standard).
+type ComparisonSynthesis struct {
+	Agent string `json:"agent,omitempty"`
+	Off   bool   `json:"off,omitempty"`
+	Tier  string `json:"tier,omitempty"`
+}
+
+// SynthesisRequest is the optional body of POST
+// /v1/comparisons/{id}/synthesis: the AI that should write, or none for
+// the one asked for before. Unknown fields are ignored.
+type SynthesisRequest struct {
+	Agent string `json:"agent,omitempty"`
+}
+
+// maxSynthesisBody bounds POST /v1/comparisons/{id}/synthesis.
+const maxSynthesisBody = 4 << 10
+
+// Fixed messages of the combined answer's 400s.
+const (
+	msgBadComparisonSynth = "synthesis must be {agent, off, tier} with an AI of this PC and a tier"
+	msgBadSynthesisBody   = "body must be empty or {agent} with an AI of this PC"
+)
 
 const msgComparisonNotFound = "no such comparison (ended more than 30 minutes ago, made by another device, or the agent restarted)"
 
+// comparisonStatus adds pollAfterMs while the comparison or its combined
+// answer waits or runs.
 func comparisonStatus(c compares.Comparison) ComparisonStatus {
 	st := ComparisonStatus{Comparison: c}
-	if c.Status == compares.Waiting || c.Status == compares.Running {
+	busy := c.Synthesis != nil && (c.Synthesis.Status == compares.SynthWaiting || c.Synthesis.Status == compares.SynthRunning)
+	if c.Status == compares.Waiting || c.Status == compares.Running || busy {
 		st.PollAfterMs = compares.PollMs
 	}
 	return st
@@ -83,6 +116,10 @@ func (s *Server) startComparison(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, CodeBadRequest, "clientComparisonId is too long")
 		return
 	}
+	if sy := req.Synthesis; sy != nil && ((sy.Agent != "" && s.adapterFor(sy.Agent) == nil) || (sy.Tier != "" && !core.ValidTier(sy.Tier))) {
+		writeError(w, http.StatusBadRequest, CodeBadRequest, msgBadComparisonSynth)
+		return
+	}
 	if _, err := s.askFolder(); err != nil {
 		// Judges run in the ask folder's judge folder.
 		if s.o.Logger != nil {
@@ -97,6 +134,9 @@ func (s *Server) startComparison(w http.ResponseWriter, r *http.Request) {
 	}
 	for _, a := range req.Answers {
 		spec.Answers = append(spec.Answers, compares.DirectAnswer{ID: a.ID, Agent: a.Agent, Via: a.Via, Model: a.Model, Text: a.Text})
+	}
+	if sy := req.Synthesis; sy != nil {
+		spec.Synth = &compares.SynthSpec{Off: sy.Off, Agent: sy.Agent, Tier: sy.Tier}
 	}
 	c, err := s.compares.Start(spec)
 	var bad *compares.SpecError
@@ -138,15 +178,50 @@ func (s *Server) retryComparison(w http.ResponseWriter, r *http.Request) {
 	case errors.Is(err, compares.ErrNotFound):
 		writeError(w, http.StatusNotFound, CodeComparisonNotFound, msgComparisonNotFound)
 	case errors.Is(err, compares.ErrRunning):
-		writeError(w, http.StatusConflict, CodeComparisonRunning, "the comparison is still waiting or running")
+		writeError(w, http.StatusConflict, CodeComparisonRunning, "the comparison or its combined answer is still waiting or running")
 	default:
 		writeError(w, http.StatusInternalServerError, CodeInternal, "the agent could not retry the comparison")
 	}
 }
 
+// writeSynthesis is POST /v1/comparisons/{id}/synthesis: the combined
+// answer of an ended comparison that failed or was off is written (202),
+// with the body's AI or the one asked for before. A done one comes back as
+// it is; 409 while the comparison or its combined answer waits or runs.
+func (s *Server) writeSynthesis(w http.ResponseWriter, r *http.Request) {
+	var req SynthesisRequest
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxSynthesisBody))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, CodeBadRequest, msgBadSynthesisBody)
+		return
+	}
+	if len(bytes.TrimSpace(body)) > 0 {
+		if err := json.Unmarshal(body, &req); err != nil {
+			writeError(w, http.StatusBadRequest, CodeBadRequest, msgBadSynthesisBody)
+			return
+		}
+	}
+	if req.Agent != "" && s.adapterFor(req.Agent) == nil {
+		writeError(w, http.StatusBadRequest, CodeBadRequest, msgBadSynthesisBody)
+		return
+	}
+	c, err := s.compares.Synthesize(deviceOf(r), r.PathValue("id"), req.Agent)
+	switch {
+	case err == nil:
+		writeJSON(w, http.StatusAccepted, comparisonStatus(c))
+	case errors.Is(err, compares.ErrNotFound):
+		writeError(w, http.StatusNotFound, CodeComparisonNotFound, msgComparisonNotFound)
+	case errors.Is(err, compares.ErrRunning):
+		writeError(w, http.StatusConflict, CodeComparisonRunning, "the comparison or its combined answer is still waiting or running")
+	default:
+		writeError(w, http.StatusInternalServerError, CodeInternal, "the agent could not write the combined answer")
+	}
+}
+
 // cancelComparison is POST /v1/comparisons/{id}/cancel: queued requests
-// are dropped and no judge is asked again; requests that run finish. An
-// ended comparison stays as it is.
+// are dropped and no judge is asked again; requests that run finish. A
+// combined answer that waits or runs is cancelled too, also of an ended
+// comparison. An ended comparison otherwise stays as it is.
 func (s *Server) cancelComparison(w http.ResponseWriter, r *http.Request) {
 	c, err := s.compares.Cancel(deviceOf(r), r.PathValue("id"))
 	switch {
