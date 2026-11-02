@@ -5,9 +5,13 @@
 #   powershell -NoProfile -File scripts\dev-server.ps1
 $app = Join-Path (Split-Path -Parent $PSScriptRoot) 'app'
 $log = Join-Path $env:TEMP 'asksemble-metro.log'
+# The phone opens the PC's Tailscale address; ask Tailscale for it so no
+# address is written here.
+$ip = & tailscale ip -4 | Select-Object -First 1
+if (-not $ip) { Write-Output 'no Tailscale address: is Tailscale running on this PC?'; exit 1 }
 $cmd = "[Console]::OutputEncoding = [Text.Encoding]::UTF8; " +
   "`$host.UI.RawUI.WindowTitle = 'Asksemble dev server (close to stop)'; " +
-  "`$env:REACT_NATIVE_PACKAGER_HOSTNAME = 'PC-TAILSCALE-IP'; " +
+  "`$env:REACT_NATIVE_PACKAGER_HOSTNAME = '$ip'; " +
   "Set-Location '$app'; npx expo start --go --port 8081 2>&1 | Tee-Object -FilePath '$log'"
 Start-Process -FilePath powershell.exe -ArgumentList '-NoExit', '-NoProfile', '-Command', $cmd -WorkingDirectory $app
 for ($i = 0; $i -lt 90; $i++) {

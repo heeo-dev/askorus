@@ -54,7 +54,7 @@
 #   powershell -NoProfile -File scripts\test-live.ps1 -Run LT07    # only LT-07
 #   powershell -NoProfile -File scripts\test-live.ps1 -Run LT08    # only LT-08
 param([string]$Run)
-$go = 'C:\Users\me\sdk\go1.27.3\bin'
+$go = Join-Path $env:USERPROFILE 'sdk\go1.27.3\bin'
 if (Test-Path $go) { $env:Path = "$go;" + $env:Path }
 # The agent starts at logon, not inside a Claude Code session: when this
 # runs from one, drop that session's variables so the AIs see what they

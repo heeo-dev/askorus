@@ -66,7 +66,7 @@ if ($Emulator) {
   }
   # The phone reaches the dev server over Tailscale (dev-server.ps1 serves on
   # the PC's Tailscale address).
-  $env:MAESTRO_HOST = 'PC-TAILSCALE-IP'
+  $env:MAESTRO_HOST = & tailscale ip -4 | Select-Object -First 1
   $env:MAESTRO_DEVICE = 'phone'
   # Flows tap English text; the app follows the phone's first language.
   $locale = Adb shell getprop persist.sys.locale
@@ -93,9 +93,12 @@ if ($Emulator) {
 # (open the Tailscale app there and connect). After a fresh emulator boot
 # Tailscale reconnects by itself within a minute or so; on the phone it is
 # either up or not, so fail fast.
+# The PC's MagicDNS name, from Tailscale itself (nothing personal is
+# written in this file).
+$pcName = ((& tailscale status --json) -join "`n" | ConvertFrom-Json).Self.DNSName.TrimEnd('.')
 $tries = if ($Emulator) { 30 } else { 3 }
 for ($i = 0; $i -lt $tries; $i++) {
-  $ping = Adb shell 'ping -c1 -W2 MY-PC.example.ts.net' 2>$null
+  $ping = Adb shell "ping -c1 -W2 $pcName" 2>$null
   if ($ping -match '1 received') { break }
   Start-Sleep 3
 }

@@ -32,7 +32,7 @@ foreach ($a in $args) {
 }
 
 $root = Split-Path -Parent $PSScriptRoot
-$go = 'C:\Users\me\sdk\go1.27.3\bin'
+$go = Join-Path $env:USERPROFILE 'sdk\go1.27.3\bin'
 if (Test-Path $go) { $env:Path = "$go;" + $env:Path }
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
