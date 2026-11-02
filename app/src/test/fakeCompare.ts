@@ -270,7 +270,8 @@ export function combinedText(o: {
     if (it.kind !== 'differ') continue;
     const sides = it.positions.map((p) => {
       const said = text.get(p.units[0]) ?? '';
-      return o.named ? `${sideNames(p.agents, o.answers, o.name).join(', ')}: ${said}` : said;
+      // synth-v2 writes the AIs that answered in braces (#6).
+      return o.named ? `${sideNames(p.agents, o.answers, o.name).map((n) => `{{${n}}}`).join(', ')}: ${said}` : said;
     });
     lines.push(`The AIs differ. ${sides.join(' ')}`);
   }

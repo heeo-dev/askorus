@@ -21,6 +21,7 @@ import { Lexer, type Links, Marked, type Token, Tokenizer, type TokenizerExtensi
 import { Component, type ReactNode, useMemo, useState } from 'react';
 import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { nameParts, plainNames } from '@/ask/aiNames';
 import * as i18n from '@/i18n';
 
 import { lettersOrDigits, korean, mathAt, type MathToken, prose } from './inlineMath';
@@ -475,19 +476,48 @@ export function footnoteNumbers(tokens: Token[]): Map<string, number> {
 // drawn; the rest are shown as written.
 const mathBudget = { count: 40, chars: 12_000 };
 
-type Ctx = { s: ReturnType<typeof styles>; notes: Map<string, number>; depth: number; math: { count: number; chars: number } };
+type Ctx = {
+  s: ReturnType<typeof styles>;
+  notes: Map<string, number>;
+  depth: number;
+  math: { count: number; chars: number };
+  /** The AIs a combined answer may name in braces (#6), drawn as chips. */
+  names?: ReadonlySet<string>;
+};
 
 /**
  * Markdown draws an answer. size 'synth' is the combined answer's larger
  * reading size (16/26, F-Result-Expanded); 'body' (15/22) everything else.
+ * names are the AIs that answered: the combined answer writes them in
+ * braces ("{{Claude}}"), drawn as chips and read without the braces.
  */
-export function Markdown({ text, size = 'body' }: { text: string; size?: 'body' | 'synth' }) {
+export function Markdown({ text, size = 'body', names }: { text: string; size?: 'body' | 'synth'; names?: readonly string[] }) {
   const th = useTheme();
   const s = useMemo(() => styles(th, size), [th, size]);
+  const known = useMemo(() => (names ? new Set(names) : undefined), [names]);
   return (
-    <AsText text={text} style={s.body}>
-      <Drawn text={text} s={s} />
+    <AsText text={known ? plainNames(text) : text} style={s.body}>
+      <Drawn text={text} s={s} names={known} />
     </AsText>
+  );
+}
+
+// chips draws a run of text with the AIs it names in braces as chips: the
+// name in the avatars' colour, set off by thin spaces.
+function chips(text: string, c: Ctx, key: number | string): ReactNode {
+  if (!c.names || !text.includes('{{')) return text;
+  return (
+    <Text key={key}>
+      {nameParts(text, c.names).map((p, i) =>
+        typeof p === 'string' ? (
+          p
+        ) : (
+          <Text key={i} style={c.s.aiName}>
+            {`\u2009${p.ai}\u2009`}
+          </Text>
+        ),
+      )}
+    </Text>
   );
 }
 
@@ -504,11 +534,11 @@ function split(text: string): [string, string] {
   return [text.slice(0, at), text.slice(at).trim()];
 }
 
-function Drawn({ text, s }: { text: string; s: Ctx['s'] }) {
+function Drawn({ text, s, names }: { text: string; s: Ctx['s']; names?: ReadonlySet<string> }) {
   const [head, rest] = useMemo(() => split(text), [text]);
   const tokens = useMemo(() => lex(head), [head]);
   const notes = useMemo(() => footnoteNumbers(tokens), [tokens]);
-  const c: Ctx = { s, notes, depth: 0, math: { ...mathBudget } };
+  const c: Ctx = { s, notes, depth: 0, math: { ...mathBudget }, names };
   const defs = footnoteDefs(tokens).sort((a, b) => (notes.get(a.id) ?? 0) - (notes.get(b.id) ?? 0));
   return (
     <View style={s.root}>
@@ -624,7 +654,7 @@ function block(t: Token, c: Ctx, key: number): ReactNode {
       const tt = t as Tokens.Text;
       return (
         <Text key={key} style={s.body} selectable>
-          {tt.tokens ? inline(tt.tokens, c) : decode(tt.text)}
+          {tt.tokens ? inline(tt.tokens, c) : chips(decode(tt.text), c, 0)}
         </Text>
       );
     }
@@ -754,7 +784,7 @@ function inline(tokens: Token[] | undefined, c: Ctx, depth = 0): ReactNode[] {
     switch (t.type) {
       case 'text': {
         const tt = t as Tokens.Text;
-        return tt.tokens ? <Text key={i}>{inner(tt.tokens)}</Text> : decode(tt.text);
+        return tt.tokens ? <Text key={i}>{inner(tt.tokens)}</Text> : chips(decode(tt.text), c, i);
       }
       case 'escape':
         return (t as Tokens.Escape).text;
@@ -847,6 +877,7 @@ const styles = (th: Theme, size: 'body' | 'synth' = 'body') =>
     italic: { fontStyle: 'italic' },
     strike: { textDecorationLine: 'line-through' },
     code: { fontFamily: mono, fontSize: 14, backgroundColor: th.bg, color: th.text },
+    aiName: { fontWeight: '600', backgroundColor: th.avatar, color: th.text },
     link: { color: th.accent, textDecorationLine: 'underline' },
     ref: { color: th.accent, fontWeight: '700' },
     codeBlock: { backgroundColor: th.bg, borderRadius: 8, borderColor: th.border, borderWidth: StyleSheet.hairlineWidth },

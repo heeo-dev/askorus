@@ -8,6 +8,7 @@
 import { act, userEvent, within } from '@testing-library/react-native';
 import * as Clipboard from 'expo-clipboard';
 import { renderRouter, screen, waitFor } from 'expo-router/testing-library';
+import { StyleSheet } from 'react-native';
 
 import { defaultAskPrefs, saveAskPrefs, type AskPrefs } from '@/ask/prefs';
 import { ConnectionStore } from '@/connections/store';
@@ -26,6 +27,9 @@ const answers = {
   opencode: 'Seoul is the capital. It has 9.7 million people. Eat at the market.',
 };
 const differs = 'The AIs differ. Claude: It has 9.4 million people. Codex, OpenCode: It has 9.7 million people.';
+// On screen the AIs the writer names in braces are chips set off by thin spaces (#6).
+const chip = (name: string) => ` ${name} `;
+const differsShown = `The AIs differ. ${chip('Claude')}: It has 9.4 million people. ${chip('Codex')}, ${chip('OpenCode')}: It has 9.7 million people.`;
 const tilesDone = ['Differ: 1. Show', 'Check this: 0. Show', 'Agree: 1. Show', 'Only one: 2. Show'];
 const company = "The writing AI's company receives the question and every answer (with the AIs' names).";
 const mayErr = 'An AI wrote this combined answer, so it can be wrong.';
@@ -95,7 +99,10 @@ test('while the AIs compare, writing the combined answer waits as the next step 
 
   agent.synthReply = 'ok';
   expect(await written()).toBeTruthy();
-  expect(screen.getByText(differs)).toBeTruthy();
+  expect(screen.getByText(differsShown)).toBeTruthy();
+  // #6: a named AI is a chip in the avatars' colour; no braces show.
+  expect(StyleSheet.flatten(screen.getAllByText(chip('Claude'))[0].props.style)).toMatchObject({ fontWeight: '600', backgroundColor: expect.any(String) });
+  expect(screen.queryByText(/\{\{/)).toBeNull();
   expect(screen.queryByLabelText(/Writing the combined answer/)).toBeNull();
   expect(skeleton()).toBeNull();
   expect(screen.getByText(mayErr)).toBeTruthy();
@@ -384,7 +391,7 @@ test('Compare by hand costs one more for the combined answer and sends it', asyn
   const [post] = agent.callsTo('POST', '/v1/comparisons');
   expect(post.body.synthesis).toEqual({ agent: 'claude', tier: 'standard' });
   expect(agent.comparisonCount('direct')).toBe(1);
-  expect(screen.getByText(differs)).toBeTruthy();
+  expect(screen.getByText(differsShown)).toBeTruthy();
 });
 
 test('in Korean the combined answer reads in Korean', async () => {

@@ -15,6 +15,7 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { agentName } from '@/api/agents';
 import type { Info, RunPart } from '@/api/types';
+import { plainNames } from '@/ask/aiNames';
 import {
   answered,
   type CardKind,
@@ -254,7 +255,7 @@ function Result({
         const differ = all?.find((c) => c.kind === 'differ')?.items ?? [];
         return (
           <View style={s.synth}>
-            <Markdown text={synth.text} size="synth" />
+            <Markdown text={synth.text} size="synth" names={answeredList.map(agentName)} />
             {differ.map((item) => {
               const head = differHeadline(item);
               return (
@@ -271,7 +272,7 @@ function Result({
             })}
             {!synth.judged ? <Text style={s.caption}>{t('compare.synth.noJudge')}</Text> : null}
             {synth.unnamed > 0 ? <Text style={s.warn}>{t('compare.synth.unnamed')}</Text> : null}
-            <AnswerActions onCopy={() => act.copy(`${turn.id}/synth`, synth.text)} note={notes[`${turn.id}/synth`]} />
+            <AnswerActions onCopy={() => act.copy(`${turn.id}/synth`, plainNames(synth.text))} note={notes[`${turn.id}/synth`]} />
           </View>
         );
       }
