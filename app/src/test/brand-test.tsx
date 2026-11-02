@@ -8,12 +8,12 @@ import { act, render, userEvent } from '@testing-library/react-native';
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import { renderRouter, screen, waitFor } from 'expo-router/testing-library';
-import { Pressable, Text, View } from 'react-native';
+import { Platform, Pressable, Text, View } from 'react-native';
 
 import RootLayout from '@/app/_layout';
 import About from '@/app/about';
 import { setLang } from '@/i18n';
-import { LAUNCH_ICON, LaunchCover } from '@/ui/LaunchCover';
+import { LAUNCH_ICON, LaunchCover, splashIconScale } from '@/ui/LaunchCover';
 import { BrandMark, Wordmark } from '@/ui/Wordmark';
 import box from '@/ui/wordmark-size.json';
 
@@ -377,6 +377,39 @@ test.each(['light', 'dark'] as const)('the launch cover matches the %s splash, a
   } finally {
     jest.useRealTimers();
   }
+});
+
+// R-63: on the S10 (One UI, Android 12) the native splash drew the icon at
+// half of imageWidth, so the icon jumped to twice its size as the cover
+// came. The cover's icon starts at the splash's size and grows to the board's.
+test('the launch icon starts at the size the native splash drew it', () => {
+  expect(splashIconScale({ os: 'android', version: 31, manufacturer: 'samsung' })).toBe(0.5);
+  expect(splashIconScale({ os: 'android', version: 35, manufacturer: 'Samsung' })).toBe(0.5);
+  expect(splashIconScale({ os: 'android', version: 34, manufacturer: 'Google' })).toBe(1);
+  // Before Android 12 the splash library draws it, at imageWidth.
+  expect(splashIconScale({ os: 'android', version: 30, manufacturer: 'samsung' })).toBe(1);
+  expect(splashIconScale({ os: 'ios', version: '18.0' })).toBe(1);
+});
+
+// The grow runs on the native driver, which tests do not play; they see
+// where it starts.
+const growStart = () => (style(screen.getByTestId('launch-mark-grow', { includeHiddenElements: true })).transform as { scale: number }[])[0].scale;
+
+test('on a Samsung phone the launch icon starts at half size', async () => {
+  jest.replaceProperty(Platform, 'OS', 'android');
+  jest.spyOn(Platform, 'Version', 'get').mockReturnValue(31);
+  jest.spyOn(Platform, 'constants', 'get').mockReturnValue({ ...Platform.constants, Manufacturer: 'samsung' } as typeof Platform.constants);
+  try {
+    await render(<LaunchCover />);
+    expect(growStart()).toBe(0.5);
+  } finally {
+    jest.restoreAllMocks();
+  }
+});
+
+test('elsewhere the launch icon starts at full size', async () => {
+  await render(<LaunchCover />);
+  expect(growStart()).toBe(1);
 });
 
 test('the root layout opens with the launch cover', async () => {
