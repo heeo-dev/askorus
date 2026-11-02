@@ -24,27 +24,46 @@ const fenceOpen = /^ {0,3}(`{3,}|~{3,})/;
 
 type Line = { start: number; end: number; text: string; blank: boolean; code: boolean };
 
+// Only the last MAX_LINES lines are read: extras are short, and a long
+// answer is not read whole again.
+const MAX_LINES = 120;
+
+// fenceAfter is the open fence after line, given the one before it ('' outside code).
+function fenceAfter(fence: string, line: string): string {
+  if (fence) {
+    const tt = line.trim();
+    return tt.startsWith(fence) && tt.split(fence[0]).join('') === '' ? '' : fence;
+  }
+  return fenceOpen.exec(line)?.[1] ?? '';
+}
+
 function lines(text: string): Line[] {
-  const out: Line[] = [];
+  let from = 0;
+  let breaks = 0;
+  for (let i = text.indexOf('\n'); i >= 0 && breaks < MAX_LINES; i = text.indexOf('\n', i + 1)) breaks++;
+  if (breaks >= MAX_LINES) {
+    let pos = text.length;
+    for (let k = 0; k < MAX_LINES; k++) pos = text.lastIndexOf('\n', pos - 1);
+    from = pos + 1;
+  }
   let fence = '';
-  for (let pos = 0; pos < text.length; ) {
+  for (let pos = 0; pos < from; ) {
+    const i = text.indexOf('\n', pos);
+    const end = i < 0 || i > from ? from : i;
+    const raw = text.slice(pos, end);
+    const t = raw.replace(/^ +/, '');
+    if (raw.length - t.length <= 3 && (t.startsWith('```') || t.startsWith('~~~'))) fence = fenceAfter(fence, raw.replace(/\r$/, ''));
+    pos = end + 1;
+  }
+  const out: Line[] = [];
+  for (let pos = from; pos < text.length; ) {
     const i = text.indexOf('\n', pos);
     const end = i < 0 ? text.length : i;
     const next = i < 0 ? text.length : i + 1;
     const raw = text.slice(pos, end).replace(/\r$/, '');
-    const l: Line = { start: pos, end: pos + raw.length, text: raw, blank: raw.trim() === '', code: false };
-    if (fence) {
-      l.code = true;
-      const tt = raw.trim();
-      if (tt.startsWith(fence) && tt.split(fence[0]).join('') === '') fence = '';
-    } else {
-      const m = fenceOpen.exec(raw);
-      if (m) {
-        l.code = true;
-        fence = m[1];
-      }
-    }
-    out.push(l);
+    const was = fence;
+    fence = fenceAfter(fence, raw);
+    out.push({ start: pos, end: pos + raw.length, text: raw, blank: raw.trim() === '', code: was !== '' || fence !== '' });
     pos = next;
   }
   return out;

@@ -104,29 +104,63 @@ type extrasLine struct {
 	code       bool // in a fenced code block, fences included
 }
 
+// extrasMaxLines is how many lines at the end are read: extras are short,
+// and a long answer is not read whole again (TestSplitHostileIsQuick).
+const extrasMaxLines = 120
+
+// extrasLines gives the last extrasMaxLines lines of text, knowing whether
+// the first of them is inside a fenced code block.
 func extrasLines(text string) []extrasLine {
-	var out []extrasLine
+	from := 0
+	if strings.Count(text, "\n") >= extrasMaxLines {
+		pos := len(text)
+		for range extrasMaxLines {
+			pos = strings.LastIndexByte(text[:pos], '\n')
+		}
+		from = pos + 1
+	}
 	fence := ""
-	for pos := 0; pos < len(text); {
+	for pos := 0; pos < from; {
+		end := from
+		if i := strings.IndexByte(text[pos:from], '\n'); i >= 0 {
+			end = pos + i
+		}
+		raw := text[pos:end]
+		if t := strings.TrimLeft(raw, " "); len(raw)-len(t) <= 3 && (strings.HasPrefix(t, "```") || strings.HasPrefix(t, "~~~")) {
+			fence = extrasFenceAfter(fence, strings.TrimSuffix(raw, "\r"))
+		}
+		pos = end + 1
+	}
+	var out []extrasLine
+	for pos := from; pos < len(text); {
 		end, next := len(text), len(text)
 		if i := strings.IndexByte(text[pos:], '\n'); i >= 0 {
 			end, next = pos+i, pos+i+1
 		}
 		raw := strings.TrimSuffix(text[pos:end], "\r")
 		l := extrasLine{start: pos, end: pos + len(raw), text: raw, blank: strings.TrimSpace(raw) == ""}
-		if fence != "" {
-			l.code = true
-			if t := strings.TrimSpace(raw); strings.HasPrefix(t, fence) && strings.Trim(t, fence[:1]) == "" {
-				fence = ""
-			}
-		} else if m := extrasFence.FindStringSubmatch(raw); m != nil {
-			l.code = true
-			fence = m[1]
-		}
+		was := fence
+		fence = extrasFenceAfter(fence, raw)
+		l.code = was != "" || fence != ""
 		out = append(out, l)
 		pos = next
 	}
 	return out
+}
+
+// extrasFenceAfter is the open fence after line, given the one before it
+// ("" outside code).
+func extrasFenceAfter(fence, line string) string {
+	if fence != "" {
+		if t := strings.TrimSpace(line); strings.HasPrefix(t, fence) && strings.Trim(t, fence[:1]) == "" {
+			return ""
+		}
+		return fence
+	}
+	if m := extrasFence.FindStringSubmatch(line); m != nil {
+		return m[1]
+	}
+	return ""
 }
 
 // extrasHeadingText gives a heading line's words, with its marks, a
