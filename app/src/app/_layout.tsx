@@ -1,3 +1,4 @@
+import { NavigationBar } from 'expo-navigation-bar';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, useColorScheme, View } from 'react-native';
@@ -25,6 +26,11 @@ function Root() {
     // Where the app ends on the screen, for the keyboard's lift (R-62).
     <View style={styles.root} onLayout={(e) => setRootBottom(e.nativeEvent.layout.y + e.nativeEvent.layout.height)}>
       <StatusBar style={th.scheme === 'dark' ? 'light' : 'dark'} />
+      {/* The navigation bar follows the theme too: Android sets it from the
+          phone's light or dark only as the app starts, so a theme chosen in
+          the app, or the phone's changed while the app runs, left it the
+          other way (R-65). */}
+      <NavigationBar style={th.scheme === 'dark' ? 'dark' : 'light'} />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: th.bg } }} />
       {/* Until the saved theme is read, the phone's background covers the
           screens, so a dark choice never flashes light (the stack stays mounted). */}

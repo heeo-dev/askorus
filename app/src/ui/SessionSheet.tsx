@@ -18,6 +18,7 @@ import { Spinner, StatusDot } from './controls';
 import { ago, folderName, sessionStatus, sessionTitle } from './format';
 import { Icon, IconButton } from './Icon';
 import { useSafeInsets } from './keyboard';
+import { modalBars } from './modalBars';
 import { SheetRise } from './Sheet';
 import { themed, useTheme } from './theme';
 
@@ -168,7 +169,15 @@ export function SessionSheet({
   const canRemove = can('remove');
 
   return (
-    <Modal visible transparent animationType="fade" onRequestClose={close} statusBarTranslucent navigationBarTranslucent>
+    <Modal
+      visible
+      transparent
+      animationType="fade"
+      onRequestClose={close}
+      onShow={() => modalBars(th.scheme)}
+      statusBarTranslucent
+      navigationBarTranslucent
+    >
       <View style={s.screen}>
         <Pressable
           style={[StyleSheet.absoluteFill, { backgroundColor: th.scrim }]}

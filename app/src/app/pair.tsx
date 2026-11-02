@@ -7,7 +7,9 @@
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Clipboard from 'expo-clipboard';
 import * as Device from 'expo-device';
+import { NavigationBar } from 'expo-navigation-bar';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Linking, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
@@ -329,6 +331,10 @@ function Scanner({ onLink, onCancel }: { onLink: (text: string) => boolean; onCa
 
   return (
     <View style={s.scanner}>
+      {/* The camera is dark in either theme: light bars over it (a light
+          theme's dark status icons vanished on it, S10). */}
+      <StatusBar style="light" />
+      <NavigationBar style="dark" />
       <CameraView
         style={StyleSheet.absoluteFill}
         facing="back"

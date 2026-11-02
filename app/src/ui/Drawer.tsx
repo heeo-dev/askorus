@@ -16,6 +16,7 @@ import { StatusDot } from './controls';
 import { sessionTitle } from './format';
 import { Icon, IconButton } from './Icon';
 import { useSafeInsets } from './keyboard';
+import { modalBars } from './modalBars';
 import { usePCs } from './shell/pcs';
 import { usePCStatus } from './shell/pcStatus';
 import { themed, useTheme } from './theme';
@@ -54,7 +55,15 @@ export function Drawer({ open, onClose }: { open: boolean; onClose: () => void }
   const pcLine = state === 'ok' ? t('pc.connected') : state === 'error' ? t('pc.notConnected') : t('home.checking');
 
   return (
-    <Modal transparent visible animationType="none" onRequestClose={onClose} statusBarTranslucent navigationBarTranslucent>
+    <Modal
+      transparent
+      visible
+      animationType="none"
+      onRequestClose={onClose}
+      onShow={() => modalBars(th.scheme)}
+      statusBarTranslucent
+      navigationBarTranslucent
+    >
       <View style={s.screen}>
         <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: th.drawerScrim, opacity: progress }]}>
           <Pressable

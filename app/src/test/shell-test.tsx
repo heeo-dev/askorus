@@ -8,7 +8,7 @@ import { userEvent } from '@testing-library/react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { act, renderHook, renderRouter, screen, waitFor } from 'expo-router/testing-library';
 import { useState } from 'react';
-import { Text, TextInput, View } from 'react-native';
+import { StatusBar, Text, TextInput, View } from 'react-native';
 
 import TabsLayout from '@/app/(tabs)/_layout';
 import RootLayout from '@/app/_layout';
@@ -21,6 +21,10 @@ import { themeChoices, useTheme, useThemeChoice } from '@/ui/theme';
 
 const mockScheme = { value: 'light' as 'light' | 'dark' | null };
 jest.mock('react-native/Libraries/Utilities/useColorScheme', () => ({ __esModule: true, default: () => mockScheme.value }));
+// The navigation bar shows its style as a test id.
+jest.mock('expo-navigation-bar', () => ({
+  NavigationBar: ({ style }: { style: string }) => require('react').createElement(require('react-native').View, { testID: `navigation-bar-${style}` }),
+}));
 
 let agent: FakeAgent;
 
@@ -152,6 +156,24 @@ test('an empty drawer says the questions go when the app closes, and it closes',
   await waitFor(() => expect(screen.queryByTestId('drawer')).toBeNull());
 });
 
+// R-64: on the S10 (Android 12) the drawer's window got white status bar
+// icons over its light panel; it sets the theme's look once it shows.
+test.each([
+  ['light', 'dark-content'],
+  ['dark', 'light-content'],
+] as const)('the drawer sets the %s theme’s status bar look', async (scheme, look) => {
+  mockScheme.value = scheme;
+  const set = jest.spyOn(StatusBar, 'setBarStyle').mockImplementation(() => undefined);
+  const user = userEvent.setup();
+  await renderRouter(routes, { initialUrl: '/' });
+  await user.press(await screen.findByRole('button', { name: 'Open menu' }));
+  let modal = (await screen.findByTestId('drawer')).parent;
+  while (modal && modal.props.onShow === undefined) modal = modal.parent;
+  set.mockClear();
+  await act(async () => modal?.props.onShow());
+  expect(set).toHaveBeenCalledWith(look);
+});
+
 test('the current PC and its sessions waiting for input: header dot, drawer rows, and where they lead', async () => {
   const user = userEvent.setup();
   await pairedPC();
@@ -225,6 +247,24 @@ test('the drawer leads to Settings, whose back returns', async () => {
   expect(await screen.findByRole('header', { name: 'Settings' })).toBeTruthy();
   await user.press(screen.getByRole('button', { name: 'Back' }));
   await waitFor(() => expect(r.getPathname()).toBe('/'));
+});
+
+// R-65: Android sets the navigation bar from the phone's light or dark as
+// the app starts only, so a theme chosen in the app (or the phone's,
+// changed while the app ran) left it the other way on the S10.
+test('the navigation bar follows the theme choice', async () => {
+  const user = userEvent.setup();
+  const nav = () => (screen.queryByTestId('navigation-bar-dark') ? 'dark' : screen.queryByTestId('navigation-bar-light') ? 'light' : 'none');
+  await renderRouter(routes, { initialUrl: '/settings' });
+  expect(await screen.findByRole('radio', { name: 'system' })).toBeChecked();
+  expect(nav()).toBe('light'); // the phone is light
+  await user.press(screen.getByRole('radio', { name: 'dark' }));
+  expect(nav()).toBe('dark');
+  mockScheme.value = 'dark';
+  await user.press(screen.getByRole('radio', { name: 'light' }));
+  expect(nav()).toBe('light');
+  await user.press(screen.getByRole('radio', { name: 'system' }));
+  expect(nav()).toBe('dark');
 });
 
 test('the theme choice is drawn at once and kept: dark, light, system', async () => {
