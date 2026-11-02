@@ -4,8 +4,13 @@
 # new session button is My PC's round "New session" button, and the session
 # sheet holds Open in the Claude app, Stop and Remove.
 appId: host.exp.exponent
+# The session keeps the default name, "rc-test MM-DD HH:MM" (11-03): typing
+# a name sends key events, which take Android out of touch mode, and React
+# Native's text field is not focusable outside it, so the focus jumped to
+# the top bar's button and the text went nowhere (on the S10; a finger on
+# the keyboard is not affected). No other rc-test session may be named so.
 env:
-  NAME: e2e-${new Date().getTime()}
+  NAME: rc-test \d\d-\d\d \d\d:\d\d
 ---
 - runFlow: 01-home-and-list.yaml
 
@@ -20,10 +25,6 @@ env:
     text: "rc-test"
     index: 0
     waitToSettleTimeoutMs: 300
-- tapOn: "Leave empty for the folder name and time"
-- inputText: ${NAME}
-# Done on the on-screen keyboard closes it, as a person would (R-16).
-- pressKey: Enter
 - tapOn:
     text: "Start and open in the Claude app"
     waitToSettleTimeoutMs: 300

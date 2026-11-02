@@ -16,5 +16,16 @@ appId: host.exp.exponent
     visible: "New session"
     timeout: 10000
 - assertVisible: "Sessions"
-- assertVisible: "Keep folders open"
 - assertVisible: "Search sessions"
+# The row is under the last session. This PC has more sessions than a
+# screen (11-03: test-live leaves live-* ones), so look under the short
+# Running list, then go back to All.
+- tapOn:
+    text: "Running"
+    waitToSettleTimeoutMs: 300
+- extendedWaitUntil:
+    visible: "Keep folders open"
+    timeout: 10000
+- tapOn:
+    text: "All"
+    waitToSettleTimeoutMs: 300
