@@ -3,10 +3,14 @@
 // model and time, the answer drawn from its Markdown (selectable), and what
 // can be done with it: copy, ask only this AI next, and carry Claude's
 // conversation on in the Claude app. The same actions are in AnswerActions
-// for the answer sheet.
+// for the answer sheet. What an AI adds at the end of an answer (#4:
+// messages to send next, an offer) is folded under it, as judging and the
+// combined answer leave it out.
 
+import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
+import { splitExtras } from '@/ask/extras';
 import { type PartView, tenths } from '@/ask/present';
 import { t } from '@/i18n';
 
@@ -35,6 +39,7 @@ export function answerMeta(p: PartView): string {
 /** AnswerBody: the answer, a spinner while it comes, or why there is none. */
 export function AnswerBody({ p }: { p: PartView }) {
   const s = styles(useTheme());
+  const [extrasOpen, setExtrasOpen] = useState(false);
   if (p.state === 'answering') {
     return (
       <View style={s.waiting}>
@@ -44,7 +49,29 @@ export function AnswerBody({ p }: { p: PartView }) {
     );
   }
   if (p.state === 'failed') return <Text style={s.error}>{p.error}</Text>;
-  return <Markdown text={p.part.answer ?? ''} />;
+  const { main, extras } = splitExtras(p.part.answer ?? '');
+  return (
+    <>
+      <Markdown text={main} />
+      {extras ? (
+        <View style={s.extras}>
+          <Button
+            variant="quiet"
+            icon={extrasOpen ? 'chevronUp' : 'chevronDown'}
+            label={t(extrasOpen ? 'ask.extras.hide' : 'ask.extras.show')}
+            onPress={() => setExtrasOpen((o) => !o)}
+            style={s.action}
+          />
+          {extrasOpen ? (
+            <>
+              <Text style={s.caption}>{t('ask.extras.note')}</Text>
+              <Markdown text={extras} />
+            </>
+          ) : null}
+        </View>
+      ) : null}
+    </>
+  );
 }
 
 /** AnswerActions: copy, only this AI, continue in the Claude app, and what the last one said. */
@@ -97,6 +124,7 @@ const styles = themed((th) =>
     caption: { fontSize: 13, lineHeight: 19.5, color: th.caption },
     error: { fontSize: 14, lineHeight: 20, color: th.danger },
     actions: { flexDirection: 'row', flexWrap: 'wrap', marginLeft: -12, marginVertical: -6 },
+    extras: { gap: 6, alignItems: 'flex-start', marginLeft: -12, paddingLeft: 12 },
     action: { paddingHorizontal: 12 },
   }),
 );

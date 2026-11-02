@@ -20,7 +20,7 @@ const wordmarks: Record<Scheme, ImageSourcePropType> = {
 const mark: ImageSourcePropType = require('../../assets/brand/mark.png');
 
 /** Wordmark draws 'Asksemble' at the given font size (px) in the theme's colours. */
-export function Wordmark({ size = box.fontSize, scheme }: { size?: number; scheme?: Scheme }) {
+export function Wordmark({ size = box.fontSize, scheme, testID }: { size?: number; scheme?: Scheme; testID?: string }) {
   const th = useTheme();
   const s = scheme ?? th.scheme;
   const k = size / box.fontSize;
@@ -32,13 +32,13 @@ export function Wordmark({ size = box.fontSize, scheme }: { size?: number; schem
       accessible
       accessibilityRole="image"
       accessibilityLabel={t('app.name')}
-      testID={`wordmark-${s}`}
+      testID={testID ?? `wordmark-${s}`}
     />
   );
 }
 
 /** BrandMark is the app icon (apricot squircle, ink bubble); decoration only. */
-export function BrandMark({ size = 112 }: { size?: number }) {
+export function BrandMark({ size = 112, testID = 'brand-mark' }: { size?: number; testID?: string }) {
   return (
     <Image
       source={mark}
@@ -47,7 +47,7 @@ export function BrandMark({ size = 112 }: { size?: number }) {
       accessible={false}
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
-      testID="brand-mark"
+      testID={testID}
     />
   );
 }

@@ -1,8 +1,9 @@
 // About (S5c, from Settings › About): the brand as on the board
 // F-Brand-Splash-Final — app icon B, the wordmark and the slogan — with the
 // one-line description, the version and the not-official line. The native
-// splash shows only the icon (Android 12+ draws an icon only), so this is
-// where the whole composition lives.
+// splash shows only the icon (Android 12+ draws an icon only); the launch
+// cover (ui/LaunchCover) adds the wordmark at start, and this is where the
+// whole composition lives.
 
 import Constants from 'expo-constants';
 import { router } from 'expo-router';

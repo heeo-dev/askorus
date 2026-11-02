@@ -40,7 +40,7 @@ type Synthesizer interface {
 // SynthRequest is one combined-answer call.
 type SynthRequest struct {
 	Folder string // the judge folder: absolute, exists, outside any project
-	Prompt string // the synth-v1 prompt; sent on stdin, never as an argument
+	Prompt string // the synth-v2 prompt; sent on stdin, never as an argument
 	Model  string // the writer's ask tier model; never empty
 	Effort string // its effort; "" lets the adapter pick its command's default
 }

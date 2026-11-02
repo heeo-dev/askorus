@@ -4,7 +4,7 @@
 // the board's colours at known points); the wordmark's measured box; and
 // the About screen that carries the whole board F-Brand-Splash-Final.
 
-import { render, userEvent } from '@testing-library/react-native';
+import { act, render, userEvent } from '@testing-library/react-native';
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import { renderRouter, screen, waitFor } from 'expo-router/testing-library';
@@ -13,6 +13,7 @@ import { Pressable, Text, View } from 'react-native';
 import RootLayout from '@/app/_layout';
 import About from '@/app/about';
 import { setLang } from '@/i18n';
+import { LAUNCH_ICON, LaunchCover } from '@/ui/LaunchCover';
 import { BrandMark, Wordmark } from '@/ui/Wordmark';
 import box from '@/ui/wordmark-size.json';
 
@@ -346,4 +347,39 @@ test('About leaves the version line out when the app has no version', async () =
   await renderRouter(routes, { initialUrl: '/about' });
   expect(await screen.findByText('Not an official product of any AI company.')).toBeTruthy();
   expect(screen.queryByText(/^Version/)).toBeNull();
+});
+
+// --- Launch cover (#1) ------------------------------------------------------
+
+// R-60: the APK opened on the icon alone, while the board
+// F-Brand-Splash-Final has the wordmark under it. The native splash can draw
+// only the icon, so the cover takes over in the same place and colour as the
+// splash, brings the wordmark in, then goes away.
+test.each(['light', 'dark'] as const)('the launch cover matches the %s splash, adds the wordmark and goes away', async (scheme) => {
+  mockScheme.value = scheme;
+  jest.useFakeTimers();
+  try {
+    const splash = readJSON('app.json').expo.plugins.find((p: unknown) => Array.isArray(p) && p[0] === 'expo-splash-screen')[1];
+    await render(<LaunchCover />);
+    const hidden = { includeHiddenElements: true };
+    const cover = screen.getByTestId('launch-cover', hidden);
+    expect(style(cover).backgroundColor).toBe(scheme === 'dark' ? splash.dark.backgroundColor : splash.backgroundColor);
+    expect(LAUNCH_ICON).toBe(splash.imageWidth);
+    expect(style(screen.getByTestId('launch-mark', hidden))).toMatchObject({ width: LAUNCH_ICON, height: LAUNCH_ICON });
+    expect(screen.getByTestId(`launch-wordmark-${scheme}`, hidden)).toBeTruthy();
+    // Never in the way: no touches, not read out.
+    expect(cover.props.pointerEvents).toBe('none');
+    expect(screen.queryByTestId('launch-cover')).toBeNull();
+    await act(async () => {
+      jest.advanceTimersByTime(3000);
+    });
+    expect(screen.queryByTestId('launch-cover', hidden)).toBeNull();
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
+test('the root layout opens with the launch cover', async () => {
+  await renderRouter(routes, { initialUrl: '/' });
+  expect(await screen.findByTestId('launch-cover', { includeHiddenElements: true })).toBeTruthy();
 });

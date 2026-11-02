@@ -18,6 +18,7 @@ import { Spinner, StatusDot } from './controls';
 import { ago, folderName, sessionStatus, sessionTitle } from './format';
 import { Icon, IconButton } from './Icon';
 import { useSafeInsets } from './keyboard';
+import { SheetRise } from './Sheet';
 import { themed, useTheme } from './theme';
 
 type Busy = null | 'open' | 'stop' | 'remove';
@@ -167,7 +168,7 @@ export function SessionSheet({
   const canRemove = can('remove');
 
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={close} statusBarTranslucent navigationBarTranslucent>
+    <Modal visible transparent animationType="fade" onRequestClose={close} statusBarTranslucent navigationBarTranslucent>
       <View style={s.screen}>
         <Pressable
           style={[StyleSheet.absoluteFill, { backgroundColor: th.scrim }]}
@@ -176,7 +177,7 @@ export function SessionSheet({
           accessibilityLabel={t('sheet.close')}
           testID="session-sheet-scrim"
         />
-        <View style={[s.sheet, { paddingBottom: 20 + insets.bottom }]} accessibilityViewIsModal testID="session-sheet">
+        <SheetRise style={[s.sheet, { paddingBottom: 20 + insets.bottom }]} accessibilityViewIsModal testID="session-sheet">
           <View style={s.handle} />
           <ScrollView style={s.scroll} contentContainerStyle={s.body} keyboardShouldPersistTaps="handled">
             <View style={s.top}>
@@ -299,7 +300,7 @@ export function SessionSheet({
               </View>
             ) : null}
           </ScrollView>
-        </View>
+        </SheetRise>
       </View>
     </Modal>
   );

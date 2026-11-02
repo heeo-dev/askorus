@@ -84,6 +84,7 @@ export function JudgesSheet({ turn, snap, info, onClose }: { turn: Turn | null; 
               {t('compare.direction')}
             </Text>
           </View>
+          <Text style={s.help}>{t('compare.judgeCountHelp')}</Text>
           {groups.map((g, gi) => (
             <View key={g.key} style={[s.group, gi > 0 && s.groupLine]}>
               {g.agent ? (
@@ -147,6 +148,7 @@ const styles = themed((th) =>
     labelRow: { minHeight: 32, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20 },
     labelText: { fontSize: 13, fontWeight: '500', lineHeight: 18, color: th.caption },
     direction: { marginLeft: 'auto', fontSize: 13, lineHeight: 18, color: th.caption },
+    help: { paddingHorizontal: 20, paddingBottom: 8, fontSize: 13, lineHeight: 19.5, color: th.textSub },
     divided: { marginTop: 4, paddingTop: 4, borderTopWidth: 1, borderTopColor: th.divider },
     writer: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 20 },
     writerName: { fontSize: 15, fontWeight: '500', lineHeight: 21, color: th.text },
