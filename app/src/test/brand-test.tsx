@@ -13,12 +13,16 @@ import { Platform, Pressable, Text, View } from 'react-native';
 import RootLayout from '@/app/_layout';
 import About from '@/app/about';
 import { setLang } from '@/i18n';
-import { LAUNCH_ICON, LaunchCover, splashIconScale } from '@/ui/LaunchCover';
+import { LAUNCH_ICON, LaunchCover, SPLASH_WAIT, splashIconScale } from '@/ui/LaunchCover';
 import { BrandMark, Wordmark } from '@/ui/Wordmark';
 import box from '@/ui/wordmark-size.json';
 
 const mockScheme = { value: 'light' as 'light' | 'dark' | null };
 jest.mock('react-native/Libraries/Utilities/useColorScheme', () => ({ __esModule: true, default: () => mockScheme.value }));
+jest.mock('expo-splash-screen', () => ({ preventAutoHideAsync: jest.fn(() => Promise.resolve(true)), hide: jest.fn() }));
+const splash = require('expo-splash-screen') as { preventAutoHideAsync: jest.Mock; hide: jest.Mock };
+// The launch cover holds the splash from its import on.
+const heldAtImport = splash.preventAutoHideAsync.mock.calls.length > 0;
 
 // The app has no Node types (tsconfig types: jest), so the few Node calls
 // are typed here, as in a11y-static-test.
@@ -370,6 +374,8 @@ test.each(['light', 'dark'] as const)('the launch cover matches the %s splash, a
     // Never in the way: no touches, not read out.
     expect(cover.props.pointerEvents).toBe('none');
     expect(screen.queryByTestId('launch-cover')).toBeNull();
+    // It moves once its icon is drawn (R-67).
+    await act(async () => screen.getByTestId('launch-mark', hidden).props.onLoad());
     await act(async () => {
       jest.advanceTimersByTime(3000);
     });
@@ -410,6 +416,48 @@ test('on a Samsung phone the launch icon starts at half size', async () => {
 test('elsewhere the launch icon starts at full size', async () => {
   await render(<LaunchCover />);
   expect(growStart()).toBe(1);
+});
+
+// R-67: the cover's icon is an image that comes a moment after the cover's
+// first frame, and the S10 showed a frame with no icon between the splash
+// and the cover. The splash stays until the icon is drawn (or a wait runs
+// out), and only then does the cover move.
+describe('the splash waits for the cover’s icon', () => {
+  beforeEach(() => {
+    splash.hide.mockClear();
+    jest.useFakeTimers();
+  });
+  afterEach(() => jest.useRealTimers());
+
+  test('it is held from the start and goes once the icon is drawn', async () => {
+    expect(heldAtImport).toBe(true);
+    await render(<LaunchCover />);
+    await act(async () => {
+      jest.advanceTimersByTime(200);
+    });
+    expect(splash.hide).not.toHaveBeenCalled();
+    // (The cover takes no touches, so the load is called rather than fired.)
+    await act(async () => screen.getByTestId('launch-mark', { includeHiddenElements: true }).props.onLoad());
+    await act(async () => {
+      jest.advanceTimersByTime(50);
+    });
+    expect(splash.hide).toHaveBeenCalledTimes(1);
+  });
+
+  test('an icon that never says it is drawn does not keep the splash', async () => {
+    await render(<LaunchCover />);
+    await act(async () => {
+      jest.advanceTimersByTime(SPLASH_WAIT - 50);
+    });
+    expect(splash.hide).not.toHaveBeenCalled();
+    await act(async () => {
+      jest.advanceTimersByTime(100);
+    });
+    await act(async () => {
+      jest.advanceTimersByTime(50);
+    });
+    expect(splash.hide).toHaveBeenCalledTimes(1);
+  });
 });
 
 test('the root layout opens with the launch cover', async () => {

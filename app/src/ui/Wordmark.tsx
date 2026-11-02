@@ -38,10 +38,11 @@ export function Wordmark({ size = box.fontSize, scheme, testID }: { size?: numbe
 }
 
 /** BrandMark is the app icon (apricot squircle, ink bubble); decoration only. */
-export function BrandMark({ size = 112, testID = 'brand-mark' }: { size?: number; testID?: string }) {
+export function BrandMark({ size = 112, testID = 'brand-mark', onLoad }: { size?: number; testID?: string; onLoad?: () => void }) {
   return (
     <Image
       source={mark}
+      onLoad={onLoad}
       style={{ width: size, height: size }}
       resizeMode="contain"
       accessible={false}
