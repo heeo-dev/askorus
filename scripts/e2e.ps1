@@ -1,12 +1,13 @@
 # Runs the app E2E flows (app\e2e, Maestro) against the real agent, on the
-# test phone over wireless debugging (default) or on the Android emulator
+# test phone over USB or wireless debugging (default) or on the Android emulator
 # (-Emulator). Installs Expo Go when needed. The dev server must already run
 # (scripts\dev-server.ps1). Keep this file ASCII.
 #   powershell -NoProfile -File scripts\e2e.ps1 [-Flow 01] [-Prepare]
 #   powershell -NoProfile -File scripts\e2e.ps1 -Emulator [-Window] [-Keep]
 param([string]$Flow = '', [switch]$Emulator, [switch]$Window, [switch]$Keep, [switch]$Prepare)
-# Phone: paired once for wireless debugging (QR in Developer options), on
-# the same Wi-Fi as the PC, Tailscale connected, screen lock None or Swipe.
+# Phone: plugged into the PC with USB debugging on (or wireless debugging,
+# paired once with a QR in Developer options, same Wi-Fi as the PC),
+# Tailscale connected, screen lock None or Swipe.
 # Emulator: runs without a window unless -Window (to watch it). An emulator
 # this script started is shut down afterwards unless -Keep; one that was
 # already running is left as it was. -Prepare only gets the device ready.
@@ -60,7 +61,7 @@ if ($Emulator) {
 } else {
   $serial = Connect-Phone
   if (-not $serial) {
-    Write-Output 'no phone: turn on Wireless debugging on the test phone (same Wi-Fi as the PC), or pair it again with a QR'
+    Write-Output $noPhone
     exit 1
   }
   # The phone reaches the dev server over Tailscale (dev-server.ps1 serves on

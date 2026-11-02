@@ -1,6 +1,7 @@
 # Live use of the test phone for one-off checks (MT items, P0-4 and the
-# like), with agent-device (Callstack) over wireless debugging. Repeated
-# checks belong in Maestro flows (e2e.ps1). Keep this file ASCII.
+# like), with agent-device (Callstack) over USB (wireless debugging as a
+# fallback). Repeated checks belong in Maestro flows (e2e.ps1). Keep this
+# file ASCII.
 #   powershell -NoProfile -File scripts\phone.ps1 ready              # connect, wake, free the screen reader
 #   powershell -NoProfile -File scripts\phone.ps1 snapshot -i        # agent-device command (see below)
 #   powershell -NoProfile -File scripts\phone.ps1 shot <file.png>    # adb screenshot, no helper app
@@ -15,7 +16,7 @@
 
 $serial = Connect-Phone
 if (-not $serial) {
-  Write-Output 'no phone: turn on Wireless debugging on the test phone (same Wi-Fi as the PC), or pair it again with a QR'
+  Write-Output $noPhone
   exit 1
 }
 $cmd = if ($args.Count) { $args[0] } else { 'ready' }
