@@ -28,11 +28,13 @@ SplashScreen.preventAutoHideAsync().catch(() => undefined);
  * splashIconScale is how big the native splash drew the icon, as a share of
  * LAUNCH_ICON. Android 12+ draws imageWidth on a 288 dp canvas: stock
  * Android (and the splash library before 12) shows the canvas at 288 dp,
- * Samsung's One UI at half that (the S10 on Android 12, 11-03). iOS draws
- * imageWidth points.
+ * Samsung's One UI on Android 12 at half that (the S10, 11-03). Samsung on
+ * Android 13 and later shows it whole: on the S23 a cover icon starting at
+ * half grew behind the splash's full one (R-69). iOS draws imageWidth points.
  */
 export function splashIconScale(d: { os: string; version: number | string; manufacturer?: string }): number {
-  return d.os === 'android' && Number(d.version) >= 31 && /samsung/i.test(d.manufacturer ?? '') ? 0.5 : 1;
+  const v = Number(d.version);
+  return d.os === 'android' && v >= 31 && v <= 32 && /samsung/i.test(d.manufacturer ?? '') ? 0.5 : 1;
 }
 
 function deviceSplashIconScale(): number {
