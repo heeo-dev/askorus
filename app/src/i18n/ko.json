@@ -382,6 +382,7 @@
   "settings.theme.system": "시스템",
   "settings.theme.dark": "다크",
   "settings.theme.light": "라이트",
+  "settings.aiColours": "AI마다 다른 색",
   "pair.intro": "PC에서 명령 하나를 실행하고 화면에 나온 QR을 찍으면, PC 화면에 허용할지 묻는 창이 뜹니다.",
   "pair.step1": "PC 터미널에서 실행",
   "pair.step2": "PC에 나온 QR 찍기",

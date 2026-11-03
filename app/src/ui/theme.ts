@@ -12,6 +12,9 @@
 // card and muted are the old names of surface and caption; accent and
 // accentText keep their old meaning (a fill and the text on it, also link
 // text), so screens not rebuilt yet stay on the palette.
+//
+// Each AI we know has a soft colour of its own (#6, aiPalettes); Settings
+// can turn it off, back to the one avatar colour of S5c.
 
 import { createContext, createElement, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { type TextStyle, useColorScheme } from 'react-native';
@@ -19,7 +22,7 @@ import * as SystemUI from 'expo-system-ui';
 
 import { type KeyValue, secureKeyValue } from '@/connections/store';
 
-import { loadThemeChoice, saveThemeChoice } from './appearance';
+import { type Appearance, defaultAppearance, loadAppearance, saveAppearance } from './appearance';
 
 export type Scheme = 'dark' | 'light';
 export type ThemeChoice = 'system' | 'dark' | 'light';
@@ -173,50 +176,113 @@ export function resolveScheme(choice: ThemeChoice, system: string | null | undef
   return system === 'dark' ? 'dark' : 'light';
 }
 
-type Ctx = { theme: Theme; choice: ThemeChoice; setChoice: (c: ThemeChoice) => void; ready: boolean };
+// AI colours (#6, board 'AI 색 (#6)' 안 2, soft fills): an AI's avatar and
+// its name chips in a combined answer sit on its tint, letters in its deep
+// shade (4.5:1 or more). No AI company's own colour, and none near apricot
+// (differ) or red (danger). AIs not listed keep the plain avatar.
+export type AIHue = 'sky' | 'lilac' | 'teal' | 'rose' | 'lime';
+export type AIColour = { bg: string; fg: string };
+
+export const aiPalettes: Record<Scheme, Record<AIHue, AIColour>> = {
+  dark: {
+    sky: { bg: '#203748', fg: '#9CCDF0' },
+    lilac: { bg: '#312C4E', fg: '#C3B4F6' },
+    teal: { bg: '#1C3B36', fg: '#84D6C6' },
+    rose: { bg: '#43273A', fg: '#F2A5C5' },
+    lime: { bg: '#30381F', fg: '#C2D98A' },
+  },
+  light: {
+    sky: { bg: '#DCEDFA', fg: '#1D5C87' },
+    lilac: { bg: '#EAE4FB', fg: '#5A3DA6' },
+    teal: { bg: '#D5F0EA', fg: '#12665A' },
+    rose: { bg: '#FAE1EC', fg: '#9C2D5B' },
+    lime: { bg: '#E8F0D2', fg: '#4A5C0F' },
+  },
+};
+
+const aiHues = new Map<string, AIHue>([
+  ['claude', 'sky'],
+  ['codex', 'lilac'],
+  ['opencode', 'teal'],
+  ['antigravity', 'rose'],
+  ['gemini', 'rose'],
+  ['kimi', 'lime'],
+]);
+
+/** aiColour is an AI's own colour in th, or undefined for an AI without one. */
+export function aiColour(th: Theme, agent: string): AIColour | undefined {
+  const hue = aiHues.get(agent);
+  return hue ? aiPalettes[th.scheme][hue] : undefined;
+}
+
+type Ctx = {
+  theme: Theme;
+  choice: ThemeChoice;
+  setChoice: (c: ThemeChoice) => void;
+  aiColours: boolean;
+  setAIColours: (on: boolean) => void;
+  ready: boolean;
+};
 const ThemeContext = createContext<Ctx | null>(null);
 
 /**
- * ThemeProvider reads the saved choice once and gives the theme to every
- * screen under it. Until the choice is read it draws the phone's scheme
- * (ready false). It also sets the window's background (behind the screens,
- * seen during transitions and under the keyboard).
+ * ThemeProvider reads the saved look once (the theme choice and whether AIs
+ * have their own colours) and gives it to every screen under it. Until it
+ * is read it draws the phone's scheme with AI colours (ready false). It also
+ * sets the window's background (behind the screens, seen during transitions
+ * and under the keyboard).
  */
 export function ThemeProvider({ children, kv = secureKeyValue }: { children: ReactNode; kv?: KeyValue }) {
   const system = useColorScheme();
-  const [choice, setChoiceState] = useState<ThemeChoice>('system');
+  const [look, setLook] = useState<Appearance>(defaultAppearance);
   const [ready, setReady] = useState(false);
-  const touched = useRef(false);
+  // The latest look, and what the person changed before the saved one was read.
+  const latest = useRef<Appearance>(defaultAppearance);
+  const touched = useRef(new Set<keyof Appearance>());
+  const read = useRef(false);
 
   useEffect(() => {
     let live = true;
-    loadThemeChoice(kv).then((c) => {
+    loadAppearance(kv).then((saved) => {
       if (!live) return;
-      // A choice made while the saved one was being read wins.
-      if (!touched.current) setChoiceState(c);
+      // A change made while the saved look was being read wins, and only
+      // then is the look saved, so the other setting is not lost.
+      const next = { ...saved };
+      for (const k of touched.current) Object.assign(next, { [k]: latest.current[k] });
+      latest.current = next;
+      read.current = true;
+      setLook(next);
       setReady(true);
+      if (touched.current.size) saveAppearance(next, kv).catch(() => undefined);
     });
     return () => {
       live = false;
     };
   }, [kv]);
 
-  const theme = themes[resolveScheme(choice, system)];
+  const theme = themes[resolveScheme(look.theme, system)];
 
   useEffect(() => {
     SystemUI.setBackgroundColorAsync(theme.bg).catch(() => undefined);
   }, [theme.bg]);
 
-  const setChoice = useCallback(
-    (c: ThemeChoice) => {
-      touched.current = true;
-      setChoiceState(c);
-      saveThemeChoice(c, kv).catch(() => undefined);
+  const change = useCallback(
+    (patch: Partial<Appearance>) => {
+      for (const k of Object.keys(patch) as (keyof Appearance)[]) touched.current.add(k);
+      const next = { ...latest.current, ...patch };
+      latest.current = next;
+      setLook(next);
+      if (read.current) saveAppearance(next, kv).catch(() => undefined);
     },
     [kv],
   );
+  const setChoice = useCallback((c: ThemeChoice) => change({ theme: c }), [change]);
+  const setAIColours = useCallback((on: boolean) => change({ aiColours: on }), [change]);
 
-  const value = useMemo(() => ({ theme, choice, setChoice, ready }), [theme, choice, setChoice, ready]);
+  const value = useMemo(
+    () => ({ theme, choice: look.theme, setChoice, aiColours: look.aiColours, setAIColours, ready }),
+    [theme, look, setChoice, setAIColours, ready],
+  );
   return createElement(ThemeContext.Provider, { value }, children);
 }
 
@@ -231,6 +297,12 @@ export function useTheme(): Theme {
 export function useThemeChoice(): { choice: ThemeChoice; setChoice: (c: ThemeChoice) => void; ready: boolean } {
   const ctx = useContext(ThemeContext);
   return ctx ? { choice: ctx.choice, setChoice: ctx.setChoice, ready: ctx.ready } : { choice: 'system', setChoice: () => undefined, ready: true };
+}
+
+/** useAIColours is whether AIs are drawn in their own colours (Settings); setOn saves it. Outside a provider: on, and setOn does nothing. */
+export function useAIColours(): { on: boolean; setOn: (on: boolean) => void } {
+  const ctx = useContext(ThemeContext);
+  return ctx ? { on: ctx.aiColours, setOn: ctx.setAIColours } : { on: true, setOn: () => undefined };
 }
 
 /** themed caches what make builds from a theme (usually a StyleSheet), once per scheme. */
