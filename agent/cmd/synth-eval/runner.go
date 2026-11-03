@@ -6,7 +6,7 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"strings"
+	"slices"
 	"time"
 )
 
@@ -35,15 +35,10 @@ func usageLimited(r Record) bool {
 	if r.Synth != nil {
 		msgs = append(msgs, r.Synth.Detail)
 	}
-	for _, m := range msgs {
-		m = strings.ToLower(m)
-		for _, w := range usageLimitWords {
-			if strings.Contains(m, w) {
-				return true
-			}
-		}
+	if r.Refine != nil {
+		msgs = append(msgs, r.Refine.Detail)
 	}
-	return false
+	return slices.ContainsFunc(msgs, limitedText)
 }
 
 // callsPerQuestion is what one question costs at most on a PC with three

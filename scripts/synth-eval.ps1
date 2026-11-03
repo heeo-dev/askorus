@@ -16,6 +16,15 @@
 #   powershell -NoProfile -File scripts\synth-eval.ps1 run -q agent\cmd\synth-eval\testdata\general.txt,.local\synth-eval\mine.txt -run base-2026-11-03 -tier quick -expect 16
 #   powershell -NoProfile -File scripts\synth-eval.ps1 report -run base-2026-11-03 -texts
 #
+# The quality experiments (C4, E0..E3 in docs/phase2-plan.md) add commands.
+# resynth, refine and score USE AI SUBSCRIPTIONS too (ask first); pairs,
+# picks and scores make no model call:
+#   ... resynth -from RUN -run NAME -tier standard -expect N   (combined answers again, same answers)
+#   ... refine -q FILES -run NAME -tier quick -form live -expect N   (the moderator only)
+#   ... score -a RUN -b RUN -name NAME -expect N   (judges claude,codex at deep, both orders)
+#   ... pairs -a RUN -b RUN -name NAME   (data for the blind A/B page)
+#   ... picks -name NAME -in FILE_OR_FOLDER [-score NAME]
+#
 # Question paths are taken from the repo's root. Exit codes pass through:
 # 0 done, 1 error, 2 bad flags, 3 stopped on a usage limit (run again with
 # -resume), 4 interrupted.

@@ -15,6 +15,8 @@ type Summary struct {
 	Run         string  `json:"run"`
 	Refine      string  `json:"refine"`
 	Tier        string  `json:"tier"`
+	Writer      string  `json:"writer"` // who wrote, at which tier, with which prompt
+	From        string  `json:"from,omitempty"`
 	Questions   int     `json:"questions"`
 	Stopped     int     `json:"stopped"`
 	SynthOK     int     `json:"synthOk"`
@@ -41,6 +43,7 @@ func summarize(name string, rs []Record) (Summary, []Metrics) {
 	s := Summary{Run: name, Questions: len(rs)}
 	if len(rs) > 0 {
 		s.Refine, s.Tier = rs[0].Run.Refine, rs[0].Run.Tier
+		s.Writer, s.From = rs[0].Run.writerLabel(), rs[0].Run.From
 	}
 	var ms []Metrics
 	var ask, cmp, syn, tot, ref []float64
@@ -156,6 +159,11 @@ func writeReport(out io.Writer, names []string, runs [][]Record) {
 	line := fmt.Sprintf("%-26s", "refine · tier")
 	for _, s := range sums {
 		line += fmt.Sprintf(" %18s", s.Refine+" · "+s.Tier)
+	}
+	fmt.Fprintln(out, line)
+	line = fmt.Sprintf("%-26s", "writer · tier · prompt")
+	for _, s := range sums {
+		line += fmt.Sprintf(" %18s", s.Writer)
 	}
 	fmt.Fprintln(out, line)
 	for _, row := range summaryRows {

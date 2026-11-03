@@ -6,6 +6,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/asksemble/asksemble/agent/internal/config"
 	"github.com/asksemble/asksemble/agent/internal/core"
 	"github.com/asksemble/asksemble/agent/internal/fakecli"
+	"github.com/asksemble/asksemble/agent/internal/judge"
 )
 
 // The test binary stands in for claude, codex and opencode (fakecli), as
@@ -122,5 +124,71 @@ func TestTheAgentPipelineRefinesFirst(t *testing.T) {
 	}
 	if m := metricsOf(rec); m.Kind != "compare" || m.TotalMs != m.RefineMs+m.AskMs+m.CompareMs+m.SynthMs || !m.SynthOK {
 		t.Fatalf("metrics %+v", m)
+	}
+}
+
+// The record keeps the writer's task (C4, E0): made again from it, the
+// prompt is the one the writer got, byte for byte (its nonce aside), and
+// a writer call through the agent's adapters writes the same combined
+// answer again. With refining, the task carries the spec (synth-v3).
+func TestTheRecordKeepsTheWritersTaskForResynth(t *testing.T) {
+	for _, refine := range []string{"off", "on"} {
+		t.Run(refine, func(t *testing.T) {
+			exes := fakecli.Install(t)
+			fakecli.SetAnswers(t, map[string]string{
+				fakecli.RoleClaude:   "가격은 NUM p=1입니다. 높이는 NUM h=5입니다.",
+				fakecli.RoleCodex:    "가격은 NUM p=2입니다. 높이는 NUM h=5입니다.",
+				fakecli.RoleOpenCode: "높이는 NUM h=5입니다. 오늘은 맑습니다.",
+			})
+			root := t.TempDir()
+			claudeDir := filepath.Join(root, "claude")
+			if err := os.MkdirAll(filepath.Join(claudeDir, "projects"), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			adapters := []core.Adapter{
+				claude.New(claude.Options{ClaudeDir: claudeDir, ClaudePath: exes[fakecli.RoleClaude]}),
+				codex.New(codex.Options{Path: exes[fakecli.RoleCodex], SchemaDir: filepath.Join(root, "agent")}),
+				opencode.New(opencode.Options{Path: exes[fakecli.RoleOpenCode]}),
+			}
+			ctx := context.Background()
+			p, err := pipelineFrom(ctx, adapters, filepath.Join(root, "ask"), config.JudgeConfig{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer p.Close()
+			rec, err := p.Ask(ctx, Question{ID: "g-1", Text: "이 상자의 가격과 높이는 얼마인가요?"}, RunInfo{Tier: core.TierQuick, Writer: "claude", Refine: refine})
+			if err != nil {
+				t.Fatal(err)
+			}
+			task := rec.Task
+			if task == nil || len(task.Answers) != 3 || len(task.Differ) != 1 || !task.Compared || task.Answers[0].AI != "Claude" {
+				t.Fatalf("task %+v", task)
+			}
+			if (task.Spec != nil) != (refine == "on") {
+				t.Fatalf("spec %+v with refine %s", task.Spec, refine)
+			}
+			var sent string
+			for _, c := range fakecli.Calls(t) {
+				if strings.HasPrefix(c.Stdin, "[Asksemble synthesis ") {
+					sent = c.Stdin
+				}
+			}
+			m := regexp.MustCompile(`<data-([0-9a-f]{16})>`).FindStringSubmatch(sent)
+			if m == nil {
+				t.Fatalf("no synth prompt among the calls")
+			}
+			if again := judge.SynthPrompt(*task, m[1]); again != sent {
+				t.Fatalf("the task does not make the prompt the writer got:\n%s\n----\n%s", again, sent)
+			}
+			// A call of the writer through the agent's adapters: the same text.
+			sr := writeSynth(ctx, p, *task, "claude", core.TierQuick, judge.SynthPrompt)
+			if sr.Status != "done" || sr.Text != rec.Synth.Text || sr.Model == "" {
+				t.Fatalf("resynth %+v, first %q", sr, rec.Synth.Text)
+			}
+			// A writer the PC does not have at that tier is an error, not a call.
+			if _, err := p.Write(ctx, writeReq{Agent: "gemini", Tier: core.TierQuick, Prompt: "x"}); err == nil {
+				t.Fatal("an unknown writer wrote")
+			}
+		})
 	}
 }

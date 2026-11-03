@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"os"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -34,6 +35,10 @@ type agentPipeline struct {
 	order    []string
 	runs     *runs.Manager
 	cmp      *compares.Manager
+	// judgeFolder is where judges and writers run; names are the AIs'
+	// names as the writer gets them (Claude, Codex, OpenCode).
+	judgeFolder string
+	names       map[string]string
 }
 
 const owner = "synth-eval"
@@ -69,8 +74,11 @@ func newAgentPipeline(ctx context.Context) (*agentPipeline, error) {
 // pipelineFrom makes the pipeline on these adapters, asking in folder and
 // judging as settings say (tests give fakes).
 func pipelineFrom(ctx context.Context, adapters []core.Adapter, folder string, settings config.JudgeConfig) (*agentPipeline, error) {
-	p := &agentPipeline{folder: folder, adapters: adapters, askers: map[string]core.Asker{}, runs: runs.NewManager()}
+	p := &agentPipeline{folder: folder, adapters: adapters, askers: map[string]core.Asker{}, runs: runs.NewManager(), names: map[string]string{}}
 	for _, a := range adapters {
+		if n, ok := a.(core.Named); ok && strings.TrimSpace(n.DisplayName()) != "" {
+			p.names[a.Agent()] = strings.TrimSpace(n.DisplayName())
+		}
 		info := a.Info(ctx)
 		if asker, ok := a.(core.Asker); ok && info.Available && slices.Contains(info.Capabilities, core.CapAsk) {
 			p.askers[a.Agent()] = asker
@@ -91,6 +99,7 @@ func pipelineFrom(ctx context.Context, adapters []core.Adapter, folder string, s
 	if err := os.MkdirAll(folder, 0o700); err != nil {
 		return nil, err
 	}
+	p.judgeFolder = gate.Folder
 	p.cmp = compares.New(compares.Options{Adapters: adapters, Gate: gate, Runs: p.runs, Logger: slog.New(slog.DiscardHandler)})
 	p.runs.OnEnd = p.cmp.RunEnded // as the API: an ended run starts its comparison
 	return p, nil
@@ -208,6 +217,7 @@ func (p *agentPipeline) Ask(ctx context.Context, q Question, run RunInfo) (Recor
 		cr.Error, cr.Detail = c.Error.Code, clip(c.Error.Message, 300)
 	}
 	rec.Compare = cr
+	rec.Task = p.synthTask(q.Text, c, rec.Answers, r.Refine)
 	if s := c.Synthesis; s != nil {
 		sr := &SynthRec{Status: s.Status, Agent: s.Agent, Model: s.Model, Ms: s.Ms, In: s.InputTokens, Out: s.OutputTokens, Judged: s.Judged, Unnamed: s.UnnamedSides, Text: s.Text}
 		if s.Error != nil {
@@ -216,6 +226,77 @@ func (p *agentPipeline) Ask(ctx context.Context, q Question, run RunInfo) (Recor
 		rec.Synth = sr
 	}
 	return rec, nil
+}
+
+// synthTask is the task the writer got, made again from the comparison's
+// snapshot (its answers' units and its items) and the answers' texts the
+// way compares makes it, so resynth can write once more from the same
+// answers and judgments (C4, E0). It is nil without a comparison.
+func (p *agentPipeline) synthTask(question string, c compares.Comparison, answers []AnswerRec, rf *runs.Refine) *judge.SynthTask {
+	if len(c.Answers) == 0 {
+		return nil
+	}
+	text := map[string]string{}
+	for _, a := range answers {
+		text[a.Agent] = a.Text
+	}
+	spec := judge.Spec{Question: question}
+	agentOf := map[string]string{}
+	for _, a := range c.Answers {
+		a.Text = text[a.Agent]
+		agentOf[a.ID] = a.Agent
+		spec.Answers = append(spec.Answers, a)
+	}
+	judged := slices.ContainsFunc(c.Requests, func(r judge.Request) bool { return r.Status == judge.RequestDone })
+	t := judge.BuildSynthTask(spec, c.Items, judged, func(id string) string {
+		if n := p.names[agentOf[id]]; n != "" {
+			return n
+		}
+		return agentOf[id]
+	})
+	if rf != nil && rf.Status == compares.RefineDone && rf.Spec != nil {
+		sp := *rf.Spec
+		t.Spec = &sp
+	}
+	return &t
+}
+
+// Write makes one writer call the way the agent does: the AI's writer at
+// the tier (compares.Writer: its model and effort), the company check on
+// the model that wrote, and what it left behind removed (OpenCode's
+// conversation).
+func (p *agentPipeline) Write(ctx context.Context, r writeReq) (writeRes, error) {
+	ws := p.cmp.Writers(ctx, r.Tier)
+	i := slices.IndexFunc(ws, func(w compares.Writer) bool { return w.Agent == r.Agent })
+	if i < 0 {
+		return writeRes{Agent: r.Agent}, fmt.Errorf("%s does not write at tier %s on this PC (asksemble-agent check)", r.Agent, r.Tier)
+	}
+	w := ws[i]
+	if err := os.MkdirAll(p.judgeFolder, 0o700); err != nil {
+		return writeRes{Agent: r.Agent}, err
+	}
+	req := core.SynthRequest{Folder: p.judgeFolder, Prompt: r.Prompt, Model: w.Model, Effort: w.Effort, Refine: r.Refine}
+	if r.Refine {
+		req.Effort = "" // as compares.Refine: the adapter's refine effort
+	}
+	start := time.Now()
+	res, err := w.Synth.Synthesize(ctx, req)
+	out := writeRes{Agent: w.Agent, Model: w.Model, Ms: time.Since(start).Milliseconds(), In: res.InputTokens, Out: res.OutputTokens, Output: res.Output}
+	if res.Model != "" {
+		out.Model = res.Model
+	}
+	if res.Cleanup != "" && w.Cleaner != nil {
+		cctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*core.JudgeCleanupTimeout)
+		_ = w.Cleaner.CleanupJudge(cctx, p.judgeFolder, []string{res.Cleanup})
+		cancel()
+	}
+	if err != nil {
+		return out, err
+	}
+	if family := w.Judger.Family(out.Model); family == "" || !strings.EqualFold(family, w.Family) {
+		return out, fmt.Errorf("the model that wrote, %q, is not of %s's company", out.Model, w.Agent)
+	}
+	return out, nil
 }
 
 func sleep(ctx context.Context, d time.Duration) error {
