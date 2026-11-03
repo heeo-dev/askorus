@@ -50,7 +50,7 @@ export type JudgeReply = 'ok' | 'unsure' | { code: string; message?: string };
 /** What the writing AI does (S5b): write, write without naming the AIs, fail (usage limit), or keep writing. */
 export type SynthReply = 'ok' | 'unnamed' | 'fail' | 'hold';
 
-type FakeRun = { id: string; tier: string; prompt: string; parts: any[]; key?: string; comparisonId?: string };
+type FakeRun = { id: string; tier: string; prompt: string; parts: any[]; key?: string; comparisonId?: string; refine?: any };
 type Source = { id: string; agent: string; via: string; model?: string; text?: string };
 
 type FakeComparison = {
@@ -70,6 +70,10 @@ type FakeComparison = {
   asked: string[]; // who may write the combined answer, in turn order
   synth?: FakeSynth; // only on a PC that writes (enableSynth)
 };
+
+/** The template the fake moderator sends with a comparison question (milestone C). */
+export const REFINE_TEMPLATE =
+  'Answer format (added by Asksemble, not written by the person asking)\n- Give the conclusion in one line first.\n- Compare in a Markdown table (a row per criterion, a column per thing compared).\n- End with what to look at when choosing.\n- Keep it short (within 3–5 sentences).';
 
 // The combined answer's state; want is the AI asked for, tier the question's.
 type FakeSynth = Omit<Synthesis, 'agent'> & { agent?: string; want?: string; tier: string };
@@ -137,6 +141,13 @@ export class FakeAgent {
   compareErrors: string[] = [];
   /** Combined answers (S5b): what the writing AI does (default 'ok'). */
   synthReply: SynthReply = 'ok';
+  /**
+   * Question refining (milestone C): what the moderator does with a run that
+   * asks for it: a comparison spec with its template (default), an open
+   * question without one, or a failure (the question went as written). The
+   * POST's 202 shows it running; the first GET has it ended.
+   */
+  refineReply: 'done' | 'open' | 'failed' = 'done';
   /** Whether the writer had the comparison's results; by default when some judging ended done. */
   synthJudged: boolean | undefined = undefined;
   /** How many combined answers were started (each takes one more AI call). */
@@ -630,6 +641,7 @@ export class FakeAgent {
   }
 
   private runState(r: FakeRun) {
+    if (r.refine?.status === 'running') r.refine = this.refined(r.refine.agent);
     // Each look lets the next AI finish, up to runLimit.
     const done = r.parts.filter((p) => p.status !== 'running').length;
     const next = r.parts.find((p) => p.status === 'running');
@@ -648,7 +660,16 @@ export class FakeAgent {
       parts,
       ...(left ? { pollAfterMs: 1 } : {}),
       ...(r.comparisonId ? { comparisonId: r.comparisonId } : {}),
+      ...(r.refine ? { refine: r.refine } : {}),
     };
+  }
+
+  // refined is the moderator's result as refineReply says.
+  private refined(agent: string) {
+    const base = { agent, model: 'claude-haiku-5-5', ms: 4800 };
+    if (this.refineReply === 'failed') return { ...base, status: 'failed', error: { code: 'judge_bad_output' } };
+    if (this.refineReply === 'open') return { ...base, status: 'done', spec: { kind: 'open', intent: 'A short poem', depth: 'normal', language: 'en' }, template: '' };
+    return { ...base, status: 'done', spec: { kind: 'compare', intent: 'How the two compare', depth: 'short', language: 'en' }, template: REFINE_TEMPLATE };
   }
 
   private route(c: Call): Response {
@@ -793,6 +814,7 @@ export class FakeAgent {
         return { agent: t.agent, status: 'running', session: sessionId, model: t.model ?? `${t.agent}-${c.body.tier}`, ms: 1234, prompt: c.body.prompt };
       });
       const r: FakeRun = { id, tier: c.body.tier ?? 'standard', prompt: c.body.prompt, parts, key: c.body.clientRunId };
+      if (c.body.refine && !c.body.refine.off) r.refine = { status: 'running', agent: c.body.refine.agent ?? parts[0]?.agent };
       this.runs.set(id, r);
       const compared = this.runCompare(r, c.body.compare);
       // Like the agent, the first answer has every AI still running.
@@ -805,6 +827,7 @@ export class FakeAgent {
         parts: parts.map(({ prompt: _p, ...p }: any) => p),
         pollAfterMs: 1,
         ...(r.comparisonId ? { comparisonId: r.comparisonId } : {}),
+        ...(r.refine ? { refine: r.refine } : {}),
         ...compared,
       });
     }

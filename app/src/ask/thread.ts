@@ -18,6 +18,7 @@ import {
   compareStart,
   directRequest,
   earlierFor,
+  refineRequest,
   judgesOf,
   polling,
   synthRequest,
@@ -123,6 +124,8 @@ export function newTurn(o: {
   info: Info;
   auto: boolean;
   synth: { on: boolean; agent: string };
+  /** Refine the question first (milestone C): the setting and the moderator; left out is off. */
+  refine?: { on: boolean; agent: string };
   at: number;
 }): Turn {
   const req = request({ question: o.question, tier: o.tier, to: o.to, on: o.on, turns: o.turns, models: o.models, id: o.id });
@@ -136,6 +139,8 @@ export function newTurn(o: {
   const synth = compares && canSynthesize(o.info) ? synthRequest(o.info, o.synth) : undefined;
   if (turn.compare && synth) turn.compare.synth = synth;
   if (start === 'auto') req.compare = synth ? { earlier, judges, synthesis: synth } : { earlier, judges };
+  const refine = o.refine ? refineRequest(o.info, o.refine) : undefined;
+  if (refine) req.refine = refine;
   return turn;
 }
 

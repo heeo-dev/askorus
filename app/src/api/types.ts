@@ -190,6 +190,33 @@ export type RunRequest = {
   clientRunId?: string;
   /** Compare the answers once they are in (P2-3). */
   compare?: RunCompare;
+  /** Refine the question first (질문 정제, milestone C); left out is off (an older agent ignores it). */
+  refine?: RefineRequest;
+};
+
+/**
+ * The moderator a run asks for (milestone C): agent is the AI the person
+ * picked as moderator (the PC falls back to the first asked AI that may;
+ * left out, the PC picks).
+ */
+export type RefineRequest = { agent?: string; off?: boolean };
+
+/** The moderator's reading of a question (refine-v1): kind and depth from fixed lists. */
+export type QuestionSpec = { kind: string; intent: string; depth: string; language: string };
+
+/**
+ * A run's refining (milestone C): running until the moderator's spec is in;
+ * done with the spec and the template every AI got after the question
+ * ("" for a kind without one); failed when the question went as written.
+ */
+export type Refine = {
+  status: 'running' | 'done' | 'failed' | (string & {});
+  agent?: string;
+  model?: string;
+  ms?: number;
+  spec?: QuestionSpec;
+  template?: string;
+  error?: CodeError;
 };
 
 /**
@@ -232,6 +259,8 @@ export type Run = {
   comparisonId?: string;
   /** Why the run's compare was not taken (only on the POST's 202); the ask goes on. */
   compareError?: CodeError;
+  /** The question's refining, when the run asked for it (milestone C). */
+  refine?: Refine;
 };
 
 // Answer comparison (P2-3): GET /v1/comparisons/{id}. Every offset is in

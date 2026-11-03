@@ -6,12 +6,12 @@ const memory = () => {
   return { mem, kv };
 };
 
-const defaults = { tier: 'standard', off: [], models: {}, pc: '', compare: true, synth: true, synthAgent: 'claude' };
+const defaults = { tier: 'standard', off: [], models: {}, pc: '', compare: true, synth: true, synthAgent: 'claude', refine: true };
 
 test('ask prefs survive a round trip, compare and the combined answer off included', async () => {
   const { kv } = memory();
   expect(await loadAskPrefs(kv)).toEqual(defaults);
-  const saved = { tier: 'deep', off: ['codex'], models: { claude: 'opus' }, pc: 'pc-1', compare: false, synth: false, synthAgent: 'codex' } as const;
+  const saved = { tier: 'deep', off: ['codex'], models: { claude: 'opus' }, pc: 'pc-1', compare: false, synth: false, synthAgent: 'codex', refine: false } as const;
   await saveAskPrefs({ ...saved, off: [...saved.off], models: { ...saved.models } }, kv);
   expect(await loadAskPrefs(kv)).toEqual(saved);
   await saveAskPrefs({ ...defaultAskPrefs, compare: true }, kv);
@@ -58,4 +58,16 @@ test('bad values still fall back', async () => {
   expect(await loadAskPrefs(kv)).toEqual(defaultAskPrefs);
   mem.set('ask.v1', 'null');
   expect(await loadAskPrefs(kv)).toEqual(defaultAskPrefs);
+});
+
+// Milestone C: refining is on unless turned off; prefs saved before it refine.
+test('a missing or odd refine setting is on', async () => {
+  const { mem, kv } = memory();
+  expect(defaultAskPrefs.refine).toBe(true);
+  for (const odd of [undefined, 'false', 0, null]) {
+    mem.set('ask.v1', JSON.stringify({ tier: 'quick', refine: odd }));
+    expect((await loadAskPrefs(kv)).refine).toBe(true);
+  }
+  mem.set('ask.v1', JSON.stringify({ refine: false }));
+  expect((await loadAskPrefs(kv)).refine).toBe(false);
 });

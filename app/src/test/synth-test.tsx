@@ -13,7 +13,7 @@ import { StyleSheet } from 'react-native';
 import { defaultAskPrefs, saveAskPrefs, type AskPrefs } from '@/ask/prefs';
 import { ConnectionStore } from '@/connections/store';
 import { setLang, t } from '@/i18n';
-import { FakeAgent, HOST, PORT, TOKEN } from '@/test/fakeAgent';
+import { FakeAgent, HOST, PORT, REFINE_TEMPLATE, TOKEN } from '@/test/fakeAgent';
 import { aiPalettes } from '@/ui/theme';
 
 let agent: FakeAgent;
@@ -420,4 +420,66 @@ test('in Korean the combined answer reads in Korean', async () => {
   expect(judges.getByRole('header', { name: '종합 답변을 쓴 AI' })).toBeTruthy();
   expect(judges.getByText('종합 답변을 쓰는 AI의 회사가 질문과 모든 답(AI 이름 포함)을 받습니다.')).toBeTruthy();
   expect(judges.getByText('판정 정확도를 아직 재지 않았습니다.')).toBeTruthy();
+});
+
+// Milestone C: question refining. The moderator is the writer picked in
+// Settings; the run asks for it, the answer format shows under the question
+// and opens what was sent with it. The fake agent shows it running on the
+// POST's 202 and ended on the first GET.
+describe('question refining', () => {
+  test('is on by default: the run asks the writer to moderate, and the answer format opens what was sent', async () => {
+    const user = await open();
+    await ask(user, 'Tell me about Seoul');
+    expect(agent.runRequests()[0].refine).toEqual({ agent: 'claude' });
+    expect(agent.runRequests()[0].prompt).toBe('Tell me about Seoul'); // the phone sends the question as written
+    await user.press(await screen.findByRole('button', { name: 'Answer format: Comparison. Show' }, { timeout: 5000 }));
+    const sheet = within(await screen.findByTestId('refine-sheet'));
+    expect(sheet.getByRole('header', { name: 'Answer format sent' })).toBeTruthy();
+    for (const text of ['Comparison', 'Short', 'How the two compare', REFINE_TEMPLATE, 'Your question went as written, with this format added after it, to every AI.', 'Moderator: Claude claude-haiku-5-5 · 4.8 s']) {
+      expect(sheet.getByText(text)).toBeTruthy();
+    }
+    await user.press(close());
+    await waitFor(() => expect(screen.queryByTestId('refine-sheet')).toBeNull());
+  });
+
+  test('a refining that failed says the question went as written; an open question shows that no format was added', async () => {
+    agent.refineReply = 'failed';
+    const user = await open();
+    await ask(user, 'Tell me about Seoul');
+    expect(await screen.findByText('Sent without refining', {}, { timeout: 5000 })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /^Answer format/ })).toBeNull();
+
+    agent.refineReply = 'open';
+    await user.press(screen.getByRole('button', { name: 'New question' }));
+    await ask(user, 'Write a poem');
+    await user.press(await screen.findByRole('button', { name: 'Answer format: Other. Show' }, { timeout: 5000 }));
+    const sheet = within(await screen.findByTestId('refine-sheet'));
+    expect(sheet.getByText('No format was added for this kind.')).toBeTruthy();
+  });
+
+  test('turned off in Settings, or with another moderator picked, the run asks as set', async () => {
+    let user = await open({ refine: false });
+    await ask(user, 'Tell me about Seoul');
+    await screen.findByText('Fake combined answer.', {}, { timeout: 5000 });
+    expect(agent.runRequests()[0].refine).toBeUndefined();
+    expect(screen.queryByText('Sent without refining')).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Answer format/ })).toBeNull();
+
+    // Another writer picked moderates too.
+    user = await open({ synthAgent: 'codex' });
+    await ask(user, 'Tell me about Busan');
+    await waitFor(() => expect(agent.runRequests().at(-1)?.refine).toEqual({ agent: 'codex' }));
+  });
+
+  test('in Korean', async () => {
+    setLang('ko');
+    const user = await open();
+    await user.type(await screen.findByLabelText(t('ask.placeholder')), '서울은?');
+    await user.press(screen.getByRole('button', { name: '묻기' }));
+    await user.press(await screen.findByRole('button', { name: '답 틀: 비교. 보기' }, { timeout: 5000 }));
+    const sheet = within(await screen.findByTestId('refine-sheet'));
+    expect(sheet.getByRole('header', { name: '보낸 답 틀' })).toBeTruthy();
+    expect(sheet.getByText('짧게')).toBeTruthy();
+    expect(sheet.getByText('사회자: Claude claude-haiku-5-5 · 4.8초')).toBeTruthy();
+  });
 });

@@ -99,6 +99,15 @@ test('the empty screen asks what to ask and says where a question goes', async (
   expect(screen.queryByRole('button', { name: 'New question' })).toBeNull();
 });
 
+// Milestone C: refining needs an AI that writes; this PC's do not, so no run asks for it.
+test('on a PC whose AIs do not write, no question is refined', async () => {
+  const { user } = await open();
+  await ask(user, 'q');
+  await screen.findByText('opencode says: q');
+  expect(agent.runRequests()[0].refine).toBeUndefined();
+  expect(screen.queryByText('Sent without refining')).toBeNull();
+});
+
 test('on a PC whose AIs judge and write, the intro says the companies get the answers (R-34)', async () => {
   agent.enableJudge();
   agent.enableSynth();

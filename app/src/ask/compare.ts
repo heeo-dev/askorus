@@ -28,6 +28,7 @@ import type {
   Info,
   Judgment,
   NumberSpan,
+  RefineRequest,
   Run,
   RunPart,
   Synthesis,
@@ -155,6 +156,17 @@ export function writerFor(info: Info | null | undefined, agent: string): string 
 /** synthRequest is what a turn asks for: the writer (or the PC's pick), or off. */
 export function synthRequest(info: Info, o: { on: boolean; agent: string }): SynthesisRequest {
   if (!o.on) return { off: true };
+  const agent = writerFor(info, o.agent);
+  return agent ? { agent } : {};
+}
+
+/**
+ * refineRequest is what a turn asks for to refine its question (milestone
+ * C): the moderator is the writer the person picked (or the PC's pick), on
+ * a PC whose AIs can write; nothing when refining is off or no AI can.
+ */
+export function refineRequest(info: Info, o: { on: boolean; agent: string }): RefineRequest | undefined {
+  if (!o.on || !canSynthesize(info)) return undefined;
   const agent = writerFor(info, o.agent);
   return agent ? { agent } : {};
 }

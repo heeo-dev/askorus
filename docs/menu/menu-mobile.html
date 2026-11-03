@@ -119,6 +119,10 @@ td.enc { font-family: var(--mono); font-size: 0.85rem; white-space: nowrap; }
                 <span class="chip">답할 AI <span class="en">AIs to answer</span></span>
                 <span class="note">겹친 아바타를 누르면 시트: AI 켜고 끄기, ›로 모델 고르기 · Pick a model</span>
               </div>
+              <div class="chips">
+                <span class="chip">답 틀: 비교 › <span class="en">Answer format: Comparison ›</span></span>
+                <span class="note">질문 말풍선 아래. 사회자가 정한 종류·깊이·의도와 질문 뒤에 붙여 보낸 답 틀을 시트로 보임 · 정리 중이면 '질문을 정리하는 중…', 실패면 '정제 없이 보냄'(마일스톤 C)</span>
+              </div>
             </li>
             <li><div class="item"><b>답하는 중</b><span class="en">Answering…</span><span class="note">AI마다 한 줄(모델·걸린 시간), 다 모이면 비교</span></div></li>
             <li><div class="item"><b>종합 답변</b><span class="en">Combined answer</span><span class="note">맨 위 카드. 비교하는 중 n/6 → 종합 답변 쓰는 중 → AI 하나가 모든 답을 모아 쓴 글</span></div>
@@ -223,7 +227,7 @@ td.enc { font-family: var(--mono); font-size: 0.85rem; white-space: nowrap; }
     <div class="shared">
       <div class="item"><b>서랍</b><span class="en">Menu</span><span class="note">☰ · 기록(오늘·어제·날짜) · 내 PC(연결 상태, 입력 기다리는 세션 → 그 세션 시트) · 설정 · 공식 제품 아님</span></div>
       <div class="item"><b>설정</b><span class="en">Settings</span><span class="ph p1">P1</span></div>
-      <p class="note">짝 맺은 PC(연결 진단·끊기), 새 세션 기본값, PC와 짝 맺기 · 묻기: 기본 단계 <span class="ph p2">P2</span> · 비교와 종합 답변 <span class="en">Comparison and combined answer</span>: 답이 모이면 자동으로 비교, 비교가 끝나면 종합 답변 쓰기, 종합 답변을 쓰는 AI <span class="ph p2">P2</span> · 화면: 테마 시스템·다크·라이트 <span class="en">Theme: System · Dark · Light</span>, AI마다 다른 색 <span class="en">A color for each AI</span> · 기록 <span class="en">History</span>: 대화 n개, 기록 모두 지우기 <span class="en">Delete all history</span> · 정보 → 앱 정보(Asksemble, Ask, assemble., 버전, 'AI 회사의 공식 제품이 아닙니다.'). AI 연결(내 PC·공식 앱으로 넘기기)은 P2-4.</p>
+      <p class="note">짝 맺은 PC(연결 진단·끊기), 새 세션 기본값, PC와 짝 맺기 · 묻기: 기본 단계 <span class="ph p2">P2</span> · 사회자 <span class="en">Moderator</span>: 질문 정제(답 틀 붙이기, 기본 켬) <span class="en">Refine questions</span>, 답이 모이면 자동으로 비교, 비교가 끝나면 종합 답변 쓰기, 사회자 AI(질문 정제·종합 답변) <span class="en">Moderator AI</span> <span class="ph p2">P2</span> · 화면: 테마 시스템·다크·라이트 <span class="en">Theme: System · Dark · Light</span>, AI마다 다른 색 <span class="en">A color for each AI</span> · 기록 <span class="en">History</span>: 대화 n개, 기록 모두 지우기 <span class="en">Delete all history</span> · 정보 → 앱 정보(Asksemble, Ask, assemble., 버전, 'AI 회사의 공식 제품이 아닙니다.'). AI 연결(내 PC·공식 앱으로 넘기기)은 P2-4.</p>
       <div class="item"><b>PC와 짝 맺기</b><span class="en">Pair with a PC</span><span class="note">PC에서 명령 실행 → QR 찍기(주 경로) · 링크 붙여 넣기 <span class="en">Paste the link instead</span></span></div>
     </div>
   </section>
