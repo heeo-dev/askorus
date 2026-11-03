@@ -19,6 +19,7 @@ import { DisagreementHighlight } from '@/ui/DisagreementHighlight';
 import { EvidenceCounts, EvidenceSections } from '@/ui/Evidence';
 import { Icon, IconButton, iconNames } from '@/ui/Icon';
 import { Group, Row } from '@/ui/List';
+import { RefineLine } from '@/ui/Refine';
 import { Sheet } from '@/ui/Sheet';
 import { aiPalettes, palettes, ThemeProvider, useAIColours, useTheme, useThemeChoice } from '@/ui/theme';
 import { ThreadBubble } from '@/ui/ThreadBubble';
@@ -86,6 +87,20 @@ describe('avatars', () => {
       </ThemeProvider>,
     );
     expect(['Cl', 'Cx'].map(look)).toEqual([0, 1].map(() => ({ bg: palettes.dark.avatar, fg: palettes.dark.text })));
+  });
+});
+
+// Milestone C: the line under a question while the moderator reads it,
+// and nothing for a run that did not refine.
+describe('refine line', () => {
+  test('refining, then nothing without a refine', async () => {
+    const onOpen = jest.fn();
+    await render(<RefineLine refine={{ status: 'running' }} onOpen={onOpen} />);
+    expect(screen.getByText('Refining the question…')).toBeTruthy();
+    await render(<RefineLine refine={undefined} onOpen={onOpen} />);
+    expect(screen.toJSON()).toBeNull();
+    await render(<RefineLine refine={{ status: 'done', spec: { kind: 'poem', intent: 'x', depth: 'deep', language: 'en' }, template: '' }} onOpen={onOpen} />);
+    expect(screen.getByRole('button', { name: 'Answer format: poem. Show' })).toBeTruthy(); // an unknown kind as the PC wrote it
   });
 });
 

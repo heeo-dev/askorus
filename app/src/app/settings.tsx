@@ -1,7 +1,8 @@
 // Settings (S5c, board F-Settings): paired PCs (a sheet each to check the
 // connection or unpair), what new sessions start with, pairing another PC;
 // the default ask tier; whether answers are compared on their own (P2-3)
-// and a combined answer is then written and by which AI (S5b); the theme
+// and a combined answer is then written and by which AI (S5b), who as
+// moderator also refines each question first (milestone C); the theme
 // (system, dark or light) and whether each AI has its own colour (#6); the
 // conversations kept on the phone, and deleting them all (milestone B); and
 // about the app.
@@ -124,6 +125,7 @@ export default function Settings() {
           right={<IconButton name="info" label={t('settings.compareInfo')} onPress={() => setInfoOpen(true)} size={18} color={th.caption} style={s.info} />}
         >
           <Group>
+            <SwitchRow label={t('settings.refineAuto')} value={ask.refine} onChange={(refine) => changeAsk({ ...ask, refine })} />
             <SwitchRow label={t('settings.compareAuto')} value={ask.compare} onChange={(compare) => changeAsk({ ...ask, compare })} />
             <SwitchRow label={t('settings.synthAuto')} value={ask.synth} onChange={(synth) => changeAsk({ ...ask, synth })} />
             {/* S5b. A fixed list of writers: Settings has no PC info, and the PC falls back when it lacks the AI. */}
@@ -197,6 +199,7 @@ export default function Settings() {
       <DefaultsSheet open={defaultsOpen} onClose={() => setDefaultsOpen(false)} prefs={prefs} onChange={change} />
       <Sheet open={infoOpen} onClose={() => setInfoOpen(false)} title={t('settings.compareSynth')} testID="compare-info">
         <View style={s.infoBody}>
+          <Text style={s.infoText}>{t('settings.refineHint')}</Text>
           <Text style={s.infoText}>{t('settings.compareHint')}</Text>
           <Text style={s.infoText}>{t('settings.synthHint')}</Text>
         </View>

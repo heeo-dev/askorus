@@ -356,11 +356,24 @@ describe('settings', () => {
     expect(screen.getByRole('radio', { name: 'Codex' })).toBeChecked();
   });
 
-  test('the info button explains what comparing and combining cost and send', async () => {
+  test('milestone C: refining questions is on by default, under Moderator, and kept when turned off', async () => {
     const user = userEvent.setup();
     await renderRouter(routes, { initialUrl: '/settings' });
-    await user.press(await screen.findByRole('button', { name: 'About comparison and combined answers' }));
+    expect(await screen.findByRole('header', { name: 'Moderator' })).toBeTruthy();
+    const refine = screen.getByRole('switch', { name: 'Refine questions (add an answer format)' });
+    expect(refine).toBeChecked();
+    expect(screen.getByText('Moderator AI (refines questions, writes the combined answer)')).toBeTruthy();
+    await user.press(refine);
+    await waitFor(async () => expect((await loadAskPrefs()).refine).toBe(false));
+    expect(screen.getByRole('switch', { name: 'Refine questions (add an answer format)' })).not.toBeChecked();
+  });
+
+  test('the info button explains what refining, comparing and combining cost and send', async () => {
+    const user = userEvent.setup();
+    await renderRouter(routes, { initialUrl: '/settings' });
+    await user.press(await screen.findByRole('button', { name: 'About the moderator' }));
     const info = within(await screen.findByTestId('compare-info'));
+    expect(info.getByText(/answers start about 5 seconds later\. The moderator AI's company receives the question once more\.$/)).toBeTruthy();
     expect(info.getByText(/each AI judges twice more/)).toBeTruthy();
     expect(info.getByText(/That AI's company receives the question and every answer/)).toBeTruthy();
   });

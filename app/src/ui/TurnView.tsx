@@ -55,6 +55,7 @@ import { DisagreementHighlight } from './DisagreementHighlight';
 import { EvidenceCounts, EvidenceSections } from './Evidence';
 import { Markdown } from './Markdown';
 import { themed, useTheme } from './theme';
+import { RefineLine } from './Refine';
 import { ThreadBubble } from './ThreadBubble';
 
 /** What the Ask screen keeps of a turn's view: evidence opened or folded (undefined: as the state says), the sections shown in full, the differ lines opened. */
@@ -70,6 +71,8 @@ export type TurnActions = {
   openPair: (key: string) => void;
   openJudges: () => void;
   openAIs: () => void;
+  /** Show what refining sent with the question (milestone C). */
+  openRefine: () => void;
   copy: (key: string, text: string) => void;
   /** Follow up with this AI only; null when it cannot answer now. */
   only: (agent: string) => (() => void) | undefined;
@@ -115,6 +118,7 @@ export function TurnView({
     return (
       <View style={s.turn}>
         <ThreadBubble text={turn.question} />
+        <RefineLine refine={turn.run?.refine} onOpen={act.openRefine} />
         {st?.kind === 'noJudge' ? <Text style={s.caption}>{t(`compare.noJudge.${st.why}`)}</Text> : null}
         {turn.error && !turn.run
           ? null
@@ -145,6 +149,7 @@ export function TurnView({
     return (
       <View style={s.turn}>
         <ThreadBubble text={turn.question} />
+        <RefineLine refine={turn.run?.refine} onOpen={act.openRefine} />
         {turn.error && !turn.run ? null : <AnsweringList rows={views} heading={going ? t('ask.answering') : undefined} caption={caption} />}
         {lost}
       </View>
@@ -154,6 +159,7 @@ export function TurnView({
   return (
     <View style={s.turn}>
       <ThreadBubble text={turn.question} />
+      <RefineLine refine={turn.run?.refine} onOpen={act.openRefine} />
       <Result turn={turn} info={info} views={views} only={only} notes={notes} ui={ui} act={act} />
       {lost}
     </View>

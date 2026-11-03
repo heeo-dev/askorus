@@ -41,6 +41,7 @@ import { Icon, IconButton } from '@/ui/Icon';
 import { JudgesSheet } from '@/ui/JudgesSheet';
 import { ModelSheet } from '@/ui/ModelSheet';
 import { PairSheet } from '@/ui/PairSheet';
+import { RefineSheet } from '@/ui/Refine';
 import { ReachError } from '@/ui/ReachError';
 import { usePCs } from '@/ui/shell/pcs';
 import { themed, type Theme, useTheme } from '@/ui/theme';
@@ -61,6 +62,7 @@ type SheetState =
   | { kind: 'answer'; turn: string; agent: string }
   | { kind: 'pair'; turn: string; key: string }
   | { kind: 'judges'; turn: string }
+  | { kind: 'refine'; turn: string }
   | null;
 
 const noUI: TurnUI = { more: [], expanded: [] };
@@ -281,6 +283,7 @@ export default function Ask() {
       info,
       auto: prefs.compare,
       synth: { on: prefs.synth, agent: prefs.synthAgent },
+      refine: { on: prefs.refine, agent: prefs.synthAgent },
       at: Date.now(),
     });
     if (!turn.agents.length) return;
@@ -353,6 +356,7 @@ export default function Ask() {
     openPair: (key) => setSheet({ kind: 'pair', turn: turn.id, key }),
     openJudges: () => setSheet({ kind: 'judges', turn: turn.id }),
     openAIs: () => setSheet({ kind: 'ais', turn: turn.id }),
+    openRefine: () => setSheet({ kind: 'refine', turn: turn.id }),
     copy,
     only: (agent) => onlyOf(agent),
     carryOn,
@@ -483,6 +487,7 @@ export default function Ask() {
         onShowAnswer={(agent) => sheetTurn && setSheet({ kind: 'answer', turn: sheetTurn.id, agent })}
       />
       <JudgesSheet turn={sheet?.kind === 'judges' ? sheetTurn : null} snap={sheetSnap} info={info} onClose={() => setSheet(null)} />
+      <RefineSheet refine={sheet?.kind === 'refine' ? (sheetTurn?.run?.refine ?? null) : null} onClose={() => setSheet(null)} />
     </>
   );
 
