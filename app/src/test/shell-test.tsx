@@ -8,7 +8,7 @@ import { userEvent } from '@testing-library/react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { act, renderHook, renderRouter, screen, waitFor } from 'expo-router/testing-library';
 import { useState } from 'react';
-import { StatusBar, Text, TextInput, View } from 'react-native';
+import { Alert, StatusBar, Text, TextInput, View } from 'react-native';
 
 import TabsLayout from '@/app/(tabs)/_layout';
 import RootLayout from '@/app/_layout';
@@ -112,7 +112,7 @@ test('the app opens on 한 번에, and the header switches without losing either
   await waitFor(() => expect(r.getPathname()).toBe('/'));
 });
 
-test('the drawer shows this run’s questions by day and reopens one', async () => {
+test('the drawer shows the kept questions by day and reopens one', async () => {
   const user = userEvent.setup();
   conversations.save({ id: 'old', pcId: 'pc', startedAt: day(1), title: 'How tall is Everest?', turns: [] });
   conversations.save({ id: 'older', pcId: 'pc', startedAt: day(5), title: 'Coffee per day?', turns: [] });
@@ -141,11 +141,46 @@ test('the drawer shows this run’s questions by day and reopens one', async () 
   expect(screen.getByText('open request: none')).toBeTruthy();
 });
 
-test('an empty drawer says the questions go when the app closes, and it closes', async () => {
+// Milestone B: a long press (or the screen reader's 'delete') removes one
+// conversation from the phone after asking; the current one too.
+test('a conversation is deleted from the drawer after asking', async () => {
+  const user = userEvent.setup();
+  const asked: string[] = [];
+  let answer: 'cancel' | 'destructive' = 'cancel';
+  jest.spyOn(Alert, 'alert').mockImplementation((title, _m, buttons) => {
+    asked.push(String(title));
+    buttons?.find((b) => b.style === answer)?.onPress?.();
+  });
+  await conversations.save({ id: 'old', pcId: 'pc', startedAt: day(1), title: 'How tall is Everest?', turns: [] });
+  await conversations.save({ id: 'older', pcId: 'pc', startedAt: day(5), title: 'Coffee per day?', turns: [] });
+  conversations.setCurrent({ id: 'now', startedAt: day(0, 0) + 60000, title: 'How long do EV batteries last?' });
+  await renderRouter(routes, { initialUrl: '/' });
+  await user.press(await screen.findByRole('button', { name: 'Open menu' }));
+
+  await user.longPress(await screen.findByRole('button', { name: 'How tall is Everest?' }));
+  expect(asked).toEqual(['Delete this conversation?']);
+  expect(screen.getByRole('button', { name: 'How tall is Everest?' })).toBeTruthy(); // cancelled
+
+  answer = 'destructive';
+  await user.longPress(screen.getByRole('button', { name: 'How tall is Everest?' }));
+  await waitFor(() => expect(screen.queryByRole('button', { name: 'How tall is Everest?' })).toBeNull());
+  expect(await conversations.load('old')).toBeUndefined();
+
+  // The screen reader's action; on the current one the Ask screen is told to start afresh.
+  const current = screen.getByRole('button', { name: 'How long do EV batteries last?' });
+  expect(current.props.accessibilityActions).toEqual([{ name: 'delete', label: 'Delete' }]);
+  await act(async () => current.props.onAccessibilityAction({ nativeEvent: { actionName: 'delete' } }));
+  await waitFor(() => expect(screen.queryByRole('button', { name: 'How long do EV batteries last?' })).toBeNull());
+  expect(conversations.current()).toBeNull();
+  expect(conversations.takeDropped()).toBe('now');
+  expect(screen.getByRole('button', { name: 'Coffee per day?' })).toBeTruthy();
+});
+
+test('an empty drawer says the questions are kept there, and it closes', async () => {
   const user = userEvent.setup();
   await renderRouter(routes, { initialUrl: '/' });
   await user.press(await screen.findByRole('button', { name: 'Open menu' }));
-  expect(await screen.findByText('Questions you ask show here until the app closes.')).toBeTruthy();
+  expect(await screen.findByText('Your questions are kept here.')).toBeTruthy();
   // No PC paired: the PC block offers pairing.
   expect(await screen.findByRole('button', { name: 'Pair with a PC' })).toBeTruthy();
   await user.press(screen.getByRole('button', { name: 'Close menu' }));

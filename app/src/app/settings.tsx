@@ -2,16 +2,18 @@
 // connection or unpair), what new sessions start with, pairing another PC;
 // the default ask tier; whether answers are compared on their own (P2-3)
 // and a combined answer is then written and by which AI (S5b); the theme
-// (system, dark or light) and whether each AI has its own colour (#6); and
+// (system, dark or light) and whether each AI has its own colour (#6); the
+// conversations kept on the phone, and deleting them all (milestone B); and
 // about the app.
 
 import Constants from 'expo-constants';
 import { router, useFocusEffect } from 'expo-router';
 import { type ReactNode, useCallback, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { agentName } from '@/api/agents';
 import { tiers } from '@/api/types';
+import { conversations, useConversations } from '@/ask/conversations';
 import { type AskPrefs, defaultAskPrefs, loadAskPrefs, saveAskPrefs, synthWriters } from '@/ask/prefs';
 import { loadPrefs, type Prefs, savePrefs } from '@/connections/prefs';
 import type { Connection } from '@/connections/store';
@@ -36,6 +38,7 @@ export default function Settings() {
   const reach = useReach(list);
   const { choice, setChoice } = useThemeChoice();
   const aiColours = useAIColours();
+  const kept = useConversations().list.length;
   const [note, setNote] = useState('');
   const [prefs, setPrefs] = useState<Prefs>({ model: '', effort: '' });
   const [ask, setAsk] = useState<AskPrefs>(defaultAskPrefs);
@@ -156,6 +159,26 @@ export default function Settings() {
           </Group>
         </Section>
 
+        <Section title={t('settings.history')}>
+          {kept ? (
+            <Group>
+              <Row title={t('settings.historyCount', { n: kept })} />
+              <Row
+                title={t('settings.historyClear')}
+                titleStyle={s.danger}
+                onPress={() =>
+                  Alert.alert(t('settings.historyClearTitle'), t('settings.historyClearBody', { n: kept }), [
+                    { text: t('sheet.cancel'), style: 'cancel' },
+                    { text: t('drawer.remove'), style: 'destructive', onPress: () => void conversations.removeAll() },
+                  ])
+                }
+              />
+            </Group>
+          ) : (
+            <Text style={s.caption}>{t('settings.historyEmpty')}</Text>
+          )}
+        </Section>
+
         <Section title={t('settings.about')}>
           <Group>
             <Row
@@ -201,6 +224,7 @@ const styles = themed((th) =>
     note: { paddingHorizontal: 4, fontSize: 14, lineHeight: 20.3, color: th.text },
     value: { maxWidth: 140, fontSize: 14, lineHeight: 20, color: th.textSub },
     accent: { fontWeight: '500', color: th.accent },
+    danger: { fontWeight: '500', color: th.danger },
     info: { marginVertical: -11, marginRight: -6 },
     writer: { gap: 10, paddingTop: 12, paddingHorizontal: 16, paddingBottom: 14 },
     writerLabel: { fontSize: 15, lineHeight: 22.5, color: th.text },
