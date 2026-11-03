@@ -58,6 +58,13 @@ Step 'agent: go vet judgeeval (linux)' $agent 'go' @('vet', '-tags', 'judgeeval'
 Remove-Item Env:GOOS
 Step 'agent: unit + scenario tests' $agent 'go' @('test', '-count=1', './...') '^(ok|FAIL)'
 Step 'agent: judge-eval tests' $agent 'go' @('test', '-tags', 'judgeeval', '-count=1', './cmd/judge-eval/...') '^(ok|FAIL)'
+# synth-eval (agent/cmd/synth-eval, milestone C) is built only with -tags
+# syntheval: vetted on both systems and tested with the fake AI programs.
+Step 'agent: go vet syntheval (windows)' $agent 'go' @('vet', '-tags', 'syntheval', './cmd/synth-eval/...')
+$env:GOOS = 'linux'
+Step 'agent: go vet syntheval (linux)' $agent 'go' @('vet', '-tags', 'syntheval', './cmd/synth-eval/...')
+Remove-Item Env:GOOS
+Step 'agent: synth-eval tests' $agent 'go' @('test', '-tags', 'syntheval', '-count=1', './cmd/synth-eval/...') '^(ok|FAIL)'
 
 if (-not (Test-Path (Join-Path $app 'node_modules'))) { Step 'app: npm ci' $app 'npm' @('ci', '--no-audit', '--no-fund') }
 Step 'app: typecheck' $app 'npx' @('tsc', '--noEmit')

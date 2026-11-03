@@ -76,6 +76,15 @@ Asksemble Phase 1과 Phase 2(P2-3 비교 판정·종합 답변·화면 재구성
 | `adapters_test.go` | 실제 세 어댑터 + fakecli: 모든 호출의 폴더는 eval 폴더, 인자는 어댑터의 고정 배열이고 답 글 없음, 질문·답은 stdin, Codex `--output-schema`는 run의 `codex-schema` 아래(같은 바이트), OpenCode는 목록 확인한 판정 대화만 지움. `codex=usage_limit` → 종료 3, `codex=prose_once` → 시도 2번 |
 | `deps_test.go` | `go list -deps ./cmd/asksemble-agent`에 judge-eval·fakecli 없음(태그가 있어도 같음), 태그를 단 파일은 이 폴더에만이고 태그 없이는 windows·linux·darwin 어디서도 빌드되지 않음(`judgeeval \|\| linux`처럼 이름만 든 것은 실패), `codex.New`마다 `SchemaDir`. `TestScriptTakesEveryFlag`: `scripts\judge-eval.ps1`은 ASCII이고 param 블록이 없음(R-31) |
 
+### synth-eval (측정 도구, `agent/cmd/synth-eval`, 태그 `syntheval`, 마일스톤 C C-9)
+
+모든 파일이 `//go:build syntheval`로 시작해 `go vet ./...`·`go test ./...`에는 들어가지 않는다. test-all의 'agent: go vet syntheval'(windows·linux)·'agent: synth-eval tests' 단계가 돈다. 실제로 재는 것은 `scripts\synth-eval.ps1 run`이고, 질문마다 AI를 10번까지 쓰므로 사용자 OK 뒤에만 돌린다. 질문은 `agent/cmd/synth-eval/testdata/general.txt`(일반 7개)와 `.local/synth-eval/mine.txt`(사용자가 S23에서 물은 질문 9개, 저장소 밖)이고, 기록은 `%LOCALAPPDATA%\Asksemble\synth-eval\<run>`에 질문마다 하나다.
+
+| 파일 | 보는 것 |
+| --- | --- |
+| `eval_test.go` | 질문 파일(BOM, 빈 줄·# 줄, 같은 질문은 처음 것만, 번호는 건너뛴 줄 그대로, 4000자 넘으면 거절, 빈 파일 거절)과 `-only`. 가짜 파이프라인으로 질문마다 기록 저장, 사용량 한도에서 종료 3과 '-resume' 안내, 이어 가면 남은 질문만, 중단된 질문은 저장하지 않음(종료 4). 지표(표·제목·글머리·첫 문장 길이·한국어 질문의 라틴 문자 비율(AI 이름·'AI'·코드·링크 뺌)·덧붙임·이름 빠진 편·시간 합). 두 run 나란히 보고서와 JSON. 플래그(`-expect`가 질문 수와 달라 거절, `-refine on`은 'not built until C2', run 이름, 단계, 쓰는 AI, 관리자 권한 거절, 거절이면 파이프라인을 만들지 않음) |
+| `agent_test.go` | `TestMain`이 fakecli를 건다. 실제 세 어댑터 + fakecli로 질문 하나를 폰처럼 묻기 → 비교(run에 붙임) → 종합까지: 답 셋, 비교 done·다른 말 1, 종합 done(claude, 판정 결과 씀). 처음 만들 때 이 테스트가 run 끝을 비교에 넘기지 않던 것(`runs.OnEnd = compares.RunEnded`)을 잡았다 |
+
 ### LT (실제 연동, `agent/internal/live/live_test.go`)
 
 시험 폴더 `.local/rc-test`에서만 만들고 끝나면 지운다. 기기 토큰은 테스트가 임시 폴더에 스스로 만들어 짝 맺기가 필요 없다.

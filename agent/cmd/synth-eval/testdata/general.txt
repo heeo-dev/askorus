@@ -1,0 +1,17 @@
+# synth-eval: general questions (milestone C, C-9). One question per line;
+# add new ones only at the end, so the IDs (general-N) stay. The person's own
+# questions live outside the repo (.local/synth-eval/mine.txt).
+# fact
+에베레스트 산의 높이는 몇 m이고, 처음 오른 사람은 누구야?
+# number
+연 4% 복리로 1000만 원을 10년 두면 얼마가 돼?
+# compare
+HTTP와 HTTPS의 차이를 정리해줘.
+# recommend
+프로그래밍을 처음 배우는 사람에게 첫 언어 하나만 추천해줘.
+# howto
+윈도우에서 폴더별 디스크 용량을 큰 순서로 보는 방법을 알려줘.
+# explain
+TLS가 하는 일을 쉽게 설명해줘.
+# English
+What does a CPU cache do? Keep it short.
