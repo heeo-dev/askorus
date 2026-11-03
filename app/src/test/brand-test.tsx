@@ -112,6 +112,14 @@ const adaptive = '-25 -25 150 150'; // the visible 72 dp of the 108 dp layer = t
 
 // --- app.json -------------------------------------------------------------
 
+// Milestone B: the history stays on the phone, so the app is kept out of
+// Android's backup; the history's store is in the build.
+test('app.json: no Android backup, and the SQLite plugin for the history', () => {
+  const { expo } = readJSON('app.json');
+  expect(expo.android.allowBackup).toBe(false);
+  expect(expo.plugins).toContain('expo-sqlite');
+});
+
 test('app.json: icon B in apricot, the adaptive and themed layers, the icon-only splash', () => {
   const { expo } = readJSON('app.json');
   expect(expo.name).toBe('Asksemble');

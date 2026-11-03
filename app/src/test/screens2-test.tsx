@@ -14,6 +14,7 @@ import Pair from '@/app/pair';
 import Folders from '@/app/pc/[id]/folders';
 import NewSession from '@/app/pc/[id]/new';
 import Settings from '@/app/settings';
+import { conversations } from '@/ask/conversations';
 import { loadAskPrefs } from '@/ask/prefs';
 import { loadPrefs, savePrefs } from '@/connections/prefs';
 import { ConnectionStore } from '@/connections/store';
@@ -393,6 +394,23 @@ describe('settings', () => {
     expect(screen.getByRole('switch', { name })).not.toBeChecked();
     expect(fill()).toBe(palettes.light.avatar);
     await waitFor(async () => expect(await loadAppearance()).toEqual({ theme: 'system', aiColours: false }));
+  });
+
+  test('milestone B: History counts the kept conversations and deletes them all after asking', async () => {
+    const user = userEvent.setup();
+    await conversations.save({ id: 'a', pcId: 'pc', startedAt: 1000, title: 'How tall is Everest?', turns: [] });
+    await conversations.save({ id: 'b', pcId: 'pc', startedAt: 2000, title: 'Coffee per day?', turns: [] });
+    await renderRouter(routes, { initialUrl: '/settings' });
+    expect(await screen.findByText('Conversations kept: 2')).toBeTruthy();
+    const alert = confirmDestructive();
+    await user.press(screen.getByRole('button', { name: 'Delete all history' }));
+    expect(alert.mock.calls[0].slice(0, 2)).toEqual([
+      'Delete all history?',
+      "Deletes every conversation kept on this phone (2). Each AI's own record on the PC stays.",
+    ]);
+    expect(await screen.findByText('No conversations kept.')).toBeTruthy();
+    expect(conversations.list()).toEqual([]);
+    expect(await conversations.load('a')).toBeUndefined();
   });
 
   test('About shows the version and the not-official line, and leads to the about screen', async () => {

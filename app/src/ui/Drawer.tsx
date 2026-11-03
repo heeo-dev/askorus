@@ -7,7 +7,7 @@
 
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Modal, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Alert, Animated, Modal, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
 import { conversations, dayGroups, useConversations } from '@/ask/conversations';
 import { label, t } from '@/i18n';
@@ -44,6 +44,13 @@ export function Drawer({ open, onClose }: { open: boolean; onClose: () => void }
 
   if (!open && !shown) return null;
 
+  // A long press (or the screen reader's 'delete' action) removes one
+  // conversation from the phone, after asking (milestone B).
+  const removeOne = (id: string) =>
+    Alert.alert(t('drawer.removeTitle'), t('drawer.removeBody'), [
+      { text: t('sheet.cancel'), style: 'cancel' },
+      { text: t('drawer.remove'), style: 'destructive', onPress: () => void conversations.remove(id) },
+    ]);
   const go = (f: () => void) => {
     onClose();
     f();
@@ -110,8 +117,13 @@ export function Drawer({ open, onClose }: { open: boolean; onClose: () => void }
                         router.navigate('/');
                       })
                     }
+                    onLongPress={() => removeOne(item.id)}
                     accessibilityRole="button"
                     accessibilityLabel={item.title}
+                    accessibilityActions={[{ name: 'delete', label: t('drawer.remove') }]}
+                    onAccessibilityAction={(e) => {
+                      if (e.nativeEvent.actionName === 'delete') removeOne(item.id);
+                    }}
                     accessibilityState={{ selected: item.current }}
                     style={({ pressed }) => [s.item, item.current && s.itemOn, pressed && !item.current && s.pressed]}
                   >

@@ -14,6 +14,7 @@
     },
     "android": {
       "package": "app.asksemble",
+      "allowBackup": false,
       "adaptiveIcon": {
         "backgroundColor": "#FFAD85",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -55,7 +56,8 @@
             "backgroundColor": "#151618"
           }
         }
-      ]
+      ],
+      "expo-sqlite"
     ],
     "extra": {
       "router": {

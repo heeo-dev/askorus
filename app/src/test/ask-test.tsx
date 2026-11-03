@@ -325,7 +325,7 @@ test('the ask folder that needs trusting is explained when continuing in the Cla
   expect(await screen.findByText(/trust the ask folder on the PC once: in a PC terminal, go to C:\\Users\\me\\AppData\\Local\\Asksemble\\ask/)).toBeTruthy();
 });
 
-test('New question keeps the conversation for this run: recent questions and the drawer bring it back', async () => {
+test('New question keeps the conversation: recent questions and the drawer bring it back', async () => {
   const { user } = await open();
   await ask(user, 'How tall is Everest?');
   await screen.findByText('opencode says: How tall is Everest?');
@@ -334,7 +334,8 @@ test('New question keeps the conversation for this run: recent questions and the
   await user.press(screen.getByRole('button', { name: 'New question' }));
   expect(await screen.findByText('Recent questions')).toBeTruthy();
   expect(conversations.current()).toBeNull();
-  expect(conversations.list().map((c) => [c.title, c.turns.length])).toEqual([['How tall is Everest?', 1]]);
+  expect(conversations.list().map((c) => c.title)).toEqual(['How tall is Everest?']);
+  expect((await conversations.load(conversations.list()[0].id))?.turns).toHaveLength(1);
   // A recent question fills the box.
   await user.press(screen.getByRole('button', { name: 'How tall is Everest?' }));
   expect(screen.getByLabelText('Ask a question').props.value).toBe('How tall is Everest?');
@@ -355,6 +356,35 @@ test('New question keeps the conversation for this run: recent questions and the
   await follow(user, 'And K2?');
   await screen.findByText('opencode says: And K2?');
   expect(agent.runRequests()[2].agents).toEqual([
+    { agent: 'claude', session: 'claude:s-1' },
+    { agent: 'codex', session: 'codex:s-1' },
+    { agent: 'opencode', session: 'opencode:s-1' },
+  ]);
+});
+
+test('milestone B: the history is kept on the phone; after the app starts again the drawer opens a conversation, answers and all, and it carries on', async () => {
+  const { user, r } = await open();
+  await ask(user, 'How tall is Everest?');
+  await screen.findByText('opencode says: How tall is Everest?');
+  // No 'New question': the conversation on screen is kept as it is (about once a second).
+  expect(conversations.list()).toEqual([]);
+  await act(() => jest.advanceTimersByTimeAsync(1500));
+  expect(conversations.list().map((c) => c.title)).toEqual(['How tall is Everest?']);
+
+  // The app is closed and started again: the memory is gone, the phone's store is not.
+  await r.unmount();
+  conversations.reset();
+  const user2 = userEvent.setup();
+  await renderRouter(appDir, { initialUrl: '/' });
+  expect(await screen.findByText('Recent questions')).toBeTruthy();
+  await user2.press(screen.getByRole('button', { name: 'Open menu' }));
+  await user2.press(within(await screen.findByTestId('drawer')).getByRole('button', { name: 'How tall is Everest?' }));
+  expect(await screen.findByText('opencode says: How tall is Everest?')).toBeTruthy();
+  expect(conversations.current()?.title).toBe('How tall is Everest?');
+
+  await follow(user2, 'And K2?');
+  await screen.findByText('opencode says: And K2?');
+  expect(agent.runRequests().at(-1)?.agents).toEqual([
     { agent: 'claude', session: 'claude:s-1' },
     { agent: 'codex', session: 'codex:s-1' },
     { agent: 'opencode', session: 'opencode:s-1' },

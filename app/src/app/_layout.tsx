@@ -1,6 +1,9 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { useEffect } from 'react';
 import { StyleSheet, useColorScheme, View } from 'react-native';
+
+import { conversations } from '@/ask/conversations';
 
 import { setRootBottom } from '@/ui/keyboard';
 import { LaunchCover } from '@/ui/LaunchCover';
@@ -8,8 +11,12 @@ import { palettes, resolveScheme, ThemeProvider, useTheme, useThemeChoice } from
 
 // The two entrances are tabs (extension principle 9, see (tabs)/_layout);
 // the screens they open stack on top of them. Every screen draws its own
-// top (Header or TopBar, S5c), so the stack shows no header.
+// top (Header or TopBar, S5c), so the stack shows no header. The kept
+// conversations' heads are read once, for the drawer (milestone B).
 export default function RootLayout() {
+  useEffect(() => {
+    conversations.init();
+  }, []);
   return (
     <ThemeProvider>
       <Root />
