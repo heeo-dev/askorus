@@ -388,9 +388,12 @@ test.each(['light', 'dark'] as const)('the launch cover matches the %s splash, a
 // R-63: on the S10 (One UI, Android 12) the native splash drew the icon at
 // half of imageWidth, so the icon jumped to twice its size as the cover
 // came. The cover's icon starts at the splash's size and grows to the board's.
+// R-69: Samsung on Android 13 and later (the S23) draws it whole, and a cover
+// icon starting at half grew behind the splash's full one.
 test('the launch icon starts at the size the native splash drew it', () => {
   expect(splashIconScale({ os: 'android', version: 31, manufacturer: 'samsung' })).toBe(0.5);
-  expect(splashIconScale({ os: 'android', version: 35, manufacturer: 'Samsung' })).toBe(0.5);
+  expect(splashIconScale({ os: 'android', version: 32, manufacturer: 'Samsung' })).toBe(0.5);
+  for (const version of [33, 34, 35, 36]) expect(splashIconScale({ os: 'android', version, manufacturer: 'samsung' })).toBe(1);
   expect(splashIconScale({ os: 'android', version: 34, manufacturer: 'Google' })).toBe(1);
   // Before Android 12 the splash library draws it, at imageWidth.
   expect(splashIconScale({ os: 'android', version: 30, manufacturer: 'samsung' })).toBe(1);
@@ -401,7 +404,7 @@ test('the launch icon starts at the size the native splash drew it', () => {
 // where it starts.
 const growStart = () => (style(screen.getByTestId('launch-mark-grow', { includeHiddenElements: true })).transform as { scale: number }[])[0].scale;
 
-test('on a Samsung phone the launch icon starts at half size', async () => {
+test('on a Samsung phone with Android 12 the launch icon starts at half size', async () => {
   jest.replaceProperty(Platform, 'OS', 'android');
   jest.spyOn(Platform, 'Version', 'get').mockReturnValue(31);
   jest.spyOn(Platform, 'constants', 'get').mockReturnValue({ ...Platform.constants, Manufacturer: 'samsung' } as typeof Platform.constants);
@@ -416,6 +419,18 @@ test('on a Samsung phone the launch icon starts at half size', async () => {
 test('elsewhere the launch icon starts at full size', async () => {
   await render(<LaunchCover />);
   expect(growStart()).toBe(1);
+});
+
+test('R-69: on a Samsung phone with Android 13 or later the launch icon starts at full size', async () => {
+  jest.replaceProperty(Platform, 'OS', 'android');
+  jest.spyOn(Platform, 'Version', 'get').mockReturnValue(34);
+  jest.spyOn(Platform, 'constants', 'get').mockReturnValue({ ...Platform.constants, Manufacturer: 'samsung' } as typeof Platform.constants);
+  try {
+    await render(<LaunchCover />);
+    expect(growStart()).toBe(1);
+  } finally {
+    jest.restoreAllMocks();
+  }
 });
 
 // R-67: the cover's icon is an image that comes a moment after the cover's
