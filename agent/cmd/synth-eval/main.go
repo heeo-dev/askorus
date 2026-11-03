@@ -16,6 +16,8 @@
 //	synth-eval report    -run NAME[,NAME] [-json] [-texts]
 //	synth-eval resynth   -from RUN -run NAME [-only ID,ID] [-tier quick] [-writer claude] [-synth product] [-resume] -expect N
 //	synth-eval refine    -q FILE[,FILE] [-only ID,ID] -run NAME [-tier quick] [-writer claude] [-form fixed|live] [-resume] -expect N
+//	synth-eval score     -a RUN -b RUN -name NAME [-only ID,ID] [-judges claude,codex] [-tier deep] [-resume] -expect N
+//	synth-eval scores    -name NAME
 //
 // resynth and the commands after it are the quality experiments (C4, E0 in
 // "마일스톤 C" of docs/phase2-plan.md): they make their own writer calls.
@@ -71,6 +73,10 @@ const usage = `synth-eval measures the combined answer (milestone C). A run uses
   refine    -q FILE[,FILE] [-only ID,ID] -run NAME [-tier quick|standard|deep] [-writer claude|codex|opencode]
             [-form fixed|live] [-resume] -expect N
             asks the moderator only (up to 2 calls a question); report shows refine runs side by side
+  score     -a RUN -b RUN -name NAME [-only ID,ID] [-judges claude,codex] [-tier quick|standard|deep] [-resume] -expect N
+            each judge picks the better combined answer twice, the order swapped (2 calls a judge and question)
+  scores    -name NAME
+            prints a scoring
 A question file has one question per line; blank lines and lines starting with # are skipped.
 -expect is the number of questions the run will ask (each uses the PC's AIs up to 10 times, 12 with -refine on).
 `
@@ -98,6 +104,10 @@ func runMain(ctx context.Context, args []string, out, errOut io.Writer) int {
 		return resynthCmd(ctx, args[1:], out, errOut)
 	case "refine":
 		return refineCmd(ctx, args[1:], out, errOut)
+	case "score":
+		return scoreCmd(ctx, args[1:], out, errOut)
+	case "scores":
+		return scoresCmd(args[1:], out, errOut)
 	}
 	fmt.Fprint(errOut, usage)
 	return exitFlags

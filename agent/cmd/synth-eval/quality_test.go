@@ -307,3 +307,113 @@ func TestRefineAsksTheModeratorOnlyFixedAndLive(t *testing.T) {
 		t.Fatalf("mixed report %d", c)
 	}
 }
+
+func TestScoreLinesAreReadAndChecked(t *testing.T) {
+	picks, why, err := parseScore(synthJSON("INTENT: 1\nREADABLE: **2**\nQUALITY: same\nCONCISE: 2.\nOVERALL: 2\nWHY: B lists the items."))
+	if err != nil || picks["intent"] != "1" || picks["readable"] != "2" || picks["quality"] != "same" || picks["concise"] != "2" || why != "B lists the items." {
+		t.Fatalf("%v %q %v", picks, why, err)
+	}
+	for name, text := range map[string]string{
+		"missing":   "INTENT: 1\nREADABLE: 2\nQUALITY: same\nCONCISE: 2",
+		"bad value": "INTENT: both\nREADABLE: 2\nQUALITY: same\nCONCISE: 2\nOVERALL: 2",
+		"twice":     "INTENT: 1\nINTENT: 2\nREADABLE: 2\nQUALITY: same\nCONCISE: 2\nOVERALL: 2",
+	} {
+		if _, _, err := parseScore(synthJSON(text)); err == nil {
+			t.Errorf("%s was taken", name)
+		}
+	}
+	if _, _, err := parseScore([]byte("Combined 2 is better.")); err == nil {
+		t.Error("prose was taken")
+	}
+	for _, c := range []struct{ p, order, want string }{
+		{"1", orderAB, pickA}, {"2", orderAB, pickB}, {"1", orderBA, pickB}, {"2", orderBA, pickA}, {pickSame, orderBA, pickSame},
+	} {
+		if got := backToRun(c.p, c.order); got != c.want {
+			t.Errorf("%s in %s = %s", c.p, c.order, got)
+		}
+	}
+}
+
+func TestScorePromptGivesTheAnswersOnceOrEachSet(t *testing.T) {
+	a, b := taskRecord("g-1", 1), taskRecord("g-1", 1)
+	a.Synth.Text, b.Synth.Text = "A-TEXT", "B-TEXT"
+	p := scorePrompt(a, b)
+	if !strings.HasPrefix(p, "[Asksemble score v0]") || strings.Count(p, "ANSWER Claude: ") != 1 || !strings.Contains(p, "COMBINED 1: \"A-TEXT\"\nCOMBINED 2: \"B-TEXT\"\n</data-") {
+		t.Fatalf("prompt:\n%s", p)
+	}
+	b.Answers[0].Text = "가격은 3원입니다."
+	p = scorePrompt(b, a)
+	if !strings.Contains(p, "ANSWER FOR COMBINED 1 BY Claude: \"가격은 3원입니다.\"") || !strings.Contains(p, "ANSWER FOR COMBINED 2 BY Claude: \"가격은 1원입니다.\"") || !strings.Contains(p, "COMBINED 1: \"B-TEXT\"") {
+		t.Fatalf("prompt:\n%s", p)
+	}
+}
+
+// Codex always prefers B's combined answer; Claude only ever picks the
+// first, so its two orders cancel; g-3's judges fail; g-2 hits a limit,
+// then resumes.
+func TestScoreSumsTheTwoOrdersPerJudge(t *testing.T) {
+	useRoot(t)
+	for _, run := range []string{"a", "b"} {
+		dir, _ := runDir(run)
+		for i, id := range []string{"g-1", "g-2", "g-3"} {
+			r := taskRecord(id, i+1)
+			r.Synth.Text = strings.ToUpper(run) + "-TEXT " + id
+			if err := saveRecord(dir, r); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	limited := true
+	verdict := func(first string) string {
+		return "INTENT: " + first + "\nREADABLE: " + first + "\nQUALITY: same\nCONCISE: " + first + "\nOVERALL: " + first + "\nWHY: w"
+	}
+	f := &fakeWriter{reply: func(_ int, r writeReq) (writeRes, error) {
+		if r.Tier != core.TierDeep || r.Refine {
+			return writeRes{}, errors.New("wrong call")
+		}
+		bFirst := strings.Contains(r.Prompt, "COMBINED 1: \"B-TEXT")
+		switch {
+		case strings.Contains(r.Prompt, "TEXT g-3"):
+			return writeRes{Agent: r.Agent, Output: []byte("no idea")}, nil
+		case strings.Contains(r.Prompt, "TEXT g-2") && limited && r.Agent == "codex":
+			return writeRes{Agent: r.Agent}, &core.ActionError{Code: core.ErrCodeJudgeFailed, Detail: "Rate limit reached"}
+		case r.Agent == "claude":
+			return writeRes{Agent: r.Agent, Model: "claude-opus", Ms: 30000, Output: synthJSON(verdict("1"))}, nil
+		case bFirst:
+			return writeRes{Agent: r.Agent, Model: "gpt-x", Ms: 20000, Output: synthJSON(verdict("1"))}, nil
+		}
+		return writeRes{Agent: r.Agent, Model: "gpt-x", Ms: 20000, Output: synthJSON(verdict("2"))}, nil
+	}}
+	useWriter(t, f)
+	var out, errOut bytes.Buffer
+	ctx := context.Background()
+	if c := runMain(ctx, []string{"score", "-a", "a", "-b", "b", "-name", "s1", "-expect", "3"}, &out, &errOut); c != exitUsageLimit {
+		t.Fatalf("score %d %s %s", c, out.String(), errOut.String())
+	}
+	limited = false
+	if c := runMain(ctx, []string{"score", "-a", "a", "-b", "b", "-name", "s1", "-resume", "-expect", "2"}, &out, &errOut); c != exitOK {
+		t.Fatalf("resume %d %s %s", c, out.String(), errOut.String())
+	}
+	out.Reset()
+	if c := runMain(ctx, []string{"scores", "-name", "s1"}, &out, &errOut); c != exitOK {
+		t.Fatalf("scores %d %s", c, errOut.String())
+	}
+	for _, want := range []string{
+		"A = a, B = b; judges at deep; 3 questions, 4 judge results (each two orders summed), 2 failed",
+		"overall         0      2      2",
+		"quality         0      0      4",
+		"overall by claude: A 0, B 0, same 2",
+		"overall by codex: A 0, B 2, same 0",
+		"judges agree on overall: 0/2 questions; a judge's two orders differ on overall: 2/4",
+	} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("scores lack %q:\n%s", want, out.String())
+		}
+	}
+	if c := runMain(ctx, []string{"score", "-a", "a", "-b", "a", "-name", "s2", "-expect", "3"}, &out, &errOut); c != exitFlags {
+		t.Fatalf("a run against itself: %d", c)
+	}
+	if c := runMain(ctx, []string{"score", "-a", "a", "-b", "b", "-name", "s2", "-judges", "gemini", "-expect", "3"}, &out, &errOut); c != exitFlags {
+		t.Fatalf("an unknown judge: %d", c)
+	}
+}
