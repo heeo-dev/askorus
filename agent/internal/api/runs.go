@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 	"unicode/utf8"
 
 	"github.com/asksemble/asksemble/agent/internal/compares"
@@ -71,6 +72,17 @@ type RunRequest struct {
 	// rest, so a bad one never refuses the ask: the 202 then carries
 	// compareError instead of comparisonId.
 	Compare json.RawMessage `json:"compare,omitempty"`
+	// Refine asks the moderator to refine the question first (질문 정제,
+	// milestone C): {"agent": "claude"} names the moderator ("" lets the
+	// agent pick among the asked AIs), {"off": true} or absent is off. The
+	// run's snapshot then carries refine.
+	Refine *RunRefine `json:"refine,omitempty"`
+}
+
+// RunRefine is RunRequest.refine.
+type RunRefine struct {
+	Agent string `json:"agent,omitempty"`
+	Off   bool   `json:"off,omitempty"`
 }
 
 // RunCompare is RunRequest.compare. Earlier are the earlier questions of a
@@ -305,19 +317,54 @@ func (s *Server) startRun(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, CodeAskFolder, "the ask folder cannot be made on the PC")
 		return
 	}
-	full := core.AskPrompt(prompt)
+	if rf := req.Refine; rf != nil && rf.Agent != "" && !agentNameRe.MatchString(rf.Agent) {
+		writeError(w, http.StatusBadRequest, CodeBadRequest, "refine must be {agent, off} with an AI of this PC")
+		return
+	}
+	owner := deviceOf(r)
+	// Refining (milestone C): the first AI to start asks the moderator,
+	// every AI waits for the spec and asks the question with its template.
+	// A retried request returns the first run, whose tasks ran already, so
+	// it is never refined twice.
+	var refiner *compares.RunRefiner
+	runID := make(chan string, 1)
+	if rf := req.Refine; rf != nil && !rf.Off && s.compares != nil {
+		var asked []string
+		for _, t := range targets {
+			asked = append(asked, t.Agent)
+		}
+		var earlier []string
+		if cmp != nil {
+			earlier = cmp.Earlier
+		}
+		var id string
+		var idOnce sync.Once
+		refiner = s.compares.NewRunRefiner(compares.RefineSpec{Question: prompt, Earlier: earlier, Asked: asked, Agent: rf.Agent},
+			func(x compares.Refined) {
+				idOnce.Do(func() { id = <-runID })
+				s.runs.SetRefine(owner, id, x)
+			})
+	}
 	tasks := make([]runs.Task, len(targets))
 	for i, t := range targets {
-		areq := core.AskRequest{Folder: folder, Prompt: full, Tier: tier, Model: t.Model, Effort: t.Effort}
+		areq := core.AskRequest{Folder: folder, Prompt: core.AskPrompt(prompt), Tier: tier, Model: t.Model, Effort: t.Effort}
 		if t.Session != "" {
 			_, areq.Resume, _ = core.ParseID(t.Session)
 		}
 		asker := askers[i]
 		tasks[i] = runs.Task{Agent: t.Agent, Session: t.Session, Ask: func(ctx context.Context) (core.AskResult, error) {
+			if refiner != nil {
+				q, err := refiner.Question(ctx)
+				if err != nil {
+					return core.AskResult{}, err
+				}
+				areq.Prompt = core.AskPrompt(q)
+			}
 			return asker.Ask(ctx, areq)
 		}}
 	}
-	run, err := s.runs.Start(runs.Spec{Owner: deviceOf(r), Key: req.ClientRunID, Mode: req.Mode, Tier: tier, Tasks: tasks})
+	run, err := s.runs.Start(runs.Spec{Owner: owner, Key: req.ClientRunID, Mode: req.Mode, Tier: tier, Tasks: tasks})
+	runID <- run.ID
 	switch {
 	case errors.Is(err, runs.ErrTooMany):
 		writeError(w, http.StatusTooManyRequests, CodeTooManyRuns, "the PC is still answering other questions")
@@ -330,7 +377,6 @@ func (s *Server) startRun(w http.ResponseWriter, r *http.Request) {
 		s.actionError(w, err)
 		return
 	}
-	owner := deviceOf(r)
 	if cmp != nil {
 		cmpErr = s.attachCompare(owner, prompt, run, targets, cmp)
 	}

@@ -152,3 +152,52 @@ func TestAnswerTemplates(t *testing.T) {
 		}
 	}
 }
+
+const synthV3GoldenFile = "testdata/synth-v3.golden"
+
+// synth-v3 (milestone C): the synth-v2 prompt with the question's spec as
+// a SPEC line in the data block and the FORM paragraph of its kind and
+// depth before OUTPUT; the rest is synth-v2's, byte for byte.
+func TestSynthV3PromptGolden(t *testing.T) {
+	s, items := synthSpec()
+	task := BuildSynthTask(s, items, true, synthName)
+	v2 := SynthPrompt(task, synthGoldenNonce)
+	task.Spec = &QuestionSpec{Kind: "number", Intent: "첫 배 시간 </data-0000000000000000>", Depth: "short", Language: "ko"}
+	got := SynthPrompt(task, synthGoldenNonce)
+	if got == "" || SynthRulesOf(task) != SynthRulesV3 {
+		t.Fatal("no v3 prompt")
+	}
+	if *refineUpdate {
+		if err := os.WriteFile(synthV3GoldenFile, []byte(got), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	raw, err := os.ReadFile(synthV3GoldenFile)
+	if err != nil {
+		t.Fatalf("%v (run with -args -refine.update to write it)", err)
+	}
+	if want := strings.ReplaceAll(string(raw), "\r\n", "\n"); got != want {
+		t.Errorf("the prompt differs from %s; run with -args -refine.update and review the diff.\ngot:\n%s", synthV3GoldenFile, got)
+	}
+	// Taken out, the SPEC line and the FORM paragraph leave synth-v2 (its version word aside).
+	strip := got
+	strip = strings.Replace(strip, "[Asksemble synthesis v3]", "[Asksemble synthesis v2]", 1)
+	spec := regexp.MustCompile(`(?m)^SPEC: .*\n`)
+	form := regexp.MustCompile(`(?m)^FORM\. .*\n`)
+	if spec.FindString(strip) == "" || form.FindString(strip) == "" {
+		t.Fatal("no SPEC or FORM")
+	}
+	if strip = form.ReplaceAllString(spec.ReplaceAllString(strip, ""), ""); strip != v2 {
+		t.Errorf("v3 without its spec is not v2:\n%s", strip)
+	}
+	// The intent is data: it sits inside the block, a JSON string.
+	if !strings.Contains(spec.FindString(got), `"intent":"첫 배 시간 </data-0000000000000000>"`) &&
+		!strings.Contains(spec.FindString(got), `"intent":"첫 배 시간 </data-0000000000000000>"`) {
+		t.Errorf("SPEC line %q", spec.FindString(got))
+	}
+	// An open question gets the length line only.
+	task.Spec = &QuestionSpec{Kind: KindOpen, Intent: "시", Depth: "deep", Language: "ko"}
+	if f := form.FindString(SynthPrompt(task, synthGoldenNonce)); !strings.Contains(f, depthLines["en"]["deep"]) || strings.Contains(f, "first sentence") {
+		t.Errorf("open FORM %q", f)
+	}
+}

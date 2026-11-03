@@ -331,6 +331,9 @@ type synthInput struct {
 	items   []judge.Item
 	judged  bool
 	cancel  <-chan struct{}
+	// qspec is the run's question spec when it was refined (milestone C):
+	// the combined answer is then synth-v3.
+	qspec *judge.QuestionSpec
 }
 
 // synthesize writes c's combined answer, in its own goroutine. Whatever
@@ -375,11 +378,12 @@ func (m *Manager) synthRun(c *comparison) (string, int, *judge.Error) {
 	}
 	names := m.answerNames(in.task.Answers)
 	task := judge.BuildSynthTask(in.task, in.items, in.judged, func(id string) string { return names[id] })
+	task.Spec = in.qspec
 	m.locked(func() {
 		c.synth.writer, c.synth.model, c.synth.judged = w.Agent, w.Model, in.judged
 		m.touchLocked(c)
 	})
-	m.log.Info("synthesis started", "comparison", c.id, "writer", w.Agent, "judged", in.judged,
+	m.log.Info("synthesis started", "comparison", c.id, "writer", w.Agent, "judged", in.judged, "rules", judge.SynthRulesOf(task),
 		"ais", len(task.Answers), "items", len(task.Differ)+len(task.Check), "leftOut", task.LeftOut)
 	if err := makeFolder(m.o.Gate.Folder); err != nil {
 		return "", 0, synthFailure(core.ErrCodeInternal, "")
@@ -474,6 +478,10 @@ func (m *Manager) synthInputLocked(c *comparison) synthInput {
 		judged: slices.ContainsFunc(c.requests, func(r judge.Request) bool { return r.Status == judge.RequestDone }),
 	}
 	in.task.Answers = slices.Clone(c.spec.Answers)
+	if c.run != nil && c.run.Refine != nil && c.run.Refine.Status == RefineDone && c.run.Refine.Spec != nil {
+		sp := *c.run.Refine.Spec
+		in.qspec = &sp
+	}
 	switch {
 	case c.runSpec != nil:
 		in.allowed = slices.Clone(c.runSpec.Asked)

@@ -341,6 +341,7 @@ const (
 	kindAsk    = "ask"
 	kindJudge  = "judge"
 	kindSynth  = "synth"  // a combined-answer writer (S5b)
+	kindRefine = "refine" // a moderator refining a question (milestone C)
 	kindList   = "list"   // OpenCode session list
 	kindDelete = "delete" // OpenCode session delete
 	kindOther  = "other"  // claude agents
@@ -354,6 +355,8 @@ func kindOf(c fakecli.Call) string {
 		switch {
 		case flag(c.Args, "--json-schema") == core.SynthSchemaV1:
 			return kindSynth
+		case flag(c.Args, "--json-schema") == core.RefineSchemaV1:
+			return kindRefine
 		case slices.Contains(c.Args, "--json-schema"):
 			return kindJudge
 		case len(c.Args) > 0 && c.Args[0] == "-p":
@@ -363,6 +366,8 @@ func kindOf(c fakecli.Call) string {
 		switch {
 		case slices.Contains(c.Args, "--output-schema") && filepath.Base(flag(c.Args, "--output-schema")) == core.SynthSchemaFile:
 			return kindSynth
+		case slices.Contains(c.Args, "--output-schema") && filepath.Base(flag(c.Args, "--output-schema")) == core.RefineSchemaFile:
+			return kindRefine
 		case slices.Contains(c.Args, "--output-schema"):
 			return kindJudge
 		case slices.Contains(c.Args, "exec"):
@@ -372,6 +377,8 @@ func kindOf(c fakecli.Call) string {
 		switch {
 		case len(c.Args) > 0 && c.Args[0] == "run" && flag(c.Args, "--agent") == fakecli.SynthAgent:
 			return kindSynth
+		case len(c.Args) > 0 && c.Args[0] == "run" && flag(c.Args, "--agent") == fakecli.RefineAgent:
+			return kindRefine
 		case len(c.Args) > 0 && c.Args[0] == "run" && flag(c.Args, "--agent") == fakecli.JudgeAgent:
 			return kindJudge
 		case len(c.Args) > 0 && c.Args[0] == "run":

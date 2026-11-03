@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/asksemble/asksemble/agent/internal/core"
+	"github.com/asksemble/asksemble/agent/internal/judge"
 )
 
 // State is where a run or one of its parts is.
@@ -80,6 +81,9 @@ type Run struct {
 	StartedAt  time.Time `json:"startedAt"`
 	FinishedAt time.Time `json:"finishedAt,omitzero"`
 	Parts      []Part    `json:"parts"`
+	// Refine is the question's refining (질문 정제, milestone C): set when
+	// the run asked for it, running until the moderator's spec is in.
+	Refine *Refine `json:"refine,omitempty"`
 
 	owner, key string
 	left       int // parts still running
@@ -296,6 +300,34 @@ func (r *Run) snapshot() Run {
 	c := *r
 	c.Parts = append([]Part(nil), r.Parts...)
 	return c
+}
+
+// Refine is a run's question refining as its snapshot shows it
+// (compares.Refined; /v1 fields may be added, never removed). Spec and
+// Template are set when done; Template is "" for a kind without one.
+type Refine struct {
+	Status   string              `json:"status"`
+	Agent    string              `json:"agent,omitempty"`
+	Model    string              `json:"model,omitempty"`
+	Ms       int64               `json:"ms,omitempty"`
+	Spec     *judge.QuestionSpec `json:"spec,omitempty"`
+	Template string              `json:"template,omitempty"`
+	Error    *judge.Error        `json:"error,omitempty"`
+}
+
+// SetRefine sets the run's refining. A run that is gone or not owner's is
+// left alone. Each call keeps its own copy, so snapshots never share it.
+func (m *Manager) SetRefine(owner, id string, rf Refine) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if r, ok := m.runs[id]; ok && r.owner == owner {
+		c := rf
+		if rf.Spec != nil {
+			spec := *rf.Spec
+			c.Spec = &spec
+		}
+		r.Refine = &c
+	}
 }
 
 // Get returns the run if it exists and belongs to owner.
