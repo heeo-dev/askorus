@@ -37,12 +37,15 @@ type Synthesizer interface {
 	Synthesize(ctx context.Context, req SynthRequest) (SynthResult, error)
 }
 
-// SynthRequest is one combined-answer call.
+// SynthRequest is one combined-answer call. With Refine it is the
+// moderator's question spec instead (질문 정제, milestone C): the same
+// locked-down command with RefineSchemaV1, its prompt refine-v1.
 type SynthRequest struct {
 	Folder string // the judge folder: absolute, exists, outside any project
-	Prompt string // the synth-v2 prompt; sent on stdin, never as an argument
+	Prompt string // the synth or refine prompt; sent on stdin, never as an argument
 	Model  string // the writer's ask tier model; never empty
 	Effort string // its effort; "" lets the adapter pick its command's default
+	Refine bool   // the question spec (RefineSchemaV1), not a combined answer
 }
 
 // SynthResult is one writer's output. Output is untrusted and never logged.
@@ -77,6 +80,26 @@ const (
 // the same bytes from SynthSchemaFile. Its object requires its property
 // and allows no other, as Codex's strict mode wants.
 const SynthSchemaV1 = `{"type":"object","properties":{"answer":{"type":"string"}},"required":["answer"],"additionalProperties":false}`
+
+// Question refining (질문 정제, milestone C, design C-2): the moderator
+// fills in a question spec with the synth command and this schema.
+const (
+	// RefineTimeout bounds refining a question: the AIs wait for it, so
+	// it is short; past it the question goes as written (C-6). The caller
+	// sets it on the context; the adapter's SynthTimeout is longer.
+	RefineTimeout = 30 * time.Second
+	// RefineSchemaFile names the refine schema file (RefineSchemaV1) in
+	// the agent folder, next to SynthSchemaFile, for codex.
+	RefineSchemaFile = "refine-schema-v1.json"
+	// RefineEffort is the effort the moderator refines with: quick.
+	RefineEffort = "low"
+)
+
+// RefineSchemaV1 is the JSON schema of a moderator's question spec:
+// internal/judge's QuestionSpec. Kind and depth are enums of
+// internal/judge's Kinds and Depths (a test keeps them the same). Written
+// by hand, strict as Codex wants: every property required, no other.
+const RefineSchemaV1 = `{"type":"object","properties":{"kind":{"type":"string","enum":["fact","number","compare","recommend","howto","explain","troubleshoot","open"]},"intent":{"type":"string"},"depth":{"type":"string","enum":["short","normal","deep"]},"language":{"type":"string"}},"required":["kind","intent","depth","language"],"additionalProperties":false}`
 
 // Named is implemented by adapters that have a name for people: the name
 // a combined answer gives the AI's answer ("Claude", "Codex",
