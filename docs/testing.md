@@ -80,12 +80,13 @@ Asksemble Phase 1과 Phase 2(P2-3 비교 판정·종합 답변·화면 재구성
 
 ### synth-eval (측정 도구, `agent/cmd/synth-eval`, 태그 `syntheval`, 마일스톤 C C-9)
 
-모든 파일이 `//go:build syntheval`로 시작해 `go vet ./...`·`go test ./...`에는 들어가지 않는다. test-all의 'agent: go vet syntheval'(windows·linux)·'agent: synth-eval tests' 단계가 돈다. 실제로 재는 것은 `scripts\synth-eval.ps1 run`이고, 질문마다 AI를 10번까지 쓰므로 사용자 OK 뒤에만 돌린다. 질문은 `agent/cmd/synth-eval/testdata/general.txt`(일반 7개)와 `.local/synth-eval/mine.txt`(사용자가 S23에서 물은 질문 9개, 저장소 밖)이고, 기록은 `%LOCALAPPDATA%\Asksemble\synth-eval\<run>`에 질문마다 하나다.
+모든 파일이 `//go:build syntheval`로 시작해 `go vet ./...`·`go test ./...`에는 들어가지 않는다. test-all의 'agent: go vet syntheval'(windows·linux)·'agent: synth-eval tests' 단계가 돈다. 실제로 재는 것은 `scripts\synth-eval.ps1 run`이고, 질문마다 AI를 10번까지 쓰므로 사용자 OK 뒤에만 돌린다. 질문은 `agent/cmd/synth-eval/testdata/general.txt`(일반 7개), `testdata/intent.txt`(의도가 까다로운 일반 8개, C4)와 `.local/synth-eval/mine.txt`(사용자가 S23에서 물은 질문 9개, 저장소 밖)이고, 기록은 `%LOCALAPPDATA%\Asksemble\synth-eval\<run>`에 질문마다 하나다. C4 품질 시험 도구(E0)도 여기 있다: `resynth`·`refine`·`score`는 AI를 쓰니 사용자 OK 뒤에만, `pairs`·`picks`·`scores`·`report`는 AI를 쓰지 않는다. 채점은 `_scores\<name>`, 블라인드 쌍은 `_pairs\<name>`(`key.json`은 PC에만)에 둔다.
 
 | 파일 | 보는 것 |
 | --- | --- |
 | `eval_test.go` | 질문 파일(BOM, 빈 줄·# 줄, 같은 질문은 처음 것만, 번호는 건너뛴 줄 그대로, 4000자 넘으면 거절, 빈 파일 거절)과 `-only`. 가짜 파이프라인으로 질문마다 기록 저장, 사용량 한도에서 종료 3과 '-resume' 안내, 이어 가면 남은 질문만, 중단된 질문은 저장하지 않음(종료 4). 지표(표·제목·글머리·첫 문장 길이·한국어 질문의 라틴 문자 비율(AI 이름·'AI'·코드·링크 뺌)·덧붙임·이름 빠진 편·시간 합). 두 run 나란히 보고서와 JSON. 플래그(`-expect`가 질문 수와 달라 거절, `-refine on`은 'not built until C2', run 이름, 단계, 쓰는 AI, 관리자 권한 거절, 거절이면 파이프라인을 만들지 않음) |
-| `agent_test.go` | `TestMain`이 fakecli를 건다. 실제 세 어댑터 + fakecli로 질문 하나를 폰처럼 묻기 → 비교(run에 붙임) → 종합까지: 답 셋, 비교 done·다른 말 1, 종합 done(claude, 판정 결과 씀). 처음 만들 때 이 테스트가 run 끝을 비교에 넘기지 않던 것(`runs.OnEnd = compares.RunEnded`)을 잡았다 |
+| `agent_test.go` | `TestMain`이 fakecli를 건다. 실제 세 어댑터 + fakecli로 질문 하나를 폰처럼 묻기 → 비교(run에 붙임) → 종합까지: 답 셋, 비교 done·다른 말 1, 종합 done(claude, 판정 결과 씀). 처음 만들 때 이 테스트가 run 끝을 비교에 넘기지 않던 것(`runs.OnEnd = compares.RunEnded`)을 잡았다. C4 E0: 기록의 종합 과제로 다시 만든 지시문이 쓰는 AI가 실제로 받은 것과 nonce만 빼고 바이트까지 같음(정제 끔·켬, 켬이면 설계서 실림), 같은 과제로 어댑터를 거쳐 다시 쓰면 같은 종합 글, PC에 없는 쓰는 AI는 오류 |
+| `quality_test.go` | C4 E0. `resynth`: 같은 답·판정으로 다른 단계 모델이 다시 씀(나쁜 답이면 새 nonce로 한 번 더, 사용량 한도에서 종료 3과 이어 가기, E0 전 기록은 건너뜀, 원래 답·비교·질문 그대로, run 정보 from·synthTier·synth, 보고서 '쓴 AI · 단계 · 지시문' 줄), 플래그(같은 run, 모르는 쓰는 AI·단계·지시문). `refine`: 고정 틀은 사회자 명령(refine-v1)으로, 실시간 틀은 종합 명령으로 묻고 줄을 검사(종류·깊이·언어·의도 200자·FORM 줄 1~4개·200자·링크 없음, open은 줄 없어도 됨, 같은 필드 두 번·모르는 필드·산문 거절), 실시간 틀 머리가 에이전트의 답 틀 머리와 같음, 질문은 따옴표 안 데이터로(주입 줄 그대로), 30초 넘으면 표시, 정제만 run 보고서와 섞기 거절. `score`: 줄 읽기(1·2·same, 굵게·마침표 허용, 빠짐·두 번·이상한 값·산문 거절), 순서 되돌리기, 같은 답이면 한 번·다르면 각각, 순서만 따르는 판정은 비김으로, 판정 실패, 한도와 이어 가기, 합계·판정별·일치·순서 뒤집힘. `pairs`·`picks`: 페이지 자료에 run 이름·질문 id 없음, 좌우 무작위(동전), 같은 이름 두 번 거절, 고른 것을 run으로 되돌림, 다른 세트·모르는 쌍·이상한 값, 페이지 저장소 문서 폴더 읽기, 채점과 일치 수 |
 
 ### LT (실제 연동, `agent/internal/live/live_test.go`)
 

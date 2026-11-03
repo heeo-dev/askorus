@@ -1,0 +1,384 @@
+<title>Asksemble 블라인드 비교</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: one reading column; a sticky bar with the pair strip, the answer under a 1|2 switch, the pick panel last. */
+:root {
+  --bg: #FCFAF8;
+  --surface: #F4EFEA;
+  --line: #E6DDD5;
+  --fg: #231C17;
+  --muted: #76675C;
+  --accent: #DD5A26;
+  --accent-soft: #FFE8DC;
+  --on-accent: #FFFFFF;
+  --ok: #2F7D4F;
+  --warn: #A3461C;
+  --ai-claude-bg: #DCEBFA; --ai-claude-fg: #1F5A8E;
+  --ai-codex-bg: #E9E1FA;  --ai-codex-fg: #5B3E9C;
+  --ai-opencode-bg: #D6F0EA; --ai-opencode-fg: #1C6B5B;
+  --font: "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", monospace;
+  --r: 12px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #151618; --surface: #1E2023; --line: #2E3135; --fg: #EDE7E2; --muted: #A2968D;
+    --accent: #FFAD85; --accent-soft: #3D2A20; --on-accent: #1A120D; --ok: #7BC79A; --warn: #FFAD85;
+    --ai-claude-bg: #1D3348; --ai-claude-fg: #A9D0F5;
+    --ai-codex-bg: #2E2645;  --ai-codex-fg: #CDB8F5;
+    --ai-opencode-bg: #183A34; --ai-opencode-fg: #9EDCCB;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #151618; --surface: #1E2023; --line: #2E3135; --fg: #EDE7E2; --muted: #A2968D;
+  --accent: #FFAD85; --accent-soft: #3D2A20; --on-accent: #1A120D; --ok: #7BC79A; --warn: #FFAD85;
+  --ai-claude-bg: #1D3348; --ai-claude-fg: #A9D0F5;
+  --ai-codex-bg: #2E2645;  --ai-codex-fg: #CDB8F5;
+  --ai-opencode-bg: #183A34; --ai-opencode-fg: #9EDCCB;
+  color-scheme: dark;
+}
+html, body { background: var(--bg); color: var(--fg); }
+body {
+  font-family: var(--font); font-size: 16px; line-height: 1.7;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 48px;
+}
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+.wrap { max-width: 720px; margin: 0 auto; display: grid; gap: 20px; }
+header.top {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg);
+  display: grid; gap: 10px; padding-block: 14px 10px; border-bottom: 1px solid var(--line);
+}
+.titlerow { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+h1 { font-size: 20px; font-weight: 800; margin: 0; letter-spacing: -0.01em; }
+h1 .brand { color: var(--accent); }
+.progress { font-family: var(--mono); font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.strip { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: thin; }
+.strip button {
+  flex: 0 0 auto; min-width: 40px; height: 32px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--surface); color: var(--muted); font: 500 13px var(--mono); cursor: pointer;
+}
+.strip button.done { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+.strip button.here { outline: 2px solid var(--accent); outline-offset: 1px; color: var(--fg); }
+.question {
+  margin: 0; font-size: 18px; font-weight: 700; line-height: 1.5; text-wrap: balance;
+}
+.qlabel { font-size: 12px; letter-spacing: 0.06em; color: var(--muted); font-weight: 500; margin-bottom: 4px; }
+.switch { display: grid; grid-template-columns: 1fr 1fr; background: var(--surface); border-radius: 10px; padding: 4px; gap: 4px; }
+.switch button {
+  border: 0; border-radius: 7px; padding: 10px 8px; background: transparent; color: var(--muted);
+  font: 700 15px var(--font); cursor: pointer;
+}
+.switch button[aria-pressed="true"] { background: var(--bg); color: var(--fg); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+.answer { min-width: 0; overflow-wrap: anywhere; }
+.answer > :first-child { margin-top: 0; }
+.answer h1, .answer h2, .answer h3, .answer h4 { font-size: 17px; line-height: 1.45; margin: 1.2em 0 .4em; }
+.answer p { margin: .6em 0; }
+.answer ul, .answer ol { padding-left: 1.3em; margin: .5em 0; }
+.answer li { margin: .25em 0; }
+.answer code { font-family: var(--mono); font-size: .88em; background: var(--surface); padding: .1em .35em; border-radius: 4px; }
+.answer pre { background: var(--surface); padding: 12px; border-radius: 8px; overflow-x: auto; }
+.answer pre code { background: none; padding: 0; }
+.answer blockquote { margin: .6em 0; padding-left: 12px; border-left: 3px solid var(--line); color: var(--muted); }
+.tablewrap { overflow-x: auto; margin: .8em 0; }
+.answer table { border-collapse: collapse; font-size: 14px; line-height: 1.5; min-width: 100%; }
+.answer th, .answer td { border: 1px solid var(--line); padding: 6px 9px; text-align: left; vertical-align: top; }
+.answer th { background: var(--surface); font-weight: 700; }
+.ai { display: inline-block; border-radius: 6px; padding: 0 .4em; font-weight: 700; font-size: .92em; line-height: 1.5; }
+.ai-claude { background: var(--ai-claude-bg); color: var(--ai-claude-fg); }
+.ai-codex { background: var(--ai-codex-bg); color: var(--ai-codex-fg); }
+.ai-opencode { background: var(--ai-opencode-bg); color: var(--ai-opencode-fg); }
+.ai-other { background: var(--surface); color: var(--fg); }
+.pick { display: grid; gap: 14px; padding: 16px; border-radius: var(--r); background: var(--surface); }
+.pick h2 { font-size: 16px; margin: 0; font-weight: 700; }
+.choices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.choices button {
+  border: 1px solid var(--line); background: var(--bg); color: var(--fg); border-radius: 10px;
+  padding: 12px 6px; font: 700 15px var(--font); cursor: pointer;
+}
+.choices button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.choices.small button { padding: 8px 4px; font-size: 14px; font-weight: 500; }
+details.more summary { cursor: pointer; color: var(--muted); font-size: 14px; }
+details.more[open] summary { margin-bottom: 10px; }
+.crit { display: grid; gap: 6px; margin-bottom: 12px; }
+.crit .lbl { font-size: 14px; font-weight: 500; }
+.crit .hint { font-size: 12.5px; color: var(--muted); }
+textarea {
+  width: 100%; box-sizing: border-box; min-height: 72px; resize: vertical; border-radius: 10px;
+  border: 1px solid var(--line); background: var(--bg); color: var(--fg); font: 15px/1.5 var(--font); padding: 10px;
+}
+label.note { font-size: 14px; font-weight: 500; display: grid; gap: 6px; }
+.nav { display: flex; justify-content: space-between; gap: 10px; }
+.nav button {
+  flex: 1; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--fg);
+  padding: 12px; font: 500 15px var(--font); cursor: pointer;
+}
+.nav button:disabled { opacity: .4; cursor: default; }
+.status { font-size: 13px; color: var(--muted); min-height: 1.2em; }
+.status.bad { color: var(--warn); }
+.banner { font-size: 14px; padding: 10px 12px; border-radius: 10px; background: var(--accent-soft); color: var(--fg); }
+.about { font-size: 13.5px; color: var(--muted); line-height: 1.6; }
+button:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: no-preference) { .switch button, .choices button { transition: background .15s, color .15s; } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="titlerow">
+      <h1><span class="brand">Asksemble</span> 블라인드 비교</h1>
+      <span class="progress" id="progress">불러오는 중</span>
+    </div>
+    <nav class="strip" id="strip" aria-label="비교할 질문"></nav>
+  </header>
+
+  <div class="banner" id="banner" hidden></div>
+
+  <section aria-labelledby="question">
+    <div class="qlabel">질문</div>
+    <p class="question" id="question">질문을 불러오는 중입니다.</p>
+  </section>
+
+  <div class="switch" role="group" aria-label="볼 답">
+    <button type="button" id="show1" aria-pressed="true">답 1</button>
+    <button type="button" id="show2" aria-pressed="false">답 2</button>
+  </div>
+
+  <article class="answer" id="answer" aria-live="polite"></article>
+
+  <section class="pick" aria-labelledby="pickTitle">
+    <h2 id="pickTitle">어느 종합 답변이 더 나은가요?</h2>
+    <div class="choices" id="overall" role="group" aria-label="전체">
+      <button type="button" data-v="left" aria-pressed="false">1이 낫다</button>
+      <button type="button" data-v="same" aria-pressed="false">비슷하다</button>
+      <button type="button" data-v="right" aria-pressed="false">2가 낫다</button>
+    </div>
+    <details class="more" id="more">
+      <summary>기준별로 고르기 (선택)</summary>
+      <div class="crit">
+        <span class="lbl">질문 의도에 맞음</span>
+        <span class="hint">물은 것, 원한 개수와 조건, 원한 형식에 맞게 답했는가</span>
+        <div class="choices small" data-c="intent" role="group" aria-label="질문 의도에 맞음">
+          <button type="button" data-v="left" aria-pressed="false">1</button>
+          <button type="button" data-v="same" aria-pressed="false">비슷</button>
+          <button type="button" data-v="right" aria-pressed="false">2</button>
+        </div>
+      </div>
+      <div class="crit">
+        <span class="lbl">읽기 쉬움</span>
+        <span class="hint">답이 먼저 오고, 구조가 분명하고, 헤매지 않고 읽히는가</span>
+        <div class="choices small" data-c="readable" role="group" aria-label="읽기 쉬움">
+          <button type="button" data-v="left" aria-pressed="false">1</button>
+          <button type="button" data-v="same" aria-pressed="false">비슷</button>
+          <button type="button" data-v="right" aria-pressed="false">2</button>
+        </div>
+      </div>
+      <div class="crit">
+        <span class="lbl">답의 품질</span>
+        <span class="hint">맞는 말인가, 중요한 것을 빠뜨리지 않았는가, AI끼리 다른 곳을 공정하게 보였는가</span>
+        <div class="choices small" data-c="quality" role="group" aria-label="답의 품질">
+          <button type="button" data-v="left" aria-pressed="false">1</button>
+          <button type="button" data-v="same" aria-pressed="false">비슷</button>
+          <button type="button" data-v="right" aria-pressed="false">2</button>
+        </div>
+      </div>
+    </details>
+    <label class="note" for="note">메모 (선택)
+      <textarea id="note" placeholder="왜 그쪽이 나은지, 거슬린 점 등"></textarea>
+    </label>
+    <div class="status" id="status" role="status"></div>
+  </section>
+
+  <div class="nav">
+    <button type="button" id="prev">← 앞 질문</button>
+    <button type="button" id="next">다음 질문 →</button>
+  </div>
+
+  <p class="about">답 1과 답 2는 같은 질문에 대해 다른 설정으로 쓴 종합 답변입니다. 어느 쪽이 어느 설정인지는 이 페이지에 없고, 좌우는 질문마다 무작위입니다. 고른 것은 바로 저장되고 Claude가 읽어 결과를 셉니다.</p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const state = { set: null, pairs: [], i: 0, side: "left", picks: {}, db: null, canWrite: false };
+  const store = {
+    get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+  };
+
+  // AI names written as {{Claude}} become chips, as in the app.
+  function chips(text) {
+    return text.replace(/\{\{([A-Za-z0-9 .\-]{1,30})\}\}/g, (_, name) => {
+      const key = name.trim().toLowerCase().replace(/[^a-z]/g, "");
+      const cls = ["claude", "codex", "opencode"].includes(key) ? "ai-" + key : "ai-other";
+      return '<span class="ai ' + cls + '">' + name.trim() + "</span>";
+    });
+  }
+  function render(md) {
+    let html;
+    if (window.marked && window.DOMPurify) {
+      html = DOMPurify.sanitize(marked.parse(chips(md), { gfm: true, breaks: false }), { ADD_ATTR: ["class"] });
+    } else {
+      const div = document.createElement("div");
+      div.textContent = md;
+      html = '<p style="white-space:pre-wrap">' + div.innerHTML + "</p>";
+    }
+    const box = $("answer");
+    box.innerHTML = html;
+    box.querySelectorAll("table").forEach((t) => {
+      const w = document.createElement("div");
+      w.className = "tablewrap";
+      t.parentNode.insertBefore(w, t);
+      w.appendChild(t);
+    });
+    box.querySelectorAll("a").forEach((a) => { a.target = "_blank"; a.rel = "noopener"; });
+  }
+
+  function pickOf(pid) { return state.picks[pid] || {}; }
+  function docId(pid) { return state.set + "__" + pid; }
+
+  function show() {
+    const p = state.pairs[state.i];
+    if (!p) return;
+    $("question").textContent = p.question;
+    $("show1").setAttribute("aria-pressed", String(state.side === "left"));
+    $("show2").setAttribute("aria-pressed", String(state.side === "right"));
+    render(state.side === "left" ? p.left : p.right);
+    const pk = pickOf(p.id);
+    document.querySelectorAll("#overall button").forEach((b) => b.setAttribute("aria-pressed", String(pk.overall === b.dataset.v)));
+    document.querySelectorAll(".choices[data-c]").forEach((g) => {
+      g.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(pk[g.dataset.c] === b.dataset.v)));
+    });
+    if (document.activeElement !== $("note")) $("note").value = pk.note || "";
+    $("prev").disabled = state.i === 0;
+    $("next").disabled = state.i === state.pairs.length - 1;
+    const strip = $("strip");
+    strip.querySelectorAll("button").forEach((b, j) => {
+      b.classList.toggle("done", !!pickOf(state.pairs[j].id).overall);
+      b.classList.toggle("here", j === state.i);
+      if (j === state.i) b.setAttribute("aria-current", "true"); else b.removeAttribute("aria-current");
+    });
+    const done = state.pairs.filter((x) => pickOf(x.id).overall).length;
+    $("progress").textContent = done + " / " + state.pairs.length + " 고름";
+    store.set("ab:" + state.set + ":i", String(state.i));
+  }
+
+  function go(i) {
+    state.i = Math.max(0, Math.min(state.pairs.length - 1, i));
+    state.side = "left";
+    show();
+    window.scrollTo({ top: 0 });
+    const here = $("strip").children[state.i];
+    if (here) here.scrollIntoView({ block: "nearest", inline: "center" });
+  }
+
+  // One write at a time per pair: each save waits for the one before.
+  const queues = {};
+  function save(pid) {
+    const body = Object.assign({ set: state.set, id: pid }, pickOf(pid), { at: new Date().toISOString() });
+    if (!state.db) {
+      setStatus("이 화면에서는 저장할 수 없어요. claude.ai에 로그인한 채로 여세요.", true);
+      return;
+    }
+    setStatus("저장 중…");
+    queues[pid] = (queues[pid] || Promise.resolve()).then(() =>
+      state.db.collection("picks").doc(docId(pid)).set(body)
+        .then(() => setStatus("저장됨"))
+        .catch((e) => setStatus("저장하지 못했어요 (" + (e && e.code || "오류") + "). 잠시 뒤 다시 골라 주세요.", true))
+    );
+  }
+  function setStatus(text, bad) { const s = $("status"); s.textContent = text; s.classList.toggle("bad", !!bad); }
+
+  function choose(field, v) {
+    const p = state.pairs[state.i];
+    const pk = Object.assign({}, pickOf(p.id));
+    pk[field] = pk[field] === v && field !== "overall" ? "" : v;
+    state.picks[p.id] = pk;
+    show();
+    save(p.id);
+  }
+
+  $("show1").onclick = () => { state.side = "left"; show(); };
+  $("show2").onclick = () => { state.side = "right"; show(); };
+  $("prev").onclick = () => go(state.i - 1);
+  $("next").onclick = () => go(state.i + 1);
+  document.querySelectorAll("#overall button").forEach((b) => (b.onclick = () => choose("overall", b.dataset.v)));
+  document.querySelectorAll(".choices[data-c]").forEach((g) => {
+    g.querySelectorAll("button").forEach((b) => (b.onclick = () => choose(g.dataset.c, b.dataset.v)));
+  });
+  let noteTimer = null;
+  $("note").addEventListener("input", () => {
+    clearTimeout(noteTimer);
+    noteTimer = setTimeout(() => {
+      const p = state.pairs[state.i];
+      const v = $("note").value.trim();
+      if ((pickOf(p.id).note || "") === v) return;
+      state.picks[p.id] = Object.assign({}, pickOf(p.id), { note: v });
+      save(p.id);
+    }, 900);
+  });
+
+  async function load() {
+    try {
+      const res = await fetch("pairs.json", { cache: "no-store" });
+      if (!res.ok) throw new Error(res.status);
+      const data = await res.json();
+      state.set = data.name;
+      state.pairs = data.pairs || [];
+    } catch (e) {
+      $("question").textContent = "비교할 답을 불러오지 못했어요. 페이지를 다시 열어 주세요.";
+      $("progress").textContent = "";
+      return;
+    }
+    const strip = $("strip");
+    state.pairs.forEach((p, j) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = String(j + 1);
+      b.setAttribute("aria-label", (j + 1) + "번 질문");
+      b.onclick = () => go(j);
+      strip.appendChild(b);
+    });
+    const saved = parseInt(store.get("ab:" + state.set + ":i") || "0", 10);
+    state.i = Number.isFinite(saved) ? Math.min(Math.max(saved, 0), state.pairs.length - 1) : 0;
+    show();
+    connect();
+  }
+
+  async function connect() {
+    const db = window.claude && window.claude.use ? await window.claude.use("db") : null;
+    if (!db) {
+      const b = $("banner");
+      b.textContent = "고른 것을 저장할 수 없는 화면이에요. claude.ai에 로그인한 채로 이 페이지를 여세요. 답은 그대로 볼 수 있어요.";
+      b.hidden = false;
+      return;
+    }
+    state.db = db;
+    const timer = setTimeout(() => setStatus("저장된 선택을 아직 불러오지 못했어요. 고르면 그대로 저장됩니다."), 10000);
+    db.collection("picks").where("set", "==", state.set).onSnapshot((snap) => {
+      if (!snap.metadata.fromCache) clearTimeout(timer);
+      snap.docs.forEach((d) => {
+        const v = d.data();
+        if (!v || !v.id) return;
+        if (document.activeElement === $("note") && state.pairs[state.i] && v.id === state.pairs[state.i].id) {
+          state.picks[v.id] = Object.assign({}, v, { note: pickOf(v.id).note ?? v.note });
+        } else {
+          state.picks[v.id] = Object.assign({}, v);
+        }
+      });
+      show();
+    }, (e) => {
+      clearTimeout(timer);
+      setStatus("저장된 선택을 불러오지 못했어요 (" + (e && e.code || "오류") + ").", true);
+    });
+  }
+
+  load();
+})();
+</script>

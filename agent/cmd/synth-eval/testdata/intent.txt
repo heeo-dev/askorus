@@ -1,0 +1,19 @@
+# synth-eval: questions whose intent a fixed answer format may miss (C4, E0).
+# One question per line; add new ones only at the end, so the IDs (intent-N)
+# stay. Each says what it tests.
+# recommend, several items, no number given
+처음 캠핑 가는 4인 가족이 꼭 챙길 장비를 추천해줘.
+# recommend with conditions (budget, use)
+예산 100만 원 안쪽으로 영상 편집용 노트북을 고를 때 볼 점과 후보를 알려줘.
+# recommend, the number given
+주말에 읽기 좋은 한국 단편소설 3편 추천해줘.
+# a length asked for
+TCP와 UDP의 차이를 한 줄로 말해줘.
+# a form asked for
+아이폰과 갤럭시의 백업 방법을 표로 비교해줘.
+# troubleshoot
+노트북 팬이 갑자기 시끄러워졌어. 뭘 확인해야 해?
+# open: writing, three tones asked for
+동네 빵집 개업 인사 문구를 세 가지 말투로 써줘.
+# explain, for a beginner
+금리가 오르면 왜 주가가 떨어지는지 초등학생도 알게 설명해줘.

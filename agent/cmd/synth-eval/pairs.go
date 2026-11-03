@@ -139,6 +139,7 @@ func makePairs(name, a, b string, both [][2]Record, now time.Time) (PairSet, Pai
 // Pick is one pair as the person picked it on the page: each of overall
 // and the optional criteria is left, right or same ("" when not picked).
 type Pick struct {
+	Set      string `json:"set,omitempty"` // the pair set, as the page stores it
 	ID       string `json:"id"`
 	Overall  string `json:"overall"`
 	Intent   string `json:"intent,omitempty"`
@@ -151,7 +152,7 @@ func picksCmd(args []string, out, errOut io.Writer) int {
 	fs := flag.NewFlagSet("picks", flag.ContinueOnError)
 	fs.SetOutput(errOut)
 	name := fs.String("name", "", "the pair set's name")
-	in := fs.String("in", "", "the picks exported from the page (JSON array)")
+	in := fs.String("in", "", "the picks from the page: a JSON array, or a folder of the page store's documents")
 	score := fs.String("score", "", "a scoring of the same runs, to see how far it agrees with the person")
 	if err := fs.Parse(args); err != nil {
 		return exitFlags
@@ -166,8 +167,8 @@ func picksCmd(args []string, out, errOut io.Writer) int {
 		fmt.Fprintln(errOut, err)
 		return exitError
 	}
-	var picks []Pick
-	if err := readJSON(*in, &picks); err != nil {
+	picks, err := readPicks(*in, *name)
+	if err != nil {
 		fmt.Fprintln(errOut, err)
 		return exitFlags
 	}
@@ -206,6 +207,55 @@ func readJSON(path string, v any) error {
 		return fmt.Errorf("%s: %w", filepath.Base(path), err)
 	}
 	return nil
+}
+
+// readPicks reads the person's picks of set name: a JSON array of picks,
+// or a folder of the page store's documents (each a pick, or a stored
+// document whose "data" is one), as ArtifactData saves them with out_dir.
+// Picks of other sets are left out.
+func readPicks(path, name string) ([]Pick, error) {
+	st, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	var raws []json.RawMessage
+	if !st.IsDir() {
+		if err := readJSON(path, &raws); err != nil {
+			return nil, err
+		}
+	} else {
+		err := filepath.WalkDir(path, func(p string, d os.DirEntry, err error) error {
+			if err != nil || d.IsDir() || filepath.Ext(p) != ".json" {
+				return err
+			}
+			b, err := os.ReadFile(p)
+			if err != nil {
+				return err
+			}
+			raws = append(raws, b)
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+	var out []Pick
+	for _, raw := range raws {
+		var doc struct {
+			Data *Pick `json:"data"`
+		}
+		var p Pick
+		if json.Unmarshal(raw, &doc) == nil && doc.Data != nil {
+			p = *doc.Data
+		} else if err := json.Unmarshal(raw, &p); err != nil {
+			return nil, fmt.Errorf("a pick that is not one: %w", err)
+		}
+		if p.Set == "" || p.Set == name {
+			out = append(out, p)
+		}
+	}
+	slices.SortFunc(out, func(x, y Pick) int { return strings.Compare(x.ID, y.ID) })
+	return out, nil
 }
 
 // toRun maps a side the person picked back to the run: a, b or same.

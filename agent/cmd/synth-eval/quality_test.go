@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -493,8 +494,35 @@ func TestPairsHideTheRunsAndPicksMapBack(t *testing.T) {
 			t.Fatalf("picks lack %q:\n%s", want, out.String())
 		}
 	}
+	// The page store's documents, saved one file each; another set's are left out.
+	store := t.TempDir() + "/picks"
+	if err := os.MkdirAll(store, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, store, "ab__p01.json", `{"id":"ab__p01","data":{"set":"ab","id":"p01","overall":"right"},"version":2}`)
+	writeFile(t, store, "ab__p02.json", `{"set":"ab","id":"p02","overall":"same"}`)
+	writeFile(t, store, "zz__p01.json", `{"id":"zz__p01","data":{"set":"zz","id":"p01","overall":"left"},"version":1}`)
+	out.Reset()
+	if c := runMain(context.Background(), []string{"picks", "-name", "ab", "-in", store}, &out, &errOut); c != exitOK {
+		t.Fatalf("picks from a folder %d %s", c, errOut.String())
+	}
+	if !strings.Contains(out.String(), "the person picked 2 of 3 pairs") || !strings.Contains(out.String(), "overall         0      1      1") {
+		t.Fatalf("picks from a folder:\n%s", out.String())
+	}
 	bad := writeFile(t, dir, "bad.json", `[{"id":"p01","overall":"top"}]`)
 	if c := runMain(context.Background(), []string{"picks", "-name", "ab", "-in", bad}, &out, &errOut); c != exitFlags {
 		t.Fatalf("a bad side: %d", c)
+	}
+}
+
+// The question set of C4: the general ones, then the eight whose intent a
+// fixed format may miss, with stable IDs.
+func TestTheIntentQuestionsLoad(t *testing.T) {
+	qs, err := readQuestions([]string{"testdata/general.txt", "testdata/intent.txt"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(qs) != 15 || qs[7].ID != "intent-1" || qs[14].ID != "intent-8" || !strings.Contains(qs[10].Text, "한 줄로") {
+		t.Fatalf("questions %+v", qs)
 	}
 }
