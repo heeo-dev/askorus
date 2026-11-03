@@ -25,6 +25,7 @@ import (
 var synthVariants = map[string]func(judge.SynthTask, string) string{
 	"product": judge.SynthPrompt,
 	"v4":      synthV4, // variants.go
+	"v4.1":    synthV41,
 }
 
 func variantNames() []string {

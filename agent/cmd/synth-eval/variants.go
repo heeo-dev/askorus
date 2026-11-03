@@ -43,6 +43,25 @@ const synthV4Task = `TASK. Write in the language of the QUESTION, in Markdown, f
 8. When the QUESTION is not in English, write terms in its language, with the original term in parentheses the first time when it helps, such as "지연 시간(latency)". Write every name of an AI that answered in double braces, exactly as written in "ais", such as {{Claude}}: write a name without braces when it is a product or company the QUESTION is about, and put braces around nothing else. Add nothing that no answer says. Be as long as the QUESTION needs and no longer: a simple question gets a few lines.
 `
 
+// synthV41 is v4 with one rule more (11-04, from s-e2-v4): when the person
+// asked for a number of items and the AIs give more, different ones (three
+// novels each, nine in all), the answer gives that number first and names
+// the rest in one line, instead of every AI's list in full.
+func synthV41(task judge.SynthTask, nonce string) string {
+	p := synthV4(task, nonce)
+	if p == "" || !strings.Contains(p, synthV4Count) {
+		return ""
+	}
+	p = strings.Replace(p, synthV4Count, synthV4Count+synthV41Count, 1)
+	return strings.Replace(p, "[Asksemble synthesis v4-draft]", "[Asksemble synthesis v4.1-draft]", 1)
+}
+
+// synthV4Count ends v4's first rule; v4.1 adds synthV41Count after it.
+const (
+	synthV4Count  = "Follow all of it: when they asked for a number of items, a length or a form (such as a table or one line), give exactly that."
+	synthV41Count = " When they asked for a number of items and the answers give more, different ones, give that number: first the items more than one AI gave, then items taken from each AI in turn, each marked with the AI that gave it; then name the others in one short line."
+)
+
 // lightTemplates are E3's light answer formats: refine-v1's kinds and
 // forms without the length line, with a recommendation that is not cut to
 // one, a table only when several things are compared, and one line that

@@ -553,6 +553,10 @@ func TestSynthV4AndTheLightFormat(t *testing.T) {
 	if synthV4(judge.SynthTask{Question: "x"}, n) != "" {
 		t.Fatal("v4 of one answer")
 	}
+	v41 := synthV41(task, n)
+	if !strings.HasPrefix(v41, "[Asksemble synthesis v4.1-draft]") || strings.Count(v41, synthV41Count) != 1 || strings.Replace(strings.Replace(v41, synthV41Count, "", 1), "v4.1-draft", "v4-draft", 1) != v4 {
+		t.Fatalf("v4.1:\n%s", v41)
+	}
 	rec := lightTemplate(judge.QuestionSpec{Kind: "recommend", Depth: "short", Language: "ko"})
 	if !strings.HasPrefix(rec, "답 형식 (Asksemble이 붙임") || !strings.Contains(rec, "정하지 않았으면 몇 가지") || !strings.HasSuffix(rec, "- 질문이 정한 개수, 길이, 형식이 있으면 그대로 따르세요.") || strings.Contains(rec, "짧게 답하세요") {
 		t.Fatalf("light:\n%s", rec)
