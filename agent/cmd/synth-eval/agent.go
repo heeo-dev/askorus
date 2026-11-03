@@ -135,10 +135,31 @@ func (p *agentPipeline) Ask(ctx context.Context, q Question, run RunInfo) (Recor
 			p.runs.SetRefine(owner, id, x)
 		})
 	}
+	// Refining with a light or a live format (C4 E3) is done here, before
+	// any AI is asked: the moderator at run.ModTier, then every AI gets the
+	// question with that format under it, as the agent would send it.
+	asked := q.Text
+	var own *RefineRec
+	if run.Refine == refineLight || run.Refine == refineLive {
+		form := formFixed
+		if run.Refine == refineLive {
+			form = formLive
+		}
+		own = refineOnce(ctx, p, q.Text, RunInfo{Writer: run.Writer, Tier: run.ModTier, Form: form})
+		own.Before = true
+		if own.Status == "done" {
+			if run.Refine == refineLight {
+				own.Template = lightTemplate(specOf(own))
+			}
+			if own.Template != "" {
+				asked = strings.TrimRight(q.Text, " \t\r\n") + "\n\n" + own.Template
+			}
+		}
+	}
 	var tasks []runs.Task
 	for _, name := range p.order {
 		asker := p.askers[name]
-		req := core.AskRequest{Folder: p.folder, Prompt: core.AskPrompt(q.Text), Tier: run.Tier}
+		req := core.AskRequest{Folder: p.folder, Prompt: core.AskPrompt(asked), Tier: run.Tier}
 		tasks = append(tasks, runs.Task{Agent: name, Ask: func(ctx context.Context) (core.AskResult, error) {
 			if refiner != nil {
 				text, err := refiner.Question(ctx)
@@ -155,9 +176,17 @@ func (p *agentPipeline) Ask(ctx context.Context, q Question, run RunInfo) (Recor
 	if err != nil {
 		return Record{}, err
 	}
+	if own != nil && own.Status == "done" {
+		sp := specOf(own)
+		p.runs.SetRefine(owner, r.ID, compares.Refined{Status: compares.RefineDone, Agent: own.Agent, Model: own.Model, Ms: own.Ms, Spec: &sp, Template: own.Template})
+	}
+	synth := &compares.SynthSpec{Agent: run.Writer, Tier: run.Tier}
+	if run.Synth == synthOff {
+		synth = nil // written later with resynth
+	}
 	cid, err := p.cmp.Attach(compares.RunSpec{
 		Owner: owner, RunID: r.ID, Question: q.Text, Judges: p.order, Asked: p.order,
-		Synth: &compares.SynthSpec{Agent: run.Writer, Tier: run.Tier},
+		Synth: synth,
 	})
 	if err != nil {
 		return Record{}, fmt.Errorf("attach: %w", err)
@@ -181,6 +210,9 @@ func (p *agentPipeline) Ask(ctx context.Context, q Question, run RunInfo) (Recor
 		}
 		rec.Refine = rr
 	}
+	if own != nil {
+		rec.Refine = own // its form lines, Before, or its failure
+	}
 	for _, part := range r.Parts {
 		a := AnswerRec{Agent: part.Agent, Model: part.Model, Status: string(part.Status), Ms: part.Ms, In: part.InputTokens, Out: part.OutputTokens, Text: part.Answer}
 		if part.Error != nil {
@@ -197,7 +229,7 @@ func (p *agentPipeline) Ask(ctx context.Context, q Question, run RunInfo) (Recor
 			judgedAt = time.Now()
 		}
 		s := c.Synthesis
-		if !judgedAt.IsZero() && (s == nil || (s.Status != compares.SynthWaiting && s.Status != compares.SynthRunning)) {
+		if !judgedAt.IsZero() && (s == nil || s.Status == compares.SynthOff || (s.Status != compares.SynthWaiting && s.Status != compares.SynthRunning)) {
 			break
 		}
 		if err := sleep(ctx, 250*time.Millisecond); err != nil {
@@ -218,7 +250,7 @@ func (p *agentPipeline) Ask(ctx context.Context, q Question, run RunInfo) (Recor
 	}
 	rec.Compare = cr
 	rec.Task = p.synthTask(q.Text, c, rec.Answers, r.Refine)
-	if s := c.Synthesis; s != nil {
+	if s := c.Synthesis; s != nil && s.Status != compares.SynthOff {
 		sr := &SynthRec{Status: s.Status, Agent: s.Agent, Model: s.Model, Ms: s.Ms, In: s.InputTokens, Out: s.OutputTokens, Judged: s.Judged, Unnamed: s.UnnamedSides, Text: s.Text}
 		if s.Error != nil {
 			sr.Error, sr.Detail = s.Error.Code, clip(s.Error.Message, 300)
@@ -226,6 +258,20 @@ func (p *agentPipeline) Ask(ctx context.Context, q Question, run RunInfo) (Recor
 		rec.Synth = sr
 	}
 	return rec, nil
+}
+
+// Refining of a run (RunInfo.Refine) besides off and on (the agent's).
+const (
+	refineLight = "light" // the agent's spec, lightTemplates (C4 E3)
+	refineLive  = "live"  // the moderator writes the format (C4 E3)
+)
+
+// synthOff in RunInfo.Synth: the run writes no combined answer.
+const synthOff = "off"
+
+// specOf is the spec a refine record holds.
+func specOf(r *RefineRec) judge.QuestionSpec {
+	return judge.QuestionSpec{Kind: r.Kind, Intent: r.Intent, Depth: r.Depth, Language: r.Language}
 }
 
 // synthTask is the task the writer got, made again from the comparison's

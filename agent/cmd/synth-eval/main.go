@@ -12,7 +12,7 @@
 // part of the agent.
 //
 //	synth-eval questions -q FILE[,FILE] [-only ID,ID]
-//	synth-eval run       -q FILE[,FILE] [-only ID,ID] -run NAME [-tier quick] [-writer claude] [-refine off|on] [-resume] -expect N
+//	synth-eval run       -q FILE[,FILE] [-only ID,ID] -run NAME [-tier quick] [-writer claude] [-refine off|on|light|live] [-mod-tier standard] [-synth product|off] [-resume] -expect N
 //	synth-eval report    -run NAME[,NAME] [-json] [-texts]
 //	synth-eval resynth   -from RUN -run NAME [-only ID,ID] [-tier quick] [-writer claude] [-synth product] [-resume] -expect N
 //	synth-eval refine    -q FILE[,FILE] [-only ID,ID] -run NAME [-tier quick] [-writer claude] [-form fixed|live] [-resume] -expect N
@@ -67,7 +67,9 @@ var newPipeline = func(ctx context.Context) (pipeline, func(), error) {
 const usage = `synth-eval measures the combined answer (milestone C). A run uses AI subscriptions.
   questions -q FILE[,FILE] [-only ID,ID]
   run       -q FILE[,FILE] [-only ID,ID] -run NAME [-tier quick|standard|deep] [-writer claude|codex|opencode]
-            [-refine off|on] [-resume] -expect N
+            [-refine off|on|light|live] [-mod-tier quick|standard|deep] [-synth product|off] [-resume] -expect N
+            refine on is the agent's; light and live (C4 E3) refine first with the writer at -mod-tier;
+            -synth off writes no combined answer (resynth writes it later)
   report    -run NAME[,NAME] [-json] [-texts]
   resynth   -from RUN -run NAME [-only ID,ID] [-tier quick|standard|deep] [-writer claude|codex|opencode]
             [-synth product] [-resume] -expect N
@@ -175,7 +177,9 @@ func runCmd(ctx context.Context, args []string, out, errOut io.Writer) int {
 	name := fs.String("run", "", "run name (a-z, 0-9, -)")
 	tier := fs.String("tier", core.TierQuick, "quick, standard or deep")
 	writer := fs.String("writer", "claude", "the AI that writes the combined answer")
-	refine := fs.String("refine", "off", "off, or on: the writer refines each question first (C2)")
+	refine := fs.String("refine", "off", "off; on: the writer refines each question first (C2); light or live: C4 E3's formats")
+	modTier := fs.String("mod-tier", core.TierStandard, "the moderator's tier for refine light or live")
+	synth := fs.String("synth", "product", "product, or off: no combined answer")
 	resume := fs.Bool("resume", false, "skip the questions the run already has")
 	expect := fs.Int("expect", -1, "the number of questions this run will ask")
 	if err := fs.Parse(args); err != nil {
@@ -185,8 +189,14 @@ func runCmd(ctx context.Context, args []string, out, errOut io.Writer) int {
 	case !core.ValidTier(*tier):
 		fmt.Fprintln(errOut, "-tier must be quick, standard or deep")
 		return exitFlags
-	case *refine != "off" && *refine != "on":
-		fmt.Fprintln(errOut, "-refine must be off or on")
+	case *refine != "off" && *refine != "on" && *refine != refineLight && *refine != refineLive:
+		fmt.Fprintln(errOut, "-refine must be off, on, light or live")
+		return exitFlags
+	case !core.ValidTier(*modTier):
+		fmt.Fprintln(errOut, "-mod-tier must be quick, standard or deep")
+		return exitFlags
+	case *synth != "product" && *synth != synthOff:
+		fmt.Fprintln(errOut, "-synth must be product or off")
 		return exitFlags
 	case !validWriter(*writer):
 		fmt.Fprintln(errOut, "-writer must be claude, codex or opencode")
@@ -233,7 +243,13 @@ func runCmd(ctx context.Context, args []string, out, errOut io.Writer) int {
 	}
 	defer closeP()
 	run := RunInfo{Name: *name, Tier: *tier, Writer: *writer, Refine: *refine}
-	fmt.Fprintf(out, "run %s: %d questions, tier %s, writer %s, refine %s\n", *name, todo, *tier, *writer, *refine)
+	if *refine == refineLight || *refine == refineLive {
+		run.ModTier = *modTier
+	}
+	if *synth == synthOff {
+		run.Synth = synthOff
+	}
+	fmt.Fprintf(out, "run %s: %d questions, tier %s, writer %s, refine %s, combined answer %s\n", *name, todo, *tier, *writer, *refine, *synth)
 	return runQuestions(ctx, p, qs, run, dir, *resume, time.Now, out)
 }
 

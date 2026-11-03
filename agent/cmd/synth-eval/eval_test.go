@@ -241,7 +241,9 @@ func TestRunFlagsGuardTheCalls(t *testing.T) {
 	}{
 		{[]string{"run", "-q", q, "-run", "base"}, "give -expect 2"},
 		{[]string{"run", "-q", q, "-run", "base", "-expect", "3"}, "give -expect 2"},
-		{[]string{"run", "-q", q, "-run", "base", "-expect", "2", "-refine", "maybe"}, "-refine must be off or on"},
+		{[]string{"run", "-q", q, "-run", "base", "-expect", "2", "-refine", "maybe"}, "-refine must be off, on, light or live"},
+		{[]string{"run", "-q", q, "-run", "base", "-expect", "2", "-mod-tier", "max"}, "-mod-tier must be quick, standard or deep"},
+		{[]string{"run", "-q", q, "-run", "base", "-expect", "2", "-synth", "v4"}, "-synth must be product or off"},
 		{[]string{"run", "-q", q, "-run", "Base", "-expect", "2"}, "run name"},
 		{[]string{"run", "-q", q, "-run", "base", "-expect", "2", "-tier", "fast"}, "-tier"},
 		{[]string{"run", "-q", q, "-run", "base", "-expect", "2", "-writer", "gemini"}, "-writer"},
