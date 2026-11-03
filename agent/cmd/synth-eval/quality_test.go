@@ -5,6 +5,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"sync"
@@ -415,5 +416,85 @@ func TestScoreSumsTheTwoOrdersPerJudge(t *testing.T) {
 	}
 	if c := runMain(ctx, []string{"score", "-a", "a", "-b", "b", "-name", "s2", "-judges", "gemini", "-expect", "3"}, &out, &errOut); c != exitFlags {
 		t.Fatalf("an unknown judge: %d", c)
+	}
+}
+
+func TestPairsHideTheRunsAndPicksMapBack(t *testing.T) {
+	root := useRoot(t)
+	for _, run := range []string{"a", "b"} {
+		dir, _ := runDir(run)
+		for i, id := range []string{"g-1", "g-2", "g-3"} {
+			r := taskRecord(id, i+1)
+			r.Synth.Text = strings.ToUpper(run) + "-TEXT " + id
+			if err := saveRecord(dir, r); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	sides := []string{pickA, pickB, pickA}
+	n := 0
+	old := coin
+	coin = func() string { n++; return sides[n-1] }
+	t.Cleanup(func() { coin = old })
+	var out, errOut bytes.Buffer
+	if c := runMain(context.Background(), []string{"pairs", "-a", "a", "-b", "b", "-name", "ab"}, &out, &errOut); c != exitOK {
+		t.Fatalf("pairs %d %s", c, errOut.String())
+	}
+	var set PairSet
+	if err := readJSON(root+"/_pairs/ab/pairs.json", &set); err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := json.Marshal(set)
+	if len(set.Pairs) != 3 || set.Pairs[0].Left != "A-TEXT g-1" || set.Pairs[1].Left != "B-TEXT g-2" || set.Pairs[1].Right != "A-TEXT g-2" ||
+		strings.Contains(string(raw), "\"id\":\"g-") || strings.Contains(string(raw), "\"a\":") {
+		t.Fatalf("page data %s", raw)
+	}
+	if c := runMain(context.Background(), []string{"pairs", "-a", "a", "-b", "b", "-name", "ab"}, &out, &errOut); c != exitFlags {
+		t.Fatal("a pair set was made twice")
+	}
+	// A scoring of the same runs: codex picked B on g-1 and g-2.
+	sd, _ := scoreDir("s")
+	for _, id := range []string{"g-1", "g-2"} {
+		v := func(order string) Verdict {
+			return Verdict{Judge: "codex", Order: order, Picks: map[string]string{"intent": pickB, "readable": pickB, "quality": pickB, "concise": pickB, "overall": pickB}}
+		}
+		if err := saveJSON(sd+"/q-"+id+".json", ScoreRec{V: 1, Question: Question{ID: id}, A: "a", B: "b", Tier: core.TierDeep, At: id, Verdicts: []Verdict{v(orderAB), v(orderBA)}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	dir := t.TempDir()
+	in := writeFile(t, dir, "picks.json", `[
+		{"id":"p01","overall":"left","intent":"right","note":"1이 짧고 좋다"},
+		{"id":"p02","overall":"left"},
+		{"id":"p03","overall":"same"},
+		{"id":"p04x","overall":""}
+	]`)
+	out.Reset()
+	if c := runMain(context.Background(), []string{"picks", "-name", "ab", "-in", in, "-score", "s"}, &out, &errOut); c != exitFlags || !strings.Contains(errOut.String(), `pair "p04x"`) {
+		t.Fatalf("an unknown pair: %d %s", c, errOut.String())
+	}
+	in = writeFile(t, dir, "picks.json", `[
+		{"id":"p01","overall":"left","intent":"right","note":"1이 짧고 좋다"},
+		{"id":"p02","overall":"left"},
+		{"id":"p03","overall":"same"}
+	]`)
+	if c := runMain(context.Background(), []string{"picks", "-name", "ab", "-in", in, "-score", "s"}, &out, &errOut); c != exitOK {
+		t.Fatalf("picks %d %s", c, errOut.String())
+	}
+	for _, want := range []string{
+		"A = a, B = b; the person picked 3 of 3 pairs",
+		"overall         1      1      1",
+		"intent          0      1      0",
+		"codex picked as the person did: 1/2",
+		"g-1          overall A, intent B · 1이 짧고 좋다",
+		"g-2          overall B",
+	} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("picks lack %q:\n%s", want, out.String())
+		}
+	}
+	bad := writeFile(t, dir, "bad.json", `[{"id":"p01","overall":"top"}]`)
+	if c := runMain(context.Background(), []string{"picks", "-name", "ab", "-in", bad}, &out, &errOut); c != exitFlags {
+		t.Fatalf("a bad side: %d", c)
 	}
 }

@@ -18,6 +18,8 @@
 //	synth-eval refine    -q FILE[,FILE] [-only ID,ID] -run NAME [-tier quick] [-writer claude] [-form fixed|live] [-resume] -expect N
 //	synth-eval score     -a RUN -b RUN -name NAME [-only ID,ID] [-judges claude,codex] [-tier deep] [-resume] -expect N
 //	synth-eval scores    -name NAME
+//	synth-eval pairs     -a RUN -b RUN -name NAME [-only ID,ID]
+//	synth-eval picks     -name NAME -in FILE [-score NAME]
 //
 // resynth and the commands after it are the quality experiments (C4, E0 in
 // "마일스톤 C" of docs/phase2-plan.md): they make their own writer calls.
@@ -77,6 +79,10 @@ const usage = `synth-eval measures the combined answer (milestone C). A run uses
             each judge picks the better combined answer twice, the order swapped (2 calls a judge and question)
   scores    -name NAME
             prints a scoring
+  pairs     -a RUN -b RUN -name NAME [-only ID,ID]
+            the blind A/B page's data: sides drawn at random, kept apart in key.json (no AI call)
+  picks     -name NAME -in FILE [-score NAME]
+            the person's picks from the page, mapped back to the runs; with -score, how far the judges agree
 A question file has one question per line; blank lines and lines starting with # are skipped.
 -expect is the number of questions the run will ask (each uses the PC's AIs up to 10 times, 12 with -refine on).
 `
@@ -108,6 +114,10 @@ func runMain(ctx context.Context, args []string, out, errOut io.Writer) int {
 		return scoreCmd(ctx, args[1:], out, errOut)
 	case "scores":
 		return scoresCmd(args[1:], out, errOut)
+	case "pairs":
+		return pairsCmd(args[1:], out, errOut)
+	case "picks":
+		return picksCmd(args[1:], out, errOut)
 	}
 	fmt.Fprint(errOut, usage)
 	return exitFlags
