@@ -55,12 +55,15 @@ var askConfig = func() string {
 	return string(b)
 }()
 
-// defaultTiers are the 2026-10-29 tier models (phase2-plan 4). The effort
-// is OpenCode's variant ("model#variant"); Kimi K3.1 Pro has no medium.
+// defaultTiers are the tier models (phase2-plan 4: 2026-10-29, deep
+// 2026-11-04). The effort is OpenCode's variant ("model#variant"). Deep was
+// Kimi K3.1 Pro until the person found it used too much (11-04); DeepSeek
+// V4 Pro, the latest Pro (v4.1 is Flash only), has no low or medium, so
+// high, as for Kimi.
 var defaultTiers = map[string]core.AskModel{
 	core.TierQuick:    {Model: "opencode-go/deepseek-v4.1-flash", Effort: "high"},
 	core.TierStandard: {Model: "opencode-go/deepseek-v4.1-flash", Effort: "max"},
-	core.TierDeep:     {Model: "opencode-go/kimi-k3.1-pro", Effort: "high"},
+	core.TierDeep:     {Model: "opencode-go/deepseek-v4-pro", Effort: "high"},
 }
 
 var (

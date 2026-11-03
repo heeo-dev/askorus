@@ -92,10 +92,11 @@ Phase 2가 다른 AI에게 쓰는 것은 '질문 한 번(ask)'뿐이다. 명령 
 | --- | --- | --- | --- |
 | 빠르게 | `--model haiku --effort medium` | `-m gpt-6-luna -c model_reasoning_effort="medium"` | `-m opencode-go/deepseek-v4.1-flash#high` |
 | **기본** | `--model sonnet --effort medium` (Sonnet 5.5) | `-m gpt-6.1-terra -c model_reasoning_effort="medium"` | `-m opencode-go/deepseek-v4.1-flash#max` |
-| 깊게 | `--model opus --effort medium` | `-m gpt-6.1-sol -c model_reasoning_effort="medium"` | `-m opencode-go/kimi-k3.1-pro#high`(medium이 없어 high로, 사용자 결정) |
+| 깊게 | `--model opus --effort medium` | `-m gpt-6.1-sol -c model_reasoning_effort="medium"` | `-m opencode-go/deepseek-v4-pro#high`(11-04 사용자 결정, 전에는 `kimi-k3.1-pro#high`) |
 
 - 2026-10-29 사용자 결정: 단계는 모델로 나누고 생각 수준은 medium으로 맞춘다. OpenCode만 DeepSeek high / DeepSeek max / Kimi K3.1 Pro로.
 - OpenCode 변형(`#이름`)은 모델마다 다르다. Kimi K3.1 Pro는 `low`·`high`·`max`와 변형 없음만 되고 `medium`·`xhigh`는 "Variant unavailable"로 거절된다(짧은 질문으로 하나씩 시험). 변형 없이 부르면 OpenCode가 정한 기본 수준으로 돈다.
+- 2026-11-04 사용자 결정: OpenCode '깊게'의 Kimi K3.1 Pro가 사용량을 너무 많이 써서 DeepSeek의 최신 Pro인 V4 Pro(`opencode-go/deepseek-v4-pro`, v4.1은 Flash만 있음)로 바꾼다. V4 Pro는 `high`·`max`와 변형 없음만 되고 `low`·`medium`은 거절된다(짧은 질문으로 시험, high 3.9초). Kimi 때처럼 `high`를 쓴다. 이 PC의 agent.json에는 단계 덮어쓰기가 없어 기본값이 바로 쓰인다.
 
 - Codex의 Luna는 6.1이 없어 `gpt-6-luna`(최신)를 쓴다. 모델 이름은 `~/.codex/models_cache.json`과 `opencode models`로 확인했다.
 - 단계와 모델은 에이전트 설정으로 바꿀 수 있게 하고, 앱에서는 질문마다 고른다(5절 P2-2).
