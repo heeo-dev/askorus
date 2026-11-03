@@ -176,6 +176,12 @@ func TestMetricsShapeLatinExtrasAndTimes(t *testing.T) {
 	if got := latinShare("서울 latency 지연"); got <= 0.3 || got >= 0.7 {
 		t.Fatalf("latin share %v", got)
 	}
+	// Refined: the parts waited for the spec, so their time holds it; it is counted once.
+	r.Refine = &RefineRec{Status: "done", Ms: 3000, Kind: "number", Depth: "short"}
+	if m := metricsOf(r); m.AskMs != 2000 || m.RefineMs != 3000 || m.TotalMs != 34000 || m.Kind != "number" {
+		t.Fatalf("refined times %+v", m)
+	}
+	r.Refine = nil
 	// No combined answer: only the times.
 	r.Synth = &SynthRec{Status: "failed", Error: "judge_timeout"}
 	if m := metricsOf(r); m.SynthOK || m.Chars != 0 || m.SynthStatus != "failed" {

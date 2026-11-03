@@ -23,7 +23,7 @@ type Metrics struct {
 	RefineMs int64  `json:"refineMs"` // the moderator's time before the AIs answered (C2)
 	Kind     string `json:"kind,omitempty"`
 	Depth    string `json:"depth,omitempty"`
-	AskMs    int64  `json:"askMs"` // the slowest answer done
+	AskMs    int64  `json:"askMs"` // the slowest answer done, refining taken out
 	// CompareMs is from the last answer to the judges' end, SynthMs the
 	// writer's own time; TotalMs is refining and the three in a row.
 	CompareMs int64 `json:"compareMs"`
@@ -92,6 +92,9 @@ func metricsOf(r Record) Metrics {
 	}
 	if rf := r.Refine; rf != nil {
 		m.RefineMs, m.Kind, m.Depth = rf.Ms, rf.Kind, rf.Depth
+		// Every AI waits for the spec inside its part, so a part's time
+		// holds refining: take it out, to keep AskMs the answering alone.
+		m.AskMs = max(0, m.AskMs-rf.Ms)
 	}
 	m.TotalMs = m.RefineMs + m.AskMs + m.CompareMs + m.SynthMs
 	return m

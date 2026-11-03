@@ -120,7 +120,7 @@ func TestTheAgentPipelineRefinesFirst(t *testing.T) {
 			t.Errorf("%s was asked without the template", c.Role)
 		}
 	}
-	if m := metricsOf(rec); m.Kind != "compare" || m.TotalMs < m.RefineMs || !m.SynthOK {
+	if m := metricsOf(rec); m.Kind != "compare" || m.TotalMs != m.RefineMs+m.AskMs+m.CompareMs+m.SynthMs || !m.SynthOK {
 		t.Fatalf("metrics %+v", m)
 	}
 }
