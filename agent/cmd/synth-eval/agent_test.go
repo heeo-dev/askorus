@@ -114,13 +114,18 @@ func TestTheAgentPipelineRefinesFirst(t *testing.T) {
 	if rf == nil || rf.Status != "done" || rf.Agent != "claude" || rf.Kind != "compare" || rf.Depth != "short" || rf.Template == "" {
 		t.Fatalf("refine %+v", rf)
 	}
+	asked := 0
 	for _, c := range fakecli.Calls(t) {
-		if strings.HasPrefix(c.Stdin, "[Asksemble") || c.Stdin == "" {
+		if !strings.HasPrefix(c.Stdin, "[Asksemble] ") {
 			continue // the moderator, judges, writer
 		}
+		asked++
 		if !strings.Contains(c.Stdin, rf.Template) {
 			t.Errorf("%s was asked without the template", c.Role)
 		}
+	}
+	if asked != 3 {
+		t.Fatalf("%d AIs asked", asked)
 	}
 	if m := metricsOf(rec); m.Kind != "compare" || m.TotalMs != m.RefineMs+m.AskMs+m.CompareMs+m.SynthMs || !m.SynthOK {
 		t.Fatalf("metrics %+v", m)
@@ -190,5 +195,70 @@ func TestTheRecordKeepsTheWritersTaskForResynth(t *testing.T) {
 				t.Fatal("an unknown writer wrote")
 			}
 		})
+	}
+}
+
+// C4 E3's arms on the fakes: light refines first with the moderator's
+// spec command and sends the light format; live's moderator gives no
+// usable lines here (the fake writes a combined answer), so the question
+// goes as written; -synth off writes no combined answer but keeps the task.
+func TestTheAgentPipelineLightAndLiveFormats(t *testing.T) {
+	exes := fakecli.Install(t)
+	fakecli.SetAnswers(t, map[string]string{
+		fakecli.RoleClaude:   "가격은 NUM p=1입니다. 높이는 NUM h=5입니다.",
+		fakecli.RoleCodex:    "가격은 NUM p=2입니다. 높이는 NUM h=5입니다.",
+		fakecli.RoleOpenCode: "높이는 NUM h=5입니다. 오늘은 맑습니다.",
+	})
+	root := t.TempDir()
+	claudeDir := filepath.Join(root, "claude")
+	if err := os.MkdirAll(filepath.Join(claudeDir, "projects"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	adapters := []core.Adapter{
+		claude.New(claude.Options{ClaudeDir: claudeDir, ClaudePath: exes[fakecli.RoleClaude]}),
+		codex.New(codex.Options{Path: exes[fakecli.RoleCodex], SchemaDir: filepath.Join(root, "agent")}),
+		opencode.New(opencode.Options{Path: exes[fakecli.RoleOpenCode]}),
+	}
+	ctx := context.Background()
+	p, err := pipelineFrom(ctx, adapters, filepath.Join(root, "ask"), config.JudgeConfig{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer p.Close()
+	q := Question{ID: "g-1", Text: "이 상자의 가격과 높이는 얼마인가요?"}
+	rec, err := p.Ask(ctx, q, RunInfo{Tier: core.TierQuick, Writer: "claude", Refine: refineLight, ModTier: core.TierQuick, Synth: synthOff})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rf := rec.Refine
+	want := lightTemplate(judge.QuestionSpec{Kind: "compare", Depth: "short", Language: "ko"})
+	if rf == nil || rf.Status != "done" || !rf.Before || rf.Kind != "compare" || rf.Template != want || want == "" {
+		t.Fatalf("refine %+v, want template %q", rf, want)
+	}
+	asked := 0
+	for _, c := range fakecli.Calls(t) {
+		if !strings.HasPrefix(c.Stdin, "[Asksemble] ") {
+			continue // the moderator, judges, writer
+		}
+		asked++
+		if !strings.Contains(c.Stdin, q.Text+"\n\n"+want) {
+			t.Errorf("%s was asked without the light format", c.Role)
+		}
+	}
+	if asked != 3 || rec.Synth != nil || rec.Task == nil || rec.Task.Spec == nil || rec.Task.Spec.Kind != "compare" || rec.Compare == nil || rec.Compare.Status != "done" {
+		t.Fatalf("asked %d, synth %+v, task %+v, compare %+v", asked, rec.Synth, rec.Task, rec.Compare)
+	}
+	if m := metricsOf(rec); m.AskMs == 0 || m.RefineMs != rf.Ms {
+		t.Fatalf("metrics %+v", m)
+	}
+	rec, err = p.Ask(ctx, q, RunInfo{Tier: core.TierQuick, Writer: "claude", Refine: refineLive, ModTier: core.TierQuick})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rf := rec.Refine; rf == nil || rf.Status != "failed" || rf.Error != core.ErrCodeJudgeBadOutput || !rf.Before {
+		t.Fatalf("live refine %+v", rf)
+	}
+	if rec.Synth == nil || rec.Synth.Status != "done" || rec.Task.Spec != nil {
+		t.Fatalf("synth %+v, task spec %+v", rec.Synth, rec.Task.Spec)
 	}
 }

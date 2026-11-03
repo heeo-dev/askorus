@@ -94,7 +94,9 @@ func metricsOf(r Record) Metrics {
 		m.RefineMs, m.Kind, m.Depth = rf.Ms, rf.Kind, rf.Depth
 		// Every AI waits for the spec inside its part, so a part's time
 		// holds refining: take it out, to keep AskMs the answering alone.
-		m.AskMs = max(0, m.AskMs-rf.Ms)
+		if !rf.Before {
+			m.AskMs = max(0, m.AskMs-rf.Ms)
+		}
 	}
 	m.TotalMs = m.RefineMs + m.AskMs + m.CompareMs + m.SynthMs
 	return m

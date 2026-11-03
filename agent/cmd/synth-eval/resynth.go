@@ -24,6 +24,7 @@ import (
 // name: product is the agent's own (synth-v2, or synth-v3 with a spec).
 var synthVariants = map[string]func(judge.SynthTask, string) string{
 	"product": judge.SynthPrompt,
+	"v4":      synthV4, // variants.go
 }
 
 func variantNames() []string {
@@ -153,7 +154,7 @@ func pickRecords(rs []Record, only []string) ([]Record, error) {
 func resynthRecords(ctx context.Context, w writer, src []Record, from string, run RunInfo, prompt func(judge.SynthTask, string) string, dir string, now func() time.Time, out io.Writer) int {
 	for i, r := range src {
 		rec := r
-		rec.Run = RunInfo{Name: run.Name, Tier: r.Run.Tier, Writer: run.Writer, Refine: r.Run.Refine, From: from, SynthTier: run.SynthTier, Synth: run.Synth}
+		rec.Run = RunInfo{Name: run.Name, Tier: r.Run.Tier, Writer: run.Writer, Refine: r.Run.Refine, ModTier: r.Run.ModTier, From: from, SynthTier: run.SynthTier, Synth: run.Synth}
 		rec.Seq, rec.Stop = i+1, ""
 		rec.At = now().UTC().Format(time.RFC3339)
 		rec.Synth = writeSynth(ctx, w, *r.Task, run.Writer, run.SynthTier, prompt)

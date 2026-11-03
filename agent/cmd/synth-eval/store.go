@@ -55,6 +55,9 @@ type RunInfo struct {
 	// Form is how a refine-only run refined: fixed (refine-v1 and the
 	// agent's templates) or live (the moderator writes the format).
 	Form string `json:"form,omitempty"`
+	// ModTier is the moderator's tier for refine light or live (C4 E3);
+	// the agent's own refining (refine on) is always quick.
+	ModTier string `json:"modTier,omitempty"`
 }
 
 // writerLabel names who wrote a run's combined answers and how: the
@@ -83,9 +86,13 @@ type RefineRec struct {
 	Intent   string `json:"intent,omitempty"`
 	Template string `json:"template,omitempty"`
 	// Form are the format lines a live moderator wrote (refine -form live).
-	Form   []string `json:"form,omitempty"`
-	Error  string   `json:"error,omitempty"`
-	Detail string   `json:"detail,omitempty"`
+	Form []string `json:"form,omitempty"`
+	// Before is set when the question was refined before any AI was asked
+	// (refine light or live, C4 E3): the answers' times then hold none of
+	// it. The agent's refining runs inside each AI's part.
+	Before bool   `json:"before,omitempty"`
+	Error  string `json:"error,omitempty"`
+	Detail string `json:"detail,omitempty"`
 }
 
 // AnswerRec is one AI's answer.

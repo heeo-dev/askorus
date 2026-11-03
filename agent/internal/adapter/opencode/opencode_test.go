@@ -193,7 +193,7 @@ func TestAskAndFollowUp(t *testing.T) {
 	if got := cs[1].Args; !reflect.DeepEqual(got, []string{"session", "list", "--format", "json", "--standalone"}) || cs[1].PWD != folder {
 		t.Errorf("check = %+v", cs[1])
 	}
-	want = []string{"run", "--standalone", "--format", "json", "--agent", "asksemble-ask", "-m", "opencode-go/kimi-k3.1-pro#high", "--session", res.SessionID}
+	want = []string{"run", "--standalone", "--format", "json", "--agent", "asksemble-ask", "-m", "opencode-go/deepseek-v4-pro#high", "--session", res.SessionID}
 	if got := cs[2].Args; !reflect.DeepEqual(got, want) {
 		t.Errorf("follow-up args = %q", got)
 	}
