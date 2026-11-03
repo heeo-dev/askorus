@@ -83,9 +83,9 @@ type RefineRec struct {
 	Intent   string `json:"intent,omitempty"`
 	Template string `json:"template,omitempty"`
 	// Form are the format lines a live moderator wrote (refine -form live).
-	Form  []string `json:"form,omitempty"`
-	Error string   `json:"error,omitempty"`
-	Detail   string `json:"detail,omitempty"`
+	Form   []string `json:"form,omitempty"`
+	Error  string   `json:"error,omitempty"`
+	Detail string   `json:"detail,omitempty"`
 }
 
 // AnswerRec is one AI's answer.

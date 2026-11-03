@@ -15,6 +15,7 @@
 //	synth-eval run       -q FILE[,FILE] [-only ID,ID] -run NAME [-tier quick] [-writer claude] [-refine off|on] [-resume] -expect N
 //	synth-eval report    -run NAME[,NAME] [-json] [-texts]
 //	synth-eval resynth   -from RUN -run NAME [-only ID,ID] [-tier quick] [-writer claude] [-synth product] [-resume] -expect N
+//	synth-eval refine    -q FILE[,FILE] [-only ID,ID] -run NAME [-tier quick] [-writer claude] [-form fixed|live] [-resume] -expect N
 //
 // resynth and the commands after it are the quality experiments (C4, E0 in
 // "마일스톤 C" of docs/phase2-plan.md): they make their own writer calls.
@@ -67,6 +68,9 @@ const usage = `synth-eval measures the combined answer (milestone C). A run uses
   resynth   -from RUN -run NAME [-only ID,ID] [-tier quick|standard|deep] [-writer claude|codex|opencode]
             [-synth product] [-resume] -expect N
             writes RUN's combined answers again from the same answers and judgments (up to 2 calls each)
+  refine    -q FILE[,FILE] [-only ID,ID] -run NAME [-tier quick|standard|deep] [-writer claude|codex|opencode]
+            [-form fixed|live] [-resume] -expect N
+            asks the moderator only (up to 2 calls a question); report shows refine runs side by side
 A question file has one question per line; blank lines and lines starting with # are skipped.
 -expect is the number of questions the run will ask (each uses the PC's AIs up to 10 times, 12 with -refine on).
 `
@@ -92,6 +96,8 @@ func runMain(ctx context.Context, args []string, out, errOut io.Writer) int {
 		return reportCmd(args[1:], out, errOut)
 	case "resynth":
 		return resynthCmd(ctx, args[1:], out, errOut)
+	case "refine":
+		return refineCmd(ctx, args[1:], out, errOut)
 	}
 	fmt.Fprint(errOut, usage)
 	return exitFlags
@@ -238,6 +244,20 @@ func reportCmd(args []string, out, errOut io.Writer) int {
 			return exitError
 		}
 		runs = append(runs, rs)
+	}
+	refineOnly := 0
+	for _, rs := range runs {
+		if isRefineOnly(rs) {
+			refineOnly++
+		}
+	}
+	if refineOnly > 0 && refineOnly < len(runs) {
+		fmt.Fprintln(errOut, "report refine-only runs apart from runs with answers")
+		return exitFlags
+	}
+	if refineOnly > 0 && !*asJSON {
+		writeRefineReport(out, list, runs)
+		return exitOK
 	}
 	if *asJSON {
 		if err := writeReportJSON(out, list, runs); err != nil {
