@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"os"
 	"slices"
+	"sync"
 	"time"
 
 	"github.com/asksemble/asksemble/agent/internal/adapter/claude"
@@ -113,13 +114,35 @@ func (p *agentPipeline) Versions(ctx context.Context) map[string]string {
 func (p *agentPipeline) Ask(ctx context.Context, q Question, run RunInfo) (Record, error) {
 	ctx, cancel := context.WithTimeout(ctx, questionLimit)
 	defer cancel()
+	// Refining (C2), as POST /v1/runs with refine {agent: writer}: the
+	// first AI to start asks the moderator, all wait for the spec.
+	var refiner *compares.RunRefiner
+	runID := make(chan string, 1)
+	if run.Refine == "on" {
+		var id string
+		var once sync.Once
+		refiner = p.cmp.NewRunRefiner(compares.RefineSpec{Question: q.Text, Asked: p.order, Agent: run.Writer}, func(x compares.Refined) {
+			once.Do(func() { id = <-runID })
+			p.runs.SetRefine(owner, id, x)
+		})
+	}
 	var tasks []runs.Task
 	for _, name := range p.order {
 		asker := p.askers[name]
 		req := core.AskRequest{Folder: p.folder, Prompt: core.AskPrompt(q.Text), Tier: run.Tier}
-		tasks = append(tasks, runs.Task{Agent: name, Ask: func(ctx context.Context) (core.AskResult, error) { return asker.Ask(ctx, req) }})
+		tasks = append(tasks, runs.Task{Agent: name, Ask: func(ctx context.Context) (core.AskResult, error) {
+			if refiner != nil {
+				text, err := refiner.Question(ctx)
+				if err != nil {
+					return core.AskResult{}, err
+				}
+				req.Prompt = core.AskPrompt(text)
+			}
+			return asker.Ask(ctx, req)
+		}})
 	}
 	r, err := p.runs.Start(runs.Spec{Owner: owner, Mode: core.ModeAsk, Tier: run.Tier, Tasks: tasks})
+	runID <- r.ID
 	if err != nil {
 		return Record{}, err
 	}
@@ -139,6 +162,16 @@ func (p *agentPipeline) Ask(ctx context.Context, q Question, run RunInfo) (Recor
 	}
 	answersAt := time.Now()
 	var rec Record
+	if rf := r.Refine; rf != nil {
+		rr := &RefineRec{Status: rf.Status, Agent: rf.Agent, Model: rf.Model, Ms: rf.Ms, Template: rf.Template}
+		if rf.Spec != nil {
+			rr.Kind, rr.Depth, rr.Language, rr.Intent = rf.Spec.Kind, rf.Spec.Depth, rf.Spec.Language, rf.Spec.Intent
+		}
+		if rf.Error != nil {
+			rr.Error, rr.Detail = rf.Error.Code, clip(rf.Error.Message, 300)
+		}
+		rec.Refine = rr
+	}
 	for _, part := range r.Parts {
 		a := AnswerRec{Agent: part.Agent, Model: part.Model, Status: string(part.Status), Ms: part.Ms, In: part.InputTokens, Out: part.OutputTokens, Text: part.Answer}
 		if part.Error != nil {

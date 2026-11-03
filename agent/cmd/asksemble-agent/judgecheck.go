@@ -156,6 +156,8 @@ func judgeLines(st []judgeStatus, off bool) []checkLine {
 		if len(writing) > 0 {
 			add("info", m("when a combined answer is written, the writing AI's company receives the question, every answer with the AIs' names and the comparison's results",
 				"종합 답변을 쓸 때는 쓰는 AI의 회사가 질문, AI 이름이 붙은 모든 답, 비교 결과를 받습니다"))
+			add("info", m("when a question is refined, the moderator's company (one of the AIs asked) receives the question once more, with up to 3 earlier questions",
+				"질문을 정제할 때는 사회자 AI의 회사(질문을 받는 AI 중 하나)가 질문을 한 번 더, 앞 질문 3개까지와 함께 받습니다"))
 		}
 	}
 	add("ok", m("the agent itself sends no request outside this PC", "에이전트가 직접 밖으로 보내는 요청은 없습니다"))
