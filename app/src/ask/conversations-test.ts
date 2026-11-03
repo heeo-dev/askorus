@@ -1,34 +1,92 @@
-// S5c: this run's questions for the drawer and '최근 질문', kept in memory
-// only, at most 50, newest first; grouped by day for the drawer.
+// S5c and milestone B: the conversations for the drawer and '최근 질문',
+// kept on the phone, at most 100, newest first; heads in memory, a whole
+// conversation read when opened; grouped by day for the drawer.
 
 import { act, renderHook } from '@testing-library/react-native';
 
 import { type Conversation, conversations, dayGroups, maxConversations, recentQuestions, useConversations } from './conversations';
+import type { HistoryKV } from './history';
 
 const at = (y: number, m: number, d: number, h = 12) => new Date(y, m - 1, d, h).getTime();
 const conv = (id: string, startedAt: number, title = `question ${id}`): Conversation => ({ id, pcId: 'pc-1', startedAt, title, turns: [] });
+const memory = () => {
+  const mem = new Map<string, string>();
+  const kv: HistoryKV = {
+    get: async (k) => mem.get(k) ?? null,
+    set: async (k, v) => void mem.set(k, v),
+    remove: async (k) => void mem.delete(k),
+    keys: async () => [...mem.keys()],
+  };
+  return { mem, kv };
+};
 
-beforeEach(() => conversations.clear());
-
-test('save adds or replaces, newest first, at most 50', () => {
-  conversations.save(conv('a', 1000));
-  conversations.save(conv('b', 3000));
-  conversations.save(conv('c', 2000));
+test('save adds or replaces, newest first, at most 100, and keeps it on the phone', async () => {
+  const { kv } = memory();
+  await conversations.init(kv);
+  await conversations.save(conv('a', 1000));
+  await conversations.save(conv('b', 3000));
+  await conversations.save(conv('c', 2000));
   expect(conversations.list().map((c) => c.id)).toEqual(['b', 'c', 'a']);
 
   // Saving one again replaces it (its turns grew), and it keeps its place by time.
-  conversations.save({ ...conv('a', 1000), title: 'changed' });
+  await conversations.save({ ...conv('a', 1000), title: 'changed' });
   expect(conversations.list().map((c) => c.id)).toEqual(['b', 'c', 'a']);
-  expect(conversations.get('a')?.title).toBe('changed');
+  expect((await conversations.load('a'))?.title).toBe('changed');
 
-  for (let i = 0; i < 60; i++) conversations.save(conv(`n${i}`, 10000 + i));
+  for (let i = 0; i < 110; i++) await conversations.save(conv(`n${i}`, 10000 + i));
   expect(conversations.list()).toHaveLength(maxConversations);
-  expect(maxConversations).toBe(50);
-  expect(conversations.list()[0].id).toBe('n59');
-  expect(conversations.get('a')).toBeUndefined(); // the oldest went
+  expect(maxConversations).toBe(100);
+  expect(conversations.list()[0].id).toBe('n109');
+  expect(await conversations.load('a')).toBeUndefined(); // the oldest went, from the phone too
 
-  conversations.remove('n59');
-  expect(conversations.list()[0].id).toBe('n58');
+  await conversations.remove('n109');
+  expect(conversations.list()[0].id).toBe('n108');
+  expect(await conversations.load('n109')).toBeUndefined();
+});
+
+test('after the app starts again, init brings the kept heads back; a whole conversation is read when opened', async () => {
+  const { kv } = memory();
+  await conversations.init(kv);
+  const turn = { id: 't1', question: 'q', req: { mode: 'ask', prompt: 'q', tier: 'quick', agents: [{ agent: 'claude' }], clientRunId: 't1' }, agents: ['claude'] };
+  await conversations.save({ ...conv('a', 1000, 'first'), turns: [turn as never] });
+  await conversations.save(conv('b', 2000, 'second'));
+
+  conversations.reset(); // the app is closed
+  expect(conversations.list()).toEqual([]);
+  await conversations.init(kv);
+  expect(conversations.list()).toEqual([
+    { id: 'b', startedAt: 2000, title: 'second' },
+    { id: 'a', startedAt: 1000, title: 'first' },
+  ]);
+  expect((await conversations.load('a'))?.turns).toEqual([turn]);
+});
+
+test('removing the current conversation drops it: the Ask screen takes it once, and a late save does not bring it back', async () => {
+  const { kv } = memory();
+  await conversations.init(kv);
+  await conversations.save(conv('a', 1000));
+  conversations.setCurrent({ id: 'a', startedAt: 1000, title: 'question a' });
+  await conversations.remove('a');
+  expect(conversations.current()).toBeNull();
+  expect(conversations.takeDropped()).toBe('a');
+  expect(conversations.takeDropped()).toBeNull();
+  await conversations.save(conv('a', 1000)); // a save still on its way
+  expect(conversations.list()).toEqual([]);
+  expect(await conversations.load('a')).toBeUndefined();
+});
+
+test('remove all empties the phone and drops the current one', async () => {
+  const { mem, kv } = memory();
+  await conversations.init(kv);
+  await conversations.save(conv('a', 1000));
+  await conversations.save(conv('b', 2000));
+  mem.set('conv.v1.orphan', '{}'); // written once without its list entry
+  conversations.setCurrent({ id: 'c', startedAt: 3000, title: 'now' });
+  await conversations.removeAll();
+  expect(conversations.list()).toEqual([]);
+  expect(conversations.takeDropped()).toBe('c');
+  expect([...mem.keys()]).toEqual(['index.v1']);
+  expect(mem.get('index.v1')).toBe('[]');
 });
 
 test('the drawer groups by day: today, yesterday, then the date; the current one first', () => {
@@ -62,12 +120,12 @@ test('yesterday across a month and a year', () => {
   expect(groups.map((g) => g.label)).toEqual(['어제', '12월 30일']);
 });
 
-test('recent questions are distinct first questions, newest first, the current one too', () => {
+test('recent questions are distinct first questions, newest first, the current one too', async () => {
   expect(recentQuestions()).toEqual([]);
-  conversations.save(conv('a', 1000, '서울 인구는?'));
-  conversations.save(conv('b', 2000, '  서울 인구는?  '));
-  conversations.save(conv('c', 3000, '커피는 하루에 몇 잔?'));
-  conversations.save(conv('d', 4000, '에베레스트 높이는?'));
+  await conversations.save(conv('a', 1000, '서울 인구는?'));
+  await conversations.save(conv('b', 2000, '  서울 인구는?  '));
+  await conversations.save(conv('c', 3000, '커피는 하루에 몇 잔?'));
+  await conversations.save(conv('d', 4000, '에베레스트 높이는?'));
   expect(recentQuestions()).toEqual(['에베레스트 높이는?', '커피는 하루에 몇 잔?', '서울 인구는?']);
   expect(recentQuestions(2)).toEqual(['에베레스트 높이는?', '커피는 하루에 몇 잔?']);
   // Room for a fourth: the same question asked twice is still one (TEST-2; the screen keys rows by question).
@@ -76,21 +134,21 @@ test('recent questions are distinct first questions, newest first, the current o
   expect(recentQuestions(1)).toEqual(['전기차 배터리 수명은?']);
 });
 
-test('an open request is taken once', () => {
-  conversations.save(conv('a', 1000));
+test('an open request is taken once', async () => {
+  await conversations.save(conv('a', 1000));
   expect(conversations.takeOpenRequest()).toBeNull();
   conversations.requestOpen('a');
   expect(conversations.takeOpenRequest()).toBe('a');
   expect(conversations.takeOpenRequest()).toBeNull();
   // Removing the conversation drops a request for it.
   conversations.requestOpen('a');
-  conversations.remove('a');
+  await conversations.remove('a');
   expect(conversations.takeOpenRequest()).toBeNull();
 });
 
 test('screens see the list, the current head and the request change', async () => {
   const { result } = await renderHook(() => useConversations());
-  expect(result.current).toEqual({ list: [], current: null, openRequest: null });
+  expect(result.current).toEqual({ list: [], current: null, openRequest: null, dropped: null });
   await act(async () => conversations.save(conv('a', 1000)));
   expect(result.current.list.map((c) => c.id)).toEqual(['a']);
   await act(async () => conversations.setCurrent({ id: 'b', startedAt: 2000, title: 'q' }));
@@ -99,6 +157,6 @@ test('screens see the list, the current head and the request change', async () =
   expect(result.current.openRequest).toBe('a');
   await act(async () => void conversations.takeOpenRequest());
   expect(result.current.openRequest).toBeNull();
-  await act(async () => conversations.clear());
-  expect(result.current).toEqual({ list: [], current: null, openRequest: null });
+  await act(async () => conversations.reset());
+  expect(result.current).toEqual({ list: [], current: null, openRequest: null, dropped: null });
 });

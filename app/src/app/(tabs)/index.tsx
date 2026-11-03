@@ -17,7 +17,7 @@ import * as Clipboard from 'expo-clipboard';
 import * as Crypto from 'expo-crypto';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Keyboard, Linking, Pressable, ScrollView, type ScrollViewInstance, StyleSheet, Text, View } from 'react-native';
+import { AppState, Keyboard, Linking, Pressable, ScrollView, type ScrollViewInstance, StyleSheet, Text, View } from 'react-native';
 
 import { agentName } from '@/api/agents';
 import type { AgentClient } from '@/api/client';
@@ -139,12 +139,39 @@ export default function Ask() {
     [],
   );
 
-  // 'New question': stop following everything (the PC is asked to stop the
-  // comparisons still running) and keep the conversation in this run's history.
-  const fresh = useCallback(() => {
-    stopAll(pcRef.current?.client, turnsRef.current, follows.current);
+  // The current conversation is kept on the phone as it changes (milestone
+  // B): at most about once a second, and at once when the app goes to the
+  // background or another conversation takes its place.
+  const pending = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const keepNow = useCallback(() => {
+    if (pending.current) clearTimeout(pending.current);
+    pending.current = null;
     const h = head.current;
     if (h && turnsRef.current.length) conversations.save({ ...h, turns: turnsRef.current });
+  }, []);
+  useEffect(() => {
+    if (!head.current || !turns.length || pending.current) return;
+    pending.current = setTimeout(keepNow, 1000);
+  }, [turns, keepNow]);
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s !== 'active') keepNow();
+    });
+    return () => {
+      sub.remove();
+      keepNow();
+    };
+  }, [keepNow]);
+
+  // 'New question': stop following everything (the PC is asked to stop the
+  // comparisons still running) and keep the conversation in the history;
+  // a removed one (drop) is not kept.
+  const fresh = useCallback((drop = false) => {
+    stopAll(pcRef.current?.client, turnsRef.current, follows.current);
+    if (drop) {
+      if (pending.current) clearTimeout(pending.current);
+      pending.current = null;
+    } else keepNow();
     head.current = null;
     conversations.setCurrent(null);
     turnsRef.current = [];
@@ -153,7 +180,7 @@ export default function Ask() {
     setUI({});
     setSheet(null);
     setTo('all');
-  }, []);
+  }, [keepNow]);
 
   // The current PC answers; its info says which AIs can.
   useEffect(() => {
@@ -188,7 +215,7 @@ export default function Ask() {
   // the PC does it once), so nothing spins for ever.
   const reopen = useCallback(
     async (id: string) => {
-      const c = conversations.get(id);
+      const c = await conversations.load(id);
       if (!c) return;
       fresh();
       head.current = { id: c.id, pcId: c.pcId, startedAt: c.startedAt, title: c.title };
@@ -217,6 +244,13 @@ export default function Ask() {
     const id = conversations.takeOpenRequest();
     if (id) reopen(id);
   }, [convs.openRequest, reopen]);
+
+  // The conversation on screen was removed (drawer or Settings): start afresh.
+  useEffect(() => {
+    if (!convs.dropped) return;
+    const id = conversations.takeDropped();
+    if (id && head.current?.id === id) fresh(true);
+  }, [convs.dropped, fresh]);
 
   useEffect(() => {
     const current = follows.current;
@@ -452,7 +486,7 @@ export default function Ask() {
     </>
   );
 
-  const header = <Header entrance="ask" right={turns.length ? <IconButton name="compose" label={t('ask.new')} onPress={fresh} /> : undefined} />;
+  const header = <Header entrance="ask" right={turns.length ? <IconButton name="compose" label={t('ask.new')} onPress={() => fresh()} /> : undefined} />;
 
   if (pcs.list === null) {
     return <View style={s.screen}>{header}</View>;
