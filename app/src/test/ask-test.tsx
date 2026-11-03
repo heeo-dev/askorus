@@ -93,7 +93,7 @@ test('the empty screen asks what to ask and says where a question goes', async (
   expect(screen.queryByText(/company receives/)).toBeNull();
   expect(screen.queryByText('Recent questions')).toBeNull();
   expect(screen.getByRole('button', { name: 'AIs to answer: 3 (Claude, Codex, OpenCode). Pick' })).toBeTruthy();
-  expect(screen.getByRole('radio', { name: 'Standard' })).toBeChecked();
+  expect(screen.getByRole('button', { name: 'Tier: Standard. Pick' })).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Ask' })).toBeDisabled();
   // No question yet: no New question button.
   expect(screen.queryByRole('button', { name: 'New question' })).toBeNull();
@@ -144,7 +144,16 @@ test('the AI picker turns AIs on and off and picks a model; they and the tier go
   await waitFor(() => expect(screen.queryByTestId('ai-sheet')).toBeNull());
 
   expect(screen.getByRole('button', { name: 'AIs to answer: 2 (Claude, OpenCode). Pick' })).toBeTruthy();
+  // The tier chip opens the tier sheet (#16): each tier with the models of
+  // the AIs that are on and follow it (Claude has its own model now).
+  await user.press(screen.getByRole('button', { name: 'Tier: Standard. Pick' }));
+  expect(await screen.findByRole('header', { name: 'Tier' })).toBeTruthy();
+  expect(screen.getByRole('radio', { name: 'Standard' })).toBeChecked();
+  expect(screen.getByText('OpenCode opencode-deep')).toBeTruthy();
+  expect(screen.getByText('OpenCode opencode-quick')).toBeTruthy();
   await user.press(screen.getByRole('radio', { name: 'Deep' }));
+  await waitFor(() => expect(screen.queryByTestId('tier-sheet')).toBeNull());
+  expect(screen.getByRole('button', { name: 'Tier: Deep. Pick' })).toBeTruthy();
   await ask(user, 'q1');
   expect(await screen.findByText('opencode says: q1')).toBeTruthy();
   expect(agent.runRequests()[0]).toMatchObject({ tier: 'deep', agents: [{ agent: 'claude', model: 'opus' }, { agent: 'opencode' }] });
@@ -154,7 +163,7 @@ test('the AI picker turns AIs on and off and picks a model; they and the tier go
   await r.unmount();
   const user2 = userEvent.setup();
   await renderRouter(appDir, { initialUrl: '/' });
-  expect(await screen.findByRole('radio', { name: 'Deep' })).toBeChecked();
+  expect(await screen.findByRole('button', { name: 'Tier: Deep. Pick' })).toBeTruthy();
   await user2.press(screen.getByRole('button', { name: 'AIs to answer: 2 (Claude, OpenCode). Pick' }));
   expect(await screen.findByRole('switch', { name: 'Codex, codex-deep' })).not.toBeChecked();
   await user2.longPress(screen.getByRole('switch', { name: 'Claude, opus' }));
@@ -404,7 +413,7 @@ test('in Korean the screen reads in Korean', async () => {
   expect(await screen.findByRole('header', { name: '무엇을 물어볼까요?' })).toBeTruthy();
   expect(screen.getByText('질문 하나를 켜 둔 AI 모두에게 한 번에 묻습니다.')).toBeTruthy();
   expect(screen.getByRole('button', { name: '답할 AI 3개: Claude, Codex, OpenCode. 고르기' })).toBeTruthy();
-  expect(screen.getByRole('radio', { name: '기본' })).toBeChecked();
+  expect(screen.getByRole('button', { name: '단계: 기본. 고르기' })).toBeTruthy();
   await user.type(screen.getByLabelText(t('ask.placeholder')), 'q');
   await user.press(screen.getByRole('button', { name: '묻기' }));
   await screen.findByText('opencode says: q');

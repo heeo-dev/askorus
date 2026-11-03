@@ -1,23 +1,25 @@
 // Where a question is written (S5c). Composer is the empty Ask screen's
 // box (F-Ask-Empty): the question, the AIs that answer (a pile that opens
-// the AI picker), the tier and the send button. FollowBar is the bar under
+// the AI picker), the tier (one chip that opens the tier sheet, #16) and
+// the send button. FollowBar is the bar under
 // a conversation (F-Ask-Answering, F-Followup-One): a follow-up, its send
 // button, and the 'only {name}' chip when it goes to one AI. Both sit at
 // the bottom of the screen and lift themselves over the keyboard.
 //
 // S5c review: the board is 411 dp wide. Narrower (or with a larger system
 // font) the toolbar packs closer: no count beside the pile (its label still
-// says it), tighter tier pills and pile button; past that the tier row
-// gives way, so the send button never leaves the box (UX-3). The follow-up
-// grows with what is written, up to about five lines (UX-7).
+// says it), a tighter pile button; past that the tier chip gives way, so
+// the send button never leaves the box (UX-3). The tier was three pills
+// whose names were cut at 360 dp (#16); one chip with the picked tier
+// fits, and leaves room for more tools. The follow-up grows with what is
+// written, up to about five lines (UX-7).
 
 import { Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 
-import { tiers, type Tier } from '@/api/types';
+import type { Tier } from '@/api/types';
 import { t } from '@/i18n';
 
 import { Avatar, AvatarPile } from './Avatar';
-import { Segment } from './controls';
 import { Icon } from './Icon';
 import { useKeyboardInset, useSafeInsets } from './keyboard';
 import { themed, type Theme, useTheme } from './theme';
@@ -56,7 +58,7 @@ export function Composer({
   pickLabel,
   onPickAIs,
   tier,
-  onTier,
+  onPickTier,
 }: {
   value: string;
   onChangeText: (s: string) => void;
@@ -67,7 +69,7 @@ export function Composer({
   pickLabel: string;
   onPickAIs: () => void;
   tier: Tier;
-  onTier: (t: Tier) => void;
+  onPickTier: () => void;
 }) {
   const th = useTheme();
   const s = styles(th);
@@ -98,7 +100,18 @@ export function Composer({
           <Icon name="chevronDown" size={14} color={th.textSub} />
         </Pressable>
         <View style={s.divider} />
-        <Segment options={tiers} value={tier} onChange={onTier} labelOf={(x) => t(`ask.tier.${x}`)} look="tier" label={t('ask.tierLabel')} dense={compact} shrink />
+        <Pressable
+          onPress={onPickTier}
+          accessibilityRole="button"
+          accessibilityLabel={t('ask.tierPick', { tier: t(`ask.tier.${tier}`) })}
+          hitSlop={{ top: 6, bottom: 6 }}
+          style={({ pressed }) => [s.tier, pressed && { opacity: 0.8 }]}
+        >
+          <Text style={s.tierText} numberOfLines={1}>
+            {t(`ask.tier.${tier}`)}
+          </Text>
+          <Icon name="chevronDown" size={14} color={th.onChipOn} />
+        </Pressable>
         <View style={s.grow} />
         <SendButton th={th} canSend={canSend} onSend={onSend} label={t('ask.send')} />
       </View>
@@ -191,6 +204,19 @@ const styles = themed((th) =>
     pickCompact: { paddingHorizontal: 4 },
     count: { fontSize: 14, fontWeight: '600', lineHeight: 20, color: th.text },
     divider: { width: 1, height: 20, marginHorizontal: 4, backgroundColor: th.border },
+    tier: {
+      height: 32,
+      flexShrink: 1,
+      minWidth: 0,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      paddingLeft: 12,
+      paddingRight: 10,
+      borderRadius: 16,
+      backgroundColor: th.chipOn,
+    },
+    tierText: { flexShrink: 1, fontSize: 14, fontWeight: '600', lineHeight: 20, color: th.onChipOn },
     grow: { flex: 1 },
     bar: {
       paddingTop: 6,

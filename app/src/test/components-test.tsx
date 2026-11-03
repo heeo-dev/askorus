@@ -273,7 +273,7 @@ describe('writing a question', () => {
       return { remove: () => undefined } as any;
     }) as any);
     const user = userEvent.setup();
-    const props = { onSend: jest.fn(), onPickAIs: jest.fn(), onTier: jest.fn(), onChangeText: jest.fn() };
+    const props = { onSend: jest.fn(), onPickAIs: jest.fn(), onPickTier: jest.fn(), onChangeText: jest.fn() };
     const view = (value: string) => (
       <Composer
         {...props}
@@ -291,9 +291,10 @@ describe('writing a question', () => {
     expect(props.onChangeText).toHaveBeenCalled();
     await user.press(screen.getByRole('button', { name: 'AIs to answer: 3 (Claude, Codex, OpenCode). Pick' }));
     expect(props.onPickAIs).toHaveBeenCalled();
-    await user.press(screen.getByRole('radio', { name: 'Deep' }));
-    expect(props.onTier).toHaveBeenCalledWith('deep');
-    expect(screen.getByLabelText('Tier').props.accessibilityRole).toBe('radiogroup');
+    // The tier is one chip with the picked one (#16): it opens the tier sheet.
+    expect(screen.queryByRole('radio')).toBeNull();
+    await user.press(screen.getByRole('button', { name: 'Tier: Standard. Pick' }));
+    expect(props.onPickTier).toHaveBeenCalled();
 
     await render(view('Hi'));
     await user.press(screen.getByRole('button', { name: 'Ask' }));

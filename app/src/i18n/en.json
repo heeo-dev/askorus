@@ -326,6 +326,7 @@
   "ask.pickModel": "Pick a model",
   "ask.onPC": "My PC: {name}",
   "ask.tierLabel": "Tier",
+  "ask.tierPick": "Tier: {tier}. Pick",
   "ask.willCompare": "Once every answer is in, they are compared and a combined answer is written.",
   "ask.willCompareOnly": "Once every answer is in, they are compared.",
   "ask.rowAnswering": "Answering, {s} s",

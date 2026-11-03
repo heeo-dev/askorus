@@ -21,7 +21,7 @@ import { Keyboard, Linking, Pressable, ScrollView, type ScrollViewInstance, Styl
 
 import { agentName } from '@/api/agents';
 import type { AgentClient } from '@/api/client';
-import type { Info, RunPart } from '@/api/types';
+import { type Info, type RunPart, type Tier, tiers } from '@/api/types';
 import { type CardKind, canSynthesize, judgedBy, polling, writerFor } from '@/ask/compare';
 import { conversations, recentQuestions, useConversations } from '@/ask/conversations';
 import { aiStatus, askErrorText, displayModel, metaLine, onlyTarget, partViews, rowValue, snapshotOf } from '@/ask/present';
@@ -44,6 +44,7 @@ import { PairSheet } from '@/ui/PairSheet';
 import { ReachError } from '@/ui/ReachError';
 import { usePCs } from '@/ui/shell/pcs';
 import { themed, type Theme, useTheme } from '@/ui/theme';
+import { TierSheet } from '@/ui/TierSheet';
 import { type Note, type TurnActions, type TurnUI, TurnView } from '@/ui/TurnView';
 
 const store = new ConnectionStore();
@@ -55,6 +56,7 @@ type Head = { id: string; pcId: string; startedAt: number; title: string };
 type SheetState =
   | { kind: 'pick' }
   | { kind: 'model'; agent: string }
+  | { kind: 'tier' }
   | { kind: 'ais'; turn: string }
   | { kind: 'answer'; turn: string; agent: string }
   | { kind: 'pair'; turn: string; key: string }
@@ -337,6 +339,20 @@ export default function Ask() {
   const sheetTurn = sheet && 'turn' in sheet ? (turns.find((x) => x.id === sheet.turn) ?? null) : null;
   const sheetSnap = sheetTurn ? snapshotOf(sheetTurn) : undefined;
   const modelOf = (agent: string) => prefs.models[agent] || list.find((a) => a.agent === agent)?.tiers[prefs.tier]?.model || '';
+  // Per tier, the models of the AIs that are on and follow the tier (#16).
+  const tierModels = Object.fromEntries(
+    tiers.map((x) => {
+      const line = on
+        .filter((a) => !prefs.models[a])
+        .map((a) => {
+          const m = list.find((l) => l.agent === a)?.tiers[x]?.model;
+          return m ? `${agentName(a)} ${displayModel(m)}` : '';
+        })
+        .filter(Boolean)
+        .join(' · ');
+      return [x, line];
+    }),
+  ) as Record<Tier, string>;
 
   const pickRows: AISheetRow[] = list.map((a) => {
     const name = agentName(a.agent);
@@ -398,6 +414,16 @@ export default function Ask() {
           else delete models[sheet.agent];
           change({ models });
           setSheet({ kind: 'pick' });
+        }}
+      />
+      <TierSheet
+        open={sheet?.kind === 'tier'}
+        value={prefs.tier}
+        models={tierModels}
+        onClose={() => setSheet(null)}
+        onPick={(tier) => {
+          change({ tier });
+          setSheet(null);
         }}
       />
       <AISheet
@@ -504,7 +530,7 @@ export default function Ask() {
             pickLabel={on.length ? t('ask.pickAIs', { n: on.length, names: on.map(agentName).join(', ') }) : t('ask.pickAIsNone')}
             onPickAIs={() => setSheet({ kind: 'pick' })}
             tier={prefs.tier}
-            onTier={(tier) => change({ tier })}
+            onPickTier={() => setSheet({ kind: 'tier' })}
           />
         ) : null}
         {sheets}

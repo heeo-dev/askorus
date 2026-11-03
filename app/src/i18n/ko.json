@@ -326,6 +326,7 @@
   "ask.pickModel": "모델 고르기",
   "ask.onPC": "내 PC: {name}",
   "ask.tierLabel": "단계",
+  "ask.tierPick": "단계: {tier}. 고르기",
   "ask.willCompare": "다 모이면 비교해서 종합 답변을 씁니다.",
   "ask.willCompareOnly": "다 모이면 서로 비교합니다.",
   "ask.rowAnswering": "답하는 중, {s}초",
