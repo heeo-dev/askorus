@@ -32,6 +32,10 @@ type Record struct {
 	Answers  []AnswerRec       `json:"answers"`
 	Compare  *CompareRec       `json:"compare,omitempty"`
 	Synth    *SynthRec         `json:"synth,omitempty"`
+	// Task is what the writer got: the answers, the judgments' 다른 말 and
+	// 확인 필요 items and the spec (C4, E0), so resynth can write again
+	// from the same answers and judgments. Runs before E0 have none.
+	Task *judge.SynthTask `json:"synthTask,omitempty"`
 	// Stop is set when the question did not run through and is asked
 	// again on resume: usage_limit, or the pipeline's error code.
 	Stop string `json:"stop,omitempty"`
@@ -43,6 +47,27 @@ type RunInfo struct {
 	Tier   string `json:"tier"`
 	Writer string `json:"writer"`
 	Refine string `json:"refine"` // off, or on: the writer moderates (C2)
+	// From is the run whose answers and judgments resynth wrote from; the
+	// writer then wrote at SynthTier with the prompt Synth (C4, E0).
+	From      string `json:"from,omitempty"`
+	SynthTier string `json:"synthTier,omitempty"`
+	Synth     string `json:"synth,omitempty"`
+	// Form is how a refine-only run refined: fixed (refine-v1 and the
+	// agent's templates) or live (the moderator writes the format).
+	Form string `json:"form,omitempty"`
+}
+
+// writerLabel names who wrote a run's combined answers and how: the
+// writer, the tier whose model wrote and the prompt.
+func (r RunInfo) writerLabel() string {
+	tier, prompt := r.Tier, "product"
+	if r.SynthTier != "" {
+		tier = r.SynthTier
+	}
+	if r.Synth != "" {
+		prompt = r.Synth
+	}
+	return r.Writer + " · " + tier + " · " + prompt
 }
 
 // RefineRec is the question's refining (C2): the moderator, its time,
@@ -57,7 +82,9 @@ type RefineRec struct {
 	Language string `json:"language,omitempty"`
 	Intent   string `json:"intent,omitempty"`
 	Template string `json:"template,omitempty"`
-	Error    string `json:"error,omitempty"`
+	// Form are the format lines a live moderator wrote (refine -form live).
+	Form  []string `json:"form,omitempty"`
+	Error string   `json:"error,omitempty"`
 	Detail   string `json:"detail,omitempty"`
 }
 

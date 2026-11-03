@@ -14,6 +14,10 @@
 //	synth-eval questions -q FILE[,FILE] [-only ID,ID]
 //	synth-eval run       -q FILE[,FILE] [-only ID,ID] -run NAME [-tier quick] [-writer claude] [-refine off|on] [-resume] -expect N
 //	synth-eval report    -run NAME[,NAME] [-json] [-texts]
+//	synth-eval resynth   -from RUN -run NAME [-only ID,ID] [-tier quick] [-writer claude] [-synth product] [-resume] -expect N
+//
+// resynth and the commands after it are the quality experiments (C4, E0 in
+// "마일스톤 C" of docs/phase2-plan.md): they make their own writer calls.
 //
 // Exit codes: 0 done, 1 error, 2 bad flags, 3 stopped on a usage limit
 // (run again with -resume), 4 interrupted.
@@ -60,6 +64,9 @@ const usage = `synth-eval measures the combined answer (milestone C). A run uses
   run       -q FILE[,FILE] [-only ID,ID] -run NAME [-tier quick|standard|deep] [-writer claude|codex|opencode]
             [-refine off|on] [-resume] -expect N
   report    -run NAME[,NAME] [-json] [-texts]
+  resynth   -from RUN -run NAME [-only ID,ID] [-tier quick|standard|deep] [-writer claude|codex|opencode]
+            [-synth product] [-resume] -expect N
+            writes RUN's combined answers again from the same answers and judgments (up to 2 calls each)
 A question file has one question per line; blank lines and lines starting with # are skipped.
 -expect is the number of questions the run will ask (each uses the PC's AIs up to 10 times, 12 with -refine on).
 `
@@ -83,6 +90,8 @@ func runMain(ctx context.Context, args []string, out, errOut io.Writer) int {
 		return runCmd(ctx, args[1:], out, errOut)
 	case "report":
 		return reportCmd(args[1:], out, errOut)
+	case "resynth":
+		return resynthCmd(ctx, args[1:], out, errOut)
 	}
 	fmt.Fprint(errOut, usage)
 	return exitFlags
@@ -153,7 +162,7 @@ func runCmd(ctx context.Context, args []string, out, errOut io.Writer) int {
 	case *refine != "off" && *refine != "on":
 		fmt.Fprintln(errOut, "-refine must be off or on")
 		return exitFlags
-	case *writer != "claude" && *writer != "codex" && *writer != "opencode":
+	case !validWriter(*writer):
 		fmt.Fprintln(errOut, "-writer must be claude, codex or opencode")
 		return exitFlags
 	}
