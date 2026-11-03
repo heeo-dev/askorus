@@ -5,7 +5,7 @@ import { userEvent } from '@testing-library/react-native';
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import { act, renderRouter, screen, waitFor, within } from 'expo-router/testing-library';
-import { Alert, Linking, Text } from 'react-native';
+import { Alert, Linking, StyleSheet, Text } from 'react-native';
 
 import TabsLayout from '@/app/(tabs)/_layout';
 import MyPC from '@/app/(tabs)/pcs';
@@ -18,8 +18,8 @@ import { loadAskPrefs } from '@/ask/prefs';
 import { loadPrefs, savePrefs } from '@/connections/prefs';
 import { ConnectionStore } from '@/connections/store';
 import { FakeAgent, HOST, PORT, TOKEN, session } from '@/test/fakeAgent';
-import { loadThemeChoice } from '@/ui/appearance';
-import { palettes } from '@/ui/theme';
+import { loadAppearance } from '@/ui/appearance';
+import { aiPalettes, palettes } from '@/ui/theme';
 
 let agent: FakeAgent;
 
@@ -370,12 +370,29 @@ describe('settings', () => {
     expect(await screen.findByRole('radio', { name: 'System' })).toBeChecked();
     await user.press(screen.getByRole('radio', { name: 'Dark' }));
     expect(screen.getByRole('radio', { name: 'Dark' })).toBeChecked();
-    await waitFor(async () => expect(await loadThemeChoice()).toBe('dark'));
+    await waitFor(async () => expect((await loadAppearance()).theme).toBe('dark'));
     expect(screen.getByRole('header', { name: 'Settings' })).toHaveStyle({ color: palettes.dark.text });
 
     await user.press(screen.getByRole('radio', { name: 'Light' }));
-    await waitFor(async () => expect(await loadThemeChoice()).toBe('light'));
+    await waitFor(async () => expect((await loadAppearance()).theme).toBe('light'));
     expect(screen.getByRole('header', { name: 'Settings' })).toHaveStyle({ color: palettes.light.text });
+  });
+
+  test('#6: AI colours are on by default; the switch turns them off at once and keeps it', async () => {
+    const user = userEvent.setup();
+    await renderRouter(routes, { initialUrl: '/settings' });
+    const name = 'A color for each AI';
+    expect(await screen.findByRole('switch', { name })).toBeChecked();
+    // Codex's avatar on the writer pills (not the picked one).
+    const fill = () => {
+      let p = screen.getByText('Cx', { includeHiddenElements: true }).parent;
+      for (; p; p = p.parent) if (StyleSheet.flatten(p.props.style)?.backgroundColor) return StyleSheet.flatten(p.props.style).backgroundColor;
+    };
+    expect(fill()).toBe(aiPalettes.light.lilac.bg);
+    await user.press(screen.getByRole('switch', { name }));
+    expect(screen.getByRole('switch', { name })).not.toBeChecked();
+    expect(fill()).toBe(palettes.light.avatar);
+    await waitFor(async () => expect(await loadAppearance()).toEqual({ theme: 'system', aiColours: false }));
   });
 
   test('About shows the version and the not-official line, and leads to the about screen', async () => {

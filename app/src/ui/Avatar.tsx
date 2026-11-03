@@ -1,11 +1,13 @@
 // An AI's round mark (S5c, F-Brand-Tokens 아바타): two letters on a 24 px
 // circle, 10/600. Piles overlap 3 px with a 2 px ring of the colour behind
 // them, and show at most four before '+n'. Avatars are decoration: the
-// control or row they sit in names the AIs.
+// control or row they sit in names the AIs. An AI with its own colour (#6)
+// is drawn on it wherever it sits, unless that is off in Settings; a dim
+// one stays an outline.
 
 import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
 
-import { themed, type Theme, useTheme } from './theme';
+import { type AIColour, aiColour, themed, type Theme, useAIColours, useTheme } from './theme';
 
 const known: Record<string, string> = { claude: 'Cl', codex: 'Cx', opencode: 'Oc', gemini: 'Ag', antigravity: 'Ag', kimi: 'Ki' };
 
@@ -19,10 +21,10 @@ export function initials(agent: string): string {
 
 type Tone = 'normal' | 'dim' | 'onDiffer' | 'inverse';
 
-function colours(th: Theme, tone: Tone, ring?: string) {
+function colours(th: Theme, tone: Tone, ring?: string, own?: AIColour) {
+  if (tone === 'dim') return { bg: ring ?? 'transparent', fg: th.caption, border: th.borderStrong };
+  if (own) return { bg: own.bg, fg: own.fg };
   switch (tone) {
-    case 'dim':
-      return { bg: ring ?? 'transparent', fg: th.caption, border: th.borderStrong };
     case 'onDiffer':
       return { bg: th.differAvatar, fg: th.text };
     case 'inverse':
@@ -64,7 +66,8 @@ const avatarText = StyleSheet.create({
 const hidden = { accessibilityElementsHidden: true, importantForAccessibility: 'no-hide-descendants' } as const;
 
 export function Avatar({ agent, size = 24, tone = 'normal', ring }: { agent: string; size?: 24 | 28; tone?: Tone; ring?: string }) {
-  const c = colours(useTheme(), tone, ring);
+  const th = useTheme();
+  const c = colours(th, tone, ring, useAIColours().on ? aiColour(th, agent) : undefined);
   return (
     <View {...hidden} testID={`avatar-${agent}`}>
       {circle({ text: initials(agent), size, bg: c.bg, fg: c.fg, border: c.border, ring })}
@@ -75,12 +78,13 @@ export function Avatar({ agent, size = 24, tone = 'normal', ring }: { agent: str
 /** AvatarPile shows the AIs overlapping, max of them and then '+n'; dim ones are outlined. */
 export function AvatarPile({ agents, max = 4, ring, dim }: { agents: string[]; max?: number; ring: string; dim?: string[] }) {
   const th = useTheme();
+  const own = useAIColours().on;
   const shown = agents.slice(0, max);
   const more = agents.length - shown.length;
   return (
     <View {...hidden} style={pile.row} testID="avatar-pile">
       {shown.map((a, i) => {
-        const c = colours(th, dim?.includes(a) ? 'dim' : 'normal', ring);
+        const c = colours(th, dim?.includes(a) ? 'dim' : 'normal', ring, own ? aiColour(th, a) : undefined);
         return (
           <View key={`${a}-${i}`} style={i ? pile.next : undefined}>
             {circle({ text: initials(a), size: 24, bg: c.bg, fg: c.fg, border: c.border, ring })}

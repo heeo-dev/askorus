@@ -382,6 +382,7 @@
   "settings.theme.system": "System",
   "settings.theme.dark": "Dark",
   "settings.theme.light": "Light",
+  "settings.aiColours": "A color for each AI",
   "pair.intro": "Run one command on the PC and scan the QR it shows; the PC then asks whether to allow this phone.",
   "pair.step1": "Run this in a terminal on the PC",
   "pair.step2": "Scan the QR on the PC",

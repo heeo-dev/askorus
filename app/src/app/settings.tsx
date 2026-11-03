@@ -2,7 +2,8 @@
 // connection or unpair), what new sessions start with, pairing another PC;
 // the default ask tier; whether answers are compared on their own (P2-3)
 // and a combined answer is then written and by which AI (S5b); the theme
-// (system, dark or light); and about the app.
+// (system, dark or light) and whether each AI has its own colour (#6); and
+// about the app.
 
 import Constants from 'expo-constants';
 import { router, useFocusEffect } from 'expo-router';
@@ -25,7 +26,7 @@ import { PCRow, useReach } from '@/ui/PCPickerSheet';
 import { PCSheet } from '@/ui/PCSheet';
 import { Sheet } from '@/ui/Sheet';
 import { usePCs } from '@/ui/shell/pcs';
-import { themeChoices, themed, useTheme, useThemeChoice } from '@/ui/theme';
+import { themeChoices, themed, useAIColours, useTheme, useThemeChoice } from '@/ui/theme';
 
 export default function Settings() {
   const th = useTheme();
@@ -34,6 +35,7 @@ export default function Settings() {
   const { list, reload } = usePCs();
   const reach = useReach(list);
   const { choice, setChoice } = useThemeChoice();
+  const aiColours = useAIColours();
   const [note, setNote] = useState('');
   const [prefs, setPrefs] = useState<Prefs>({ model: '', effort: '' });
   const [ask, setAsk] = useState<AskPrefs>(defaultAskPrefs);
@@ -150,6 +152,7 @@ export default function Settings() {
                 />
               }
             />
+            <SwitchRow label={t('settings.aiColours')} value={aiColours.on} onChange={aiColours.setOn} />
           </Group>
         </Section>
 

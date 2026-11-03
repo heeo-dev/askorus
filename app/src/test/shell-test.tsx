@@ -254,7 +254,7 @@ test('the theme choice is drawn at once and kept: dark, light, system', async ()
 
   await user.press(screen.getByRole('radio', { name: 'dark' }));
   expect(bg('settings-bg')).toBe('#151618');
-  expect(JSON.parse((await require('expo-secure-store').getItemAsync('ui.v1')) ?? '')).toEqual({ theme: 'dark' });
+  expect(JSON.parse((await require('expo-secure-store').getItemAsync('ui.v1')) ?? '')).toEqual({ theme: 'dark', aiColours: true });
 
   await user.press(screen.getByRole('radio', { name: 'light' }));
   expect(bg('settings-bg')).toBe('#FCFAF8');

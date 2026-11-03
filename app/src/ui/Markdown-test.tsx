@@ -7,6 +7,7 @@ import { Linking, StyleSheet } from 'react-native';
 import { setLang } from '@/i18n';
 
 import { Markdown, columnWidths, lex, safeLink } from './Markdown';
+import { aiPalettes, palettes, ThemeProvider } from './theme';
 
 const answer = [
   '## 차이',
@@ -500,4 +501,23 @@ test('past 50,000 characters or 1,000 emphasis marks the rest of an answer is pl
 test('plain text stays as it is', async () => {
   await render(<Markdown text={'서울입니다.'} />);
   expect(screen.getByText('서울입니다.')).toBeTruthy();
+});
+
+test('#6: the AIs a combined answer names are chips in their own colours, plain with AI colours off; the subject stays text', async () => {
+  const text = '{{Claude}}가 48~49개, {{OpenCode}}가 49개라고 합니다. Claude Code의 스킬은 따로 셉니다. {{Gemini}}는 답하지 않았습니다.';
+  const chip = (name: string) => StyleSheet.flatten(screen.getByText(` ${name} `).props.style);
+  await render(<Markdown text={text} size="synth" ais={['claude', 'opencode', 'mistral']} />);
+  expect(chip('Claude')).toMatchObject({ fontWeight: '600', backgroundColor: aiPalettes.light.sky.bg, color: aiPalettes.light.sky.fg });
+  expect(chip('OpenCode')).toMatchObject({ backgroundColor: aiPalettes.light.teal.bg, color: aiPalettes.light.teal.fg });
+  expect(screen.getByText(/Claude Code의 스킬/)).toBeTruthy();
+  expect(screen.queryByText(' Gemini ')).toBeNull(); // did not answer: plain text without braces
+
+  const kv = { get: async () => '{"theme":"dark","aiColours":false}', set: async () => {}, remove: async () => {} };
+  await render(
+    <ThemeProvider kv={kv}>
+      <Markdown text={text} size="synth" ais={['claude', 'opencode']} />
+    </ThemeProvider>,
+  );
+  expect(chip('Claude')).toMatchObject({ backgroundColor: palettes.dark.avatar, color: palettes.dark.text });
+  expect(chip('OpenCode')).toMatchObject({ backgroundColor: palettes.dark.avatar, color: palettes.dark.text });
 });

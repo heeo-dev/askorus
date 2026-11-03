@@ -2,7 +2,7 @@
 // value for value, and every pair of colours that carries words or marks
 // reads (WCAG: words 4.5:1, small marks 3:1).
 
-import { contrast, font, palettes, radius, resolveScheme, size, themeChoices } from './theme';
+import { aiColour, aiPalettes, contrast, font, palettes, radius, resolveScheme, size, themeChoices } from './theme';
 
 test('the dark and light palettes are the boards’ values', () => {
   expect(palettes.dark).toEqual({
@@ -145,6 +145,27 @@ describe.each(['dark', 'light'] as const)('%s: everything with words or marks re
   test.each(marks)('%s on %s ≥ 3', (_a, fg, _b, back) => {
     expect(contrast(fg, back)).toBeGreaterThanOrEqual(3);
   });
+});
+
+describe.each(['dark', 'light'] as const)('%s: each AI’s own colour (#6) reads and is its own', (scheme) => {
+  const hues = Object.entries(aiPalettes[scheme]);
+  test.each(hues)('%s letters on its tint ≥ 4.5', (_h, c) => {
+    expect(contrast(c.fg, c.bg)).toBeGreaterThanOrEqual(4.5);
+  });
+  test('no AI tint is the plain avatar, apricot or another AI’s', () => {
+    const p = palettes[scheme];
+    const tints = hues.map(([, c]) => c.bg);
+    expect(new Set(tints).size).toBe(tints.length);
+    for (const t of tints) expect([p.avatar, p.fill, p.soft, p.highlightBg]).not.toContain(t);
+  });
+});
+
+test('the AIs we know have their colours, the rest none', () => {
+  const th = { ...palettes.dark, scheme: 'dark' as const };
+  expect(['claude', 'codex', 'opencode', 'antigravity', 'gemini', 'kimi'].map((a) => aiColour(th, a))).toEqual(
+    [aiPalettes.dark.sky, aiPalettes.dark.lilac, aiPalettes.dark.teal, aiPalettes.dark.rose, aiPalettes.dark.rose, aiPalettes.dark.lime],
+  );
+  for (const a of ['mistral', '', 'toString', 'constructor']) expect(aiColour(th, a)).toBeUndefined();
 });
 
 test('the scheme is the choice, or the phone’s; an unknown phone setting is light', () => {

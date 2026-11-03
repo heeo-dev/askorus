@@ -21,13 +21,14 @@ import { Lexer, type Links, Marked, type Token, Tokenizer, type TokenizerExtensi
 import { Component, type ReactNode, useMemo, useState } from 'react';
 import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { agentName } from '@/api/agents';
 import { nameParts, plainNames } from '@/ask/aiNames';
 import * as i18n from '@/i18n';
 
 import { lettersOrDigits, korean, mathAt, type MathToken, prose } from './inlineMath';
 import { MathBlock, drawable } from './MathBlock';
 import { texToUnicode } from './tex';
-import { type Theme, useTheme } from './theme';
+import { type AIColour, aiColour, type Theme, useAIColours, useTheme } from './theme';
 
 const mono = Platform.select({ ios: 'Menlo', default: 'monospace' });
 
@@ -481,20 +482,25 @@ type Ctx = {
   notes: Map<string, number>;
   depth: number;
   math: { count: number; chars: number };
-  /** The AIs a combined answer may name in braces (#6), drawn as chips. */
-  names?: ReadonlySet<string>;
+  /** The AIs a combined answer may name in braces (#6), drawn as chips: name to the AI's own colour, if any. */
+  names?: ReadonlyMap<string, AIColour | undefined>;
 };
 
 /**
  * Markdown draws an answer. size 'synth' is the combined answer's larger
  * reading size (16/26, F-Result-Expanded); 'body' (15/22) everything else.
- * names are the AIs that answered: the combined answer writes them in
- * braces ("{{Claude}}"), drawn as chips and read without the braces.
+ * ais are the AIs that answered: the combined answer writes their names in
+ * braces ("{{Claude}}"), drawn as chips (in the AI's own colour, #6) and
+ * read without the braces.
  */
-export function Markdown({ text, size = 'body', names }: { text: string; size?: 'body' | 'synth'; names?: readonly string[] }) {
+export function Markdown({ text, size = 'body', ais }: { text: string; size?: 'body' | 'synth'; ais?: readonly string[] }) {
   const th = useTheme();
+  const own = useAIColours().on;
   const s = useMemo(() => styles(th, size), [th, size]);
-  const known = useMemo(() => (names ? new Set(names) : undefined), [names]);
+  const known = useMemo(
+    () => (ais ? new Map(ais.map((a) => [agentName(a), own ? aiColour(th, a) : undefined] as const)) : undefined),
+    [ais, th, own],
+  );
   return (
     <AsText text={known ? plainNames(text) : text} style={s.body}>
       <Drawn text={text} s={s} names={known} />
@@ -503,7 +509,7 @@ export function Markdown({ text, size = 'body', names }: { text: string; size?: 
 }
 
 // chips draws a run of text with the AIs it names in braces as chips: the
-// name in the avatars' colour, set off by thin spaces.
+// name in its avatar's colour, set off by thin spaces.
 function chips(text: string, c: Ctx, key: number | string): ReactNode {
   if (!c.names || !text.includes('{{')) return text;
   return (
@@ -512,13 +518,17 @@ function chips(text: string, c: Ctx, key: number | string): ReactNode {
         typeof p === 'string' ? (
           p
         ) : (
-          <Text key={i} style={c.s.aiName}>
+          <Text key={i} style={[c.s.aiName, chipColour(c.names?.get(p.ai))]}>
             {`\u2009${p.ai}\u2009`}
           </Text>
         ),
       )}
     </Text>
   );
+}
+
+function chipColour(own: AIColour | undefined) {
+  return own ? { backgroundColor: own.bg, color: own.fg } : undefined;
 }
 
 // split keeps the part of an answer drawn as Markdown: up to maxMarkdown
@@ -534,7 +544,7 @@ function split(text: string): [string, string] {
   return [text.slice(0, at), text.slice(at).trim()];
 }
 
-function Drawn({ text, s, names }: { text: string; s: Ctx['s']; names?: ReadonlySet<string> }) {
+function Drawn({ text, s, names }: { text: string; s: Ctx['s']; names?: Ctx['names'] }) {
   const [head, rest] = useMemo(() => split(text), [text]);
   const tokens = useMemo(() => lex(head), [head]);
   const notes = useMemo(() => footnoteNumbers(tokens), [tokens]);

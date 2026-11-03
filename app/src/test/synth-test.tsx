@@ -14,6 +14,7 @@ import { defaultAskPrefs, saveAskPrefs, type AskPrefs } from '@/ask/prefs';
 import { ConnectionStore } from '@/connections/store';
 import { setLang, t } from '@/i18n';
 import { FakeAgent, HOST, PORT, TOKEN } from '@/test/fakeAgent';
+import { aiPalettes } from '@/ui/theme';
 
 let agent: FakeAgent;
 const appDir = './src/app';
@@ -100,8 +101,11 @@ test('while the AIs compare, writing the combined answer waits as the next step 
   agent.synthReply = 'ok';
   expect(await written()).toBeTruthy();
   expect(screen.getByText(differsShown)).toBeTruthy();
-  // #6: a named AI is a chip in the avatars' colour; no braces show.
-  expect(StyleSheet.flatten(screen.getAllByText(chip('Claude'))[0].props.style)).toMatchObject({ fontWeight: '600', backgroundColor: expect.any(String) });
+  // #6: a named AI is a chip in its own avatar colour; no braces show.
+  const chipLook = (name: string) => StyleSheet.flatten(screen.getAllByText(chip(name))[0].props.style);
+  expect(chipLook('Claude')).toMatchObject({ fontWeight: '600', backgroundColor: aiPalettes.light.sky.bg, color: aiPalettes.light.sky.fg });
+  expect(chipLook('Codex')).toMatchObject({ backgroundColor: aiPalettes.light.lilac.bg, color: aiPalettes.light.lilac.fg });
+  expect(chipLook('OpenCode')).toMatchObject({ backgroundColor: aiPalettes.light.teal.bg, color: aiPalettes.light.teal.fg });
   expect(screen.queryByText(/\{\{/)).toBeNull();
   expect(screen.queryByLabelText(/Writing the combined answer/)).toBeNull();
   expect(skeleton()).toBeNull();

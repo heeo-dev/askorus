@@ -255,7 +255,7 @@ function Result({
         const differ = all?.find((c) => c.kind === 'differ')?.items ?? [];
         return (
           <View style={s.synth}>
-            <Markdown text={synth.text} size="synth" names={answeredList.map(agentName)} />
+            <Markdown text={synth.text} size="synth" ais={answeredList} />
             {differ.map((item) => {
               const head = differHeadline(item);
               return (

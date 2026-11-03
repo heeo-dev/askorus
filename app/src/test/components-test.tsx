@@ -20,7 +20,7 @@ import { EvidenceCounts, EvidenceSections } from '@/ui/Evidence';
 import { Icon, IconButton, iconNames } from '@/ui/Icon';
 import { Group, Row } from '@/ui/List';
 import { Sheet } from '@/ui/Sheet';
-import { ThemeProvider, useTheme, useThemeChoice } from '@/ui/theme';
+import { aiPalettes, palettes, ThemeProvider, useAIColours, useTheme, useThemeChoice } from '@/ui/theme';
 import { ThreadBubble } from '@/ui/ThreadBubble';
 
 const unit = (id: string, text: string, agent = 'claude'): UnitView => ({ id, answer: agent, agent, kind: 'sentence', text, math: [] });
@@ -53,6 +53,39 @@ describe('avatars', () => {
 
     await render(<AvatarPile agents={['claude', 'codex', 'opencode']} ring="#151618" />);
     expect(screen.queryByText(/^\+/, shown)).toBeNull();
+  });
+
+  // #6: the circle's fill (the nearest fill around the letters) and the letters' colour.
+  const look = (letters: string) => {
+    const el = screen.getByText(letters, { includeHiddenElements: true });
+    let fill: string | undefined;
+    for (let p = el.parent; p && !fill; p = p.parent) fill = StyleSheet.flatten(p.props.style)?.backgroundColor;
+    return { bg: fill, fg: StyleSheet.flatten(el.props.style).color };
+  };
+
+  test('#6: each AI we know has its own colour; a dim one stays an outline and others stay plain', async () => {
+    const light = aiPalettes.light;
+    await render(<AvatarPile agents={['claude', 'codex', 'opencode', 'mistral']} dim={['opencode']} ring="#FCFAF8" />);
+    expect(['Cl', 'Cx', 'Oc', 'Mi'].map(look)).toEqual([
+      light.sky,
+      light.lilac,
+      { bg: '#FCFAF8', fg: palettes.light.caption },
+      { bg: palettes.light.avatar, fg: palettes.light.text },
+    ]);
+    // Five AIs, five colours.
+    const all = ['sky', 'lilac', 'teal', 'rose', 'lime'] as const;
+    expect(new Set(all.map((h) => aiPalettes.dark[h].bg)).size).toBe(5);
+    expect(new Set(all.map((h) => aiPalettes.light[h].bg)).size).toBe(5);
+  });
+
+  test('#6: with AI colours off in Settings every avatar is the one plain colour again', async () => {
+    const kv: KeyValue = { get: async () => '{"theme":"dark","aiColours":false}', set: async () => {}, remove: async () => {} };
+    await render(
+      <ThemeProvider kv={kv}>
+        <AvatarPile agents={['claude', 'codex']} ring="#151618" />
+      </ThemeProvider>,
+    );
+    expect(['Cl', 'Cx'].map(look)).toEqual([0, 1].map(() => ({ bg: palettes.dark.avatar, fg: palettes.dark.text })));
   });
 });
 
@@ -535,8 +568,38 @@ describe('theme provider', () => {
     expect(SystemUI.setBackgroundColorAsync).toHaveBeenLastCalledWith('#151618');
     await user.press(screen.getByText('light'));
     expect(screen.getByTestId('probe')).toHaveTextContent('light #FCFAF8 light ready');
-    expect(JSON.parse(mem.get('ui.v1') ?? '')).toEqual({ theme: 'light' });
+    expect(JSON.parse(mem.get('ui.v1') ?? '')).toEqual({ theme: 'light', aiColours: true });
     expect(SystemUI.setBackgroundColorAsync).toHaveBeenLastCalledWith('#FCFAF8');
+  });
+
+  test('#6: AI colours are read and saved with the theme; a change made while reading wins for that setting only', async () => {
+    const user = userEvent.setup();
+    let release = () => {};
+    const gate = new Promise<void>((r) => (release = r));
+    const { mem } = memory('{"theme":"dark","aiColours":true}');
+    const kv: KeyValue = { get: async (k) => (await gate, mem.get(k) ?? null), set: async (k, v) => void mem.set(k, v), remove: async () => {} };
+    function Colours() {
+      const { on, setOn } = useAIColours();
+      return <Text onPress={() => setOn(!on)} testID="colours">{on ? 'on' : 'off'}</Text>;
+    }
+    await render(
+      <ThemeProvider kv={kv}>
+        <Probe />
+        <Colours />
+      </ThemeProvider>,
+    );
+    expect(screen.getByTestId('colours')).toHaveTextContent('on');
+    await user.press(screen.getByTestId('colours'));
+    expect(screen.getByTestId('colours')).toHaveTextContent('off');
+    expect(JSON.parse(mem.get('ui.v1') ?? '')).toEqual({ theme: 'dark', aiColours: true }); // nothing saved before reading
+
+    await act(async () => release());
+    expect(screen.getByTestId('probe')).toHaveTextContent('dark #151618 dark ready');
+    expect(screen.getByTestId('colours')).toHaveTextContent('off');
+    expect(JSON.parse(mem.get('ui.v1') ?? '')).toEqual({ theme: 'dark', aiColours: false });
+
+    await user.press(screen.getByTestId('colours'));
+    expect(JSON.parse(mem.get('ui.v1') ?? '')).toEqual({ theme: 'dark', aiColours: true });
   });
 
   test('outside a provider the phone’s scheme is used and the choice does nothing', async () => {

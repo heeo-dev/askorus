@@ -16,7 +16,7 @@ export function plainNames(text: string): string {
  * nameParts cuts text into plain strings and the AIs it marks. A marked
  * name that is not one of names stays as plain text, without its braces.
  */
-export function nameParts(text: string, names: ReadonlySet<string>): (string | { ai: string })[] {
+export function nameParts(text: string, names: { has(name: string): boolean }): (string | { ai: string })[] {
   const out: (string | { ai: string })[] = [];
   let at = 0;
   let plain = '';
