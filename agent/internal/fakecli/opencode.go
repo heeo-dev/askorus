@@ -21,7 +21,8 @@ const (
 const ProjectID = "fakeproject0000000000000000000000000000"
 
 // opencodeMain plays opencode: run with --agent asksemble-judge is a
-// judge, run with --agent asksemble-synth a combined-answer writer, any
+// judge, run with --agent asksemble-synth a combined-answer writer (and
+// asksemble-refine a moderator refining a question), any
 // other run an ask; `session list --format json --standalone`
 // prints every saved session, whatever its folder, and `session delete
 // <id> --standalone` removes one.
@@ -30,7 +31,7 @@ func opencodeMain(c *Call) int {
 	switch {
 	case len(a) > 0 && a[0] == "run" && flagValue(a, "--agent") == JudgeAgent:
 		return opencodeJudge(c)
-	case len(a) > 0 && a[0] == "run" && flagValue(a, "--agent") == SynthAgent:
+	case len(a) > 0 && a[0] == "run" && (flagValue(a, "--agent") == SynthAgent || flagValue(a, "--agent") == RefineAgent):
 		return opencodeSynth(c)
 	case len(a) > 0 && a[0] == "run":
 		return opencodeAsk(c)

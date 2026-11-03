@@ -28,6 +28,7 @@ type Record struct {
 	Run      RunInfo           `json:"run"`
 	At       string            `json:"at"` // when it was asked (RFC 3339)
 	Versions map[string]string `json:"versions,omitempty"`
+	Refine   *RefineRec        `json:"refine,omitempty"`
 	Answers  []AnswerRec       `json:"answers"`
 	Compare  *CompareRec       `json:"compare,omitempty"`
 	Synth    *SynthRec         `json:"synth,omitempty"`
@@ -41,7 +42,23 @@ type RunInfo struct {
 	Name   string `json:"name"`
 	Tier   string `json:"tier"`
 	Writer string `json:"writer"`
-	Refine string `json:"refine"` // off; on comes with C2
+	Refine string `json:"refine"` // off, or on: the writer moderates (C2)
+}
+
+// RefineRec is the question's refining (C2): the moderator, its time,
+// the spec and the template every AI got.
+type RefineRec struct {
+	Status   string `json:"status"`
+	Agent    string `json:"agent,omitempty"`
+	Model    string `json:"model,omitempty"`
+	Ms       int64  `json:"ms,omitempty"`
+	Kind     string `json:"kind,omitempty"`
+	Depth    string `json:"depth,omitempty"`
+	Language string `json:"language,omitempty"`
+	Intent   string `json:"intent,omitempty"`
+	Template string `json:"template,omitempty"`
+	Error    string `json:"error,omitempty"`
+	Detail   string `json:"detail,omitempty"`
 }
 
 // AnswerRec is one AI's answer.

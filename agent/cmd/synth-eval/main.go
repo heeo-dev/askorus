@@ -12,7 +12,7 @@
 // part of the agent.
 //
 //	synth-eval questions -q FILE[,FILE] [-only ID,ID]
-//	synth-eval run       -q FILE[,FILE] [-only ID,ID] -run NAME [-tier quick] [-writer claude] [-refine off] [-resume] -expect N
+//	synth-eval run       -q FILE[,FILE] [-only ID,ID] -run NAME [-tier quick] [-writer claude] [-refine off|on] [-resume] -expect N
 //	synth-eval report    -run NAME[,NAME] [-json] [-texts]
 //
 // Exit codes: 0 done, 1 error, 2 bad flags, 3 stopped on a usage limit
@@ -58,10 +58,10 @@ var newPipeline = func(ctx context.Context) (pipeline, func(), error) {
 const usage = `synth-eval measures the combined answer (milestone C). A run uses AI subscriptions.
   questions -q FILE[,FILE] [-only ID,ID]
   run       -q FILE[,FILE] [-only ID,ID] -run NAME [-tier quick|standard|deep] [-writer claude|codex|opencode]
-            [-refine off] [-resume] -expect N
+            [-refine off|on] [-resume] -expect N
   report    -run NAME[,NAME] [-json] [-texts]
 A question file has one question per line; blank lines and lines starting with # are skipped.
--expect is the number of questions the run will ask (each uses the PC's AIs up to 10 times).
+-expect is the number of questions the run will ask (each uses the PC's AIs up to 10 times, 12 with -refine on).
 `
 
 func main() {
@@ -140,7 +140,7 @@ func runCmd(ctx context.Context, args []string, out, errOut io.Writer) int {
 	name := fs.String("run", "", "run name (a-z, 0-9, -)")
 	tier := fs.String("tier", core.TierQuick, "quick, standard or deep")
 	writer := fs.String("writer", "claude", "the AI that writes the combined answer")
-	refine := fs.String("refine", "off", "off (on comes with C2)")
+	refine := fs.String("refine", "off", "off, or on: the writer refines each question first (C2)")
 	resume := fs.Bool("resume", false, "skip the questions the run already has")
 	expect := fs.Int("expect", -1, "the number of questions this run will ask")
 	if err := fs.Parse(args); err != nil {
@@ -150,11 +150,8 @@ func runCmd(ctx context.Context, args []string, out, errOut io.Writer) int {
 	case !core.ValidTier(*tier):
 		fmt.Fprintln(errOut, "-tier must be quick, standard or deep")
 		return exitFlags
-	case *refine == "on":
-		fmt.Fprintln(errOut, "-refine on is not built until C2 (question refining)")
-		return exitFlags
-	case *refine != "off":
-		fmt.Fprintln(errOut, "-refine must be off")
+	case *refine != "off" && *refine != "on":
+		fmt.Fprintln(errOut, "-refine must be off or on")
 		return exitFlags
 	case *writer != "claude" && *writer != "codex" && *writer != "opencode":
 		fmt.Fprintln(errOut, "-writer must be claude, codex or opencode")

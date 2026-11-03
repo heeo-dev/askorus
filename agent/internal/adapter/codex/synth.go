@@ -28,6 +28,10 @@ import (
 // uninstall removes it.
 const synthSchemaName = core.SynthSchemaFile
 
+// refineSchemaName is the question spec's schema file (질문 정제, milestone C),
+// next to the synth schema; the command is otherwise the same.
+const refineSchemaName = core.RefineSchemaFile
+
 // synthTimeout is the time limit Synthesize sets itself
 // (core.Synthesizer); a variable so a test can shorten it.
 var synthTimeout = core.SynthTimeout
@@ -66,7 +70,7 @@ func (a *Adapter) checkSynthArgs(args []string) error {
 		return fmt.Errorf("codex synth: model %q refused", model)
 	case !ok || !ok2 || !efforts[effort]:
 		return fmt.Errorf("codex synth: effort %q refused", args[10])
-	case schema == "" || !filepath.IsAbs(schema) || schema != a.synthSchemaPath():
+	case schema == "" || !filepath.IsAbs(schema) || (schema != a.synthSchemaPath() && schema != a.refineSchemaPath()):
 		return fmt.Errorf("codex synth: schema %q refused", schema)
 	case !slices.Equal(args, synthArgs(model, effort, schema)):
 		return fmt.Errorf("codex synth: arguments %q refused", args)
@@ -83,30 +87,46 @@ func (a *Adapter) synthSchemaPath() string {
 	return filepath.Join(a.schemaDir, synthSchemaName)
 }
 
-// synthSchema makes sure the combined-answer schema file holds
-// core.SynthSchemaV1 and returns its path, by judgeSchema's rule: the
-// first call of the process writes it unless it already holds those
-// bytes, and later ones only read and compare, so a file that changed is
-// refused as internal, never repaired while another codex may read it.
-func (a *Adapter) synthSchema() (string, error) {
-	p := a.synthSchemaPath()
-	if p == "" {
-		return "", core.Fail(core.ErrCodeInternal, "codex synth: no folder for the combined-answer schema")
+// refineSchemaPath is the refine schema file's path, "" without a folder.
+func (a *Adapter) refineSchemaPath() string {
+	if a.schemaDir == "" {
+		return ""
 	}
-	want := []byte(core.SynthSchemaV1)
+	return filepath.Join(a.schemaDir, refineSchemaName)
+}
+
+// synthSchema makes sure the combined-answer schema file holds
+// core.SynthSchemaV1 and gives its path.
+func (a *Adapter) synthSchema() (string, error) {
+	return a.schemaFile(a.synthSchemaPath(), core.SynthSchemaV1, &a.synthReady, &a.synthWrites)
+}
+
+// refineSchema does the same for core.RefineSchemaV1.
+func (a *Adapter) refineSchema() (string, error) {
+	return a.schemaFile(a.refineSchemaPath(), core.RefineSchemaV1, &a.refineReady, &a.refineWrites)
+}
+
+// schemaFile writes schema to p once (when it is missing or differs), then
+// checks before every use that it still holds exactly that: a file
+// changed under a running agent is internal, never used.
+func (a *Adapter) schemaFile(p, schema string, ready *bool, writes *int) (string, error) {
+	if p == "" {
+		return "", core.Fail(core.ErrCodeInternal, "codex synth: no folder for the schema")
+	}
+	want := []byte(schema)
 	a.synthMu.Lock()
 	defer a.synthMu.Unlock()
-	if !a.synthReady {
+	if !*ready {
 		if b, err := os.ReadFile(p); err != nil || !bytes.Equal(b, want) {
 			if err := config.WriteFileAtomic(p, want); err != nil {
-				return "", core.Fail(core.ErrCodeInternal, "codex synth: the combined-answer schema file could not be written")
+				return "", core.Fail(core.ErrCodeInternal, "codex synth: the schema file could not be written")
 			}
-			a.synthWrites++
+			*writes++
 		}
-		a.synthReady = true
+		*ready = true
 	}
 	if b, err := os.ReadFile(p); err != nil || !bytes.Equal(b, want) {
-		return "", core.Fail(core.ErrCodeInternal, "codex synth: the combined-answer schema file changed; restart the agent")
+		return "", core.Fail(core.ErrCodeInternal, "codex synth: the schema file changed; restart the agent")
 	}
 	return p, nil
 }
@@ -127,6 +147,9 @@ func (a *Adapter) Synthesize(ctx context.Context, req core.SynthRequest) (core.S
 	model, effort := req.Model, req.Effort
 	if effort == "" {
 		effort = synthEffort
+		if req.Refine {
+			effort = core.RefineEffort
+		}
 	}
 	switch {
 	case !config.ValidModel(model):
@@ -134,7 +157,11 @@ func (a *Adapter) Synthesize(ctx context.Context, req core.SynthRequest) (core.S
 	case !efforts[effort]:
 		return core.SynthResult{}, core.Fail(core.ErrCodeBadModel, "codex synth: effort refused")
 	}
-	schema, err := a.synthSchema()
+	schemaOf := a.synthSchema
+	if req.Refine {
+		schemaOf = a.refineSchema
+	}
+	schema, err := schemaOf()
 	if err != nil {
 		return core.SynthResult{}, err
 	}

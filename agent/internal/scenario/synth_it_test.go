@@ -342,8 +342,10 @@ func TestIT15SynthesisWays(t *testing.T) {
 				Permission map[string]string `json:"permission"`
 			} `json:"agent"`
 		}
-		if err := json.Unmarshal([]byte(sc.Env["OPENCODE_CONFIG_CONTENT"]), &cfg); err != nil || len(cfg.Agent) != 1 ||
-			len(cfg.Agent[fakecli.SynthAgent].Permission) != 1 || cfg.Agent[fakecli.SynthAgent].Permission["*"] != "deny" {
+		// The writer's agent and the refine agent (milestone C), both deny-all.
+		if err := json.Unmarshal([]byte(sc.Env["OPENCODE_CONFIG_CONTENT"]), &cfg); err != nil || len(cfg.Agent) != 2 ||
+			len(cfg.Agent[fakecli.SynthAgent].Permission) != 1 || cfg.Agent[fakecli.SynthAgent].Permission["*"] != "deny" ||
+			len(cfg.Agent[fakecli.RefineAgent].Permission) != 1 || cfg.Agent[fakecli.RefineAgent].Permission["*"] != "deny" {
 			t.Errorf("opencode synth config %q: %v", sc.Env["OPENCODE_CONFIG_CONTENT"], err)
 		}
 		if !strings.EqualFold(filepath.Clean(sc.Env["PWD"]), filepath.Clean(r.judge)) {

@@ -204,6 +204,9 @@ const (
 	writeLineKo = "종합 답변을 쓸 수 있는 AI: Claude Code · OpenCode (질문 단계의 모델)"
 	writeInfo   = "when a combined answer is written, the writing AI's company receives the question, every answer with the AIs' names and the comparison's results"
 	writeInfoKo = "종합 답변을 쓸 때는 쓰는 AI의 회사가 질문, AI 이름이 붙은 모든 답, 비교 결과를 받습니다"
+	// Milestone C: refining sends the question to the moderator once more.
+	refineInfo   = "when a question is refined, the moderator's company (one of the AIs asked) receives the question once more, with up to 3 earlier questions"
+	refineInfoKo = "질문을 정제할 때는 사회자 AI의 회사(질문을 받는 AI 중 하나)가 질문을 한 번 더, 앞 질문 3개까지와 함께 받습니다"
 )
 
 // The combined-answer lines: which AIs write, and what the writing AI's
@@ -218,10 +221,11 @@ func TestJudgeLinesSynthesis(t *testing.T) {
 	lines := judgeLines(st, false)
 	findLine(t, lines, "ok", writeLine, writeLineKo)
 	findLine(t, lines, "info", writeInfo, writeInfoKo)
+	findLine(t, lines, "info", refineInfo, refineInfoKo)
 	findLine(t, lines, "ok", "comparison judging: Claude Code haiku · Codex gpt-6-luna · OpenCode opencode-go/deepseek-v4.1-flash", "비교 판정: Claude Code haiku")
 	findLine(t, lines, "info", company, companyKo)
 	noLineTwice(t, lines)
-	if len(lines) != 6 || lines[len(lines)-1].text.en != noOutside {
+	if len(lines) != 7 || lines[len(lines)-1].text.en != noOutside {
 		t.Errorf("%d lines:\n%s", len(lines), strings.Join(lineTexts(lines), "\n"))
 	}
 	// The writer lines follow the judge lines they go with.
@@ -237,7 +241,7 @@ func TestJudgeLinesSynthesis(t *testing.T) {
 	}
 	for _, off := range []bool{false, true} {
 		for _, l := range lineTexts(judgeLines(st, off)) {
-			if strings.Contains(l, "combined answer") || strings.Contains(l, "종합 답변") {
+			if strings.Contains(l, "combined answer") || strings.Contains(l, "종합 답변") || strings.Contains(l, "refined") || strings.Contains(l, "정제") {
 				t.Errorf("off %v: %q", off, l)
 			}
 		}

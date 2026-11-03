@@ -21,7 +21,8 @@ import (
 // tool, no MCP server, no saved conversation, --safe-mode, the prompt on
 // stdin, proc.Run with Runner.Path(); checkSynthArgs checks the exact
 // shape first, as checkJudgeArgs does for a judge, and each refuses the
-// other's.
+// other's. A question spec (질문 정제, milestone C) is the same command with
+// --json-schema core.RefineSchemaV1 and, by default, effort low.
 
 // synthTimeout is the time limit Synthesize sets itself
 // (core.Synthesizer); a variable so a test can shorten it.
@@ -42,18 +43,25 @@ func (a *Adapter) DisplayName() string { return "Claude" }
 
 // synthArgs builds the command line of one combined answer: judgeArgs with
 // the synth schema. The prompt is not in it.
-func synthArgs(model, effort string) []string {
+func synthArgs(model, effort string) []string { return writerArgs(model, effort, core.SynthSchemaV1) }
+
+// refineArgs builds the command line of one question spec: synthArgs with
+// the refine schema.
+func refineArgs(model, effort string) []string { return writerArgs(model, effort, core.RefineSchemaV1) }
+
+func writerArgs(model, effort, schema string) []string {
 	return []string{"-p", "--output-format", "json", "--model", model, "--effort", effort,
 		"--tools", "", "--strict-mcp-config", "--no-session-persistence", "--safe-mode",
-		"--json-schema", core.SynthSchemaV1}
+		"--json-schema", schema}
 }
 
 // synthArgCount is len(synthArgs(…)).
 const synthArgCount = 14
 
-// checkSynthArgs accepts exactly what synthArgs makes for a valid model
-// and effort, the synth schema byte for byte: never the judge schema, a
-// permission flag, a tool, an MCP config, a resume or a prompt argument.
+// checkSynthArgs accepts exactly what synthArgs or refineArgs makes for a
+// valid model and effort, the synth or refine schema byte for byte: never
+// the judge schema, a permission flag, a tool, an MCP config, a resume or a
+// prompt argument.
 func checkSynthArgs(args []string) error {
 	if len(args) != synthArgCount {
 		return fmt.Errorf("%w: a combined answer has %d arguments, not %d", ErrArgRejected, synthArgCount, len(args))
@@ -61,7 +69,7 @@ func checkSynthArgs(args []string) error {
 	if !config.ValidModel(args[4]) || !config.ValidEffort(args[6]) {
 		return fmt.Errorf("%w: a combined answer needs a valid model and effort", ErrArgRejected)
 	}
-	if !slices.Equal(args, synthArgs(args[4], args[6])) {
+	if !slices.Equal(args, synthArgs(args[4], args[6])) && !slices.Equal(args, refineArgs(args[4], args[6])) {
 		return fmt.Errorf("%w: not the combined-answer command", ErrArgRejected)
 	}
 	return nil
@@ -81,14 +89,18 @@ func (a *Adapter) Synthesize(ctx context.Context, req core.SynthRequest) (core.S
 	if info, err := os.Stat(req.Folder); !filepath.IsAbs(req.Folder) || err != nil || !info.IsDir() {
 		return core.SynthResult{}, core.Fail(core.ErrCodeInternal, "the judge folder is not an absolute existing folder")
 	}
-	model, effort := req.Model, firstNonEmpty(req.Effort, synthEffort)
+	defEffort, build := synthEffort, synthArgs
+	if req.Refine {
+		defEffort, build = core.RefineEffort, refineArgs
+	}
+	model, effort := req.Model, firstNonEmpty(req.Effort, defEffort)
 	if !config.ValidModel(model) {
 		return core.SynthResult{}, core.Fail(core.ErrCodeBadModel, model)
 	}
 	if !config.ValidEffort(effort) {
 		return core.SynthResult{}, core.Fail(core.ErrCodeBadModel, "effort "+effort)
 	}
-	args := synthArgs(model, effort)
+	args := build(model, effort)
 	if err := checkSynthArgs(args); err != nil {
 		return core.SynthResult{}, core.Fail(core.ErrCodeInternal, err.Error())
 	}

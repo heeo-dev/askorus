@@ -1197,7 +1197,17 @@ S5c를 worktree에서 만들었다(커밋 전, 57f9776 위). 기반(테마·아�
   - 종합 글: 길이 중앙값 806자(369~1864), 표 8개, 첫 문장 중앙값 70자, 제목으로 시작 0, 덧붙임 0, 이름 빠진 편 0. 다른 말 10, 확인 필요 13.
   - 한국어 질문의 라틴 문자 비율은 평균 14.6%다. 높은 것은 CPU 모델명·도구 이름이 많은 질문이라(mine-4 36.7%, mine-8 43.1%), 이 수는 '영어 섞임'보다 기술 이름을 더 많이 센다.
   - 읽어 보니 첫 줄에 답이 오고 짧은 질문은 짧다. 대신 '세 답변 모두', '{{OpenCode}}만 다음을 더 말했습니다', '비교로는 검증되지 않았습니다' 같은 출처 설명이 많다. 긴 질문(mine-4)은 표, 한 AI만 목록, 엇갈리는 항목이 한 글에 다 있어 길다(#11의 '난잡함').
-
+- **C2 결과(11-03, 에이전트).** 설계 C-2~C-6대로 만들었다(C2a ae5b0b6, C2b c2f3ceb, C2c 690d1cd, C2d).
+  - 정제 프롬프트 `refine-v1`과 엄격한 출력 검사, 답 틀 7종(한국어·영어, `open`은 없음)과 길이 줄 셋.
+  - 어댑터 셋은 종합 명령의 둘째 모양으로 정제한다: Claude `--json-schema` refine 스키마, Codex `refine-schema-v1.json`, OpenCode `asksemble-refine`(모두 거절). 효과는 low다.
+  - `compares.Refine`이 종합과 같은 규칙으로 물은 AI 중에서 사회자를 고르고 빠른 모델로 30초 안에 묻는다. 틀리면 한 번 더 묻고, 회사를 확인한다. `RunRefiner`는 run의 AI 셋에 한 번만 정제한다. 실패하면 원문으로 묻는다.
+  - API: `POST /v1/runs`에 `refine {agent, off}`가 생겼고(없으면 끔), run 스냅숏에 `refine {status, agent, model, ms, spec, template, error}`가 실린다. 판정은 원문만 받는다.
+  - 정제된 run의 종합은 `synth-v3`(데이터 블록 안 SPEC 줄과 OUTPUT 앞 FORM 문단)이고, 정제가 없으면 `synth-v2` 그대로다.
+  - check에 정제 [i] 줄이 생겼고, uninstall이 refine 스키마도 지운다. synth-eval은 `-refine on`으로 잰다.
+  - 시험: UT, IT-16(가짜 AI로 API 끝까지), LT-09(실제 CLI 셋, 모두 kind compare를 4.2~5.9초에, 주입 줄은 따르지 않음).
+  - 정제는 판정 자리를 기다리지 않는다. 짧은 호출 하나이고 그 run의 판정보다 먼저 끝난다.
+  - 앱은 아직 `refine`을 보내지 않는다(C3).
+  - 결과: test-all ALL PASSED(jest 1018/1018). test-live는 LT-09와, 종합 명령을 고쳐 LT-08을 다시 돌려 LIVE PASSED였다(셋 다 1번에 유효).
 ## 5. 단계 (초안)
 
 | 단계 | 할 일 |

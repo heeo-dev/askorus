@@ -23,6 +23,9 @@ const (
 	// synthAgent is the agent a writer runs with, handed to OpenCode for
 	// one run only in OPENCODE_CONFIG_CONTENT.
 	synthAgent = "asksemble-synth"
+	// refineAgent fills in a question spec (질문 정제, milestone C): the
+	// same locked agent with its own prompt; the message says the JSON.
+	refineAgent = "asksemble-refine"
 	// synthTitle is the title of every writer conversation: the judge
 	// title, so CleanupJudge deletes it.
 	synthTitle = judgeTitle
@@ -32,16 +35,25 @@ const (
 // (core.Synthesizer); a variable so a test can shorten it.
 var synthTimeout = core.SynthTimeout
 
-// synthConfig is the writer agent: apart from askConfig and judgeConfig,
-// with every tool denied, the web tools too.
+// synthConfig holds the writer agent and the refine agent: apart from
+// askConfig and judgeConfig, with every tool denied, the web tools too.
 var synthConfig = func() string {
-	b, _ := json.Marshal(map[string]any{"agent": map[string]any{synthAgent: map[string]any{
-		"description": "Asksemble synthesis: write one combined answer",
-		"mode":        "primary",
-		"prompt": "You write the combined answer for the Asksemble app. " +
-			"Reply only with the JSON the message asks for, and use no tools.",
-		"permission": map[string]string{"*": "deny"},
-	}}})
+	b, _ := json.Marshal(map[string]any{"agent": map[string]any{
+		synthAgent: map[string]any{
+			"description": "Asksemble synthesis: write one combined answer",
+			"mode":        "primary",
+			"prompt": "You write the combined answer for the Asksemble app. " +
+				"Reply only with the JSON the message asks for, and use no tools.",
+			"permission": map[string]string{"*": "deny"},
+		},
+		refineAgent: map[string]any{
+			"description": "Asksemble refine: fill in a question spec",
+			"mode":        "primary",
+			"prompt": "You fill in a question spec for the Asksemble app; you do not answer the question. " +
+				"Reply only with the JSON the message asks for, and use no tools.",
+			"permission": map[string]string{"*": "deny"},
+		},
+	}})
 	return string(b)
 }()
 
@@ -54,8 +66,13 @@ var (
 // (core.Named).
 func (a *Adapter) DisplayName() string { return "OpenCode" }
 
-func synthArgs(model string) []string {
-	return []string{"run", "--standalone", "--format", "json", "--agent", synthAgent, "-m", model, "--title", synthTitle}
+func synthArgs(model string) []string { return writerArgs(synthAgent, model) }
+
+// refineArgs is synthArgs with the refine agent.
+func refineArgs(model string) []string { return writerArgs(refineAgent, model) }
+
+func writerArgs(agent, model string) []string {
+	return []string{"run", "--standalone", "--format", "json", "--agent", agent, "-m", model, "--title", synthTitle}
 }
 
 // checkSynthArgs accepts exactly what synthArgs makes from a valid model:
@@ -66,7 +83,7 @@ func checkSynthArgs(args []string) error {
 		return fmt.Errorf("opencode synth: %d arguments refused", len(args))
 	case !modelRe.MatchString(args[7]):
 		return fmt.Errorf("opencode synth: model %q refused", args[7])
-	case !slices.Equal(args, synthArgs(args[7])):
+	case !slices.Equal(args, synthArgs(args[7])) && !slices.Equal(args, refineArgs(args[7])):
 		return fmt.Errorf("opencode synth: arguments %q refused", args)
 	}
 	return nil
@@ -102,6 +119,9 @@ func (a *Adapter) Synthesize(ctx context.Context, req core.SynthRequest) (core.S
 	}
 	model := modelArg(req.Model, req.Effort)
 	args := synthArgs(model)
+	if req.Refine {
+		args = refineArgs(model)
+	}
 	if err := checkSynthArgs(args); err != nil {
 		return core.SynthResult{}, core.Fail(core.ErrCodeInternal, "the combined-answer command was refused")
 	}

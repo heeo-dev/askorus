@@ -6,6 +6,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/asksemble/asksemble/agent/internal/adapter/claude"
@@ -74,6 +75,52 @@ func TestTheAgentPipelineAsksComparesAndWrites(t *testing.T) {
 		t.Fatalf("synth %+v", s)
 	}
 	if m := metricsOf(rec); !m.SynthOK || m.Answered != 3 || m.Differ != 1 {
+		t.Fatalf("metrics %+v", m)
+	}
+}
+
+// With -refine on (C2) the writer refines the question first: the record
+// keeps the spec and the template every AI got.
+func TestTheAgentPipelineRefinesFirst(t *testing.T) {
+	exes := fakecli.Install(t)
+	fakecli.SetAnswers(t, map[string]string{
+		fakecli.RoleClaude:   "가격은 NUM p=1입니다. 높이는 NUM h=5입니다.",
+		fakecli.RoleCodex:    "가격은 NUM p=2입니다. 높이는 NUM h=5입니다.",
+		fakecli.RoleOpenCode: "높이는 NUM h=5입니다. 오늘은 맑습니다.",
+	})
+	root := t.TempDir()
+	claudeDir := filepath.Join(root, "claude")
+	if err := os.MkdirAll(filepath.Join(claudeDir, "projects"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	adapters := []core.Adapter{
+		claude.New(claude.Options{ClaudeDir: claudeDir, ClaudePath: exes[fakecli.RoleClaude]}),
+		codex.New(codex.Options{Path: exes[fakecli.RoleCodex], SchemaDir: filepath.Join(root, "agent")}),
+		opencode.New(opencode.Options{Path: exes[fakecli.RoleOpenCode]}),
+	}
+	ctx := context.Background()
+	p, err := pipelineFrom(ctx, adapters, filepath.Join(root, "ask"), config.JudgeConfig{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer p.Close()
+	rec, err := p.Ask(ctx, Question{ID: "g-1", Text: "이 상자의 가격과 높이는 얼마인가요?"}, RunInfo{Tier: core.TierQuick, Writer: "claude", Refine: "on"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rf := rec.Refine
+	if rf == nil || rf.Status != "done" || rf.Agent != "claude" || rf.Kind != "compare" || rf.Depth != "short" || rf.Template == "" {
+		t.Fatalf("refine %+v", rf)
+	}
+	for _, c := range fakecli.Calls(t) {
+		if strings.HasPrefix(c.Stdin, "[Asksemble") || c.Stdin == "" {
+			continue // the moderator, judges, writer
+		}
+		if !strings.Contains(c.Stdin, rf.Template) {
+			t.Errorf("%s was asked without the template", c.Role)
+		}
+	}
+	if m := metricsOf(rec); m.Kind != "compare" || m.TotalMs < m.RefineMs || !m.SynthOK {
 		t.Fatalf("metrics %+v", m)
 	}
 }

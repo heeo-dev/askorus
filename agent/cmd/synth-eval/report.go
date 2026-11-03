@@ -18,6 +18,8 @@ type Summary struct {
 	Questions   int     `json:"questions"`
 	Stopped     int     `json:"stopped"`
 	SynthOK     int     `json:"synthOk"`
+	Refined     int     `json:"refined"`
+	MedianRef   float64 `json:"medianRefineS"`
 	MedianAsk   float64 `json:"medianAskS"`
 	MedianJudge float64 `json:"medianCompareS"`
 	MedianSynth float64 `json:"medianSynthS"`
@@ -41,7 +43,7 @@ func summarize(name string, rs []Record) (Summary, []Metrics) {
 		s.Refine, s.Tier = rs[0].Run.Refine, rs[0].Run.Tier
 	}
 	var ms []Metrics
-	var ask, cmp, syn, tot []float64
+	var ask, cmp, syn, tot, ref []float64
 	var chars, first []int
 	var latin []float64
 	for _, r := range rs {
@@ -52,6 +54,10 @@ func summarize(name string, rs []Record) (Summary, []Metrics) {
 			continue
 		}
 		ask = append(ask, float64(m.AskMs)/1000)
+		if m.Kind != "" {
+			s.Refined++
+			ref = append(ref, float64(m.RefineMs)/1000)
+		}
 		cmp = append(cmp, float64(m.CompareMs)/1000)
 		s.Differ += m.Differ
 		s.Check += m.Check
@@ -80,6 +86,7 @@ func summarize(name string, rs []Record) (Summary, []Metrics) {
 		}
 	}
 	s.MedianAsk, s.MedianJudge, s.MedianSynth, s.MedianTotal = median(ask), median(cmp), median(syn), median(tot)
+	s.MedianRef = median(ref)
 	s.MedianChars, s.MedianFirst = int(medianInt(chars)), int(medianInt(first))
 	for _, l := range latin {
 		s.MeanLatin += l / float64(len(latin))
@@ -115,6 +122,7 @@ var summaryRows = []struct {
 }{
 	{"questions (stopped)", func(s Summary) string { return fmt.Sprintf("%d (%d)", s.Questions, s.Stopped) }},
 	{"combined answers written", func(s Summary) string { return fmt.Sprintf("%d", s.SynthOK) }},
+	{"refined (median s)", func(s Summary) string { return fmt.Sprintf("%d (%.1f)", s.Refined, s.MedianRef) }},
 	{"median answers s", func(s Summary) string { return fmt.Sprintf("%.1f", s.MedianAsk) }},
 	{"median judging s", func(s Summary) string { return fmt.Sprintf("%.1f", s.MedianJudge) }},
 	{"median combined s", func(s Summary) string { return fmt.Sprintf("%.1f", s.MedianSynth) }},
@@ -159,7 +167,7 @@ func writeReport(out io.Writer, names []string, runs [][]Record) {
 	}
 	for i, ms := range all {
 		fmt.Fprintf(out, "\n== %s\n", names[i])
-		fmt.Fprintf(out, "%-12s %5s %6s %6s %6s %6s %5s %5s %6s %4s %4s %s\n", "question", "ans", "ask s", "judge", "synth", "chars", "table", "first", "latin", "ext", "unn", "differ/check")
+		fmt.Fprintf(out, "%-12s %-12s %5s %6s %6s %6s %6s %5s %5s %6s %4s %4s %s\n", "question", "kind", "ans", "ask s", "judge", "synth", "chars", "table", "first", "latin", "ext", "unn", "differ/check")
 		for _, m := range ms {
 			if m.Stop != "" {
 				fmt.Fprintf(out, "%-12s stopped: %s\n", m.ID, m.Stop)
@@ -173,8 +181,12 @@ func writeReport(out io.Writer, names []string, runs [][]Record) {
 			if !m.SynthOK {
 				synth = m.SynthStatus
 			}
-			fmt.Fprintf(out, "%-12s %2d/%-2d %6.1f %6.1f %6s %6d %5s %5d %6s %4s %4d %d/%d\n",
-				m.ID, m.Answered, m.Asked, float64(m.AskMs)/1000, float64(m.CompareMs)/1000, synth, m.Chars,
+			kind := "-"
+			if m.Kind != "" {
+				kind = m.Kind + "/" + m.Depth
+			}
+			fmt.Fprintf(out, "%-12s %-12s %2d/%-2d %6.1f %6.1f %6s %6d %5s %5d %6s %4s %4d %d/%d\n",
+				m.ID, kind, m.Answered, m.Asked, float64(m.AskMs)/1000, float64(m.CompareMs)/1000, synth, m.Chars,
 				yes(m.Table), m.FirstSentence, latin, yes(m.Extras), m.Unnamed, m.Differ, m.Check)
 		}
 	}

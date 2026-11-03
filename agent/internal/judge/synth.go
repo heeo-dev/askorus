@@ -24,8 +24,22 @@ import (
 // own, and the instructions in English outside it. 한 AI만 items are left
 // out: they are in the answers.
 
-// SynthRules names the combined-answer prompt and its rules.
-const SynthRules = "synth-v2"
+// SynthRules names the combined-answer prompt and its rules; SynthRulesV3
+// is the same prompt with the question's spec (질문 정제, milestone C): the
+// SPEC line in the data block and a FORM paragraph before OUTPUT. Without
+// a spec the prompt is synth-v2, byte for byte.
+const (
+	SynthRules   = "synth-v2"
+	SynthRulesV3 = "synth-v3"
+)
+
+// SynthRulesOf names the rules task's prompt follows.
+func SynthRulesOf(task SynthTask) string {
+	if task.Spec != nil {
+		return SynthRulesV3
+	}
+	return SynthRules
+}
 
 // Combined-answer limits (S5b decision 4).
 const (
@@ -50,6 +64,11 @@ type SynthTask struct {
 	Compared bool
 	// LeftOut counts the items that did not fit in MaxSynthItemsBytes.
 	LeftOut int
+	// Spec is the question's spec when it was refined (milestone C): the
+	// combined answer takes the form every AI was asked for. Its intent is
+	// the moderator's words, so it goes in the data block; its kind and
+	// depth are checked enums and give the FORM text, which is the agent's.
+	Spec *QuestionSpec
 }
 
 // SynthAnswer is one answer: the name of the AI or app that wrote it, as
@@ -253,6 +272,11 @@ func synthContent(task SynthTask) []string {
 	for _, q := range task.Earlier {
 		add(q)
 	}
+	if task.Spec != nil {
+		add(task.Spec.Kind)
+		add(task.Spec.Intent)
+		add(task.Spec.Depth)
+	}
 	for _, a := range task.Answers {
 		add(a.AI)
 		add(a.Text)
@@ -295,7 +319,11 @@ func SynthPrompt(task SynthTask, nonce string) string {
 		return ""
 	}
 	var b strings.Builder
-	b.WriteString(strings.ReplaceAll(synthHead, "{N}", nonce))
+	head := synthHead
+	if task.Spec != nil {
+		head = strings.Replace(head, "[Asksemble synthesis v2]", "[Asksemble synthesis v3]", 1)
+	}
+	b.WriteString(strings.ReplaceAll(head, "{N}", nonce))
 	b.WriteString("<data-" + nonce + ">\n")
 	b.WriteString(synthQuestion)
 	promptQuote(&b, task.Question)
@@ -304,6 +332,15 @@ func SynthPrompt(task SynthTask, nonce string) string {
 		b.WriteString(synthEarlierQ)
 		synthStrings(&b, earlier)
 		b.WriteByte('\n')
+	}
+	if sp := task.Spec; sp != nil {
+		b.WriteString(synthSpecLine + `{"kind":`)
+		promptQuote(&b, sp.Kind)
+		b.WriteString(`,"intent":`)
+		promptQuote(&b, sp.Intent)
+		b.WriteString(`,"depth":`)
+		promptQuote(&b, sp.Depth)
+		b.WriteString("}\n")
 	}
 	for _, a := range task.Answers {
 		b.WriteString(synthAnswer + `{"ai":`)
@@ -326,8 +363,33 @@ func SynthPrompt(task SynthTask, nonce string) string {
 	} else {
 		b.WriteString(synthNotCompared)
 	}
-	b.WriteString(synthTail)
+	out := strings.Index(synthTail, "OUTPUT. ")
+	b.WriteString(synthTail[:out])
+	if task.Spec != nil {
+		b.WriteString(synthForm(*task.Spec))
+	}
+	b.WriteString(synthTail[out:])
 	return b.String()
+}
+
+// synthSpecLine starts the SPEC line of synth-v3.
+const synthSpecLine = "SPEC: "
+
+// synthForm is synth-v3's FORM paragraph: the answer form of the spec's
+// kind and the length line of its depth, in English, as every AI was
+// asked for them (templates.go). A kind without a form (open) gets the
+// length line only.
+func synthForm(sp QuestionSpec) string {
+	var parts []string
+	parts = append(parts, templates["en"][sp.Kind]...)
+	if d := depthLines["en"][sp.Depth]; d != "" {
+		parts = append(parts, d)
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "FORM. SPEC is how the QUESTION was read before it was asked, and every AI was asked to answer in this form: " +
+		strings.Join(parts, " ") + " Write the combined answer in the same form, keeping every rule above.\n"
 }
 
 // synthStrings writes list as a JSON array of strings.
