@@ -22,6 +22,19 @@ const EnvSynth = "ASKSEMBLE_FAKE_SYNTH"
 // SynthAgent is the agent OpenCode's synth command names.
 const SynthAgent = "asksemble-synth"
 
+// RefineAgent is the agent OpenCode's refine command names (질문 정제,
+// milestone C). A refine call is a synth call whose prompt is refine-v1:
+// it answers RefineSpec, and the synth modes apply to it as to a combined
+// answer (prose, bad_json, slow, usage_limit…, with _once for the AI's
+// first writer call).
+const RefineAgent = "asksemble-refine"
+
+// RefineSpec is the question spec the fake moderator gives.
+const RefineSpec = `{"kind":"compare","intent":"상자의 가격과 높이","depth":"short","language":"ko"}`
+
+// isRefinePrompt reports whether a writer's prompt is a refine prompt.
+func isRefinePrompt(prompt string) bool { return strings.HasPrefix(prompt, "[Asksemble refine ") }
+
 // Synth modes of ASKSEMBLE_FAKE_SYNTH.
 const (
 	SynthOK           = "ok"            // the default: SynthText, naming the AIs of every DIFFER side
@@ -134,6 +147,17 @@ func synthMode(role string) (string, error) {
 // an empty answer. Modes that fail before any reply have none and give
 // the ok reply.
 func synthReply(mode, prompt string) string {
+	if isRefinePrompt(prompt) {
+		switch mode {
+		case SynthProse:
+			return SynthProseText
+		case SynthBadJSON:
+			return RefineSpec[:20]
+		case SynthEmpty:
+			return `{}`
+		}
+		return RefineSpec
+	}
 	switch mode {
 	case SynthProse:
 		return SynthProseText
@@ -150,9 +174,11 @@ func synthReply(mode, prompt string) string {
 	return string(b)
 }
 
-// isSynthSchema reports whether a schema is the synth one: it has the
-// property answer, which the judge schema does not.
-func isSynthSchema(schema string) bool { return strings.Contains(schema, `"answer"`) }
+// isSynthSchema reports whether a schema is the synth or refine one: it
+// has the property answer or intent, which the judge schema does not.
+func isSynthSchema(schema string) bool {
+	return strings.Contains(schema, `"answer"`) || strings.Contains(schema, `"intent"`)
+}
 
 // claudeSynth prints the result object of a synth call, as claudeJudge
 // does for a judge.

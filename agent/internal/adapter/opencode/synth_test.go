@@ -62,12 +62,18 @@ func TestSynthArgsEnvAndStdin(t *testing.T) {
 			t.Errorf("argument %q carries the content", arg)
 		}
 	}
-	// The writer agent may use no tool at all, the web tools neither, and
-	// is the only agent of the run.
+	// The writer agent may use no tool at all, the web tools neither; the
+	// only other agent of the run is the refine agent, locked the same way
+	// (질문 정제, milestone C).
 	agents := agentConfig(t, c.Env["OPENCODE_CONFIG_CONTENT"])
 	ag, ok := agents["asksemble-synth"]
-	if len(agents) != 1 || !ok {
+	rf, ok2 := agents["asksemble-refine"]
+	if len(agents) != 2 || !ok || !ok2 {
 		t.Fatalf("agents = %v", agents)
+	}
+	rperm, _ := json.Marshal(rf["permission"])
+	if string(rperm) != `{"*":"deny"}` || rf["mode"] != "primary" || len(rf) != 4 {
+		t.Errorf("refine agent = %v", rf)
 	}
 	perm, _ := json.Marshal(ag["permission"])
 	prompt, _ := ag["prompt"].(string)

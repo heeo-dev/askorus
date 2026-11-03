@@ -237,6 +237,10 @@ func TestUninstallRemovesSynthSchema(t *testing.T) {
 	if err := os.WriteFile(synth, []byte(core.SynthSchemaV1), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	// Milestone C: the refine schema file goes too.
+	if err := os.WriteFile(filepath.Join(dir, core.RefineSchemaFile), []byte(core.RefineSchemaV1), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	var out bytes.Buffer
 	if err := uninstallCmd(dir, nil, strings.NewReader("n\n"), &out); err != nil {
 		t.Fatal(err)
@@ -251,7 +255,7 @@ func TestUninstallRemovesSynthSchema(t *testing.T) {
 	if err := uninstallCmd(dir, []string{"-yes"}, strings.NewReader(""), &out); err != nil {
 		t.Fatal(err)
 	}
-	for _, f := range []string{synth, filepath.Join(dir, core.JudgeSchemaFile)} {
+	for _, f := range []string{synth, filepath.Join(dir, core.JudgeSchemaFile), filepath.Join(dir, core.RefineSchemaFile)} {
 		if _, err := os.Stat(f); !os.IsNotExist(err) {
 			t.Errorf("%s stayed: %v", f, err)
 		}

@@ -453,7 +453,8 @@ func uninstallCmd(dir string, args []string, in io.Reader, out io.Writer) error 
 	}
 	schemaFile := filepath.Join(dir, core.JudgeSchemaFile)
 	synthSchemaFile := filepath.Join(dir, core.SynthSchemaFile)
-	plan = append(plan, m("delete %s", "%s 삭제", schemaFile), m("delete %s", "%s 삭제", synthSchemaFile))
+	refineSchemaFile := filepath.Join(dir, core.RefineSchemaFile)
+	plan = append(plan, m("delete %s", "%s 삭제", schemaFile), m("delete %s", "%s 삭제", synthSchemaFile), m("delete %s", "%s 삭제", refineSchemaFile))
 	if *all {
 		plan = append(plan, m("delete %s", "%s 삭제", dir))
 	}
@@ -496,6 +497,7 @@ func uninstallCmd(dir string, args []string, in io.Reader, out io.Writer) error 
 	}
 	os.Remove(schemaFile)
 	os.Remove(synthSchemaFile)
+	os.Remove(refineSchemaFile)
 	if ti.served {
 		if c, err := tailnet.New(); err == nil {
 			if err := c.ServeOff(ctx, ti.serve.HTTPSPort); err != nil {

@@ -93,6 +93,9 @@ type Adapter struct {
 	synthMu     sync.Mutex
 	synthReady  bool
 	synthWrites int
+	// The refine schema file (질문 정제, milestone C), under synthMu too.
+	refineReady  bool
+	refineWrites int
 }
 
 // New finds codex. A missing codex is not an error: /v1/info reports it.
