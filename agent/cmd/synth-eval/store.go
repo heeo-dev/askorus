@@ -36,6 +36,12 @@ type Record struct {
 	// 확인 필요 items and the spec (C4, E0), so resynth can write again
 	// from the same answers and judgments. Runs before E0 have none.
 	Task *judge.SynthTask `json:"synthTask,omitempty"`
+	// Label is the C5 board's draft B2: the combined answer cut at its
+	// headings and its parts labelled (label, c5label.go).
+	Label *LabelRec `json:"label,omitempty"`
+	// Topic is the C5 differ board's draft: each 다른 말 item named, with
+	// what each side says (topics, c5topic.go).
+	Topic *TopicRec `json:"topic,omitempty"`
 	// Stop is set when the question did not run through and is asked
 	// again on resume: usage_limit, or the pipeline's error code.
 	Stop string `json:"stop,omitempty"`
