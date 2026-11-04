@@ -10,6 +10,7 @@ import * as Clipboard from 'expo-clipboard';
 import { renderRouter, screen, waitFor } from 'expo-router/testing-library';
 import { StyleSheet } from 'react-native';
 
+import { features } from '@/ask/features';
 import { defaultAskPrefs, saveAskPrefs, type AskPrefs } from '@/ask/prefs';
 import { ConnectionStore } from '@/connections/store';
 import { setLang, t } from '@/i18n';
@@ -422,13 +423,31 @@ test('in Korean the combined answer reads in Korean', async () => {
   expect(judges.getByText('판정 정확도를 아직 재지 않았습니다.')).toBeTruthy();
 });
 
-// Milestone C: question refining. The moderator is the writer picked in
-// Settings; the run asks for it, the answer format shows under the question
-// and opens what was sent with it. The fake agent shows it running on the
-// POST's 202 and ended on the first GET.
-describe('question refining', () => {
-  test('is on by default: the run asks the writer to moderate, and the answer format opens what was sent', async () => {
-    const user = await open();
+// Milestone C: question refining, off since 2026-11-04 (features.ts): no
+// run asks for it, whatever the setting says.
+test('with the refining feature off, no run asks for refining, even with the setting on', async () => {
+  const user = await open({ refine: true });
+  await ask(user, 'Tell me about Seoul');
+  await written();
+  expect(agent.runRequests()[0].refine).toBeUndefined();
+  expect(screen.queryByText('Sent without refining')).toBeNull();
+  expect(screen.queryByRole('button', { name: /^Answer format/ })).toBeNull();
+});
+
+// With the feature turned on (its code stays): the moderator is the writer
+// picked in Settings; the run asks for it, the answer format shows under
+// the question and opens what was sent with it. The fake agent shows it
+// running on the POST's 202 and ended on the first GET.
+describe('question refining, turned on', () => {
+  beforeEach(() => {
+    features.refine = true;
+  });
+  afterEach(() => {
+    features.refine = false;
+  });
+
+  test('set on: the run asks the writer to moderate, and the answer format opens what was sent', async () => {
+    const user = await open({ refine: true });
     await ask(user, 'Tell me about Seoul');
     expect(agent.runRequests()[0].refine).toEqual({ agent: 'claude' });
     expect(agent.runRequests()[0].prompt).toBe('Tell me about Seoul'); // the phone sends the question as written
@@ -444,7 +463,7 @@ describe('question refining', () => {
 
   test('a refining that failed says the question went as written; an open question shows that no format was added', async () => {
     agent.refineReply = 'failed';
-    const user = await open();
+    const user = await open({ refine: true });
     await ask(user, 'Tell me about Seoul');
     expect(await screen.findByText('Sent without refining', {}, { timeout: 5000 })).toBeTruthy();
     expect(screen.queryByRole('button', { name: /^Answer format/ })).toBeNull();
@@ -466,14 +485,14 @@ describe('question refining', () => {
     expect(screen.queryByRole('button', { name: /^Answer format/ })).toBeNull();
 
     // Another writer picked moderates too.
-    user = await open({ synthAgent: 'codex' });
+    user = await open({ synthAgent: 'codex', refine: true });
     await ask(user, 'Tell me about Busan');
     await waitFor(() => expect(agent.runRequests().at(-1)?.refine).toEqual({ agent: 'codex' }));
   });
 
   test('in Korean', async () => {
     setLang('ko');
-    const user = await open();
+    const user = await open({ refine: true });
     await user.type(await screen.findByLabelText(t('ask.placeholder')), '서울은?');
     await user.press(screen.getByRole('button', { name: '묻기' }));
     await user.press(await screen.findByRole('button', { name: '답 틀: 비교. 보기' }, { timeout: 5000 }));

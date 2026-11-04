@@ -381,6 +381,7 @@
   "settings.compareSynth": "Moderator",
   "settings.compareInfo": "About the moderator",
   "settings.synthAgentLong": "Moderator AI (refines questions, writes the combined answer)",
+  "settings.moderatorAI": "Moderator AI (writes the combined answer)",
   "settings.refineAuto": "Refine questions (add an answer format)",
   "settings.refineHint": "With refining on, the moderator AI reads each question before the AIs answer and adds an answer format for its kind after it. It uses the moderator AI once more per question (its quick model), and answers start about 5 seconds later. The moderator AI's company receives the question once more.",
   "ask.refine.running": "Refining the question…",
