@@ -116,6 +116,12 @@ Settings live in %s (override with ASKSEMBLE_AGENT_DIR).
 설정 폴더: %s (ASKSEMBLE_AGENT_DIR로 바꿀 수 있습니다)
 `
 
+// refineOn turns 질문 정제 (the answer formats, milestone C) on. Off since
+// 2026-11-04: the C4 quality experiments found it did not make the
+// combined answer better. The code stays; check says nothing of it while
+// it is off.
+var refineOn = false
+
 func main() {
 	if err := run(os.Args[1:], os.Stdin, os.Stdout); err != nil {
 		printError(os.Stderr, err)
@@ -376,9 +382,7 @@ func serve(dir string, args []string) error {
 		// each only with a CLI as new as its judge command was tested with.
 		Judge:            cfg.Judge,
 		JudgeMinVersions: judgeMinVersions(),
-		// 질문 정제 (answer formats) is off since 2026-11-04: C4 found it did
-		// not make the combined answer better. The code stays.
-		Refine: false,
+		Refine:           refineOn,
 	})
 	srv := api.HTTPServer(apiSrv.Handler())
 	ln, err := api.Listen(cfg.Port)
