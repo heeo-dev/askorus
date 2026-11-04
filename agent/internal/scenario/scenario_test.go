@@ -78,6 +78,7 @@ type rigOptions struct {
 	answers map[string]string // fakecli's answers file
 	env     map[string]string // set before the adapters are made
 	judge   config.JudgeConfig
+	refine  bool // api.Options.Refine: off, as in the agent, unless a test turns it on
 }
 
 type rig struct {
@@ -139,7 +140,7 @@ func (r *rig) start() {
 	r.server = api.New(api.Options{
 		Version: "it", Hostname: "PC", Adapters: r.adapters, Devices: r.store,
 		Logger:    logx.New(r.logs, slog.LevelDebug),
-		AskFolder: r.askDir, Judge: r.o.judge,
+		AskFolder: r.askDir, Judge: r.o.judge, Refine: r.o.refine,
 		JudgeMinVersions: map[string]string{
 			claude.Name: claude.JudgeMinVersion, codex.Name: codex.JudgeMinVersion, opencode.Name: opencode.JudgeMinVersion,
 		},

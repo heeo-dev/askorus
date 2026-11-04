@@ -14,11 +14,11 @@ import (
 	"github.com/asksemble/asksemble/agent/internal/core"
 )
 
-var synthUpdate = flag.Bool("synth.update", false, "rewrite testdata/synth-v2*.golden")
+var synthUpdate = flag.Bool("synth.update", false, "rewrite testdata/synth-v4*.golden")
 
 const (
-	synthGoldenFile           = "testdata/synth-v2.golden"
-	synthGoldenUncomparedFile = "testdata/synth-v2-uncompared.golden"
+	synthGoldenFile           = "testdata/synth-v4.golden"
+	synthGoldenUncomparedFile = "testdata/synth-v4-uncompared.golden"
 	synthGoldenNonce          = "3b9e1f0c7a5d2468"
 )
 
@@ -597,7 +597,7 @@ func TestHandoffName(t *testing.T) {
 			t.Errorf("no name for %s", app)
 		}
 	}
-	if SynthRules != "synth-v2" {
+	if SynthRules != "synth-v4" {
 		t.Errorf("SynthRules = %q", SynthRules)
 	}
 }

@@ -135,7 +135,7 @@ func TestTheAgentPipelineRefinesFirst(t *testing.T) {
 // The record keeps the writer's task (C4, E0): made again from it, the
 // prompt is the one the writer got, byte for byte (its nonce aside), and
 // a writer call through the agent's adapters writes the same combined
-// answer again. With refining, the task carries the spec (synth-v3).
+// answer again. With refining, the task carries the spec (kept in the record; synth-v4 does not use it).
 func TestTheRecordKeepsTheWritersTaskForResynth(t *testing.T) {
 	for _, refine := range []string{"off", "on"} {
 		t.Run(refine, func(t *testing.T) {

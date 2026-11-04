@@ -103,6 +103,12 @@ type Options struct {
 	// judge command was tested with (its adapter's JudgeMinVersion). An AI
 	// not listed never judges.
 	JudgeMinVersions map[string]string
+	// Refine turns 질문 정제 on (milestone C): a run's refine field then
+	// asks the moderator first and every AI gets the question with its
+	// answer format. Off since 2026-11-04 (C4: the formats did not make the
+	// combined answer better; the user's decision): the field is ignored
+	// and every AI gets the question as written. The code stays.
+	Refine bool
 }
 
 // Server serves /v1.

@@ -72,7 +72,7 @@ const (
 	SynthEmptyText = `{"answer":""}`
 )
 
-// SynthText is the combined answer of mode ok for a synth-v2 prompt: the
+// SynthText is the combined answer of mode ok for a synth-v4 prompt: the
 // lead, then one line per DIFFER line of the data block, "- The AIs differ:
 // A vs B, C" with the AIs of each side as the prompt names them. A prompt
 // without DIFFER lines gives the lead only.

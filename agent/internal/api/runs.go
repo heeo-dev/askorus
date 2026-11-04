@@ -75,7 +75,8 @@ type RunRequest struct {
 	// Refine asks the moderator to refine the question first (질문 정제,
 	// milestone C): {"agent": "claude"} names the moderator ("" lets the
 	// agent pick among the asked AIs), {"off": true} or absent is off. The
-	// run's snapshot then carries refine.
+	// run's snapshot then carries refine. Without Options.Refine (the
+	// default since 2026-11-04) it is ignored.
 	Refine *RunRefine `json:"refine,omitempty"`
 }
 
@@ -317,7 +318,7 @@ func (s *Server) startRun(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, CodeAskFolder, "the ask folder cannot be made on the PC")
 		return
 	}
-	if rf := req.Refine; rf != nil && rf.Agent != "" && !agentNameRe.MatchString(rf.Agent) {
+	if rf := req.Refine; s.o.Refine && rf != nil && rf.Agent != "" && !agentNameRe.MatchString(rf.Agent) {
 		writeError(w, http.StatusBadRequest, CodeBadRequest, "refine must be {agent, off} with an AI of this PC")
 		return
 	}
@@ -328,7 +329,7 @@ func (s *Server) startRun(w http.ResponseWriter, r *http.Request) {
 	// it is never refined twice.
 	var refiner *compares.RunRefiner
 	runID := make(chan string, 1)
-	if rf := req.Refine; rf != nil && !rf.Off && s.compares != nil {
+	if rf := req.Refine; s.o.Refine && rf != nil && !rf.Off && s.compares != nil {
 		var asked []string
 		for _, t := range targets {
 			asked = append(asked, t.Agent)
@@ -393,7 +394,7 @@ func (s *Server) startRun(w http.ResponseWriter, r *http.Request) {
 		}
 		synth := cmp != nil && cmpErr == nil && cmp.Synthesis != nil && !cmp.Synthesis.Off
 		s.o.Logger.Info("run started", "mode", req.Mode, "tier", tier, "agents", strings.Join(names, ","), "followUp", followUp,
-			"compare", cmp != nil || cmpErr != nil, "compareCode", compareCode, "synthesis", synth)
+			"compare", cmp != nil || cmpErr != nil, "compareCode", compareCode, "synthesis", synth, "refine", refiner != nil)
 	}
 	st := s.runStatus(owner, run)
 	st.CompareError = cmpErr
