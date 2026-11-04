@@ -15,6 +15,7 @@ import Folders from '@/app/pc/[id]/folders';
 import NewSession from '@/app/pc/[id]/new';
 import Settings from '@/app/settings';
 import { conversations } from '@/ask/conversations';
+import { features } from '@/ask/features';
 import { loadAskPrefs } from '@/ask/prefs';
 import { loadPrefs, savePrefs } from '@/connections/prefs';
 import { ConnectionStore } from '@/connections/store';
@@ -356,26 +357,48 @@ describe('settings', () => {
     expect(screen.getByRole('radio', { name: 'Codex' })).toBeChecked();
   });
 
-  test('milestone C: refining questions is on by default, under Moderator, and kept when turned off', async () => {
+  // Milestone C: refining is off since 2026-11-04 (features.ts), and
+  // Settings shows nothing of it: the moderator only writes the combined answer.
+  test('milestone C: with the refining feature off, Settings has no refine switch or hint', async () => {
     const user = userEvent.setup();
     await renderRouter(routes, { initialUrl: '/settings' });
     expect(await screen.findByRole('header', { name: 'Moderator' })).toBeTruthy();
-    const refine = screen.getByRole('switch', { name: 'Refine questions (add an answer format)' });
-    expect(refine).toBeChecked();
-    expect(screen.getByText('Moderator AI (refines questions, writes the combined answer)')).toBeTruthy();
-    await user.press(refine);
-    await waitFor(async () => expect((await loadAskPrefs()).refine).toBe(false));
-    expect(screen.getByRole('switch', { name: 'Refine questions (add an answer format)' })).not.toBeChecked();
-  });
-
-  test('the info button explains what refining, comparing and combining cost and send', async () => {
-    const user = userEvent.setup();
-    await renderRouter(routes, { initialUrl: '/settings' });
-    await user.press(await screen.findByRole('button', { name: 'About the moderator' }));
+    expect(screen.queryByRole('switch', { name: 'Refine questions (add an answer format)' })).toBeNull();
+    expect(screen.getByText('Moderator AI (writes the combined answer)')).toBeTruthy();
+    await user.press(screen.getByRole('button', { name: 'About the moderator' }));
     const info = within(await screen.findByTestId('compare-info'));
-    expect(info.getByText(/answers start about 5 seconds later\. The moderator AI's company receives the question once more\.$/)).toBeTruthy();
+    expect(info.queryByText(/answers start about 5 seconds later/)).toBeNull();
     expect(info.getByText(/each AI judges twice more/)).toBeTruthy();
     expect(info.getByText(/That AI's company receives the question and every answer/)).toBeTruthy();
+  });
+
+  describe('with the refining feature turned on', () => {
+    beforeEach(() => {
+      features.refine = true;
+    });
+    afterEach(() => {
+      features.refine = false;
+    });
+
+    test('refining questions is off by default, under Moderator, and kept when turned on', async () => {
+      const user = userEvent.setup();
+      await renderRouter(routes, { initialUrl: '/settings' });
+      expect(await screen.findByRole('header', { name: 'Moderator' })).toBeTruthy();
+      const refine = screen.getByRole('switch', { name: 'Refine questions (add an answer format)' });
+      expect(refine).not.toBeChecked();
+      expect(screen.getByText('Moderator AI (refines questions, writes the combined answer)')).toBeTruthy();
+      await user.press(refine);
+      await waitFor(async () => expect((await loadAskPrefs()).refine).toBe(true));
+      expect(screen.getByRole('switch', { name: 'Refine questions (add an answer format)' })).toBeChecked();
+    });
+
+    test('the info button explains what refining costs and sends', async () => {
+      const user = userEvent.setup();
+      await renderRouter(routes, { initialUrl: '/settings' });
+      await user.press(await screen.findByRole('button', { name: 'About the moderator' }));
+      const info = within(await screen.findByTestId('compare-info'));
+      expect(info.getByText(/answers start about 5 seconds later\. The moderator AI's company receives the question once more\.$/)).toBeTruthy();
+    });
   });
 
   test('the theme is system by default; dark and light are drawn at once and kept', async () => {

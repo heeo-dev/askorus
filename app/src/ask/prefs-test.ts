@@ -6,12 +6,12 @@ const memory = () => {
   return { mem, kv };
 };
 
-const defaults = { tier: 'standard', off: [], models: {}, pc: '', compare: true, synth: true, synthAgent: 'claude', refine: true };
+const defaults = { tier: 'standard', off: [], models: {}, pc: '', compare: true, synth: true, synthAgent: 'claude', refine: false };
 
 test('ask prefs survive a round trip, compare and the combined answer off included', async () => {
   const { kv } = memory();
   expect(await loadAskPrefs(kv)).toEqual(defaults);
-  const saved = { tier: 'deep', off: ['codex'], models: { claude: 'opus' }, pc: 'pc-1', compare: false, synth: false, synthAgent: 'codex', refine: false } as const;
+  const saved = { tier: 'deep', off: ['codex'], models: { claude: 'opus' }, pc: 'pc-1', compare: false, synth: false, synthAgent: 'codex', refine: true } as const;
   await saveAskPrefs({ ...saved, off: [...saved.off], models: { ...saved.models } }, kv);
   expect(await loadAskPrefs(kv)).toEqual(saved);
   await saveAskPrefs({ ...defaultAskPrefs, compare: true }, kv);
@@ -60,14 +60,15 @@ test('bad values still fall back', async () => {
   expect(await loadAskPrefs(kv)).toEqual(defaultAskPrefs);
 });
 
-// Milestone C: refining is on unless turned off; prefs saved before it refine.
-test('a missing or odd refine setting is on', async () => {
+// Milestone C: refining is off unless turned on (since 2026-11-04, when
+// the feature itself went off); a saved choice is kept.
+test('a missing or odd refine setting is off', async () => {
   const { mem, kv } = memory();
-  expect(defaultAskPrefs.refine).toBe(true);
-  for (const odd of [undefined, 'false', 0, null]) {
+  expect(defaultAskPrefs.refine).toBe(false);
+  for (const odd of [undefined, 'true', 1, null]) {
     mem.set('ask.v1', JSON.stringify({ tier: 'quick', refine: odd }));
-    expect((await loadAskPrefs(kv)).refine).toBe(true);
+    expect((await loadAskPrefs(kv)).refine).toBe(false);
   }
-  mem.set('ask.v1', JSON.stringify({ refine: false }));
-  expect((await loadAskPrefs(kv)).refine).toBe(false);
+  mem.set('ask.v1', JSON.stringify({ refine: true }));
+  expect((await loadAskPrefs(kv)).refine).toBe(true);
 });

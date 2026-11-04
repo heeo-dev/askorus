@@ -3,7 +3,8 @@ package scenario
 // IT-16 (docs/testing.md): question refining (질문 정제, milestone C)
 // through the whole agent: the moderator fills in the question's spec,
 // every AI is asked the question with its answer template, the judges get
-// the question as written, and the combined answer is synth-v3.
+// the question as written, and the combined answer is synth-v4. Refining is
+// off in the agent since 2026-11-04 (C4); these tests turn it on.
 
 import (
 	"encoding/json"
@@ -30,8 +31,12 @@ func callsOfKind(t *testing.T, kind string) []fakecli.Call {
 	return out
 }
 
-func TestRefineAsksWithTheTemplateAndWritesV3(t *testing.T) {
-	r := newRig(t, nil)
+// refineOn turns 질문 정제 on in the rig: it is off in the agent since
+// 2026-11-04 (C4), and these tests keep its code working.
+func refineOn(o *rigOptions) { o.refine = true }
+
+func TestRefineAsksWithTheTemplateAndWritesV4(t *testing.T) {
+	r := newRig(t, refineOn)
 	r.addDevice()
 	st := r.ask(nil, map[string]any{
 		"refine":  map[string]any{"agent": "claude"},
@@ -71,19 +76,19 @@ func TestRefineAsksWithTheTemplateAndWritesV3(t *testing.T) {
 			t.Errorf("%s judge got the template", j.Role)
 		}
 	}
-	// The combined answer is synth-v3: the spec's SPEC line and FORM.
+	// The combined answer is synth-v4, which reads the question itself: no SPEC line, no FORM.
 	s := synthOf(t, c)
 	writers := callsOfKind(t, kindSynth)
 	if s.Status != compares.SynthDone || len(writers) != 1 {
 		t.Fatalf("synth %+v, %d writer calls", s, len(writers))
 	}
-	if w := writers[0].Stdin; !strings.HasPrefix(w, "[Asksemble synthesis v3]") || !strings.Contains(w, "\nSPEC: {\"kind\":\"compare\"") || !strings.Contains(w, "\nFORM. ") {
-		t.Errorf("writer prompt is not synth-v3: %q", w[:min(len(w), 200)])
+	if w := writers[0].Stdin; !strings.HasPrefix(w, "[Asksemble synthesis v4]") || strings.Contains(w, "\nSPEC: ") || strings.Contains(w, "\nFORM. ") {
+		t.Errorf("writer prompt is not synth-v4: %q", w[:min(len(w), 200)])
 	}
 }
 
 func TestRefineThatFailsAsksTheQuestionAsWritten(t *testing.T) {
-	r := newRig(t, nil)
+	r := newRig(t, refineOn)
 	r.addDevice()
 	t.Setenv(fakecli.EnvSynth, "claude="+fakecli.SynthProse)
 	st := r.ask(nil, map[string]any{"refine": map[string]any{"agent": "claude"}})
@@ -106,8 +111,47 @@ func TestRefineThatFailsAsksTheQuestionAsWritten(t *testing.T) {
 	}
 }
 
-func TestRefinePicksAnAskedModeratorAndIsOffUnlessAsked(t *testing.T) {
+// The agent's default since 2026-11-04: a run that asks for refining (an
+// older app does by default) is asked as written, with no moderator call,
+// no refine in its snapshot and synth-v4 for the combined answer.
+func TestRefineIsOffInTheAgent(t *testing.T) {
 	r := newRig(t, nil)
+	r.addDevice()
+	st := r.ask(nil, map[string]any{
+		"refine":  map[string]any{"agent": "claude"},
+		"compare": map[string]any{"synthesis": map[string]any{"agent": "claude"}},
+	})
+	run := r.waitRun(st.ID)
+	if run.Refine != nil {
+		t.Fatalf("refine %+v", run.Refine)
+	}
+	if n := len(callsOfKind(t, kindRefine)); n != 0 {
+		t.Fatalf("%d refine calls", n)
+	}
+	asks := callsOfKind(t, kindAsk)
+	if len(asks) != 3 {
+		t.Fatalf("%d asks", len(asks))
+	}
+	for _, a := range asks {
+		if strings.Contains(a.Stdin, templateMark) || !strings.Contains(a.Stdin, question) {
+			t.Errorf("%s was not asked the question as written", a.Role)
+		}
+	}
+	c, _ := r.waitComparison(st.ComparisonID)
+	s := synthOf(t, c)
+	writers := callsOfKind(t, kindSynth)
+	if s.Status != compares.SynthDone || len(writers) != 1 || !strings.HasPrefix(writers[0].Stdin, "[Asksemble synthesis v4]") {
+		t.Fatalf("synth %+v, %d writer calls", s, len(writers))
+	}
+	// A moderator name that is no AI's is not refused either: the field is ignored.
+	r.waitRun(r.ask(nil, map[string]any{"refine": map[string]any{"agent": "no such AI!"}}).ID)
+	if n := len(callsOfKind(t, kindRefine)); n != 0 {
+		t.Fatalf("%d refine calls", n)
+	}
+}
+
+func TestRefinePicksAnAskedModeratorAndIsOffUnlessAsked(t *testing.T) {
+	r := newRig(t, refineOn)
 	r.addDevice()
 	// Codex is not asked: the first asked AI that may moderate does it.
 	st := r.ask([]map[string]string{{"agent": "opencode"}, {"agent": "claude"}}, map[string]any{"refine": map[string]any{"agent": "codex"}})

@@ -128,7 +128,7 @@ func TestResynthWritesFromTheSameAnswersAsksAgainOnceAndStopsOnALimit(t *testing
 		t.Fatalf("out %s", out.String())
 	}
 	for _, c := range f.calls {
-		if c.Agent != "claude" || c.Tier != core.TierStandard || c.Refine || !strings.HasPrefix(c.Prompt, "[Asksemble synthesis v2]") {
+		if c.Agent != "claude" || c.Tier != core.TierStandard || c.Refine || !strings.HasPrefix(c.Prompt, "[Asksemble synthesis v4]") {
 			t.Fatalf("call %+v", c)
 		}
 	}
@@ -532,31 +532,9 @@ func TestTheIntentQuestionsLoad(t *testing.T) {
 	}
 }
 
-// v4 keeps the agent's data block and changes only the instructions; it
-// takes no spec. The light format keeps the person's count and form.
-func TestSynthV4AndTheLightFormat(t *testing.T) {
+// The light format keeps the person's count and form.
+func TestTheLightFormat(t *testing.T) {
 	r := taskRecord("g-1", 1)
-	task := *r.Task
-	task.Spec = &judge.QuestionSpec{Kind: "recommend", Intent: "x", Depth: "short", Language: "ko"}
-	n := judge.SynthNonce(task)
-	v4 := synthV4(task, n)
-	plain := task
-	plain.Spec = nil
-	prod := judge.SynthPrompt(plain, n)
-	block := func(p string) string { return p[strings.Index(p, "<data-"):strings.Index(p, "TASK. ")] }
-	if v4 == "" || !strings.HasPrefix(v4, "[Asksemble synthesis v4-draft]") || block(v4) != block(prod) {
-		t.Fatalf("v4:\n%s", v4)
-	}
-	if strings.Contains(v4, "SPEC: ") || strings.Contains(v4, "FORM. ") || !strings.Contains(v4, "Never write about the process") || !strings.HasSuffix(v4, prod[strings.LastIndex(prod, "OUTPUT. "):]) {
-		t.Fatalf("v4:\n%s", v4)
-	}
-	if synthV4(judge.SynthTask{Question: "x"}, n) != "" {
-		t.Fatal("v4 of one answer")
-	}
-	v41 := synthV41(task, n)
-	if !strings.HasPrefix(v41, "[Asksemble synthesis v4.1-draft]") || strings.Count(v41, synthV41Count) != 1 || strings.Replace(strings.Replace(v41, synthV41Count, "", 1), "v4.1-draft", "v4-draft", 1) != v4 {
-		t.Fatalf("v4.1:\n%s", v41)
-	}
 	rec := lightTemplate(judge.QuestionSpec{Kind: "recommend", Depth: "short", Language: "ko"})
 	if !strings.HasPrefix(rec, "답 형식 (Asksemble이 붙임") || !strings.Contains(rec, "정하지 않았으면 몇 가지") || !strings.HasSuffix(rec, "- 질문이 정한 개수, 길이, 형식이 있으면 그대로 따르세요.") || strings.Contains(rec, "짧게 답하세요") {
 		t.Fatalf("light:\n%s", rec)

@@ -331,8 +331,8 @@ type synthInput struct {
 	items   []judge.Item
 	judged  bool
 	cancel  <-chan struct{}
-	// qspec is the run's question spec when it was refined (milestone C):
-	// the combined answer is then synth-v3.
+	// qspec is the run's question spec when it was refined (milestone C,
+	// off since 2026-11-04). It rides in the task; synth-v4 does not use it.
 	qspec *judge.QuestionSpec
 }
 

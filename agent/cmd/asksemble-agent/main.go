@@ -376,6 +376,9 @@ func serve(dir string, args []string) error {
 		// each only with a CLI as new as its judge command was tested with.
 		Judge:            cfg.Judge,
 		JudgeMinVersions: judgeMinVersions(),
+		// 질문 정제 (answer formats) is off since 2026-11-04: C4 found it did
+		// not make the combined answer better. The code stays.
+		Refine: false,
 	})
 	srv := api.HTTPServer(apiSrv.Handler())
 	ln, err := api.Listen(cfg.Port)

@@ -5,7 +5,8 @@
 // existed keep it on. synth and synthAgent (S5b): once compared, one AI
 // writes a combined answer, and which one; prefs saved before them keep
 // it on, written by Claude. refine (milestone C): the writer, as moderator,
-// refines each question first; on unless turned off.
+// refines each question first; off unless turned on, and only used while
+// the feature is on (features.ts, off since 2026-11-04).
 
 import { tiers, type Tier } from '@/api/types';
 import { type KeyValue, secureKeyValue } from '@/connections/store';
@@ -29,7 +30,7 @@ export type AskPrefs = {
 };
 
 const key = 'ask.v1';
-export const defaultAskPrefs: AskPrefs = { tier: 'standard', off: [], models: {}, pc: '', compare: true, synth: true, synthAgent: 'claude', refine: true };
+export const defaultAskPrefs: AskPrefs = { tier: 'standard', off: [], models: {}, pc: '', compare: true, synth: true, synthAgent: 'claude', refine: false };
 
 export async function loadAskPrefs(kv: KeyValue = secureKeyValue): Promise<AskPrefs> {
   try {
@@ -46,7 +47,7 @@ export async function loadAskPrefs(kv: KeyValue = secureKeyValue): Promise<AskPr
       compare: typeof v.compare === 'boolean' ? v.compare : true,
       synth: typeof v.synth === 'boolean' ? v.synth : true,
       synthAgent: (synthWriters as readonly unknown[]).includes(v.synthAgent) ? v.synthAgent : 'claude',
-      refine: typeof v.refine === 'boolean' ? v.refine : true,
+      refine: typeof v.refine === 'boolean' ? v.refine : false,
     };
   } catch {
     return defaultAskPrefs;

@@ -24,6 +24,7 @@ import type { AgentClient } from '@/api/client';
 import { type Info, type RunPart, type Tier, tiers } from '@/api/types';
 import { type CardKind, canSynthesize, judgedBy, polling, writerFor } from '@/ask/compare';
 import { conversations, recentQuestions, useConversations } from '@/ask/conversations';
+import { features } from '@/ask/features';
 import { aiStatus, askErrorText, displayModel, metaLine, onlyTarget, partViews, rowValue, snapshotOf } from '@/ask/present';
 import { type AskPrefs, defaultAskPrefs, loadAskPrefs, saveAskPrefs } from '@/ask/prefs';
 import { askers, type FollowDeps, followCompare, followRun, newTurn, running, stopAll, type Target, type Turn } from '@/ask/thread';
@@ -283,7 +284,7 @@ export default function Ask() {
       info,
       auto: prefs.compare,
       synth: { on: prefs.synth, agent: prefs.synthAgent },
-      refine: { on: prefs.refine, agent: prefs.synthAgent },
+      refine: features.refine ? { on: prefs.refine, agent: prefs.synthAgent } : undefined,
       at: Date.now(),
     });
     if (!turn.agents.length) return;
