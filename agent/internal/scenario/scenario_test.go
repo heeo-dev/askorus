@@ -79,6 +79,8 @@ type rigOptions struct {
 	env     map[string]string // set before the adapters are made
 	judge   config.JudgeConfig
 	refine  bool // api.Options.Refine: off, as in the agent, unless a test turns it on
+	// noTopics turns api.Options.Topics off; it is on, as in the agent.
+	noTopics bool
 }
 
 type rig struct {
@@ -140,7 +142,7 @@ func (r *rig) start() {
 	r.server = api.New(api.Options{
 		Version: "it", Hostname: "PC", Adapters: r.adapters, Devices: r.store,
 		Logger:    logx.New(r.logs, slog.LevelDebug),
-		AskFolder: r.askDir, Judge: r.o.judge, Refine: r.o.refine,
+		AskFolder: r.askDir, Judge: r.o.judge, Refine: r.o.refine, Topics: !r.o.noTopics,
 		JudgeMinVersions: map[string]string{
 			claude.Name: claude.JudgeMinVersion, codex.Name: codex.JudgeMinVersion, opencode.Name: opencode.JudgeMinVersion,
 		},
@@ -293,7 +295,8 @@ func (r *rig) waitComparison(id string) (api.ComparisonStatus, []byte) {
 // being written.
 func synthBusy(c api.ComparisonStatus) bool {
 	st := synthStatus(c)
-	return st == compares.SynthWaiting || st == compares.SynthRunning
+	topics := c.Synthesis != nil && c.Synthesis.Topics != nil && c.Synthesis.Topics.Status == compares.TopicsRunning
+	return st == compares.SynthWaiting || st == compares.SynthRunning || topics
 }
 
 // synthStatus is the status of the comparison's combined answer, "" when
@@ -343,14 +346,27 @@ const (
 	kindJudge  = "judge"
 	kindSynth  = "synth"  // a combined-answer writer (S5b)
 	kindRefine = "refine" // a moderator refining a question (milestone C)
+	kindTopics = "topics" // the writer naming the 다른 말 items (C5): the synth command, a topics prompt
 	kindList   = "list"   // OpenCode session list
 	kindDelete = "delete" // OpenCode session delete
 	kindOther  = "other"  // claude agents
 )
 
 // kindOf is what a recorded call was. A writer's command is a judge's
-// with another schema or agent, so it is told apart first.
+// with another schema or agent, so it is told apart first; a topics call
+// is the synth command with a topics prompt.
 func kindOf(c fakecli.Call) string {
+	k := callKind(c)
+	if k == kindSynth && strings.HasPrefix(c.Stdin, judgeTopicsHead) {
+		return kindTopics
+	}
+	return k
+}
+
+// judgeTopicsHead starts every topics prompt (judge/topics.go).
+const judgeTopicsHead = "[Asksemble differ topics "
+
+func callKind(c fakecli.Call) string {
 	switch c.Role {
 	case fakecli.RoleClaude:
 		switch {

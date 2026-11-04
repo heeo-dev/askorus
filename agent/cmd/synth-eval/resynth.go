@@ -25,6 +25,7 @@ import (
 // its text in variants.go.
 var synthVariants = map[string]func(judge.SynthTask, string) string{
 	"product": judge.SynthPrompt,
+	"c5-b":    synthC5B,
 }
 
 func variantNames() []string {

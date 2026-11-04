@@ -32,8 +32,7 @@ import {
   answeredAgents,
   blockTitle,
   cardPreview,
-  differHeadline,
-  differRows,
+  differBundle,
   evidenceSections,
   metaLine,
   type PartView,
@@ -51,15 +50,18 @@ import { AnswerActions, AnswerBlock } from './AnswerBlock';
 import { AnsweringList } from './AnsweringList';
 import { Button } from './Button';
 import { CombinedAnswerCard } from './CombinedAnswer';
-import { DisagreementHighlight } from './DisagreementHighlight';
+import { DifferBundle } from './DifferBundle';
 import { EvidenceCounts, EvidenceSections } from './Evidence';
 import { Markdown } from './Markdown';
 import { themed, useTheme } from './theme';
 import { RefineLine } from './Refine';
 import { ThreadBubble } from './ThreadBubble';
 
-/** What the Ask screen keeps of a turn's view: evidence opened or folded (undefined: as the state says), the sections shown in full, the differ lines opened. */
+/** What the Ask screen keeps of a turn's view: evidence opened or folded (undefined: as the state says), the sections shown in full, and what is open of 'AI 답이 다른 곳' (differKey and the items' keys). */
 export type TurnUI = { evidence?: boolean; more: CardKind[]; expanded: string[] };
+
+/** differKey in TurnUI.expanded opens the 'AI 답이 다른 곳' list; an item's key opens its sentences. */
+export const differKey = 'differ';
 
 export type Note = { text: string; error?: boolean };
 
@@ -258,24 +260,20 @@ function Result({
           </View>
         );
       case 'done': {
-        const differ = all?.find((c) => c.kind === 'differ')?.items ?? [];
+        const bundle = differBundle(snap, all?.find((c) => c.kind === 'differ')?.items ?? [], synth.topics);
         return (
           <View style={s.synth}>
             <Markdown text={synth.text} size="synth" ais={answeredList} />
-            {differ.map((item) => {
-              const head = differHeadline(item);
-              return (
-                <DisagreementHighlight
-                  key={item.key}
-                  lead={head.summary ? '' : t('compare.differLead')}
-                  headline={head.text}
-                  groupLabel={t('compare.differGroup')}
-                  expanded={ui.expanded.includes(item.key)}
-                  onToggle={() => act.toggleDiffer(item.key)}
-                  rows={differRows(snap, item).map((r) => ({ ...r, onPress: () => act.openAnswer(r.agent) }))}
-                />
-              );
-            })}
+            {bundle ? (
+              <DifferBundle
+                view={bundle}
+                open={ui.expanded.includes(differKey)}
+                onToggle={() => act.toggleDiffer(differKey)}
+                opened={ui.expanded}
+                onToggleItem={act.toggleDiffer}
+                onOpenAnswer={act.openAnswer}
+              />
+            ) : null}
             {!synth.judged ? <Text style={s.caption}>{t('compare.synth.noJudge')}</Text> : null}
             {synth.unnamed > 0 ? <Text style={s.warn}>{t('compare.synth.unnamed')}</Text> : null}
             <AnswerActions onCopy={() => act.copy(`${turn.id}/synth`, plainNames(synth.text))} note={notes[`${turn.id}/synth`]} />

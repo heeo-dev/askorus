@@ -692,7 +692,7 @@ func TestCompareWithSynthesisNotes(t *testing.T) {
 	}
 	for _, want := range []string{
 		"(some places where the AIs differ may be missing from the combined answer: check the Differ card above)",
-		"(갈린 곳 일부가 종합 답변에 빠졌을 수 있습니다. 위의 다른 말 카드에서 확인하세요)",
+		"(AI 답이 다른 곳 일부가 종합 답변에 빠졌을 수 있습니다. 위의 다른 말 카드에서 확인하세요)",
 	} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("output lacks %q:\n%s", want, out.String())

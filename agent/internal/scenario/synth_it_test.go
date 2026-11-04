@@ -365,8 +365,8 @@ func TestIT15SynthesisWays(t *testing.T) {
 		for _, d := range calls(t, 0, kindDelete, fakecli.RoleOpenCode) {
 			ids[d.Args[2]] = true
 		}
-		if len(ids) != 3 || ids[ocAsk] {
-			t.Errorf("opencode deleted %d conversations (two judges and the writer's): %v", len(ids), ids)
+		if len(ids) != 4 || ids[ocAsk] { // C5: the writer's topics call is one more
+			t.Errorf("opencode deleted %d conversations (two judges, the writer's and its topics'): %v", len(ids), ids)
 		}
 	})
 

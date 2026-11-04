@@ -13,6 +13,7 @@ import {
   blockTitle,
   cardPreview,
   cutText,
+  differBundle,
   differHeadline,
   differRows,
   displayModel,
@@ -330,7 +331,44 @@ test('a differ headline names each side and its numbers while short, else how ma
   const bare = { ...item, sides: item.sides.map((sd) => ({ ...sd, numberSpans: [] })) };
   expect(differHeadline(bare)).toEqual({ text: "The 3 AIs' answers differ", summary: true });
   setLang('ko');
-  expect(differHeadline(bare)).toEqual({ text: 'AI 3개의 답이 갈립니다', summary: true });
+  expect(differHeadline(bare)).toEqual({ text: 'AI 3개의 답이 다릅니다', summary: true });
+});
+
+test('the AI answers differ line: topics by key with a gist per side by position, else the headline or the first words (C5)', () => {
+  const s = comparison();
+  const items = cards(s)[0].items;
+  const key = items[0].key;
+  expect(differBundle(s, [], [])).toBeNull();
+  // Named: the topic, a gist per side from its position, the AIs as codes.
+  const named = differBundle(s, items, [{ key, topic: ' Population ', gists: ['9.4 million', '9.7 million'] }]);
+  expect(named).toEqual({
+    count: 1,
+    topics: ['Population'],
+    items: [
+      {
+        key,
+        title: 'Population',
+        gists: [
+          { agents: ['claude'], text: '9.4 million' },
+          { agents: ['codex', 'opencode'], text: '9.7 million' },
+        ],
+        rows: differRows(s, items[0]),
+      },
+    ],
+  });
+  // A gist of a position that is not drawn (a whole answer) or empty is left out.
+  expect(differBundle(s, items, [{ key, topic: 'Population', gists: ['', '9.7 million'] }])?.items[0].gists).toEqual([{ agents: ['codex', 'opencode'], text: '9.7 million' }]);
+  // Not named (still naming, failed, an older agent, another key): no topics line, the headline.
+  for (const n of [undefined, [], [{ key: 'other', topic: 'x', gists: [] }], [{ key, topic: '  ', gists: [] }]]) {
+    const b = differBundle(s, items, n);
+    expect(b?.topics).toEqual([]);
+    expect(b?.items[0]).toMatchObject({ title: 'Claude 9.4, Codex·OpenCode 9.7', gists: [] });
+  }
+  // A headline that only counts the AIs gives way to the first words of the first sentence, cut with '…'.
+  const bare = items.map((it) => ({ ...it, sides: it.sides.map((sd) => ({ ...sd, numberSpans: [] })) }));
+  expect(differBundle(s, bare)?.items[0].title).toBe('It has 9.4 million people.');
+  const long = bare.map((it) => ({ ...it, sides: it.sides.map((sd) => ({ ...sd, units: sd.units.map((u) => ({ ...u, text: 'Seoul has about 9.3 million people in the city proper.' })) })) }));
+  expect(differBundle(s, long)?.items[0].title).toBe('Seoul has about 9.3 million…');
 });
 
 test('two numbers of one sentence stay apart in the headline and the who line (UX-2)', () => {
@@ -386,7 +424,7 @@ test('a Differ item against a whole answer names that AI and counts it (COR-1)',
   expect(whoOf(three)).toEqual([{ text: 'Claude ↔ ' }, { text: 'OpenCode' }, { text: ' · Codex' }]);
   expect(differHeadline(three)).toEqual({ text: "The 3 AIs' answers differ", summary: true });
   setLang('ko');
-  expect(differHeadline(item).text).toBe('AI 2개의 답이 갈립니다');
+  expect(differHeadline(item).text).toBe('AI 2개의 답이 다릅니다');
 });
 
 // ---- The evidence ----

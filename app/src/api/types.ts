@@ -358,6 +358,28 @@ export type Synthesis = {
   judged: boolean;
   unnamedSides?: number;
   error?: CodeError;
+  /** The Differ items named beside it (C5): none from an older agent or without Differ items. */
+  topics?: Topics;
+};
+
+/** One Differ item named for the 'AI 답이 다른 곳' line: gists are one per position of the item, '' for a whole answer. */
+export type DifferTopic = { key: string; topic: string; gists: string[] };
+
+/**
+ * The Differ items' topics (C5, #11): the writer of the combined answer
+ * names them at the quick tier, beside it. items come only when done; a
+ * failed one leaves the combined answer as it is.
+ */
+export type Topics = {
+  status: 'running' | 'done' | 'failed' | (string & {});
+  agent?: string;
+  model?: string;
+  attempt?: number;
+  ms?: number;
+  inputTokens?: number;
+  outputTokens?: number;
+  items?: DifferTopic[];
+  error?: CodeError;
 };
 
 export type Comparison = {

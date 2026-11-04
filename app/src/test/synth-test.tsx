@@ -131,22 +131,23 @@ test('while the AIs compare, writing the combined answer waits as the next step 
   expect(tile('Differ: 1. Show')).toBeTruthy();
 });
 
-test('where the AIs differ is a highlight in the answer that opens their own sentences, each leading to its answer', async () => {
+test('where the AI answers differ is one link line with the topics; an item opens its sentences, each leading to its answer (C5)', async () => {
   const user = await open();
   await ask(user, 'q');
   await written();
-  expect(screen.getByText(/^The AIs differ: /)).toBeTruthy();
-  // The whole line is the button, with its state (UX-1).
-  const headline = screen.getByRole('button', { name: 'The AIs differ: Claude 9.4, Codex·OpenCode 9.7' });
-  expect(headline).toBeCollapsed();
+  // Folded: the count, the link and the topics, one button with its state.
+  const link = screen.getByRole('button', { name: 'Where the AI answers differ: 1. Topic 1' });
+  expect(link).toBeCollapsed();
   expect(screen.queryByTestId('differ-panel')).toBeNull();
 
-  await user.press(headline);
+  await user.press(link);
+  expect(screen.getByRole('button', { name: 'Where the AI answers differ: 1. Topic 1' })).toBeExpanded();
   const panel = within(screen.getByTestId('differ-panel'));
-  expect(screen.getByRole('button', { name: 'The AIs differ: Claude 9.4, Codex·OpenCode 9.7' })).toBeExpanded();
+  const item = panel.getByRole('button', { name: 'Topic 1: Claude gist 1, Codex, OpenCode gist 2' });
+  expect(item).toBeCollapsed();
+  await user.press(item);
   expect(panel.getByRole('button', { name: 'Claude: It has 9.4 million people.' })).toBeTruthy();
   expect(panel.getByRole('button', { name: 'Codex: It has 9.7 million people.' })).toBeTruthy();
-  expect(panel.getByRole('button', { name: 'OpenCode: It has 9.7 million people.' })).toBeTruthy();
   expect(panel.getByText('9.4')).toHaveStyle({ fontWeight: '700' });
 
   await user.press(panel.getByRole('button', { name: 'OpenCode: It has 9.7 million people.' }));
@@ -156,18 +157,39 @@ test('where the AIs differ is a highlight in the answer that opens their own sen
   await user.press(close());
   await waitFor(() => expect(screen.queryByTestId('answer-sheet')).toBeNull());
 
-  await user.press(screen.getByRole('button', { name: 'The AIs differ: Claude 9.4, Codex·OpenCode 9.7' }));
+  await user.press(screen.getByRole('button', { name: 'Where the AI answers differ: 1. Topic 1' }));
   expect(screen.queryByTestId('differ-panel')).toBeNull();
 });
 
-test('a differ line that can only count the AIs says so alone; a whole answer on the other side is named (UX-6, COR-1)', async () => {
-  // No numbers marked on either side: the count of AIs, with no 'The AIs differ:' in front.
+test('topics still being named: the line shows the count and the polls go on until they come; failed ones leave the headline (C5)', async () => {
+  agent.topicsReply = 'hold';
+  const user = await open();
+  await ask(user, 'q');
+  await written();
+  expect(screen.getByRole('button', { name: 'Where the AI answers differ: 1' })).toBeTruthy();
+  const gets = agent.compareCalls('GET').length;
+  await later();
+  expect(agent.compareCalls('GET').length).toBeGreaterThan(gets);
+  agent.topicsReply = 'done';
+  expect(await screen.findByRole('button', { name: 'Where the AI answers differ: 1. Topic 1' }, { timeout: 5000 })).toBeTruthy();
+
+  agent.topicsReply = 'failed';
+  await user.press(screen.getByRole('button', { name: 'New question' }));
+  await ask(user, 'q2');
+  await written();
+  await user.press(screen.getByRole('button', { name: 'Where the AI answers differ: 1' }));
+  expect(within(screen.getByTestId('differ-panel')).getByRole('button', { name: 'Claude 9.4, Codex·OpenCode 9.7' })).toBeTruthy();
+});
+
+test('from an older agent without topics an item is titled by its headline, else by its first words; a whole answer on the other side is named (UX-6, COR-1)', async () => {
+  agent.topicsReply = 'none';
+  // No numbers marked on either side: the first words of the first sentence.
   agent.itemsTweak = (items) => items.map((it) => ({ ...it, positions: it.positions.map((p) => ({ agents: p.agents, units: p.units })) }));
   const user = await open();
   await ask(user, 'q');
   await written();
-  expect(screen.getByRole('button', { name: "The 3 AIs' answers differ" })).toBeCollapsed();
-  expect(screen.queryByText(/^The AIs differ: /)).toBeNull();
+  await user.press(screen.getByRole('button', { name: 'Where the AI answers differ: 1' }));
+  expect(within(screen.getByTestId('differ-panel')).getByRole('button', { name: 'It has 9.4 million people.' })).toBeTruthy();
 
   // Codex's whole answer against Claude's sentence (no evidence): both AIs counted and named.
   agent.itemsTweak = (items) =>
@@ -175,9 +197,10 @@ test('a differ line that can only count the AIs says so alone; a whole answer on
   await user.press(screen.getByRole('button', { name: 'New question' }));
   await ask(user, 'q2');
   await written();
-  const line = screen.getByRole('button', { name: "The 2 AIs' answers differ" });
-  await user.press(line);
-  expect(within(screen.getByTestId('differ-panel')).getByRole('button', { name: 'Claude: It has 9.4 million people.' })).toBeTruthy();
+  await user.press(screen.getByRole('button', { name: 'Where the AI answers differ: 1' }));
+  const panel = within(screen.getByTestId('differ-panel'));
+  await user.press(panel.getByRole('button', { name: 'It has 9.4 million people.' }));
+  expect(panel.getByRole('button', { name: 'Claude: It has 9.4 million people.' })).toBeTruthy();
   await user.press(screen.getByRole('button', { name: 'Differ: 1. Show' }));
   expect(within(screen.getByTestId('evidence-differ')).getByText('Claude ↔ Codex')).toBeTruthy();
 });
@@ -413,7 +436,7 @@ test('in Korean the combined answer reads in Korean', async () => {
   await written();
   expect(screen.getByRole('header', { name: '종합 답변' })).toBeTruthy();
   expect(screen.getByText('AI가 쓴 종합이라 틀릴 수 있습니다.')).toBeTruthy();
-  expect(screen.getByText(/^AI마다 다릅니다: /)).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'AI 답이 다른 곳 1개: Topic 1' })).toBeTruthy();
   expect(screen.getByText('답 1초 · 비교 10초')).toBeTruthy();
   for (const name of ['다른 말 1개, 펼치기', '확인 필요 0개, 펼치기', '같은 말 1개, 펼치기', '한 AI만 2개, 펼치기']) expect(tile(name)).toBeTruthy();
   await user.press(screen.getByRole('button', { name: '판정 정보' }));

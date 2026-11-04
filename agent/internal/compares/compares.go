@@ -131,6 +131,10 @@ type Options struct {
 	Runs     RunSource // nil in the CLI, which only starts direct comparisons
 	Logger   *slog.Logger
 	Now      func() time.Time // time.Now when nil; tests move it for expiry
+	// Topics names the 다른 말 items beside the combined answer (C5,
+	// topics.go). The agent turns it on; tests that count writer calls
+	// leave it off.
+	Topics bool
 	// QueueLimit, JudgeLimit and SynthLimit replace the constants when
 	// not zero, for tests.
 	QueueLimit, JudgeLimit, SynthLimit time.Duration

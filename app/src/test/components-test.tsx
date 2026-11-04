@@ -15,7 +15,7 @@ import { Button } from '@/ui/Button';
 import { CombinedAnswerCard } from '@/ui/CombinedAnswer';
 import { Composer, FollowBar } from '@/ui/Composer';
 import { Chip, Mark, PillChoice, Segment, SwitchRow } from '@/ui/controls';
-import { DisagreementHighlight } from '@/ui/DisagreementHighlight';
+import { DifferBundle } from '@/ui/DifferBundle';
 import { EvidenceCounts, EvidenceSections } from '@/ui/Evidence';
 import { Icon, IconButton, iconNames } from '@/ui/Icon';
 import { Group, Row } from '@/ui/List';
@@ -420,39 +420,58 @@ describe('the combined answer', () => {
     expect(screen.queryByTestId('skeleton', { includeHiddenElements: true })).toBeNull();
   });
 
-  test('the differ highlight opens the AIs’ own sentences', async () => {
+  test('where the AI answers differ: one link line with the topics, an item per place, its sentences under it (C5)', async () => {
     const user = userEvent.setup();
     const toggle = jest.fn();
-    const toClaude = jest.fn();
+    const toggleItem = jest.fn();
+    const openAnswer = jest.fn();
     const rows = [
-      { key: 'claude', agent: 'claude', name: 'Claude', unit: unit('claude:1', '15~20년, 30만 km 넘게 씁니다.'), spans: [{ unit: 'claude:1', start: 0, end: 6 }], onPress: toClaude },
-      { key: 'codex', agent: 'codex', name: 'Codex', unit: unit('codex:1', '보통 10~15년 씁니다.', 'codex'), spans: [], onPress: () => undefined },
+      { key: 'claude:1', agent: 'claude', name: 'Claude', unit: unit('claude:1', '15~20년, 30만 km 넘게 씁니다.'), spans: [{ unit: 'claude:1', start: 0, end: 6 }] },
+      { key: 'codex:1', agent: 'codex', name: 'Codex', unit: unit('codex:1', '보통 10~15년 씁니다.', 'codex'), spans: [] },
     ];
-    const view = (expanded: boolean) => (
-      <DisagreementHighlight lead="The AIs differ:" headline="Claude 15~20년, Codex 10~15년" groupLabel="Sentences that differ by AI" expanded={expanded} onToggle={toggle} rows={rows} />
+    const bundle = (topics: boolean) => ({
+      count: 2,
+      topics: topics ? ['Life span', 'Battery'] : [],
+      items: [
+        { key: 'd:1', title: topics ? 'Life span' : 'Claude 15~20년, Codex 10~15년', gists: topics ? [{ agents: ['claude'], text: '15~20 years' }, { agents: ['codex'], text: '10~15 years' }] : [], rows },
+        { key: 'd:2', title: topics ? 'Battery' : '배터리는 8년 뒤에…', gists: [], rows },
+      ],
+    });
+    const view = (o: { topics: boolean; open: boolean; opened?: string[] }) => (
+      <DifferBundle view={bundle(o.topics)} open={o.open} onToggle={toggle} opened={o.opened ?? []} onToggleItem={toggleItem} onOpenAnswer={openAnswer} />
     );
-    await render(view(false));
-    // The whole line is one button with its state (UX-1): Android gives a
-    // Text inside another Text no node of its own unless it is a link, so
-    // TalkBack could not reach a highlight that was the button.
-    const head = screen.getByRole('button', { name: 'The AIs differ: Claude 15~20년, Codex 10~15년' });
-    expect(inText(head)).toBe(false);
-    expect(head).not.toBeExpanded();
+    // Folded: the count, the link and the topics, one button with its state.
+    await render(view({ topics: true, open: false }));
+    const link = screen.getByRole('button', { name: 'Where the AI answers differ: 2. Life span · Battery' });
+    expect(link).toBeCollapsed();
+    expect(screen.getByText('Life span · Battery')).toBeTruthy();
     expect(screen.queryByTestId('differ-panel')).toBeNull();
-    await user.press(head);
+    await user.press(link);
     expect(toggle).toHaveBeenCalled();
 
-    await render(view(true));
-    expect(screen.getByRole('button', { name: 'The AIs differ: Claude 15~20년, Codex 10~15년' })).toBeExpanded();
+    // Open: an item per place with its topic and gists; the topics line goes.
+    await render(view({ topics: true, open: true }));
+    expect(screen.getByRole('button', { name: 'Where the AI answers differ: 2. Life span · Battery' })).toBeExpanded();
+    expect(screen.queryByText('Life span · Battery')).toBeNull();
+    const item = screen.getByRole('button', { name: 'Life span: Claude 15~20 years, Codex 10~15 years' });
+    expect(item).toBeCollapsed();
+    expect(screen.queryByRole('button', { name: 'Claude: 15~20년, 30만 km 넘게 씁니다.' })).toBeNull();
+    await user.press(item);
+    expect(toggleItem).toHaveBeenCalledWith('d:1');
+
+    // An item opened: the AIs' own sentences, each opening its answer.
+    await render(view({ topics: true, open: true, opened: ['d:1'] }));
+    expect(screen.getByRole('button', { name: 'Life span: Claude 15~20 years, Codex 10~15 years' })).toBeExpanded();
     expect(screen.getByText('15~20년')).toBeTruthy(); // the differing number, bold
     await user.press(screen.getByRole('button', { name: 'Claude: 15~20년, 30만 km 넘게 씁니다.' }));
-    expect(toClaude).toHaveBeenCalled();
+    expect(openAnswer).toHaveBeenCalledWith('claude');
 
-    // A headline that is the count stands alone (UX-6): no lead, no space before it.
-    await render(<DisagreementHighlight lead="" headline="The 2 AIs' answers differ" groupLabel="g" expanded={false} onToggle={toggle} rows={rows} />);
-    const alone = screen.getByRole('button', { name: "The 2 AIs' answers differ" });
-    expect(inText(alone)).toBe(false);
-    expect(textOf(alone).startsWith(' ')).toBe(false);
+    // Without topics: the count alone, the items by their headline.
+    await render(view({ topics: false, open: false }));
+    expect(screen.getByRole('button', { name: 'Where the AI answers differ: 2' })).toBeCollapsed();
+    await render(view({ topics: false, open: true }));
+    expect(screen.getByRole('button', { name: 'Claude 15~20년, Codex 10~15년' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: '배터리는 8년 뒤에…' })).toBeTruthy();
   });
 
   test('AI cards: the one a follow-up goes to says so', async () => {

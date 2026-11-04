@@ -436,7 +436,7 @@ func printSynthesis(out io.Writer, s *compares.Synthesis) {
 		if s.UnnamedSides > 0 {
 			fmt.Fprintln(out)
 			say(out, m("(some places where the AIs differ may be missing from the combined answer: check the Differ card above)",
-				"(갈린 곳 일부가 종합 답변에 빠졌을 수 있습니다. 위의 다른 말 카드에서 확인하세요)"))
+				"(AI 답이 다른 곳 일부가 종합 답변에 빠졌을 수 있습니다. 위의 다른 말 카드에서 확인하세요)"))
 		}
 	case compares.SynthFailed:
 		code, message := core.ErrCodeInternal, ""

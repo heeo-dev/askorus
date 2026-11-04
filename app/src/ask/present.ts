@@ -18,7 +18,7 @@
 
 import { agentName } from '@/api/agents';
 import { AgentError } from '@/api/client';
-import type { Comparison, Info, NumberSpan, RunPart } from '@/api/types';
+import type { Comparison, DifferTopic, Info, NumberSpan, RunPart } from '@/api/types';
 import {
   type CardKind,
   cardKinds,
@@ -304,6 +304,55 @@ export function differRows(s: Comparison | undefined, item: ItemView): DifferRow
   return item.sides.flatMap((sd) =>
     sd.units.map((u) => ({ key: u.id, agent: agents.get(u.answer) ?? u.answer, name: u.agent, unit: u, spans: sd.numberSpans })),
   );
+}
+
+/** One side's gist under a topic: its AIs (codes) and a few words. */
+export type DifferGist = { agents: string[]; text: string };
+/** One item of the 'AI 답이 다른 곳' list: its title, the sides' gists ([] without a topic) and its rows. */
+export type DifferTopicView = { key: string; title: string; gists: DifferGist[]; rows: DifferRow[] };
+/** The 'AI 답이 다른 곳' line (C5): how many items, the titles the folded line lists ([] without topics) and the items. */
+export type DifferBundleView = { count: number; topics: string[]; items: DifferTopicView[] };
+
+/**
+ * differBundle is the one folded line under the combined answer (C5, #11):
+ * an item per Differ item, titled by the topic the PC named (with a gist
+ * per side), else by differHeadline, else, when that only counts the AIs,
+ * by the first words of the first side's sentence. The folded line lists
+ * the titles only once the PC named an item: before that (still naming,
+ * failed, an older agent) it is the count alone. null without Differ items.
+ */
+export function differBundle(s: Comparison | undefined, items: ItemView[], named?: DifferTopic[]): DifferBundleView | null {
+  if (!items.length) return null;
+  const agents = answerAgents(s);
+  const byKey = new Map((named ?? []).map((n) => [n.key, n]));
+  let any = false;
+  const views = items.map((item): DifferTopicView => {
+    const n = byKey.get(item.key);
+    const topic = n?.topic.trim() ?? '';
+    if (topic) any = true;
+    const gists = topic
+      ? item.sides
+          .map((sd) => ({
+            agents: [...new Set(sd.units.map((u) => agents.get(u.answer) ?? u.answer))],
+            text: (sd.pos !== undefined ? (n?.gists[sd.pos] ?? '') : '').trim(),
+          }))
+          .filter((g) => g.text)
+      : [];
+    return { key: item.key, title: topic || fallbackTitle(item), gists, rows: differRows(s, item) };
+  });
+  return { count: views.length, topics: any ? views.map((v) => v.title) : [], items: views };
+}
+
+const titleChars = 28;
+
+// fallbackTitle: the headline, unless it only counts the AIs; then the
+// first words of the first side's sentence, cut with '…'.
+function fallbackTitle(item: ItemView): string {
+  const head = differHeadline(item);
+  const first = (item.sides[0]?.units[0]?.text ?? '').replace(/\s+/g, ' ').trim();
+  if (!head.summary || !first) return head.text;
+  const chars = [...first];
+  return chars.length > titleChars ? `${chars.slice(0, titleChars - 1).join('').trimEnd()}…` : first;
 }
 
 // ---- The evidence ----

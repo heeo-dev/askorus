@@ -109,6 +109,9 @@ type Options struct {
 	// combined answer better; the user's decision): the field is ignored
 	// and every AI gets the question as written. The code stays.
 	Refine bool
+	// Topics names the 다른 말 items beside the combined answer (C5, #11,
+	// compares/topics.go): the agent turns it on.
+	Topics bool
 }
 
 // Server serves /v1.
@@ -149,7 +152,7 @@ func New(o Options) *Server {
 	if filepath.IsAbs(o.AskFolder) {
 		s.gate.Folder = core.JudgeFolder(o.AskFolder)
 	}
-	s.compares = compares.New(compares.Options{Adapters: o.Adapters, Gate: s.gate, Runs: s.runs, Logger: o.Logger})
+	s.compares = compares.New(compares.Options{Adapters: o.Adapters, Gate: s.gate, Runs: s.runs, Logger: o.Logger, Topics: o.Topics})
 	// A run's comparison starts when its last answer is in (P2-3).
 	s.runs.OnEnd = s.compares.RunEnded
 	return s

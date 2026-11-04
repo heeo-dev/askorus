@@ -89,7 +89,8 @@ const msgComparisonNotFound = "no such comparison (ended more than 30 minutes ag
 // answer waits or runs.
 func comparisonStatus(c compares.Comparison) ComparisonStatus {
 	st := ComparisonStatus{Comparison: c}
-	busy := c.Synthesis != nil && (c.Synthesis.Status == compares.SynthWaiting || c.Synthesis.Status == compares.SynthRunning)
+	busy := c.Synthesis != nil && (c.Synthesis.Status == compares.SynthWaiting || c.Synthesis.Status == compares.SynthRunning ||
+		c.Synthesis.Topics != nil && c.Synthesis.Topics.Status == compares.TopicsRunning)
 	if c.Status == compares.Waiting || c.Status == compares.Running || busy {
 		st.PollAfterMs = compares.PollMs
 	}

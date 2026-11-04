@@ -64,6 +64,10 @@ type Synthesis struct {
 	// whose AI names the text has: the phone warns when it is over 0.
 	UnnamedSides int          `json:"unnamedSides,omitempty"`
 	Error        *judge.Error `json:"error,omitempty"`
+	// Topics names the 다른 말 items for the phone (C5, topics.go): none
+	// when Options.Topics is off, the comparison has no such item or the
+	// combined answer has not started.
+	Topics *Topics `json:"topics,omitempty"`
 }
 
 // synthState is a comparison's combined answer. Manager.mu guards it.
@@ -81,6 +85,7 @@ type synthState struct {
 	err       *judge.Error
 	cancelled bool
 	cancelCh  chan struct{} // closed by Cancel while it runs
+	topics    *topicsState  // the 다른 말 items named beside it (topics.go)
 }
 
 // newSynth is the combined answer a spec asks for: off without one.
@@ -170,12 +175,14 @@ func snapshotSynthLocked(c *comparison) *Synthesis {
 		e := *s.err
 		out.Error = &e
 	}
+	out.Topics = snapshotTopics(s.topics)
 	return out
 }
 
-// synthBusy reports whether c's combined answer waits or is written.
+// synthBusy reports whether c's combined answer waits or is written, or
+// its topics are being named.
 func synthBusy(c *comparison) bool {
-	return c.synth.status == SynthWaiting || c.synth.status == SynthRunning
+	return c.synth.status == SynthWaiting || c.synth.status == SynthRunning || topicsBusy(c)
 }
 
 // synthResetLocked makes c's combined answer wait for the next round's
@@ -268,6 +275,11 @@ func (m *Manager) cancelSynthLocked(c *comparison) {
 		m.synthEndLocked(c, synthFailure(core.ErrCodeCancelled, ""))
 	case SynthRunning:
 		if !c.synth.cancelled {
+			c.synth.cancelled = true
+			close(c.synth.cancelCh)
+		}
+	default: // the topics may still wait for a slot
+		if topicsBusy(c) && !c.synth.cancelled {
 			c.synth.cancelled = true
 			close(c.synth.cancelCh)
 		}
@@ -385,6 +397,7 @@ func (m *Manager) synthRun(c *comparison) (string, int, *judge.Error) {
 	})
 	m.log.Info("synthesis started", "comparison", c.id, "writer", w.Agent, "judged", in.judged, "rules", judge.SynthRulesOf(task),
 		"ais", len(task.Answers), "items", len(task.Differ)+len(task.Check), "leftOut", task.LeftOut)
+	m.topicsStart(c, w, in, names)
 	if err := makeFolder(m.o.Gate.Folder); err != nil {
 		return "", 0, synthFailure(core.ErrCodeInternal, "")
 	}
