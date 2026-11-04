@@ -142,6 +142,13 @@ export class FakeAgent {
   /** Combined answers (S5b): what the writing AI does (default 'ok'). */
   synthReply: SynthReply = 'ok';
   /**
+   * The Differ items' topics (C5): named with the combined answer (done,
+   * 'Topic 1' with 'gist 1', 'gist 2', … per side), failed, still being
+   * named until this is set to something else (hold), or none as from an
+   * older agent.
+   */
+  topicsReply: 'done' | 'failed' | 'hold' | 'none' = 'done';
+  /**
    * Question refining (milestone C): what the moderator does with a run that
    * asks for it: a comparison spec with its template (default), an open
    * question without one, or a failure (the question went as written). The
@@ -312,7 +319,7 @@ export class FakeAgent {
 
   // resetSynth makes a synthesis wait to be written again (by want, or the AI the PC picks).
   private resetSynth(y: FakeSynth, want?: string) {
-    const written = ['agent', 'model', 'attempt', 'ms', 'inputTokens', 'outputTokens', 'text', 'unnamedSides', 'error'] as const;
+    const written = ['agent', 'model', 'attempt', 'ms', 'inputTokens', 'outputTokens', 'text', 'unnamedSides', 'error', 'topics'] as const;
     for (const k of written) delete y[k];
     Object.assign(y, { status: 'waiting', judged: false });
     if (want !== undefined) {
@@ -349,6 +356,7 @@ export class FakeAgent {
       this.synthCalls++;
       return;
     }
+    if (y.topics?.status === 'running' && this.topicsReply !== 'hold') this.topicsEnd(y);
     if (y.status !== 'running' || this.synthReply === 'hold') return;
     if (this.synthReply === 'fail') {
       Object.assign(y, { status: 'failed', ms: 2100, error: { code: 'judge_failed', message: 'usage limit reached' } });
@@ -365,6 +373,23 @@ export class FakeAgent {
       text,
       unnamedSides: unnamedSides(items, cmp.answers, agentName, text),
     });
+    const differ = items.filter((it) => it.kind === 'differ');
+    if (this.topicsReply === 'none' || !differ.length) return;
+    y.topics = { status: 'running', agent: y.agent, model: this.tierModel(y.agent ?? '', 'quick'), attempt: 1 };
+    this.topicsItems = differ.map((it, i) => ({ key: it.key, topic: `Topic ${i + 1}`, gists: it.positions.map((p, j) => (p.units.length ? `gist ${j + 1}` : '')) }));
+    if (this.topicsReply !== 'hold') this.topicsEnd(y);
+  }
+
+  private topicsItems: { key: string; topic: string; gists: string[] }[] = [];
+
+  // topicsEnd ends a synthesis's running topics as topicsReply says.
+  private topicsEnd(y: FakeSynth) {
+    if (!y.topics) return;
+    if (this.topicsReply === 'failed') {
+      y.topics = { ...y.topics, status: 'failed', attempt: 2, ms: 9100, error: { code: 'judge_bad_output', message: 'the reply did not name each item' } };
+      return;
+    }
+    y.topics = { ...y.topics, status: 'done', ms: 9800, inputTokens: 900, outputTokens: 40, items: this.topicsItems };
   }
 
   // synthSnap is the snapshot's synthesis: the AI asked for until one is picked, the text only when done.
@@ -548,7 +573,7 @@ export class FakeAgent {
       counts,
     };
     if (cmp.runId) s.runId = cmp.runId;
-    const writing = cmp.synth?.status === 'waiting' || cmp.synth?.status === 'running';
+    const writing = cmp.synth?.status === 'waiting' || cmp.synth?.status === 'running' || cmp.synth?.topics?.status === 'running';
     if (cmp.status === 'waiting' || cmp.status === 'running' || writing) s.pollAfterMs = 1;
     if (cmp.error) s.error = cmp.error;
     if (cmp.synth) s.synthesis = this.synthSnap(cmp.synth);
@@ -592,7 +617,7 @@ export class FakeAgent {
     if (m[2] === 'synthesis' && !this.synthOn) return err(404, 'not_found');
     const cmp = this.comparisons.get(decodeURIComponent(m[1]));
     if (!cmp) return err(404, 'comparison_not_found');
-    const writing = cmp.synth?.status === 'waiting' || cmp.synth?.status === 'running';
+    const writing = cmp.synth?.status === 'waiting' || cmp.synth?.status === 'running' || cmp.synth?.topics?.status === 'running';
     if (c.method === 'GET' && !m[2]) {
       this.look(cmp);
       return json(200, this.snapshot(cmp));

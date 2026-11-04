@@ -25,6 +25,7 @@ import type {
   Comparison,
   ComparisonAnswer,
   ComparisonRequest,
+  DifferTopic,
   Info,
   Judgment,
   NumberSpan,
@@ -401,7 +402,7 @@ export function compareErrorText(code: string, message?: string): string {
 export type SynthState =
   | { kind: 'waiting' }
   | { kind: 'writing' }
-  | { kind: 'done'; text: string; agent: string; model?: string; ms?: number; judged: boolean; unnamed: number }
+  | { kind: 'done'; text: string; agent: string; model?: string; ms?: number; judged: boolean; unnamed: number; topics?: DifferTopic[] }
   | { kind: 'failed'; code: string; message?: string; retry: boolean }
   | { kind: 'off'; cost: 1 };
 
@@ -441,6 +442,7 @@ export function synthState(turn: Turn, info: Info | null): SynthState | null {
       };
       if (y.model) out.model = y.model;
       if (y.ms !== undefined) out.ms = y.ms;
+      if (y.topics?.status === 'done' && Array.isArray(y.topics.items)) out.topics = y.topics.items;
       return out;
     }
     case 'failed': {
@@ -564,8 +566,8 @@ export function answeringLines(turn: Turn, now: number): { agent: string; s: num
 
 /** One unit to draw. answer is the answer id; agent is the AI's display name. */
 export type UnitView = { id: string; answer: string; agent: string; kind: string; text: string; context?: string; math: UnitMath[] };
-/** One side of an item: the AIs that say it (display names) and their units. */
-export type SideView = { agents: string[]; units: UnitView[]; numberSpans: NumberSpan[] };
+/** One side of an item: the AIs that say it (display names) and their units; pos is its place among the item's positions. */
+export type SideView = { agents: string[]; units: UnitView[]; numberSpans: NumberSpan[]; pos?: number };
 /**
  * missing: the AIs (display names) whose answers this item could not be
  * compared with. whole: the AIs (display names) of the sides that are a
@@ -614,9 +616,9 @@ export function cards(s: Comparison): CardView[] {
     if (!isCardKind(it.kind) || seen.has(it.key)) continue;
     const sides: SideView[] = [];
     const whole: string[] = [];
-    for (const p of it.positions ?? []) {
+    for (const [pos, p] of (it.positions ?? []).entries()) {
       const us = (p.units ?? []).map((id) => units.get(id)).filter((u): u is UnitView => !!u);
-      if (us.length) sides.push({ agents: (p.agents ?? []).map(nameOf), units: us, numberSpans: p.numberSpans ?? [] });
+      if (us.length) sides.push({ agents: (p.agents ?? []).map(nameOf), units: us, numberSpans: p.numberSpans ?? [], pos });
       else if (!(p.units ?? []).length) whole.push(...(p.agents ?? []).map(nameOf));
     }
     if (!sides.length) continue;
