@@ -474,6 +474,39 @@ describe('the combined answer', () => {
     expect(screen.getByRole('button', { name: '배터리는 8년 뒤에…' })).toBeTruthy();
   });
 
+  test('an opened place shows two sentences per AI, then n more, which opens the rest of that AI (C5)', async () => {
+    const user = userEvent.setup();
+    const toggleItem = jest.fn();
+    const cx = (n: number) => ({ key: `codex:${n}`, agent: 'codex', name: 'Codex', unit: unit(`codex:${n}`, `Codex sentence ${n}.`, 'codex'), spans: [] });
+    const rows = [{ key: 'claude:1', agent: 'claude', name: 'Claude', unit: unit('claude:1', 'Claude sentence 1.'), spans: [] }, cx(1), cx(2), cx(3), cx(4)];
+    const view = (opened: string[]) => (
+      <DifferBundle
+        view={{ count: 1, topics: ['Specs'], items: [{ key: 'd:1', title: 'Specs', gists: [], rows }] }}
+        open
+        onToggle={() => undefined}
+        opened={opened}
+        onToggleItem={toggleItem}
+        onOpenAnswer={() => undefined}
+      />
+    );
+    await render(view(['d:1']));
+    expect(screen.getByRole('button', { name: 'Claude: Claude sentence 1.' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Codex: Codex sentence 2.' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Codex: Codex sentence 3.' })).toBeNull();
+    // One AI's sentence or two: no 'more' line for it.
+    expect(screen.queryByRole('button', { name: /from Claude$/ })).toBeNull();
+    const more = screen.getByRole('button', { name: 'Show 2 more from Codex' });
+    expect(more).toBeCollapsed();
+    expect(screen.getByText('2 more')).toBeTruthy();
+    await user.press(more);
+    expect(toggleItem).toHaveBeenCalledWith('d:1|codex');
+
+    await render(view(['d:1', 'd:1|codex']));
+    expect(screen.getByRole('button', { name: 'Codex: Codex sentence 4.' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Show less from Codex' })).toBeExpanded();
+    expect(screen.getByText('Show less')).toBeTruthy();
+  });
+
   test('AI cards: the one a follow-up goes to says so', async () => {
     const user = userEvent.setup();
     const open = jest.fn();
