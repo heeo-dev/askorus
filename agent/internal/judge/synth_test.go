@@ -597,7 +597,7 @@ func TestHandoffName(t *testing.T) {
 			t.Errorf("no name for %s", app)
 		}
 	}
-	if SynthRules != "synth-v4" {
+	if SynthRules != "synth-v4.2" {
 		t.Errorf("SynthRules = %q", SynthRules)
 	}
 }

@@ -32,6 +32,16 @@ const RefineAgent = "asksemble-refine"
 // RefineSpec is the question spec the fake moderator gives.
 const RefineSpec = `{"kind":"compare","intent":"상자의 가격과 높이","depth":"short","language":"ko"}`
 
+// EnvTopics is the mode of a topics call (C5: the 다른 말 items named
+// beside the combined answer): the synth modes, by AI as EnvSynth, apart
+// from EnvSynth so a synth mode with _once stays the combined answer's.
+const EnvTopics = "ASKSEMBLE_FAKE_TOPICS"
+
+// isTopicsPrompt reports whether a writer's prompt is a topics prompt.
+func isTopicsPrompt(prompt string) bool {
+	return strings.HasPrefix(prompt, "[Asksemble differ topics ")
+}
+
 // isRefinePrompt reports whether a writer's prompt is a refine prompt.
 func isRefinePrompt(prompt string) bool { return strings.HasPrefix(prompt, "[Asksemble refine ") }
 
@@ -92,6 +102,42 @@ func SynthText(prompt string) string {
 	return b.String()
 }
 
+// TopicsText is the topics reply of mode ok for a topics prompt: one line
+// per ITEM line of the data block, "Fake topic N | gist 1 | gist 2" with a
+// gist per side. With mode missing_names a topics reply is a line short.
+func TopicsText(prompt string) string {
+	var lines []string
+	end := ""
+	for _, line := range strings.Split(prompt, "\n") {
+		line = strings.TrimRight(line, "\r")
+		if end == "" {
+			if strings.HasPrefix(line, "<data-") && strings.HasSuffix(line, ">") {
+				end = "</" + line[1:]
+			}
+			continue
+		}
+		if line == end {
+			break
+		}
+		_, rest, ok := strings.Cut(line, ": ")
+		if !ok || !strings.HasPrefix(line, "ITEM ") {
+			continue
+		}
+		var d struct {
+			Sides []json.RawMessage `json:"sides"`
+		}
+		if json.Unmarshal([]byte(rest), &d) != nil {
+			continue
+		}
+		parts := []string{fmt.Sprintf("Fake topic %d", len(lines)+1)}
+		for i := range d.Sides {
+			parts = append(parts, fmt.Sprintf("gist %d", i+1))
+		}
+		lines = append(lines, strings.Join(parts, " | "))
+	}
+	return strings.Join(lines, "\n")
+}
+
 // synthSides reads the AIs of every side of the prompt's DIFFER lines.
 func synthSides(prompt string) [][][]string {
 	var out [][][]string
@@ -128,16 +174,21 @@ func synthSides(prompt string) [][][]string {
 	return out
 }
 
-// synthMode is role's mode for this synth call.
-func synthMode(role string) (string, error) {
-	m, err := pick(os.Getenv(EnvSynth), role, SynthOK, func(v string) bool {
+// synthMode is role's mode for this synth call: EnvTopics's for a topics
+// prompt, else EnvSynth's.
+func synthMode(role, prompt string) (string, error) {
+	env, kind := EnvSynth, "synth-"
+	if isTopicsPrompt(prompt) {
+		env, kind = EnvTopics, "topics-"
+	}
+	m, err := pick(os.Getenv(env), role, SynthOK, func(v string) bool {
 		return slices.Contains(SynthModes, strings.TrimSuffix(v, "_once"))
 	})
 	if err != nil {
 		return "", err
 	}
 	mode, once := strings.CutSuffix(m, "_once")
-	if once && !firstCall(role, "synth-"+mode) {
+	if once && !firstCall(role, kind+mode) {
 		return SynthOK, nil
 	}
 	return mode, nil
@@ -166,6 +217,14 @@ func synthReply(mode, prompt string) string {
 	case SynthEmpty:
 		return SynthEmptyText
 	}
+	if isTopicsPrompt(prompt) {
+		text := TopicsText(prompt)
+		if mode == SynthMissingNames { // a line short: not one line per item
+			text = strings.Join(strings.Split(text, "\n")[1:], "\n")
+		}
+		b, _ := json.Marshal(map[string]string{"answer": text})
+		return string(b)
+	}
 	text := SynthText(prompt)
 	if mode == SynthMissingNames {
 		text = SynthMissingNamesText
@@ -183,7 +242,7 @@ func isSynthSchema(schema string) bool {
 // claudeSynth prints the result object of a synth call, as claudeJudge
 // does for a judge.
 func claudeSynth(c *Call) int {
-	mode, err := synthMode(RoleClaude)
+	mode, err := synthMode(RoleClaude, c.Stdin)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "fakecli:", err)
 		return 2
@@ -223,7 +282,7 @@ func claudeSynth(c *Call) int {
 
 // codexSynth prints the events of a synth call, as codexJudge does.
 func codexSynth(c *Call) int {
-	mode, err := synthMode(RoleCodex)
+	mode, err := synthMode(RoleCodex, c.Stdin)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "fakecli:", err)
 		return 2
@@ -260,7 +319,7 @@ func codexSynth(c *Call) int {
 // as OpenCode does, and prints a step with the synth JSON in a ```json
 // fence, as opencodeJudge does.
 func opencodeSynth(c *Call) int {
-	mode, err := synthMode(RoleOpenCode)
+	mode, err := synthMode(RoleOpenCode, c.Stdin)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "fakecli:", err)
 		return 2

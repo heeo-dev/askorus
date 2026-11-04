@@ -383,6 +383,7 @@ func serve(dir string, args []string) error {
 		Judge:            cfg.Judge,
 		JudgeMinVersions: judgeMinVersions(),
 		Refine:           refineOn,
+		Topics:           true,
 	})
 	srv := api.HTTPServer(apiSrv.Handler())
 	ln, err := api.Listen(cfg.Port)

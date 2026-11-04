@@ -63,6 +63,7 @@
 #   powershell -NoProfile -File scripts\test-live.ps1 -Run LT07    # only LT-07
 #   powershell -NoProfile -File scripts\test-live.ps1 -Run LT08    # only LT-08
 #   powershell -NoProfile -File scripts\test-live.ps1 -Run LT09    # only LT-09
+#   powershell -NoProfile -File scripts\test-live.ps1 -Run LT10    # only LT-10
 param([string]$Run)
 $go = Join-Path $env:USERPROFILE 'sdk\go1.27.3\bin'
 if (Test-Path $go) { $env:Path = "$go;" + $env:Path }
