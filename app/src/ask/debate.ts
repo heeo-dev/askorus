@@ -14,6 +14,7 @@ import { agentName } from '@/api/agents';
 import type { Debate, DebateRequest, Info } from '@/api/types';
 import { has, t } from '@/i18n';
 
+import { plainNames } from './aiNames';
 import { compareErrorText, cutUtf8, maxAnswerBytes, maxQuestionBytes, readyParts, synthState } from './compare';
 import type { Turn } from './thread';
 
@@ -161,6 +162,19 @@ export function debateErrorText(code: string, message?: string): string {
 /** sideLine: one side of a point, "Claude, Codex: 8시". */
 export function sideLine(side: { ais: string[]; says: string }): string {
   return `${side.ais.map(agentName).join(', ')}: ${side.says}`;
+}
+
+/**
+ * foldText is a turn's start as plain words, for its folded bubble: AI
+ * names without braces and no Markdown marks (bold, code, headings, links
+ * as their words), which a folded line cannot draw (S10, 11-06:
+ * '**Mapo Dalbit Bakery**' showed as typed).
+ */
+export function foldText(text: string): string {
+  return plainNames(text)
+    .replace(/\[([^\]\n]+)\]\([^)\s]+\)/g, '$1')
+    .replace(/(\*\*|__|`)/g, '')
+    .replace(/^#{1,6}\s+/gm, '');
 }
 
 /** duration: "2분 26초" / "2 min 26 s"; under a minute "38초" / "38 s". */

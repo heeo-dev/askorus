@@ -3,7 +3,20 @@
 import type { Debate, Info } from '@/api/types';
 import { setLang } from '@/i18n';
 
-import { debateCost, debateErrorText, debateOffered, debateRequest, debateView, debating, duration, natureLabel, resultLabel, sideLine, stanceLabel } from './debate';
+import {
+  debateCost,
+  debateErrorText,
+  debateOffered,
+  debateRequest,
+  debateView,
+  debating,
+  duration,
+  foldText,
+  natureLabel,
+  resultLabel,
+  sideLine,
+  stanceLabel,
+} from './debate';
 import type { Turn } from './thread';
 
 afterEach(() => setLang('en'));
@@ -118,4 +131,12 @@ test('the chips and lines in English and Korean', () => {
   expect(debateErrorText('need_two_answers')).toBeTruthy(); // the comparison's words
   setLang('ko');
   expect([natureLabel('taste'), stanceLabel('change'), resultLabel('differ'), duration(146000)]).toEqual(['취향', '바꿈', '여전히 다름', '2분 26초']);
+});
+
+// R-73 (S10, 11-06): a folded turn showed its Markdown as typed.
+test('a folded turn reads as plain words', () => {
+  expect(foldText("**Mapo Dalbit Bakery**'s strongest point is `Mapo`; see [the map](https://example.com) and {{Claude}}.")).toBe(
+    "Mapo Dalbit Bakery's strongest point is Mapo; see the map and Claude.",
+  );
+  expect(foldText('## Pick\n__one__ of them')).toBe('Pick\none of them');
 });
