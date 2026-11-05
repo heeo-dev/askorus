@@ -231,6 +231,15 @@ func (m *Manager) makePlan(c *comparison) plan {
 		p.engines[name], p.families[name] = e, e.Family
 		p.spec.Judges = append(p.spec.Judges, judge.JudgeAI{Agent: e.Agent, Family: e.Family, Model: e.Model, Effort: e.Effort, AskCode: askCodes[name]})
 	}
+	if m.o.NoJudging {
+		// No request: the round ends at once and the combined answer
+		// starts. spec.Judges stays: a writer among them gets the earlier
+		// questions, as when they judged (synthRun).
+		if !twoReady(p.spec.Answers) {
+			p.err = &judge.Error{Code: core.ErrCodeNeedTwoAnswers, Message: "fewer than two answers to compare"}
+		}
+		return p
+	}
 	reqs, err := judge.Plan(p.spec)
 	p.requests = reqs
 	if err != nil {
@@ -245,6 +254,18 @@ func (m *Manager) makePlan(c *comparison) plan {
 		p.mkErr = makeFolder(m.o.Gate.Folder)
 	}
 	return p
+}
+
+// twoReady reports whether two or more answers are ready, as judge.Plan
+// needs them.
+func twoReady(answers []judge.Answer) bool {
+	n := 0
+	for _, a := range answers {
+		if a.Status == judge.AnswerReady {
+			n++
+		}
+	}
+	return n >= 2
 }
 
 // makeFolder makes the judge folder, as every round does first.
@@ -727,6 +748,10 @@ func (m *Manager) finishLocked(c *comparison, status string, err *judge.Error, s
 // it panics, the comparison is broken: it asks no judge again and ends
 // failed with internal. Callers hold mu.
 func (m *Manager) aggregateLocked(c *comparison, ended bool) {
+	if m.o.NoJudging {
+		c.summary, c.lastItems, c.lastEndedItems = judge.Summary{}, nil, nil // no judge, no card
+		return
+	}
 	in := judge.AggregateInput{
 		Answers: c.spec.Answers, Requests: c.requests, Judgments: c.judgments, Checks: m.checks, Ended: ended,
 		Prev: append(slices.Clone(c.lastItems), c.lastEndedItems...),

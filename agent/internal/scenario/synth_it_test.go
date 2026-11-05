@@ -412,9 +412,10 @@ func TestIT15SynthesisWays(t *testing.T) {
 			t.Fatalf("%d synth calls", len(synths))
 		}
 		_, data := synthData(t, synths[0].Stdin)
-		if !strings.Contains(synths[0].Stdin, "\nNOT COMPARED. ") || len(linesWith(data, "DIFFER: "))+len(linesWith(data, "CHECK: ")) != 0 ||
-			len(linesWith(data, "ANSWER: ")) != 3 {
-			t.Error("writer stdin is not the not-compared variant with three answers")
+		// Nothing judged: synth-v5, the prompt without judgments (C6).
+		if !strings.HasPrefix(synths[0].Stdin, "[Asksemble synthesis v5] ") || strings.Contains(synths[0].Stdin, "COMPARED") ||
+			len(linesWith(data, "DIFFER: "))+len(linesWith(data, "CHECK: ")) != 0 || len(linesWith(data, "ANSWER: ")) != 3 {
+			t.Error("writer stdin is not synth-v5 with three answers")
 		}
 		r.waitIdle(c.ID)
 	})

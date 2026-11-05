@@ -26,6 +26,25 @@ import (
 var synthVariants = map[string]func(judge.SynthTask, string) string{
 	"product": judge.SynthPrompt,
 	"c5-b":    synthC5B,
+	"c5-nj":   synthC5NoJudge,
+	"c5-m":    synthC5M,
+	"c5-one":  synthC5One,
+	"c5-one2": synthC5One2,
+	"c5-solo": synthC5Solo,
+	"c5-sel":  c5SoloWith("c5-sel", "sel"),
+	"c5-nat":  c5SoloWith("c5-nat", "nat"),
+	"c5-sn":   c5SoloWith("c5-sn", "sel", "nat"),
+	"c5-sf":   c5SoloWith("c5-sf", "sel", "few"),
+	"c5-sfd":  c5SoloWith("c5-sfd", "sel", "few", "nodup"),
+	"c5-si":   c5SoloWith("c5-si", "sel", "inline"),
+	"c5-sq":   c5SoloWith("c5-sq", "sel", "quiet"),
+}
+
+// synthSplits take a variant's reply apart when it holds more than the
+// combined answer: the answer, and the list of differences it carries.
+var synthSplits = map[string]func(string, []judge.SynthAnswer) (string, *DiffRec){
+	"c5-one":  splitC5One,
+	"c5-one2": splitC5One,
 }
 
 func variantNames() []string {
@@ -159,6 +178,12 @@ func resynthRecords(ctx context.Context, w writer, src []Record, from string, ru
 		rec.Seq, rec.Stop = i+1, ""
 		rec.At = now().UTC().Format(time.RFC3339)
 		rec.Synth = writeSynth(ctx, w, *r.Task, run.Writer, run.SynthTier, prompt)
+		rec.Differs = nil
+		if split := synthSplits[run.Synth]; split != nil && rec.Synth.Status == "done" {
+			sr := rec.Synth
+			sr.Text, rec.Differs = split(sr.Text, r.Task.Answers)
+			rec.Differs.Agent, rec.Differs.Model, rec.Differs.Ms, rec.Differs.In, rec.Differs.Out = sr.Agent, sr.Model, sr.Ms, sr.In, sr.Out
+		}
 		if ctx.Err() != nil {
 			fmt.Fprintf(out, "%-12s interrupted; run again with -resume\n", r.Question.ID)
 			return exitInterrupted
@@ -171,6 +196,18 @@ func resynthRecords(ctx context.Context, w writer, src []Record, from string, ru
 			return exitError
 		}
 		fmt.Fprintln(out, progressLine(rec))
+		if d := rec.Differs; d != nil {
+			quotes, found := 0, 0
+			for _, p := range d.Places {
+				for _, sd := range p.Sides {
+					quotes++
+					if sd.Found {
+						found++
+					}
+				}
+			}
+			fmt.Fprintf(out, "%-12s list %s: %d places, quotes found %d/%d %s\n", "", d.Status, len(d.Places), found, quotes, d.Error)
+		}
 		if rec.Stop == "usage_limit" {
 			fmt.Fprintln(out, "stopped on a usage limit; run again with -resume when it resets")
 			return exitUsageLimit

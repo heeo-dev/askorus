@@ -532,8 +532,8 @@ export default function Ask() {
                   {t('ask.emptyTitle')}
                 </Text>
                 {/* Before the first question: where the answers go (R-34). */}
-                <Text style={s.caption}>{judgeOn(info) && prefs.compare ? t('ask.introCompare') : t('ask.intro')}</Text>
-                {canSynthesize(info) && prefs.synth ? <Text style={s.caption}>{t('ask.introSynth')}</Text> : null}
+                <Text style={s.caption}>{features.judging && judgeOn(info) && prefs.compare ? t('ask.introCompare') : t('ask.intro')}</Text>
+                {canSynthesize(info) && prefs.synth ? <Text style={s.caption}>{t(features.judging ? 'ask.introSynth' : 'ask.introModerator')}</Text> : null}
               </View>
               {recent.length ? (
                 <View>

@@ -14,11 +14,11 @@ import (
 	"github.com/asksemble/asksemble/agent/internal/core"
 )
 
-var synthUpdate = flag.Bool("synth.update", false, "rewrite testdata/synth-v4*.golden")
+var synthUpdate = flag.Bool("synth.update", false, "rewrite testdata/synth-v4.golden and synth-v5.golden")
 
 const (
 	synthGoldenFile           = "testdata/synth-v4.golden"
-	synthGoldenUncomparedFile = "testdata/synth-v4-uncompared.golden"
+	synthGoldenUncomparedFile = "testdata/synth-v5.golden" // a task without judgments: synth-v5 (C6)
 	synthGoldenNonce          = "3b9e1f0c7a5d2468"
 )
 
@@ -79,6 +79,10 @@ type synthRead struct {
 func synthParse(t *testing.T, prompt, nonce string) synthRead {
 	t.Helper()
 	head := strings.ReplaceAll(synthHead, "{N}", nonce)
+	tail := synthTail
+	if !strings.HasPrefix(prompt, head+"<data-"+nonce+">\n") {
+		head, tail = strings.ReplaceAll(synthHeadV5, "{N}", nonce), synthTailV5
+	}
 	if !strings.HasPrefix(prompt, head+"<data-"+nonce+">\n") {
 		t.Fatalf("the prompt does not start with the head and the block:\n%s", prompt)
 	}
@@ -87,10 +91,10 @@ func synthParse(t *testing.T, prompt, nonce string) synthRead {
 		t.Fatalf("no end marker:\n%s", prompt)
 	}
 	var r synthRead
-	switch after {
-	case synthCompared + synthTail:
+	switch {
+	case tail == synthTail && after == synthCompared+synthTail:
 		r.Compared = true
-	case synthNotCompared + synthTail:
+	case tail == synthTailV5 && after == synthTailV5:
 	default:
 		t.Fatalf("the text after the block is not the fixed text:\n%s", after)
 	}
@@ -221,6 +225,11 @@ func TestSynthPromptGoldenUncompared(t *testing.T) {
 	synthCheckRead(t, task, got, synthGoldenNonce)
 	if strings.Contains(got, "EARLIER") || strings.Contains(got, "DIFFER: ") || strings.Contains(got, "CHECK: ") || strings.Contains(got, "\nCOMPARED.") {
 		t.Errorf("uncompared prompt:\n%s", got)
+	}
+	// synth-v5 (C6): no word of a comparison, the head of v5.
+	if !strings.HasPrefix(got, "[Asksemble synthesis v5] ") || strings.Contains(got, "COMPARED") || strings.Contains(got, synthNotCompared) ||
+		strings.Contains(got, `"ais"`) || SynthRulesOf(task) != "synth-v5" {
+		t.Errorf("not synth-v5:\n%s", got)
 	}
 	var ais []string
 	for _, a := range task.Answers {
@@ -597,8 +606,9 @@ func TestHandoffName(t *testing.T) {
 			t.Errorf("no name for %s", app)
 		}
 	}
-	if SynthRules != "synth-v4.2" {
-		t.Errorf("SynthRules = %q", SynthRules)
+	if SynthRules != "synth-v5" || SynthRulesJudged != "synth-v4.2" ||
+		SynthRulesOf(SynthTask{Compared: true}) != SynthRulesJudged || SynthRulesOf(SynthTask{}) != SynthRules {
+		t.Errorf("SynthRules = %q, SynthRulesJudged = %q", SynthRules, SynthRulesJudged)
 	}
 }
 

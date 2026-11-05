@@ -135,6 +135,12 @@ type Options struct {
 	// topics.go). The agent turns it on; tests that count writer calls
 	// leave it off.
 	Topics bool
+	// NoJudging leaves the judges out (C6, #19, 2026-11-05, the user's
+	// decision: the moderator alone writes the combined answer): a
+	// comparison asks no judge, makes no cards and ends as soon as it
+	// starts, and its combined answer is written from the answers alone
+	// (synth-v5). The agent sets it; the tests of judging leave it unset.
+	NoJudging bool
 	// QueueLimit, JudgeLimit and SynthLimit replace the constants when
 	// not zero, for tests.
 	QueueLimit, JudgeLimit, SynthLimit time.Duration

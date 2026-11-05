@@ -86,7 +86,7 @@ td.enc { font-family: var(--mono); font-size: 0.85rem; white-space: nowrap; }
 <div class="wrap">
   <header style="display:grid;gap:8px">
     <h1>Asksemble 두 입구와 메뉴</h1>
-    <p class="lead">한 번에 묻기(ask)·일 맡기기(work)·코딩하기(code)를 원칙 9의 두 입구에 나눈 구조입니다. 이름마다 한국어와 영어를 같이 적었고, 바꿀 수 있는 한국어 이름은 아래 표에 후보를 모았습니다. 2026-10-29 확정(사용자). 2026-11-02 화면 재구성(S5c, 사용자 결정 8)에 맞춰 고침: 아래 탭 대신 헤더 가운데 스위치와 서랍.</p>
+    <p class="lead">한 번에 묻기(ask)·일 맡기기(work)·코딩하기(code)를 원칙 9의 두 입구에 나눈 구조입니다. 이름마다 한국어와 영어를 같이 적었고, 바꿀 수 있는 한국어 이름은 아래 표에 후보를 모았습니다. 2026-10-29 확정(사용자). 2026-11-02 화면 재구성(S5c, 사용자 결정 8)에 맞춰 고침: 아래 탭 대신 헤더 가운데 스위치와 서랍. 2026-11-05 사회자 혼자(C6)에 맞춰 고침: 근거·판정 정보·'AI 답이 다른 곳' 없앰.</p>
     <div class="legend">
       <span><span class="ph p1">P1</span> 지금 있음</span>
       <span><span class="ph p2">P2</span> 다음(한 번에 묻기)</span>
@@ -124,11 +124,9 @@ td.enc { font-family: var(--mono); font-size: 0.85rem; white-space: nowrap; }
                 <span class="note">질문 말풍선 아래. 사회자가 정한 종류·깊이·의도와 질문 뒤에 붙여 보낸 답 틀을 시트로 보임 · 정리 중이면 '질문을 정리하는 중…', 실패면 '정제 없이 보냄'(마일스톤 C). 11-04부터 질문 정제를 꺼서 예전 기록의 정제된 질문에만 보임</span>
               </div>
             </li>
-            <li><div class="item"><b>답하는 중</b><span class="en">Answering…</span><span class="note">AI마다 한 줄(모델·걸린 시간), 다 모이면 비교</span></div></li>
-            <li><div class="item"><b>종합 답변</b><span class="en">Combined answer</span><span class="note">맨 위 카드. 비교하는 중 n/6 → 종합 답변 쓰는 중 → AI 하나가 모든 답을 모아 쓴 글</span></div>
+            <li><div class="item"><b>답하는 중</b><span class="en">Answering…</span><span class="note">AI마다 한 줄(모델·걸린 시간), 다 모이면 사회자가 종합</span></div></li>
+            <li><div class="item"><b>종합 답변</b><span class="en">Combined answer</span><span class="note">맨 위 카드. 종합 답변 쓰는 중 → 사회자 AI가 모든 답을 읽고 쓴 글(다른 점은 글 안에, C6)</span></div>
               <div class="chips">
-                <span class="chip">AI 답이 다른 곳 › <span class="en">Where the AI answers differ ›</span></span>
-                <span class="chip">판정 정보 ⓘ <span class="en">Judging details</span></span>
                 <span class="chip">종합 답변 쓰기 · 다시 쓰기 <span class="en">Write a combined answer · Write again</span></span>
               </div>
             </li>
@@ -137,18 +135,6 @@ td.enc { font-family: var(--mono); font-size: 0.85rem; white-space: nowrap; }
                 <span class="chip">복사 <span class="en">Copy</span></span>
                 <span class="chip">이 AI에게만 <span class="en">Only this AI</span></span>
                 <span class="chip">Claude 앱에서 이어서 하기 <span class="en">Continue in the Claude app</span></span>
-              </div>
-            </li>
-            <li><div class="item"><b>근거</b><span class="en">Evidence</span><span class="note">종합 답변 아래 네 칸으로 접힘, 누르면 네 절(판정한 문장 모두, S5c)</span></div>
-              <div class="chips">
-                <span class="chip">다른 말 <span class="en">Differ</span></span>
-                <span class="chip">확인 필요 <span class="en">Check this</span></span>
-                <span class="chip">같은 말 <span class="en">Agree</span></span>
-                <span class="chip">한 AI만 <span class="en">Only one</span></span>
-              </div>
-              <div class="chips">
-                <span class="chip">두 문장 나란히 보기 <span class="en">See both sentences</span></span>
-                <span class="chip">비교하기 · 다시 비교 <span class="en">Compare · Compare again</span></span>
               </div>
             </li>
             <li><div class="item"><b>이어서 묻기</b><span class="en">Follow up</span></div>
@@ -227,7 +213,7 @@ td.enc { font-family: var(--mono); font-size: 0.85rem; white-space: nowrap; }
     <div class="shared">
       <div class="item"><b>서랍</b><span class="en">Menu</span><span class="note">☰ · 기록(오늘·어제·날짜) · 내 PC(연결 상태, 입력 기다리는 세션 → 그 세션 시트) · 설정 · 공식 제품 아님</span></div>
       <div class="item"><b>설정</b><span class="en">Settings</span><span class="ph p1">P1</span></div>
-      <p class="note">짝 맺은 PC(연결 진단·끊기), 새 세션 기본값, PC와 짝 맺기 · 묻기: 기본 단계 <span class="ph p2">P2</span> · 사회자 <span class="en">Moderator</span>: 답이 모이면 자동으로 비교, 비교가 끝나면 종합 답변 쓰기, 사회자 AI(종합 답변) <span class="en">Moderator AI</span> (질문 정제 스위치는 11-04부터 기능과 함께 숨김) <span class="ph p2">P2</span> · 화면: 테마 시스템·다크·라이트 <span class="en">Theme: System · Dark · Light</span>, AI마다 다른 색 <span class="en">A color for each AI</span> · 기록 <span class="en">History</span>: 대화 n개, 기록 모두 지우기 <span class="en">Delete all history</span> · 정보 → 앱 정보(Asksemble, Ask, assemble., 버전, 'AI 회사의 공식 제품이 아닙니다.'). AI 연결(내 PC·공식 앱으로 넘기기)은 P2-4.</p>
+      <p class="note">짝 맺은 PC(연결 진단·끊기), 새 세션 기본값, PC와 짝 맺기 · 묻기: 기본 단계 <span class="ph p2">P2</span> · 사회자 <span class="en">Moderator</span>: 답이 모이면 종합 답변 쓰기 <span class="en">Write a combined answer once the answers are in</span>, 사회자 AI(종합 답변) <span class="en">Moderator AI</span> (질문 정제 스위치는 11-04부터, 자동 비교 스위치는 11-05 C6부터 숨김) <span class="ph p2">P2</span> · 화면: 테마 시스템·다크·라이트 <span class="en">Theme: System · Dark · Light</span>, AI마다 다른 색 <span class="en">A color for each AI</span> · 기록 <span class="en">History</span>: 대화 n개, 기록 모두 지우기 <span class="en">Delete all history</span> · 정보 → 앱 정보(Asksemble, Ask, assemble., 버전, 'AI 회사의 공식 제품이 아닙니다.'). AI 연결(내 PC·공식 앱으로 넘기기)은 P2-4.</p>
       <div class="item"><b>PC와 짝 맺기</b><span class="en">Pair with a PC</span><span class="note">PC에서 명령 실행 → QR 찍기(주 경로) · 링크 붙여 넣기 <span class="en">Paste the link instead</span></span></div>
     </div>
   </section>
@@ -244,12 +230,12 @@ td.enc { font-family: var(--mono); font-size: 0.85rem; white-space: nowrap; }
           <tr><td>work</td><td class="pick">일 맡기기</td><td class="alt">일하기 · 만들기 · 맡기기</td><td class="enc">Work</td><td>AI가 일하고 사람은 맡기는 쪽이라 '맡기기'가 주어와 맞는다. 설계의 Phase 4 이름 '일 나눠 맡기기'와 이어진다. 기능 이름은 '한 번에 맡기기'.</td></tr>
           <tr><td>code</td><td class="pick">코딩하기</td><td class="alt">코드 맡기기 · 코드 고치기</td><td class="enc">Code</td><td>개발자에게 가장 바로 읽힌다. 개발자 입구에만 있다.</td></tr>
           <tr><td>묻기 단계</td><td class="pick">빠르게 · 기본 · 깊게</td><td class="alt">가볍게 · 보통 · 꼼꼼히</td><td class="enc">Quick · Standard · Deep</td><td>지금 정한 이름. 영어 'Default'는 설정값처럼 읽혀 'Standard'로.</td></tr>
-          <tr><td>비교 결과</td><td class="pick">다른 말 · 확인 필요 · 같은 말 · 한 AI만</td><td class="alt">일치 · 차이 · 단독 · 검토 필요</td><td class="enc">Differ · Check this · Agree · Only one</td><td>설계의 쉬운 말 원칙대로 한자어(일치·단독)를 피했다. 카드도 이 순서다(직접 확인할 곳부터, 2026-10-31).</td></tr>
-          <tr><td>근거</td><td class="pick">근거</td><td class="alt">근거 카드 · 정리</td><td class="enc">Evidence</td><td>종합 답변 아래 네 칸(다른 말·확인 필요·같은 말·한 AI만)으로 접히고 누르면 네 절이 된다. 카드는 AI 원문 문장만 보여 준다. S5c에서 '정리' 탭과 AI 탭이 없어지고 한 흐름이 됐다.</td></tr>
+          <tr><td>비교 결과</td><td class="pick">다른 말 · 확인 필요 · 같은 말 · 한 AI만</td><td class="alt">일치 · 차이 · 단독 · 검토 필요</td><td class="enc">Differ · Check this · Agree · Only one</td><td>(2026-11-05 C6에서 화면에서 없어짐) 설계의 쉬운 말 원칙대로 한자어(일치·단독)를 피했다. 카드도 이 순서다(직접 확인할 곳부터, 2026-10-31).</td></tr>
+          <tr><td>근거</td><td class="pick">근거</td><td class="alt">근거 카드 · 정리</td><td class="enc">Evidence</td><td>(2026-11-05 C6에서 화면에서 없어짐) 종합 답변 아래 네 칸(다른 말·확인 필요·같은 말·한 AI만)으로 접히고 누르면 네 절이 된다. 카드는 AI 원문 문장만 보여 준다. S5c에서 '정리' 탭과 AI 탭이 없어지고 한 흐름이 됐다.</td></tr>
           <tr><td>AI별 답</td><td class="pick">AI별 답</td><td class="alt">—</td><td class="enc">Answers by AI</td><td>옆으로 넘기는 카드. 누르면 그 AI의 답 전체(시트).</td></tr>
           <tr><td>서랍</td><td class="pick">메뉴</td><td class="alt">—</td><td class="enc">Menu</td><td>☰ 버튼. 기록, 내 PC, 설정. 두 입구는 헤더 가운데 스위치로 오간다(S5c).</td></tr>
-          <tr><td>종합 답변</td><td class="pick">종합 답변</td><td class="alt">정리본 · 모은 답</td><td class="enc">Combined answer</td><td>질문 아래 맨 위 카드. AI 하나가 모든 답과 비교 결과로 쓴 글이고, 다른 곳은 고르지 않고 AI마다 적는다(2026-11-01 사용자 결정 7·8). 글 아래 한 줄 'AI 답이 다른 곳'(개수, 그 아래 주제들)을 누르면 다른 곳마다 주제와 AI별 요지가, 주제를 누르면 AI 문장이 열린다(2026-11-04 C5). 근거는 아래에 네 칸으로 접힌다.</td></tr>
-          <tr><td>판정 표시</td><td class="pick">판정 정보</td><td class="alt">판정한 AI</td><td class="enc">Judging details</td><td>종합 답변 카드의 ⓘ. 종합 답변을 쓴 AI, 판정 AI별 요청(문장 → 답)과 시간, 주의 문구를 한 시트에.</td></tr>
+          <tr><td>종합 답변</td><td class="pick">종합 답변</td><td class="alt">정리본 · 모은 답</td><td class="enc">Combined answer</td><td>질문 아래 맨 위 카드. AI 하나가 모든 답과 비교 결과로 쓴 글이고, 다른 곳은 고르지 않고 AI마다 적는다(2026-11-01 사용자 결정 7·8). 2026-11-05(C6)부터 서로 판정 없이 사회자 AI 혼자 질문과 모든 답으로 쓰고(AI 둘에게만 물어도), 질문한 사람이 신경 쓸 다른 곳만 글 안에 AI 이름과 함께 적는다. 'AI 답이 다른 곳' 줄과 근거 칸은 없다.</td></tr>
+          <tr><td>판정 표시</td><td class="pick">판정 정보</td><td class="alt">판정한 AI</td><td class="enc">Judging details</td><td>(2026-11-05 C6에서 화면에서 없어짐) 종합 답변 카드의 ⓘ. 종합 답변을 쓴 AI, 판정 AI별 요청(문장 → 답)과 시간, 주의 문구를 한 시트에.</td></tr>
           <tr><td>테마</td><td class="pick">시스템 · 다크 · 라이트</td><td class="alt">—</td><td class="enc">System · Dark · Light</td><td>다크·라이트 살구 한 쌍, 기본은 폰 설정을 따른다(S5c).</td></tr>
           <tr><td>AI마다 다른 색</td><td class="pick">켜기 · 끄기</td><td class="alt">—</td><td class="enc">A color for each AI</td><td>아바타와 종합 답변의 AI 이름 칩을 AI마다 옅은 색으로. 끄면 한 색. 기본은 켜짐(#6, 11-03).</td></tr>
           <tr><td>후속 질문</td><td class="pick">이어서 묻기</td><td class="alt">더 묻기 · 후속 질문</td><td class="enc">Follow up</td><td>'후속'보다 쉬운 말.</td></tr>
@@ -266,8 +252,9 @@ td.enc { font-family: var(--mono); font-size: 0.85rem; white-space: nowrap; }
       <li><b>입구 1 탭 이름 '한 번에':</b> 확정. 탭에는 '한 번에', 화면 위 제목에는 '한 번에 묻기 / 한 번에 맡기기'처럼 붙여 씁니다.</li>
       <li><b>work를 '일 맡기기'로 할지 '일하기'로 할지:</b> '일 맡기기'로 확정. 영어는 Work.</li>
       <li><b>영어 'All at once'가 탭 이름으로 긴지:</b> 'All at once'로 확정.</li>
-      <li><b>비교 카드 순서:</b> 다른 말 → 확인 필요 → 같은 말 → 한 AI만(2026-10-31). 확인 필요는 숫자가 어긋나는 등 직접 봐야 할 문장을 모은 카드입니다('확실하지 않음' 표시만으로는 넣지 않음, 2026-11-01 판정 검증 뒤 사용자 결정).</li>
-      <li><b>종합 답변:</b> 질문 아래 맨 위에 둡니다(2026-11-01). 근거는 그 아래 네 칸으로 접히고, 종합 답변이 없을 때(끔·실패·옛 에이전트)는 펼쳐 둡니다. 쓰는 AI는 설정에서 고릅니다(기본 Claude).</li>
+      <li><b>비교 카드 순서:</b> (2026-11-05 C6에서 카드와 함께 없어짐) 다른 말 → 확인 필요 → 같은 말 → 한 AI만(2026-10-31). 확인 필요는 숫자가 어긋나는 등 직접 봐야 할 문장을 모은 카드입니다('확실하지 않음' 표시만으로는 넣지 않음, 2026-11-01 판정 검증 뒤 사용자 결정).</li>
+      <li><b>종합 답변:</b> 질문 아래 맨 위에 둡니다(2026-11-01). 쓰는 AI(사회자)는 설정에서 고릅니다(기본 Claude).</li>
+      <li><b>사회자 혼자(C6, 2026-11-05 사용자 결정):</b> AI끼리 서로 판정하지 않습니다. 답이 모이면 사회자 AI가 혼자 종합 답변을 쓰고, 화면에는 그 글과 AI별 답만 있습니다(근거 칸, 'AI 답이 다른 곳', 판정 정보, 두 문장 나란히 보기 없음). AI 둘에게만 물어도 종합 답변이 나옵니다.</li>
       <li><b>화면 재구성(S5c, 2026-11-01 사용자 결정 8):</b> 대화 흐름(B), 아래 탭 대신 헤더 가운데 [한 번에 | 내 PC] 스위치와 ☰ 서랍, 앱은 '한 번에'로 열림, 다크·라이트 살구 테마(기본은 폰 설정), 근거에는 판정한 문장을 모두 싣습니다(핵심 문장만이 아님). 처음 연결은 QR이 주 경로, 링크 붙여 넣기가 다음 경로입니다.</li>
     </ol>
   </section>

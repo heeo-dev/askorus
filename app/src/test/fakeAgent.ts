@@ -129,6 +129,12 @@ export class FakeAgent {
   judgeReplies: Record<string, JudgeReply> = {};
   /** Stop after the first three requests ended; set false to let the rest finish. */
   compareHold = false;
+  /**
+   * The PC judges no more (C6, api.Options.NoJudging as in the agent since
+   * 2026-11-05): a comparison plans no request, makes no card and is done
+   * at once; the moderator then writes the combined answer alone.
+   */
+  noJudging = false;
   /** Units past this many in an answer are not judged (notJudged). */
   maxUnits = 40;
   /** Whether judges call every unit core; false leaves only conflicts shown. */
@@ -472,6 +478,11 @@ export class FakeAgent {
       cmp.error = { code: 'need_two_answers', message: 'a comparison needs answers from at least two AIs' };
       return;
     }
+    if (this.noJudging) {
+      cmp.requests = [];
+      cmp.status = 'done';
+      return;
+    }
     const pairs: Array<[CompareAnswer, CompareAnswer]> = [];
     for (let i = 0; i < ready.length; i++) for (let j = i + 1; j < ready.length; j++) pairs.push([ready[i], ready[j]], [ready[j], ready[i]]);
     const load = new Map<string, number>();
@@ -558,7 +569,7 @@ export class FakeAgent {
 
   private snapshot(cmp: FakeComparison): Comparison {
     const all = cmp.requests.length > 0 && cmp.requests.every(ended);
-    const made = aggregate(cmp.answers, cmp.requests, cmp.judgments, all);
+    const made = this.noJudging ? { items: [], counts: aggregate([], [], [], true).counts } : aggregate(cmp.answers, cmp.requests, cmp.judgments, all);
     const items = this.itemsTweak ? this.itemsTweak(made.items) : made.items;
     const counts = made.counts;
     const s: Comparison = {

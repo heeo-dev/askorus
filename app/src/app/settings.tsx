@@ -128,8 +128,9 @@ export default function Settings() {
         >
           <Group>
             {features.refine && <SwitchRow label={t('settings.refineAuto')} value={ask.refine} onChange={(refine) => changeAsk({ ...ask, refine })} />}
-            <SwitchRow label={t('settings.compareAuto')} value={ask.compare} onChange={(compare) => changeAsk({ ...ask, compare })} />
-            <SwitchRow label={t('settings.synthAuto')} value={ask.synth} onChange={(synth) => changeAsk({ ...ask, synth })} />
+            {/* C6: no judging, so no switch of its own; the combined answer's says it all. */}
+            {features.judging && <SwitchRow label={t('settings.compareAuto')} value={ask.compare} onChange={(compare) => changeAsk({ ...ask, compare })} />}
+            <SwitchRow label={t(features.judging ? 'settings.synthAuto' : 'settings.synthAutoMod')} value={ask.synth} onChange={(synth) => changeAsk({ ...ask, synth })} />
             {/* S5b. A fixed list of writers: Settings has no PC info, and the PC falls back when it lacks the AI. */}
             <View style={s.writer}>
               <Text style={s.writerLabel}>{t(features.refine ? 'settings.synthAgentLong' : 'settings.moderatorAI')}</Text>
@@ -202,7 +203,7 @@ export default function Settings() {
       <Sheet open={infoOpen} onClose={() => setInfoOpen(false)} title={t('settings.compareSynth')} testID="compare-info">
         <View style={s.infoBody}>
           {features.refine && <Text style={s.infoText}>{t('settings.refineHint')}</Text>}
-          <Text style={s.infoText}>{t('settings.compareHint')}</Text>
+          {features.judging && <Text style={s.infoText}>{t('settings.compareHint')}</Text>}
           <Text style={s.infoText}>{t('settings.synthHint')}</Text>
         </View>
       </Sheet>

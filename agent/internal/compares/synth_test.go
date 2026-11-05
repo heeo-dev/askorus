@@ -431,8 +431,9 @@ func TestSynthNotJudged(t *testing.T) {
 	if c.Status != Failed || s.Status != SynthDone || s.Judged || s.UnnamedSides != 0 || s.Text != fakecli.SynthLead {
 		t.Fatalf("status %s, synthesis %+v", c.Status, s)
 	}
+	// Nothing was judged: synth-v5, the prompt without judgments (C6).
 	p := writerOf(ais[2]).synthCalls()[0].Prompt
-	if !strings.Contains(p, "\nNOT COMPARED.") || strings.Contains(p, "DIFFER: ") {
+	if !strings.HasPrefix(p, "[Asksemble synthesis v5] ") || strings.Contains(p, "COMPARED") || strings.Contains(p, "DIFFER: ") {
 		t.Errorf("prompt:\n%s", p)
 	}
 }

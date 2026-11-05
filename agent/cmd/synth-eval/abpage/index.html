@@ -220,6 +220,9 @@ button:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 2
       return '<span class="ai ' + cls + '">' + name.trim() + "</span>";
     });
   }
+  // Only "~~" strikes text through. A single "~" is a range ("80~90℃", "4~5W"),
+  // which GFM would strike through between two of them (as the app does).
+  if (window.marked) marked.use({ tokenizer: { del(src) { return /^~~(?!~)/.test(src) ? false : undefined; } } });
   function render(md) {
     let html;
     if (window.marked && window.DOMPurify) {

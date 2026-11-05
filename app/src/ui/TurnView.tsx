@@ -42,6 +42,7 @@ import {
   synthExpected,
   tiles,
 } from '@/ask/present';
+import { features } from '@/ask/features';
 import type { Turn } from '@/ask/thread';
 import { t } from '@/i18n';
 
@@ -145,8 +146,10 @@ export function TurnView({
     const caption =
       going && turn.compare?.start === 'auto'
         ? turn.compare.synth && !turn.compare.synth.off
-          ? t('ask.willCompare')
-          : t('ask.willCompareOnly')
+          ? t(features.judging ? 'ask.willCompare' : 'ask.willSynth')
+          : features.judging
+            ? t('ask.willCompareOnly')
+            : undefined
         : undefined;
     return (
       <View style={s.turn}>
@@ -193,10 +196,11 @@ function Result({
   const stepList = steps(turn, info);
   const ended = st.kind === 'done';
   const all = snap ? cards(snap) : null;
-  const cs = all && (st.kind === 'comparing' || ended) ? all : null;
+  const cs = features.judging && all && (st.kind === 'comparing' || ended) ? all : null;
   const folded = ui.evidence === undefined ? evidenceFolded(synth) : !ui.evidence;
   const answeredList = answeredAgents(turn);
-  const judgingInfo = !!snap || st.kind === 'manual' || st.kind === 'comparing' || st.kind === 'done' || st.kind === 'failed';
+  // C6: no judging, so no judging details, cards or 'AI 답이 다른 곳'.
+  const judgingInfo = features.judging && (!!snap || st.kind === 'manual' || st.kind === 'comparing' || st.kind === 'done' || st.kind === 'failed');
   const infoButton = judgingInfo ? { label: t('compare.info'), onPress: act.openJudges } : undefined;
 
   // Where the comparison stands when it says something besides its steps.
@@ -260,7 +264,7 @@ function Result({
           </View>
         );
       case 'done': {
-        const bundle = differBundle(snap, all?.find((c) => c.kind === 'differ')?.items ?? [], synth.topics);
+        const bundle = features.judging ? differBundle(snap, all?.find((c) => c.kind === 'differ')?.items ?? [], synth.topics) : null;
         return (
           <View style={s.synth}>
             <Markdown text={synth.text} size="synth" ais={answeredList} />
@@ -274,7 +278,7 @@ function Result({
                 onOpenAnswer={act.openAnswer}
               />
             ) : null}
-            {!synth.judged ? <Text style={s.caption}>{t('compare.synth.noJudge')}</Text> : null}
+            {features.judging && !synth.judged ? <Text style={s.caption}>{t('compare.synth.noJudge')}</Text> : null}
             {synth.unnamed > 0 ? <Text style={s.warn}>{t('compare.synth.unnamed')}</Text> : null}
             <AnswerActions onCopy={() => act.copy(`${turn.id}/synth`, plainNames(synth.text))} note={notes[`${turn.id}/synth`]} />
           </View>

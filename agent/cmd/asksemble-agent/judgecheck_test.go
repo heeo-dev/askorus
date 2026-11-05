@@ -65,7 +65,7 @@ func TestJudgeLines(t *testing.T) {
 		{agent: "zed", name: "zed", version: "1.0.0", min: "1.0.0", why: compares.WhyNoFamily, info: &core.JudgeInfo{Model: "openrouter/x-1"}},
 		{agent: "nofolder", name: "nofolder", version: "1.0.0", min: "1.0.0", why: compares.WhyNoFolder},
 	}
-	lines := judgeLines(st, false)
+	lines := judgeLines(st, false, true)
 	findLine(t, lines, "ok", "comparison judging: Claude Code haiku · OpenCode opencode-go/deepseek-v4.1-flash", "비교 판정: Claude Code haiku · OpenCode opencode-go/deepseek-v4.1-flash")
 	findLine(t, lines, "warn",
 		"Codex 0.163.0 is older than 0.164.0, the oldest version the judge was tested with; it does not judge until it is updated",
@@ -108,7 +108,7 @@ func TestJudgeLinesVerified(t *testing.T) {
 		{agent: "claude", name: "Claude Code", version: "2.1.316", min: "2.1.314", verified: "2.1.316", info: &core.JudgeInfo{Model: "haiku", Family: "anthropic"}},
 		{agent: "gemini", name: "gemini", version: "1.1.0", min: "1.0.0", info: &core.JudgeInfo{Model: "gemini-x", Family: "google"}},
 	}
-	lines := judgeLines(st, false)
+	lines := judgeLines(st, false, true)
 	findLine(t, lines, "info",
 		"the judge command was tested on 2026-10-31 with gemini 1.0.0; this PC has 1.1.0",
 		"2026-10-31에 gemini 1.0.0 판으로 판정 명령을 시험했습니다. 이 PC는 1.1.0입니다")
@@ -135,7 +135,7 @@ func TestJudgeLinesOff(t *testing.T) {
 		{agent: "claude", name: "Claude Code", version: "2.1.300", min: "2.1.314", why: compares.WhyOff},
 		{agent: "codex", name: "Codex", version: "0.164.0", min: "0.164.0", why: compares.WhyOld},
 	}
-	lines := judgeLines(st, true)
+	lines := judgeLines(st, true, true)
 	if len(lines) != 2 {
 		t.Fatalf("lines:\n%s", strings.Join(lineTexts(lines), "\n"))
 	}
@@ -146,7 +146,7 @@ func TestJudgeLinesOff(t *testing.T) {
 // Nobody judges: no judging line and no company line; a version that
 // could not be read shows as "?".
 func TestJudgeLinesNobody(t *testing.T) {
-	lines := judgeLines([]judgeStatus{{agent: "codex", name: "Codex", min: "0.164.0", why: compares.WhyOld}}, false)
+	lines := judgeLines([]judgeStatus{{agent: "codex", name: "Codex", min: "0.164.0", why: compares.WhyOld}}, false, true)
 	findLine(t, lines, "warn", "Codex ? is older than 0.164.0", "Codex ? 판은")
 	for _, s := range lineTexts(lines) {
 		if strings.Contains(s, "comparison judging") || strings.Contains(s, company) {
@@ -156,7 +156,7 @@ func TestJudgeLinesNobody(t *testing.T) {
 	if len(lines) != 2 {
 		t.Errorf("lines:\n%s", strings.Join(lineTexts(lines), "\n"))
 	}
-	if lines := judgeLines(nil, false); len(lines) != 1 || lines[0].text.en != noOutside {
+	if lines := judgeLines(nil, false, true); len(lines) != 1 || lines[0].text.en != noOutside {
 		t.Errorf("no AI: %v", lineTexts(lines))
 	}
 }
@@ -185,7 +185,7 @@ func TestJudgeStatuses(t *testing.T) {
 	if o.agent != "opencode" || o.name != "OpenCode" || o.why != compares.WhyNoFamily || o.info == nil || o.info.Model != "openrouter/x-1" {
 		t.Errorf("opencode = %+v %+v", o, o.info)
 	}
-	lines := judgeLines(st, false)
+	lines := judgeLines(st, false, true)
 	findLine(t, lines, "ok", "comparison judging: Claude Code haiku", "비교 판정: Claude Code haiku")
 	findLine(t, lines, "warn", "the judge model openrouter/x-1 set for OpenCode", "OpenCode에 설정한 판정 모델 openrouter/x-1")
 	noLineTwice(t, lines)
@@ -219,7 +219,7 @@ func TestJudgeLinesSynthesis(t *testing.T) {
 		{agent: "opencode", name: "OpenCode", version: "2.2.1", min: "2.2.1", writes: true, info: &core.JudgeInfo{Model: "opencode-go/deepseek-v4.1-flash", Family: "deepseek"}},
 		{agent: "old", name: "old", version: "0.1.0", min: "1.0.0", why: compares.WhyOld, writes: true},
 	}
-	lines := judgeLines(st, false)
+	lines := judgeLines(st, false, true)
 	findLine(t, lines, "ok", writeLine, writeLineKo)
 	findLine(t, lines, "info", writeInfo, writeInfoKo)
 	if slices.ContainsFunc(lines, func(l checkLine) bool { return l.text.en == refineInfo }) {
@@ -234,7 +234,7 @@ func TestJudgeLinesSynthesis(t *testing.T) {
 	// Turned on, it says what refining sends.
 	refineOn = true
 	t.Cleanup(func() { refineOn = false })
-	findLine(t, judgeLines(st, false), "info", refineInfo, refineInfoKo)
+	findLine(t, judgeLines(st, false, true), "info", refineInfo, refineInfoKo)
 	// The writer lines follow the judge lines they go with.
 	idx := func(en string) int {
 		return slices.IndexFunc(lines, func(l checkLine) bool { return strings.HasPrefix(l.text.en, en) })
@@ -247,7 +247,7 @@ func TestJudgeLinesSynthesis(t *testing.T) {
 		st[i].writes = false
 	}
 	for _, off := range []bool{false, true} {
-		for _, l := range lineTexts(judgeLines(st, off)) {
+		for _, l := range lineTexts(judgeLines(st, off, true)) {
 			if strings.Contains(l, "combined answer") || strings.Contains(l, "종합 답변") || strings.Contains(l, "refined") || strings.Contains(l, "정제") {
 				t.Errorf("off %v: %q", off, l)
 			}
@@ -265,11 +265,44 @@ func TestJudgeStatusesWrites(t *testing.T) {
 	if len(st) != 3 || !st[0].writes || st[1].writes || !st[2].writes {
 		t.Fatalf("statuses = %+v", st)
 	}
-	findLine(t, judgeLines(st, false), "ok", writeLine, writeLineKo)
+	findLine(t, judgeLines(st, false, true), "ok", writeLine, writeLineKo)
 	g.Settings.Off = true
 	for _, s := range judgeStatuses(context.Background(), ads, g) {
 		if s.writes {
 			t.Errorf("off: %+v", s)
 		}
 	}
+}
+
+// Judging off (C6, judgingOn false): no word of judging; the AIs that
+// write, what reaches the writer's company, and warnings that speak of
+// combined answers.
+func TestJudgeLinesNoJudging(t *testing.T) {
+	st := []judgeStatus{
+		{agent: "claude", name: "Claude Code", version: "2.1.317", min: "2.1.314", verified: "2.1.316", writes: true, info: &core.JudgeInfo{Model: "haiku", Family: "anthropic"}},
+		{agent: "codex", name: "Codex", version: "0.163.0", min: "0.164.0", why: compares.WhyOld},
+		{agent: "zed", name: "zed", version: "1.0.0", min: "1.0.0", why: compares.WhyNoFamily, info: &core.JudgeInfo{Model: "openrouter/x-1"}},
+	}
+	lines := judgeLines(st, false, false)
+	findLine(t, lines, "ok", "combined answers: Claude Code can write them", "종합 답변을 쓸 수 있는 AI: Claude Code")
+	findLine(t, lines, "warn", "Codex 0.163.0 is older than 0.164.0, the oldest version its one-off command was tested with; it does not write combined answers until it is updated",
+		"Codex 0.163.0 판은 일회성 명령을 시험한 가장 오래된 판(0.164.0)보다 오래되어 업데이트할 때까지 종합 답변을 쓰지 않습니다")
+	findLine(t, lines, "warn", "the judge model openrouter/x-1 set for zed is of a company the agent cannot tell, so it does not write combined answers",
+		"zed에 설정한 판정 모델 openrouter/x-1의 회사를 알 수 없어 종합 답변을 쓰지 않습니다")
+	findLine(t, lines, "info", "when a combined answer is written, the writing AI's company receives the question and every answer with the AIs' names",
+		"종합 답변을 쓸 때는 쓰는 AI의 회사가 질문과 AI 이름이 붙은 모든 답을 받습니다")
+	findLine(t, lines, "ok", noOutside, noOutsideKo)
+	for _, l := range lineTexts(lines) {
+		if strings.Contains(l, "judging") || strings.Contains(l, "compared") || strings.Contains(l, "판정을") || strings.Contains(l, "비교") {
+			t.Errorf("a judging line although judging is off: %q", l)
+		}
+	}
+	if len(lines) != 5 {
+		t.Errorf("lines:\n%s", strings.Join(lineTexts(lines), "\n"))
+	}
+	off := judgeLines(st, true, false)
+	if len(off) != 2 {
+		t.Fatalf("judge.off lines:\n%s", strings.Join(lineTexts(off), "\n"))
+	}
+	findLine(t, off, "info", "combined answers are off (agent.json judge.off)", "종합 답변이 꺼져 있습니다 (agent.json judge.off)")
 }

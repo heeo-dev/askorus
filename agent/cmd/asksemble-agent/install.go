@@ -272,9 +272,10 @@ func checkCmd(dir string, out io.Writer) error {
 	if folder, err := cfg.AskFolder(); err == nil {
 		c.line("ok", m("asks run in %s", "묻기는 %s에서 돕니다", folder))
 	}
-	// Comparison judging (P2-3): who judges, and where the answers go.
+	// Comparison judging (P2-3; off since C6, then only who writes the
+	// combined answers), and where the answers go.
 	st := judgeStatuses(ctx, append([]core.Adapter{adapter}, askOnly...), judgeGate(cfg))
-	for _, l := range judgeLines(st, cfg.Judge.Off) {
+	for _, l := range judgeLines(st, cfg.Judge.Off, judgingOn) {
 		c.line(l.level, l.text)
 	}
 
