@@ -13,6 +13,7 @@ import {
   request,
   running,
   stopAll,
+  stopTurns,
   type Turn,
 } from './thread';
 
@@ -376,6 +377,29 @@ test('stopAll stops following and asks the PC to stop what is not final', async 
   const again = new Map([['x', new AbortController()]]);
   stopAll(undefined, turns, again);
   expect(again.size).toBe(0);
+});
+
+test('stopTurns stops only the turns given; another conversation followed in the background goes on (#23)', async () => {
+  const pc = script({ 'POST comparisons/c1/cancel': [[200, snap('c1', 'failed')]] });
+  const base = ask();
+  const mine: Turn = { ...base, id: '1', compare: { ...base.compare!, id: 'c1', snap: snap('c1', 'running') } };
+  const other = new AbortController();
+  const follows = new Map([
+    ['1', new AbortController()],
+    ['1/compare', new AbortController()],
+    ['9', other],
+    ['9/compare', other],
+  ]);
+  const ctls = [follows.get('1')!, follows.get('1/compare')!];
+  stopTurns(pc.client, [mine], follows);
+  expect(ctls.every((c) => c.signal.aborted)).toBe(true);
+  expect([...follows.keys()]).toEqual(['9', '9/compare']);
+  expect(other.signal.aborted).toBe(false);
+  expect(said(pc.calls)).toEqual(['POST comparisons/c1/cancel']);
+});
+
+test('a waiting turn counts as running: nothing else goes in its conversation until it went (#23)', () => {
+  expect(running({ ...ask(), queued: true })).toBe(true);
 });
 
 // ---- Found in the S5 review (R-34) ----

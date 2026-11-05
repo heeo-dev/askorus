@@ -11,6 +11,7 @@ import * as Clipboard from 'expo-clipboard';
 import { renderRouter, screen, waitFor } from 'expo-router/testing-library';
 import { StyleSheet } from 'react-native';
 
+import { conversations } from '@/ask/conversations';
 import { features } from '@/ask/features';
 import { defaultAskPrefs, saveAskPrefs, type AskPrefs } from '@/ask/prefs';
 import { ConnectionStore } from '@/connections/store';
@@ -159,25 +160,28 @@ test('a writer that fails says why in its words; Write again writes it', async (
   expect(screen.queryByRole('button', { name: 'Write again' })).toBeNull();
 });
 
-test('New question while the combined answer is written asks the PC to stop, once', async () => {
+test('New question while the combined answer is written stops nothing: it is written on and kept in the history (#23)', async () => {
   agent.synthReply = 'hold';
   const user = await open();
   await ask(user, 'q');
   expect(await screen.findByLabelText(step, {}, { timeout: 5000 })).toBeTruthy();
   await waitFor(() => expect(agent.synthCalls).toBe(1));
-  const [id] = agent.comparisonIds();
-  let gets = agent.compareCalls('GET').length;
-  await later();
-  expect(agent.compareCalls('GET').length).toBeGreaterThan(gets); // still polling
 
   await user.press(screen.getByRole('button', { name: 'New question' }));
-  await waitFor(() => expect(agent.compareCalls('POST', '/cancel')).toHaveLength(1));
-  expect(agent.compareCalls('POST', '/cancel')[0].path).toBe(`/v1/comparisons/${id}/cancel`);
+  expect(screen.queryByLabelText(step)).toBeNull();
+  let gets = agent.compareCalls('GET').length;
+  await later();
+  expect(agent.compareCalls('GET').length).toBeGreaterThan(gets); // still followed, in the background
+
+  agent.synthReply = 'ok'; // the writing already started finishes
+  const id = conversations.list().find((c) => c.title === 'q')?.id ?? '';
+  await waitFor(async () => expect((await conversations.load(id))?.turns[0].compare?.snap?.synthesis?.status).toBe('done'), { timeout: 5000 });
+  expect(agent.compareCalls('POST', '/cancel')).toHaveLength(0);
+  expect(agent.synthCalls).toBe(1);
+  // Done: the polling stops.
   gets = agent.compareCalls('GET').length;
   await later();
   expect(agent.compareCalls('GET')).toHaveLength(gets);
-  expect(agent.compareCalls('POST', '/cancel')).toHaveLength(1);
-  expect(screen.queryByLabelText(step)).toBeNull();
 });
 
 test('in Korean the combined answer reads in Korean', async () => {
