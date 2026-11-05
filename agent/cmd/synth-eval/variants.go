@@ -16,7 +16,7 @@ import (
 
 // c5ProductHead is the version tag the product prompt starts with,
 // synth-v5's; the drafts swap it for their own.
-const c5ProductHead = "[Asksemble synthesis v5]"
+const c5ProductHead = "[Asksemble synthesis v5.1]"
 
 // synthC5Solo is the moderator alone with no list under the answer (#19,
 // 11-05, the person's call: a list of every difference is not better, many
@@ -163,3 +163,14 @@ func lightTemplate(spec judge.QuestionSpec) string {
 	}
 	return liveTemplate(lang, append(append([]string{}, lines...), lightKeep[lang]))
 }
+
+// The language line synth-v5.1 took (#27, 2026-11-06), made firm after
+// the S10 once wrote an English question's answer in Korean: the draft
+// v5-lang (synth-v5 with this line alone changed) wrote the ant question
+// in English 10 of 10 times, as synth-v5 did, and Korean questions as
+// before (runs c27-*). TestProductIsC5SQ checks the product is c5-sq with
+// this line.
+const (
+	v5LangLine = "TASK. Write in the language of the QUESTION, in Markdown, for the person who asked it.\n"
+	v5LangFirm = "TASK. Write the whole answer in the language of the QUESTION, in Markdown, for the person who asked it: a QUESTION in English gets an answer in English, whatever language the answers are in. The Korean words in the rules below (such as 다릅니다) are only for a QUESTION in Korean.\n"
+)

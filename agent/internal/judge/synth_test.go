@@ -14,10 +14,10 @@ import (
 	"github.com/asksemble/asksemble/agent/internal/core"
 )
 
-var synthUpdate = flag.Bool("synth.update", false, "rewrite testdata/synth-v5.golden")
+var synthUpdate = flag.Bool("synth.update", false, "rewrite testdata/synth-v5.1.golden")
 
 const (
-	synthGoldenFile  = "testdata/synth-v5.golden"
+	synthGoldenFile  = "testdata/synth-v5.1.golden"
 	synthGoldenNonce = "3b9e1f0c7a5d2468"
 )
 
@@ -133,7 +133,7 @@ func TestSynthPromptGolden(t *testing.T) {
 	}
 	synthGolden(t, synthGoldenFile, got)
 	synthCheckRead(t, task, got, synthGoldenNonce)
-	if !strings.HasPrefix(got, "[Asksemble synthesis v5] ") || strings.Contains(got, "COMPARED") || strings.Contains(got, "DIFFER") ||
+	if !strings.HasPrefix(got, "[Asksemble synthesis v5.1] ") || strings.Contains(got, "COMPARED") || strings.Contains(got, "DIFFER") ||
 		strings.Contains(got, "CHECK") || strings.Contains(got, `"ais"`) || strings.Contains(got, "EARLIER") {
 		t.Errorf("not synth-v5:\n%s", got)
 	}
@@ -372,7 +372,7 @@ func TestHandoffName(t *testing.T) {
 			t.Errorf("no name for %s", app)
 		}
 	}
-	if SynthRules != "synth-v5" {
+	if SynthRules != "synth-v5.1" {
 		t.Errorf("SynthRules = %q", SynthRules)
 	}
 }
@@ -388,5 +388,21 @@ func TestSynthLeavesExtrasOut(t *testing.T) {
 	}
 	if p := SynthPrompt(task, synthGoldenNonce); strings.Contains(p, "다음에 쓸 문장") || strings.Contains(p, "요금") {
 		t.Errorf("the prompt keeps the extras:\n%s", p)
+	}
+}
+
+// R-72 (#27): the combined answer is written in the question's language;
+// an English question gets English, the Korean words in the rules being
+// only for a Korean question.
+func TestSynthLanguageRule(t *testing.T) {
+	p := SynthPrompt(SynthTask{Question: "How many legs does an ant have?", Answers: []SynthAnswer{{AI: "Claude", Text: "Six."}, {AI: "Codex", Text: "Six legs."}}}, "0123456789abcdef")
+	for _, want := range []string{
+		"TASK. Write the whole answer in the language of the QUESTION",
+		"a QUESTION in English gets an answer in English, whatever language the answers are in",
+		"The Korean words in the rules below (such as 다릅니다) are only for a QUESTION in Korean.",
+	} {
+		if !strings.Contains(p, want) {
+			t.Errorf("missing %q", want)
+		}
 	}
 }
