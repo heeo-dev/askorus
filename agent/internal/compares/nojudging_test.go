@@ -41,7 +41,7 @@ func TestNoJudgingRun(t *testing.T) {
 		t.Fatalf("synth calls claude %d codex %d opencode %d", len(cl.synthCalls()), len(cx.synthCalls()), len(oc.synthCalls()))
 	}
 	p := cx.synthCalls()[0].Prompt
-	if !strings.HasPrefix(p, "[Asksemble synthesis v5] ") || strings.Contains(p, "COMPARED") || strings.Contains(p, "DIFFER: ") ||
+	if !strings.HasPrefix(p, "[Asksemble synthesis v5.1] ") || strings.Contains(p, "COMPARED") || strings.Contains(p, "DIFFER: ") ||
 		strings.Count(p, "\nANSWER: ") != 3 || !strings.Contains(p, "NUM 2") {
 		t.Errorf("prompt:\n%s", p)
 	}
@@ -51,7 +51,7 @@ func TestNoJudgingRun(t *testing.T) {
 			t.Errorf("JSON lacks %s: %s", want, b)
 		}
 	}
-	if l := logs.String(); !strings.Contains(l, `"rules":"synth-v5"`) || !strings.Contains(l, `"ais":3`) {
+	if l := logs.String(); !strings.Contains(l, `"rules":"synth-v5.1"`) || !strings.Contains(l, `"ais":3`) {
 		t.Errorf("logs:\n%s", l)
 	}
 }

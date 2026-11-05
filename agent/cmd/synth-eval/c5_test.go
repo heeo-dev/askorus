@@ -66,8 +66,9 @@ func TestC5SoloWith(t *testing.T) {
 	}
 }
 
-// TestProductIsC5SQ: synth-v5, the product's prompt since C6 (2026-11-05),
-// is the night's c5-sq word for word but for its version tag, with earlier
+// TestProductIsC5SQ: synth-v5.1, the product's prompt (synth-v5 since C6,
+// 2026-11-05; v5.1 since #27, 2026-11-06), is the night's c5-sq word for
+// word but for its version tag and the firm language line, with earlier
 // questions and without.
 func TestProductIsC5SQ(t *testing.T) {
 	const n = "0123456789abcdef"
@@ -76,8 +77,8 @@ func TestProductIsC5SQ(t *testing.T) {
 		task := judge.SynthTask{Question: "첫 배는?", Earlier: earlier, Answers: answers}
 		product := judge.SynthPrompt(task, n)
 		draft := c5SoloWith("c5-sq", "sel", "quiet")(task, n)
-		if product == "" || judge.SynthRules != "synth-v5" ||
-			strings.Replace(draft, "[Asksemble synthesis c5-sq-draft]", "[Asksemble synthesis v5]", 1) != product {
+		want := strings.Replace(strings.Replace(draft, "[Asksemble synthesis c5-sq-draft]", c5ProductHead, 1), v5LangLine, v5LangFirm, 1)
+		if product == "" || judge.SynthRules != "synth-v5.1" || !strings.Contains(draft, v5LangLine) || want != product {
 			t.Errorf("earlier %v: the product prompt is not c5-sq:\n%s\n---\n%s", earlier, product, draft)
 		}
 	}

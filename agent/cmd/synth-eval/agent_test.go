@@ -87,7 +87,7 @@ func TestTheAgentPipelineAsksComparesAndWrites(t *testing.T) {
 		case call.Stdin == "":
 		case strings.HasPrefix(call.Stdin, "[Asksemble] "):
 			asked++
-		case strings.HasPrefix(call.Stdin, "[Asksemble synthesis v5]"):
+		case strings.HasPrefix(call.Stdin, "[Asksemble synthesis v5.1]"):
 			written++
 		default:
 			t.Errorf("%s got another prompt:\n%.80s", call.Role, call.Stdin)

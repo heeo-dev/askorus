@@ -77,7 +77,7 @@ func TestRefineAsksWithTheTemplateAndWritesV5(t *testing.T) {
 	if s.Status != compares.SynthDone || len(writers) != 1 {
 		t.Fatalf("synth %+v, %d writer calls", s, len(writers))
 	}
-	if w := writers[0].Stdin; !strings.HasPrefix(w, "[Asksemble synthesis v5]") || strings.Contains(w, "\nSPEC: ") || strings.Contains(w, "\nFORM. ") ||
+	if w := writers[0].Stdin; !strings.HasPrefix(w, "[Asksemble synthesis v5.1]") || strings.Contains(w, "\nSPEC: ") || strings.Contains(w, "\nFORM. ") ||
 		strings.Contains(w, templateMark) {
 		t.Errorf("writer prompt is not synth-v5 with the question as written: %q", w[:min(len(w), 200)])
 	}
@@ -136,7 +136,7 @@ func TestRefineIsOffInTheAgent(t *testing.T) {
 	c, _ := r.waitComparison(st.ComparisonID)
 	s := synthOf(t, c)
 	writers := callsOfKind(t, kindSynth)
-	if s.Status != compares.SynthDone || len(writers) != 1 || !strings.HasPrefix(writers[0].Stdin, "[Asksemble synthesis v5]") {
+	if s.Status != compares.SynthDone || len(writers) != 1 || !strings.HasPrefix(writers[0].Stdin, "[Asksemble synthesis v5.1]") {
 		t.Fatalf("synth %+v, %d writer calls", s, len(writers))
 	}
 	// A moderator name that is no AI's is not refused either: the field is ignored.

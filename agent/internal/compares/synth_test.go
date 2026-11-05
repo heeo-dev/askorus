@@ -188,7 +188,7 @@ func TestSynthDirect(t *testing.T) {
 	// synth-v5: the question and every answer with its AI's name, nothing
 	// of the judging.
 	nonce := nonceOf(req.Prompt)
-	if !strings.HasPrefix(req.Prompt, "[Asksemble synthesis v5] ") {
+	if !strings.HasPrefix(req.Prompt, "[Asksemble synthesis v5.1] ") {
 		t.Errorf("prompt head:\n%s", req.Prompt)
 	}
 	for _, want := range []string{
@@ -1070,7 +1070,7 @@ func TestSynthSnapshotAndLogs(t *testing.T) {
 	if strings.Count(logs, `"msg":"synthesis started"`) != 2 || strings.Count(logs, `"msg":"synthesis ended"`) != 2 {
 		t.Errorf("logs:\n%s", logs)
 	}
-	for _, want := range []string{`"writer":"claude"`, `"rules":"synth-v5"`, `"ais":3`, `"code":"judge_failed"`} {
+	for _, want := range []string{`"writer":"claude"`, `"rules":"synth-v5.1"`, `"ais":3`, `"code":"judge_failed"`} {
 		if !strings.Contains(logs, want) {
 			t.Errorf("logs lack %s:\n%s", want, logs)
 		}
