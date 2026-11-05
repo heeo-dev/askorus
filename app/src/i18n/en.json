@@ -433,5 +433,9 @@
   "pair.tailscaleNote": "The phone and the PC need the same Tailscale account turned on",
   "app.slogan": "Ask, assemble.",
   "app.tagline": "Ask every AI at once. See where they agree, and where they don't.",
-  "about.version": "Version {v}"
+  "about.version": "Version {v}",
+  "ask.willSynth": "Once every answer is in, the moderator AI writes a combined answer.",
+  "ask.introModerator": "Once the answers are in, the moderator AI reads them all and writes a combined answer. Its company receives the question and every answer.",
+  "settings.synthAutoMod": "Write a combined answer once the answers are in",
+  "ask.metaSynth": "combined in {s} s"
 }

@@ -39,6 +39,7 @@ import type {
 import type { Target, Turn, TurnCompare } from '@/ask/thread';
 import { has, type MessageKey, t } from '@/i18n';
 import { texOfSpan } from '@/ui/inlineMath';
+import { features } from './features';
 
 /** The cards of the Summary tab, always in this order. */
 export const cardKinds = ['differ', 'check', 'agree', 'onlyOne'] as const;
@@ -186,6 +187,9 @@ export function judgesOf(info: Info, asked: string[]): string[] {
  */
 export function compareStart(o: { info: Info; asked: string[]; to: Target; auto: boolean }): TurnCompare['start'] | null {
   if (o.to !== 'all' || o.asked.length < 2) return null;
+  // C6: no judging, so two AIs are compared too, always as the answers
+  // come in; the combined answer's own switch says whether it is written.
+  if (!features.judging) return canSynthesize(o.info) ? 'auto' : null;
   const pcJudges = (o.info.agents ?? []).filter(canJudge);
   if (!pcJudges.length) return null;
   if (o.asked.length === 2) {

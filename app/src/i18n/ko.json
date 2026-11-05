@@ -433,5 +433,9 @@
   "pair.tailscaleNote": "폰과 PC에 같은 Tailscale 계정이 켜져 있어야 합니다",
   "app.slogan": "Ask, assemble.",
   "app.tagline": "한 번 물으면 여러 AI가 답하고, 같은 말과 다른 말을 한눈에 보여 줍니다.",
-  "about.version": "버전 {v}"
+  "about.version": "버전 {v}",
+  "ask.willSynth": "다 모이면 사회자 AI가 종합 답변을 씁니다.",
+  "ask.introModerator": "답이 모이면 사회자 AI가 모든 답을 읽고 종합 답변을 씁니다. 사회자 AI의 회사가 질문과 모든 답을 받습니다.",
+  "settings.synthAutoMod": "답이 모이면 종합 답변 쓰기",
+  "ask.metaSynth": "종합 {s}초"
 }

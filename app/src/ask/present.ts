@@ -43,6 +43,7 @@ import type { StepView } from '@/ui/CombinedAnswer';
 import type { EvidenceItemView, EvidenceSectionView, TileView, WhoPiece } from '@/ui/Evidence';
 import { inlineMathSpans, texOfSpan } from '@/ui/inlineMath';
 import { texToUnicode } from '@/ui/tex';
+import { features } from './features';
 
 // ---- Errors ----
 
@@ -168,8 +169,8 @@ export function snapshotOf(turn: Turn): Comparison | undefined {
  * once the judges are done, how long the comparison took (its slowest
  * judging request: snapshots carry no start or end times).
  */
-export function turnTimes(turn: Turn): { answersMs?: number; compareMs?: number } {
-  const out: { answersMs?: number; compareMs?: number } = {};
+export function turnTimes(turn: Turn): { answersMs?: number; compareMs?: number; synthMs?: number } {
+  const out: { answersMs?: number; compareMs?: number; synthMs?: number } = {};
   const answers = (turn.run?.parts ?? [])
     .filter((p) => turn.agents.includes(p.agent) && p.status !== 'running' && typeof p.ms === 'number')
     .map((p) => p.ms as number);
@@ -179,15 +180,18 @@ export function turnTimes(turn: Turn): { answersMs?: number; compareMs?: number 
     const judged = (s.requests ?? []).filter((r) => r.judge && typeof r.ms === 'number').map((r) => r.ms as number);
     if (judged.length) out.compareMs = Math.max(...judged);
   }
+  // C6: with no judging the wait after the answers is the combined answer's.
+  if (!features.judging && s?.synthesis?.status === 'done' && typeof s.synthesis.ms === 'number') out.synthMs = s.synthesis.ms;
   return out;
 }
 
-/** metaLine: 'answers 12 s · compared in 25 s', each part when known. */
+/** metaLine: 'answers 12 s · compared in 25 s' (C6: '· combined in 15 s'), each part when known. */
 export function metaLine(turn: Turn): string {
-  const { answersMs, compareMs } = turnTimes(turn);
+  const { answersMs, compareMs, synthMs } = turnTimes(turn);
   return [
     answersMs !== undefined ? t('ask.metaAnswers', { s: wholeSeconds(answersMs) }) : '',
     compareMs !== undefined ? t('ask.metaCompare', { s: wholeSeconds(compareMs) }) : '',
+    synthMs !== undefined ? t('ask.metaSynth', { s: wholeSeconds(synthMs) }) : '',
   ]
     .filter(Boolean)
     .join(' · ');
@@ -232,6 +236,12 @@ export function steps(turn: Turn, info: Info | null): StepView[] {
   const st = compareState(turn);
   if (!st) return [];
   const synth: StepView = { key: 'synth', label: t('compare.step.synth'), state: 'pending' };
+  if (!features.judging) {
+    // C6: no judging step; the combined answer is the only one.
+    const y = synthState(turn, info);
+    const coming = st.kind === 'comparing' ? synthExpected(turn) : (st.kind === 'done' || st.kind === 'failed') && (y?.kind === 'waiting' || y?.kind === 'writing');
+    return coming ? [{ ...synth, state: 'active' }] : [];
+  }
   if (st.kind === 'comparing') {
     const typical = info?.judging?.verified && info.judging.typicalMs ? wholeSeconds(info.judging.typicalMs) : 0;
     const compare: StepView = { key: 'compare', label: t('compare.comparingStart'), state: 'active' };

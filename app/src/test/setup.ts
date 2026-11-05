@@ -5,6 +5,7 @@
 // test, as the secure store and the history store (milestone B) do.
 
 import { conversations } from '@/ask/conversations';
+import { features } from '@/ask/features';
 import { setLang } from '@/i18n';
 import { resetPCs } from '@/ui/shell/pcs';
 import { resetPCStatus } from '@/ui/shell/pcStatus';
@@ -59,6 +60,8 @@ jest.mock('react-native-webview', () => {
 setLang('en');
 
 beforeEach(() => {
+  // The tests of judging keep its code working (features.ts); C6's turn it off.
+  features.judging = true;
   mockSecure.clear();
   for (const m of mockSQLite.values()) m.clear();
   conversations.reset();
