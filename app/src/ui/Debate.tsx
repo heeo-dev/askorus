@@ -15,7 +15,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { agentName } from '@/api/agents';
 import type { DebatePoint, DebateTurn, Info } from '@/api/types';
 import { plainNames } from '@/ask/aiNames';
-import { debateCost, debateErrorText, debateOffered, debateView, duration, natureLabel, resultLabel, sideLine, stanceLabel } from '@/ask/debate';
+import { debateCost, debateErrorText, debateOffered, debateView, duration, foldText, natureLabel, resultLabel, sideLine, stanceLabel } from '@/ask/debate';
 import type { Turn } from '@/ask/thread';
 import { t } from '@/i18n';
 
@@ -215,7 +215,7 @@ function TurnBubble({ x }: { x: DebateTurn }) {
             <Markdown text={text} />
           ) : (
             <Text style={s.body} numberOfLines={foldLines}>
-              {text}
+              {foldText(text)}
             </Text>
           )}
           {long && x.status === 'done' ? (
