@@ -133,38 +133,66 @@ test('an older agent whose AIs do not write: each answer in full, the plain intr
   expect(agent.runRequests()[0].compare).toBeUndefined();
 });
 
-test('a conversation left while the combined answer was written is looked at again once when reopened', async () => {
+test('a conversation left while the combined answer was written goes on, and comes back from the drawer as it is (#23)', async () => {
   agent.synthReply = 'hold';
   const user = await open();
   await ask(user, 'q');
   await writing();
   await user.press(screen.getByRole('button', { name: 'New question' }));
-  await waitFor(() => expect(agent.compareCalls('POST', '/cancel')).toHaveLength(1));
-  agent.synthReply = 'ok'; // the writing already started finishes
+  expect(await screen.findByText('The question before is still being answered and is kept in the history.')).toBeTruthy();
 
+  // Back while it is still written: no second follow, nothing asked again.
   await user.press(screen.getByRole('button', { name: 'Open menu' }));
   await user.press(within(await screen.findByTestId('drawer')).getByRole('button', { name: 'q' }));
+  expect(await writing()).toBeTruthy();
+  agent.synthReply = 'ok'; // the writing already started finishes
   expect(await written()).toBeTruthy();
   expect(screen.queryByLabelText('Writing the combined answer…')).toBeNull();
   expect(agent.comparisonCount()).toBe(1);
+  expect(agent.compareCalls('POST', '/cancel')).toHaveLength(0);
+  expect(agent.runRequests()).toHaveLength(1);
   // Done: the polling stops.
   const gets = agent.compareCalls('GET').length;
   await later();
   expect(agent.compareCalls('GET')).toHaveLength(gets);
 });
 
-test('a comparison stopped before it was made (New question while the AIs answered) is started over by Compare again', async () => {
+test('#23: New question while the AIs answer: the question before goes on and is kept, and the next one waits for it', async () => {
   agent.runLimit = 1;
   const user = await open();
   await ask(user, 'slow one');
   await screen.findByText('Answering…');
-  await waitFor(() => expect(screen.getByTestId('answering-claude')).toHaveAccessibilityValue({ text: 'Answered, 1 s' }));
   await user.press(screen.getByRole('button', { name: 'New question' }));
-  await waitFor(() => expect(agent.compareCalls('POST', '/cancel')).toHaveLength(1));
+  expect(await screen.findByText('The question before is still being answered and is kept in the history.')).toBeTruthy();
+
+  await ask(user, 'next one');
+  expect(await screen.findByText('Waiting: it goes once the question before it is done.')).toBeTruthy();
+  expect(agent.runRequests()).toHaveLength(1);
+  expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
+
+  agent.runLimit = Infinity;
+  // The one before ends with its combined answer, kept in the history; then this one goes.
+  await waitFor(() => expect(agent.runRequests()).toHaveLength(2), { timeout: 5000 });
+  expect(agent.runRequests()[1].prompt).toBe('next one');
+  expect(await written()).toBeTruthy();
+  expect(screen.queryByText('Waiting: it goes once the question before it is done.')).toBeNull();
+  expect(agent.compareCalls('POST', '/cancel')).toHaveLength(0);
+  const before = conversations.list().find((c) => c.title === 'slow one');
+  const kept = before && (await conversations.load(before.id));
+  expect(kept?.turns[0].run?.status).toBe('done');
+  expect(kept?.turns[0].compare?.snap?.synthesis?.status).toBe('done');
+});
+
+test('a comparison stopped on the PC (from another device) before it was made is started over by Compare again', async () => {
+  agent.runLimit = 1;
+  const user = await open();
+  await ask(user, 'slow one');
+  await screen.findByText('Answering…');
+  await waitFor(() => expect(agent.comparisonIds()).toHaveLength(1));
+  const [id] = agent.comparisonIds();
+  await agent.fetch(`https://${HOST}:${PORT}/v1/comparisons/${id}/cancel`, { method: 'POST', headers: { Authorization: `Bearer ${TOKEN}` } });
   agent.runLimit = Infinity;
 
-  await user.press(screen.getByRole('button', { name: 'Open menu' }));
-  await user.press(within(await screen.findByTestId('drawer')).getByRole('button', { name: 'slow one' }));
   expect(await screen.findByText('The comparison was stopped.', {}, { timeout: 5000 })).toBeTruthy();
   expect(screen.getByText('The combined answer was stopped.')).toBeTruthy();
   await user.press(screen.getByRole('button', { name: 'Compare again' }));

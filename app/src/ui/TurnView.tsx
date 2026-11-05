@@ -65,6 +65,17 @@ export function TurnView({
   act: TurnActions;
 }) {
   const s = styles(useTheme());
+  // Waiting for the conversation left running before it (#23): not sent yet.
+  if (turn.queued) {
+    return (
+      <View style={s.turn}>
+        <ThreadBubble text={turn.question} />
+        <Text style={s.caption} accessibilityLiveRegion="polite">
+          {t('ask.queued')}
+        </Text>
+      </View>
+    );
+  }
   const st = compareState(turn);
   const views = partViews(turn, now, info);
   const lost = turn.error ? (

@@ -8,10 +8,14 @@
 //
 // thread.ts follows the runs and comparisons; compare.ts and present.ts
 // say what each state shows; ui/TurnView draws a turn. This screen keeps
-// the conversation (in memory for this run of the app; the phone history
-// is P2-6): 'New question' and opening another one from the drawer archive
-// it in ask/conversations.ts. A conversation stays with the PC it was
-// asked on.
+// the conversation, saved on the phone as it changes (milestone B): 'New
+// question' and opening another one from the drawer archive it in
+// ask/conversations.ts. A conversation stays with the PC it was asked on.
+//
+// #23 (A, the user's choice): a conversation left while it still runs is
+// not stopped. It goes on in the background, kept in the history as it
+// changes, and a question sent meanwhile waits (Turn.queued) until it is
+// done. Only a removed conversation is stopped.
 
 import * as Clipboard from 'expo-clipboard';
 import * as Crypto from 'expo-crypto';
@@ -27,7 +31,7 @@ import { conversations, recentQuestions, useConversations } from '@/ask/conversa
 import { features } from '@/ask/features';
 import { aiStatus, askErrorText, displayModel, metaLine, onlyTarget, partViews, rowValue } from '@/ask/present';
 import { type AskPrefs, defaultAskPrefs, loadAskPrefs, saveAskPrefs } from '@/ask/prefs';
-import { askers, type FollowDeps, followCompare, followRun, newTurn, running, stopAll, type Target, type Turn } from '@/ask/thread';
+import { askers, type FollowDeps, followCompare, followRun, newTurn, running, stopTurns, type Target, type Turn } from '@/ask/thread';
 import { connect } from '@/connections/open';
 import { type Cause, cause } from '@/connections/reach';
 import { type Connection, ConnectionStore } from '@/connections/store';
@@ -122,15 +126,72 @@ export default function Ask() {
     }
   }, []);
 
+  // Conversations left while they still ran (#23), by id: their follows
+  // patch these copies, kept in the history at most about once a second.
+  const bgs = useRef(new Map<string, { head: Head; turns: Turn[] }>());
+  const [bgBusy, setBgBusy] = useState(false);
+  const bgTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const keepBgs = useCallback(() => {
+    if (bgTimer.current) return;
+    bgTimer.current = setTimeout(() => {
+      bgTimer.current = null;
+      for (const b of bgs.current.values()) conversations.save({ ...b.head, turns: b.turns });
+    }, 1000);
+  }, []);
+
   // What following a run or a comparison needs; thread.ts does the following.
   const deps: FollowDeps = useMemo(
     () => ({
       follows: follows.current,
-      update: (id, patch) => setTurns((ts) => ts.map((x) => (x.id === id ? { ...x, ...patch(x) } : x))),
+      update: (id, patch) => {
+        for (const b of bgs.current.values()) {
+          if (!b.turns.some((x) => x.id === id)) continue;
+          b.turns = b.turns.map((x) => (x.id === id ? { ...x, ...patch(x) } : x));
+          keepBgs();
+          return;
+        }
+        setTurns((ts) => ts.map((x) => (x.id === id ? { ...x, ...patch(x) } : x)));
+      },
       newId: () => Crypto.randomUUID(),
       errorText: askErrorText,
     }),
-    [],
+    [keepBgs],
+  );
+
+  // The follows going on, with their turns: a conversation with one still runs.
+  const jobs = useRef(new Map<Promise<void>, string>());
+  const track = useCallback((id: string, job: Promise<void>) => {
+    jobs.current.set(job, id);
+    job.finally(() => jobs.current.delete(job)).catch(() => undefined);
+  }, []);
+  const jobsOf = useCallback((ts: Turn[]) => [...jobs.current].filter(([, id]) => ts.some((x) => x.id === id)).map(([job]) => job), []);
+
+  // A question that waited goes now, as it was written (#23).
+  const startQueued = useCallback(
+    (client: AgentClient | undefined, x: Turn) => {
+      const at = Date.now();
+      deps.update(x.id, () => ({ queued: undefined, at }));
+      if (client) track(x.id, followRun(client, { ...x, queued: undefined, at }, deps));
+      else deps.update(x.id, () => ({ error: t('ask.notSent') }));
+    },
+    [deps, track],
+  );
+
+  // A conversation that ran in the background is done: it is kept as it
+  // ended, and once none runs, the question that waited goes.
+  const finishBg = useCallback(
+    (id: string) => {
+      const b = bgs.current.get(id);
+      if (!b) return;
+      bgs.current.delete(id);
+      conversations.save({ ...b.head, turns: b.turns });
+      if (bgs.current.size) return;
+      if (bgTimer.current) clearTimeout(bgTimer.current);
+      bgTimer.current = null;
+      setBgBusy(false);
+      for (const x of turnsRef.current) if (x.queued) startQueued(pcRef.current?.client, x);
+    },
+    [startQueued],
   );
 
   // The current conversation is kept on the phone as it changes (milestone
@@ -157,11 +218,25 @@ export default function Ask() {
     };
   }, [keepNow]);
 
-  // 'New question': stop following everything (the PC is asked to stop the
-  // comparisons still running) and keep the conversation in the history;
-  // a removed one (drop) is not kept.
+  // 'New question': the conversation is kept in the history. One that still
+  // runs goes on in the background (#23); a removed one (drop) is stopped
+  // (the PC is asked to stop its comparisons still running) and not kept.
+  // A question that waited and never went is kept as not sent.
   const fresh = useCallback((drop = false) => {
-    stopAll(pcRef.current?.client, turnsRef.current, follows.current);
+    const h = head.current;
+    let current = turnsRef.current;
+    if (current.some((x) => x.queued)) {
+      current = current.map((x) => (x.queued ? { ...x, queued: undefined, error: t('ask.notSent') } : x));
+      turnsRef.current = current;
+    }
+    const left = drop ? [] : jobsOf(current);
+    if (h && left.length) {
+      bgs.current.set(h.id, { head: h, turns: current });
+      setBgBusy(true);
+      Promise.allSettled(left).then(() => finishBg(h.id));
+    } else {
+      stopTurns(pcRef.current?.client, current, follows.current);
+    }
     if (drop) {
       if (pending.current) clearTimeout(pending.current);
       pending.current = null;
@@ -173,7 +248,7 @@ export default function Ask() {
     setNotes({});
     setSheet(null);
     setTo('all');
-  }, [keepNow]);
+  }, [keepNow, finishBg, jobsOf]);
 
   // The current PC answers; its info says which AIs can.
   useEffect(() => {
@@ -205,9 +280,21 @@ export default function Ask() {
   // A conversation opened from the drawer: the current one is kept, the
   // other comes back, and what was still running is followed again (an
   // unanswered run or comparison request goes again with the same id, so
-  // the PC does it once), so nothing spins for ever.
+  // the PC does it once), so nothing spins for ever. One still running in
+  // the background (#23) comes back as it is, its follows going on.
   const reopen = useCallback(
     async (id: string) => {
+      const back = bgs.current.get(id);
+      if (back) {
+        fresh();
+        bgs.current.delete(id);
+        setBgBusy(bgs.current.size > 0);
+        head.current = back.head;
+        conversations.setCurrent(back.head);
+        turnsRef.current = back.turns;
+        setTurns(back.turns);
+        return;
+      }
       const c = await conversations.load(id);
       if (!c) return;
       fresh();
@@ -219,17 +306,23 @@ export default function Ask() {
       const p = await connect(store, c.pcId);
       if (!p || head.current?.id !== c.id) return;
       for (const turn of c.turns) {
+        // Kept while it waited (the app was closed): it goes once none runs in the background.
+        if (turn.queued) {
+          if (!bgs.current.size) startQueued(p.client, turn);
+          continue;
+        }
         if (running(turn)) {
-          followRun(p.client, turn, deps, turn.run?.runId);
+          track(turn.id, followRun(p.client, turn, deps, turn.run?.runId));
           continue;
         }
         const cmp = turn.compare;
         if (!cmp || turn.error || cmp.error) continue;
-        if (cmp.key) followCompare(p.client, turn, 'start', deps);
-        else if (cmp.id && (!cmp.snap || cmp.snap.comparisonId !== cmp.id || polling(cmp.snap))) followCompare(p.client, turn, 'poll', deps);
+        if (cmp.key) track(turn.id, followCompare(p.client, turn, 'start', deps));
+        else if (cmp.id && (!cmp.snap || cmp.snap.comparisonId !== cmp.id || polling(cmp.snap)))
+          track(turn.id, followCompare(p.client, turn, 'poll', deps));
       }
     },
-    [currentId, deps, fresh, pcs],
+    [currentId, deps, fresh, pcs, startQueued, track],
   );
 
   useEffect(() => {
@@ -277,6 +370,9 @@ export default function Ask() {
       at: Date.now(),
     });
     if (!turn.agents.length) return;
+    // A conversation left running goes first: this question waits for it (#23).
+    const wait = bgs.current.size > 0;
+    if (wait) turn.queued = true;
     if (!head.current) {
       head.current = { id: Crypto.randomUUID(), pcId: p.conn.id, startedAt: Date.now(), title: question };
       conversations.setCurrent(head.current);
@@ -287,7 +383,7 @@ export default function Ask() {
     setTo('all');
     Keyboard.dismiss();
     stick.current = true;
-    followRun(p.client, turn, deps);
+    if (!wait) track(turn.id, followRun(p.client, turn, deps));
   };
 
   const note = (key: string, n: Note | null) =>
@@ -333,12 +429,12 @@ export default function Ask() {
     compare: (how) => {
       const p = pcRef.current;
       if (!p) return;
-      if (how === 'synth') followCompare(p.client, turn, how, deps, { agent: writerFor(info, prefs.synthAgent) });
-      else followCompare(p.client, turn, how, deps);
+      if (how === 'synth') track(turn.id, followCompare(p.client, turn, how, deps, { agent: writerFor(info, prefs.synthAgent) }));
+      else track(turn.id, followCompare(p.client, turn, how, deps));
     },
     retryRun: () => {
       const p = pcRef.current;
-      if (p) followRun(p.client, turn, deps, turn.run?.runId);
+      if (p) track(turn.id, followRun(p.client, turn, deps, turn.run?.runId));
     },
     openAnswer: (agent) => setSheet({ kind: 'answer', turn: turn.id, agent }),
     openAIs: () => setSheet({ kind: 'ais', turn: turn.id }),
@@ -506,6 +602,7 @@ export default function Ask() {
                 {/* Before the first question: where the answers go (R-34). */}
                 <Text style={s.caption}>{t('ask.intro')}</Text>
                 {canSynthesize(info) && prefs.synth ? <Text style={s.caption}>{t('ask.introModerator')}</Text> : null}
+                {bgBusy ? <Text style={s.caption}>{t('ask.goingOn')}</Text> : null}
               </View>
               {recent.length ? (
                 <View>

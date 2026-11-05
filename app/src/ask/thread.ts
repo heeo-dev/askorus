@@ -55,6 +55,9 @@ export type Turn = {
   error?: string; // why the run could not be sent or followed (words to show)
   at?: number; // when it was sent (phone clock, ms)
   compare?: TurnCompare; // set when the turn has a Summary tab (P2-3)
+  // Not sent yet: it waits until the conversation left running before it
+  // is done (#23), then goes as it is.
+  queued?: boolean;
 };
 
 /** Who a follow-up goes to: everyone turned on, or one AI. */
@@ -266,6 +269,25 @@ export async function followCompare(
 export function stopAll(client: AgentClient | undefined, turns: Turn[], follows: Map<string, AbortController>): void {
   follows.forEach((c) => c.abort());
   follows.clear();
+  stopComparisons(client, turns);
+}
+
+/**
+ * stopTurns stops following these turns only (a removed conversation) and
+ * asks the PC to stop their comparisons that are not final; another
+ * conversation still followed in the background (#23) goes on.
+ */
+export function stopTurns(client: AgentClient | undefined, turns: Turn[], follows: Map<string, AbortController>): void {
+  for (const t of turns) {
+    for (const key of [t.id, `${t.id}/compare`]) {
+      follows.get(key)?.abort();
+      follows.delete(key);
+    }
+  }
+  stopComparisons(client, turns);
+}
+
+function stopComparisons(client: AgentClient | undefined, turns: Turn[]): void {
   if (!client) return;
   for (const t of turns) {
     const c = t.compare;
