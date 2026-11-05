@@ -60,8 +60,11 @@ export function CombinedAnswerCard({
           {title}
         </Text>
         {meta ? (
-          <Text style={s.meta} numberOfLines={1}>
-            {meta}
+          // Two lines rather than cut ('answers 11 s · combine…' on a phone,
+          // 11-05): each part keeps its words together, so a line breaks only
+          // after a ' · ', and two lines fit the row the pile makes tall.
+          <Text style={s.meta} numberOfLines={2}>
+            {metaParts(meta)}
           </Text>
         ) : null}
         {infoButton ? <View style={[s.headInfo, !meta && s.pushRight]}>{infoButton}</View> : null}
@@ -87,6 +90,13 @@ export function CombinedAnswerCard({
     </View>
   );
 }
+
+/** metaParts: the times with no-break spaces inside each ' · ' part, so a part never splits across lines. */
+export const metaParts = (meta: string) =>
+  meta
+    .split(' · ')
+    .map((p) => p.replace(/ /g, ' '))
+    .join(' · ');
 
 function Step({ step }: { step: StepView }) {
   const th = useTheme();
@@ -125,7 +135,7 @@ const styles = themed((th) =>
     card: { gap: 8 },
     head: { flexDirection: 'row', alignItems: 'center', gap: 8, marginVertical: -10 },
     pile: { height: 44, flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: -4, paddingHorizontal: 4, borderRadius: 22 },
-    // The title keeps its room; the times give way (English 'answers 23 s · compared in 30 s' is long).
+    // The title keeps its room; the times give way, onto a second line (English 'answers 23 s · compared in 30 s' is long).
     title: { flexShrink: 0, maxWidth: '60%', fontSize: 14, fontWeight: '600', lineHeight: 20, color: th.text },
     meta: { marginLeft: 'auto', flexShrink: 1, minWidth: 0, textAlign: 'right', fontSize: 13, lineHeight: 18, color: th.caption, fontVariant: ['tabular-nums'] },
     headInfo: { marginRight: -14 },

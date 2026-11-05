@@ -374,6 +374,22 @@ describe('writing a question', () => {
 });
 
 describe('the combined answer', () => {
+  // R-70 (11-05, S10): 'answers 11 s · combined in 10 s' was cut to
+  // 'answers 11 s · combine…' beside the title. It may take two lines now,
+  // and only breaks after a ' · '.
+  test('the times take two lines rather than being cut, and a part never splits', async () => {
+    await render(
+      <CombinedAnswerCard
+        pile={{ agents: ['claude', 'codex'], label: 'AIs that answered: 2 (Claude, Codex). Details', onPress: () => undefined }}
+        title="Combined answer"
+        meta="answers 11 s · combined in 10 s"
+      />,
+    );
+    const meta = screen.getByText('answers 11 s · combined in 10 s');
+    expect(meta.props.numberOfLines).toBe(2);
+    expect(textOf(meta as unknown as HostNode)).toBe('answers 11 s · combined in 10 s');
+  });
+
   test('steps: the next one is read as the next step, the active one with its count', async () => {
     const user = userEvent.setup();
     const info = jest.fn();
