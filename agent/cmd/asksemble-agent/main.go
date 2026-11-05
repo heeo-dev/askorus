@@ -80,12 +80,6 @@ Usage / 사용법:
   asksemble-agent ask [-agents claude,codex,opencode] [-tier quick|standard|deep] [-follow ID,ID] QUESTION
       ask several AIs at once, answer only (web search on, no file writes)
       여러 AI에게 한 번에 묻습니다 (답만, 웹 검색 켬, 파일 쓰기 없음)
-  asksemble-agent compare -q FILE -answer AI=FILE ... [-model AI=MODEL] [-earlier FILE] [-judges A,B] [-json]
-          [-synth [-writer AI] [-tier quick|standard|deep]]
-      split the answers into sentences and have the AIs judge each other's (the judging AI's company receives the question and the answers)
-      답을 문장으로 나눠 AI끼리 판정합니다 (판정하는 AI의 회사가 질문과 답을 받습니다)
-      -synth: then one AI writes a combined answer (its company receives the question, every answer and the results)
-      -synth: 그다음 AI 하나가 종합 답변을 씁니다 (그 AI의 회사가 질문, 모든 답, 비교 결과를 받습니다)
   asksemble-agent stop SESSION_ID
       stop a background session
       백그라운드 세션을 멈춥니다
@@ -121,15 +115,6 @@ Settings live in %s (override with ASKSEMBLE_AGENT_DIR).
 // combined answer better. The code stays; check says nothing of it while
 // it is off.
 var refineOn = false
-
-// judgingOn turns comparison judging on: the AIs judging each other's
-// answers sentence by sentence (P2-3), its cards, and the topics of the
-// 다른 말 items (C5). Off since 2026-11-05 (C6, #19, the user's decision):
-// six judge requests took too long, and the moderator alone wrote a better
-// combined answer from the answers (synth-v5). The code stays until the
-// user has seen the change on the phone; check says nothing of judging
-// while it is off.
-var judgingOn = false
 
 func main() {
 	if err := run(os.Args[1:], os.Stdin, os.Stdout); err != nil {
@@ -169,8 +154,6 @@ func run(args []string, in io.Reader, out io.Writer) error {
 		return newCmd(dir, args[1:], out)
 	case "ask":
 		return askCmd(dir, args[1:], out)
-	case "compare":
-		return compareCmd(dir, args[1:], in, out)
 	case "stop":
 		return stopCmd(dir, args[1:], out)
 	case "rm":
@@ -207,8 +190,9 @@ func newAdapter(cfg config.Config) (*claude.Adapter, error) {
 	}), nil
 }
 
-// judgeMinVersions maps each AI to the oldest version of its CLI the judge
-// command was tested with. An AI not listed never judges.
+// judgeMinVersions maps each AI to the oldest version of its CLI the
+// locked-down one-off command (the judging days', now the combined
+// answer's and refining's) was tested with. An AI not listed never writes.
 func judgeMinVersions() map[string]string {
 	return map[string]string{
 		claude.Name:   claude.JudgeMinVersion,
@@ -217,9 +201,10 @@ func judgeMinVersions() map[string]string {
 	}
 }
 
-// judgeGate decides which AIs judge, as serve's API does: the settings'
-// judge block, the tested versions and the judge folder inside the ask
-// folder ("" without an ask folder, and then no AI judges).
+// judgeGate decides which AIs may write combined answers, as serve's API
+// does: the settings' judge block, the tested versions and the judge
+// folder inside the ask folder ("" without an ask folder, and then no AI
+// writes).
 func judgeGate(cfg config.Config) compares.Gate {
 	g := compares.Gate{Settings: cfg.Judge, MinVersions: judgeMinVersions()}
 	if ask, err := cfg.AskFolder(); err == nil {
@@ -387,13 +372,12 @@ func serve(dir string, args []string) error {
 		HistoryFolders:  historyFoldersOn(dir),
 		AddFolder:       addFolder(dir),
 		AskFolder:       askFolder,
-		// Comparison judging (P2-3): the AIs judge in <askFolder>\judge,
-		// each only with a CLI as new as its judge command was tested with.
+		// Combined answers (P2-3): the writers run in <askFolder>\judge,
+		// each only with a CLI as new as its one-off command was tested
+		// with.
 		Judge:            cfg.Judge,
 		JudgeMinVersions: judgeMinVersions(),
 		Refine:           refineOn,
-		Topics:           judgingOn,
-		NoJudging:        !judgingOn,
 	})
 	srv := api.HTTPServer(apiSrv.Handler())
 	ln, err := api.Listen(cfg.Port)
@@ -672,7 +656,8 @@ func groupCode(code string) string {
 
 // sessionFilter is the CLI sessions filter: the settings' hidden folders
 // and, like GET /v1/sessions, the judge folder inside the ask folder
-// (P2-3), where only judges run. The settings' list is never appended to.
+// (P2-3), where only the one-off calls run. The settings' list is never
+// appended to.
 func sessionFilter(cfg config.Config, q, folder string) core.Filter {
 	f := core.Filter{Query: q, Folder: folder, Hidden: cfg.HiddenFolders}
 	if ask, err := cfg.AskFolder(); err == nil {
@@ -759,13 +744,20 @@ func info(dir string, out io.Writer) error {
 }
 
 // printInfo prints every AI's Info as GET /v1/info's agents shows it:
-// with its ask tiers, and for an AI that judges the capability judge and
-// its judge model, effort and company (compares.Announce, as the API).
+// with its ask tiers, and synthesize for an AI that writes combined
+// answers (compares.Announce, as the API).
 func printInfo(ctx context.Context, adapters []core.Adapter, g compares.Gate, out io.Writer) error {
 	infos, _ := compares.Announce(ctx, adapters, g)
 	enc := json.NewEncoder(out)
 	enc.SetIndent("", "  ")
 	return enc.Encode(infos)
+}
+
+// errElevated refuses to run as administrator: what the agent starts
+// would get full rights (N3).
+func errElevated() error {
+	return fail("refusing to run as administrator: sessions started from here would get full rights. Start the agent from a normal terminal",
+		"관리자 권한으로는 실행하지 않습니다. 여기서 켠 세션이 모든 권한을 갖게 됩니다. 일반 터미널에서 에이전트를 켜세요")
 }
 
 func devicesCmd(dir string, args []string, out io.Writer) error {

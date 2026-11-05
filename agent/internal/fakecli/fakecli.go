@@ -2,8 +2,8 @@
 // docs/testing.md). A test binary that calls Main from its TestMain acts
 // as the AI programs: it picks the AI from ASKSEMBLE_FAKECLI, and what to
 // do from the shape of its arguments, the way the adapters build them:
-// --version, an ask, a judge, a combined-answer writer (synth.go), and
-// OpenCode's session list and delete. Every
+// --version, an ask, a combined-answer writer or a moderator refining a
+// question (synth.go), and OpenCode's session list and delete. Every
 // call but --version is recorded with its arguments, folder, the
 // environment the adapters set and stdin, so a test can check that the
 // question went on stdin and never into an argument.
@@ -25,14 +25,11 @@
 //	ASKSEMBLE_FAKECLI_RECORD   folder; each call writes <unixnano>-<pid>.json
 //	ASKSEMBLE_FAKECLI_STATE    folder for OpenCode's sessions.json (with a
 //	                           lock file) and the _once flags
-//	ASKSEMBLE_FAKE_JUDGE       judge mode: "prose" for every AI, or per AI
-//	                           "codex=usage_limit,claude=prose_once"; _once
-//	                           is only that AI's first judge call, later
-//	                           ones follow rule (see Modes)
-//	ASKSEMBLE_FAKE_SYNTH       combined-answer writer mode, set like
-//	                           ASKSEMBLE_FAKE_JUDGE: "prose", or per AI
-//	                           "claude=usage_limit_once"; ok by default
-//	                           (see SynthModes)
+//	ASKSEMBLE_FAKE_SYNTH       combined-answer writer mode: "prose" for every
+//	                           AI, or per AI "codex=bad_json,claude=
+//	                           usage_limit_once"; _once is only that AI's
+//	                           first writer call, later ones are ok; ok by
+//	                           default (see SynthModes)
 //	ASKSEMBLE_FAKECLI_SLEEP    how long mode slow waits (default 60s)
 //	ASKSEMBLE_FAKECLI_VERSION  "0.163.0" for every AI or "codex=0.163.0";
 //	                           default the tested minimum of each AI
@@ -70,7 +67,6 @@ const (
 	EnvRole    = "ASKSEMBLE_FAKECLI"
 	EnvRecord  = "ASKSEMBLE_FAKECLI_RECORD"
 	EnvState   = "ASKSEMBLE_FAKECLI_STATE"
-	EnvJudge   = "ASKSEMBLE_FAKE_JUDGE"
 	EnvSleep   = "ASKSEMBLE_FAKECLI_SLEEP"
 	EnvVersion = "ASKSEMBLE_FAKECLI_VERSION"
 	EnvFail    = "ASKSEMBLE_FAKECLI_FAIL"
@@ -268,7 +264,7 @@ func record(c *Call) {
 	}
 }
 
-// sleepSlow waits like a judge that never ends in time.
+// sleepSlow waits like a writer that never ends in time.
 func sleepSlow() {
 	d, err := time.ParseDuration(os.Getenv(EnvSleep))
 	if err != nil {
@@ -417,8 +413,8 @@ func updateSessions(f func([]Session) ([]Session, error)) error {
 	})
 }
 
-// firstCall reports whether this is the first judge call of role in mode
-// (for _once). Creating the flag file is the count, so parallel calls
+// firstCall reports whether this is the first writer call of role in
+// mode (for _once). Creating the flag file is the count, so parallel calls
 // agree on which one was first. Without a state folder every call is the
 // first.
 func firstCall(role, mode string) bool {
@@ -488,7 +484,7 @@ func setEnv(t testing.TB, role string) {
 	t.Setenv(EnvRole, role)
 	t.Setenv(EnvRecord, t.TempDir())
 	t.Setenv(EnvState, t.TempDir())
-	for _, k := range []string{EnvJudge, EnvSynth, EnvSleep, EnvVersion, EnvFail, EnvAnswers, EnvAsk} {
+	for _, k := range []string{EnvSynth, EnvSleep, EnvVersion, EnvFail, EnvAnswers, EnvAsk} {
 		t.Setenv(k, "")
 	}
 }

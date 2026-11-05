@@ -8,28 +8,23 @@ import (
 	"github.com/asksemble/asksemble/agent/internal/fakecli"
 )
 
-// IT-18 (C6, #19, 2026-11-05, the user's decision): with judging off, as in
-// the agent, a run's comparison asks no judge and makes no card; the
+// IT-18 (C6, #19, 2026-11-05, the user's decision; the judging's code went
+// with C6d, #24): a run's comparison asks no judge and makes no card; the
 // moderator alone writes the combined answer, with synth-v5. Two AIs asked
 // get one too.
 func TestIT18NoJudging(t *testing.T) {
 	t.Run("three AIs", func(t *testing.T) {
-		r := newRig(t, func(o *rigOptions) { o.noJudging = true })
+		r := newRig(t, nil)
 		r.addDevice()
 		_, c, b := r.synthRun(map[string]any{"synthesis": map[string]any{"agent": fakecli.RoleCodex}})
 		s := synthOf(t, c)
 		if c.Status != compares.Done || c.Error != nil || len(c.Requests) != 0 || len(c.Items) != 0 {
 			t.Fatalf("comparison %s %+v, requests %d, items %d", c.Status, c.Error, len(c.Requests), len(c.Items))
 		}
-		if s.Status != compares.SynthDone || s.Agent != fakecli.RoleCodex || s.Judged || s.Text != fakecli.SynthLead || s.Topics != nil {
+		if s.Status != compares.SynthDone || s.Agent != fakecli.RoleCodex || s.Judged || s.Text != fakecli.SynthLead {
 			t.Fatalf("synthesis %+v", s)
 		}
-		if n := len(calls(t, 0, kindJudge, "")); n != 0 {
-			t.Errorf("%d judge calls", n)
-		}
-		if n := len(calls(t, 0, kindTopics, "")); n != 0 {
-			t.Errorf("%d topics calls", n)
-		}
+		onlyAsksAndWriters(t)
 		synths := calls(t, 0, kindSynth, "")
 		if len(synths) != 1 {
 			t.Fatalf("%d synth calls", len(synths))
@@ -48,7 +43,7 @@ func TestIT18NoJudging(t *testing.T) {
 	})
 
 	t.Run("two AIs", func(t *testing.T) {
-		r := newRig(t, func(o *rigOptions) { o.noJudging = true })
+		r := newRig(t, nil)
 		r.addDevice()
 		two := []map[string]string{{"agent": fakecli.RoleClaude}, {"agent": fakecli.RoleOpenCode}}
 		st := r.ask(two, map[string]any{"tier": "standard", "compare": map[string]any{
@@ -62,9 +57,10 @@ func TestIT18NoJudging(t *testing.T) {
 			t.Fatalf("comparison %s, synthesis %+v", c.Status, s)
 		}
 		synths := calls(t, 0, kindSynth, "")
-		if len(synths) != 1 || len(calls(t, 0, kindJudge, "")) != 0 {
-			t.Fatalf("%d synth calls, %d judge calls", len(synths), len(calls(t, 0, kindJudge, "")))
+		if len(synths) != 1 {
+			t.Fatalf("%d synth calls", len(synths))
 		}
+		onlyAsksAndWriters(t)
 		if _, data := synthData(t, synths[0].Stdin); len(linesWith(data, "ANSWER: ")) != 2 {
 			t.Errorf("writer stdin has not the two answers:\n%s", synths[0].Stdin)
 		}

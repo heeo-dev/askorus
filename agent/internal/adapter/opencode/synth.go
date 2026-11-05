@@ -15,9 +15,9 @@ import (
 
 // Combined answers (종합 답변, P2-3 S5b, spec part 20). A writer is one
 // `opencode run --standalone` with its own agent, asksemble-synth, that may
-// use no tool, as a judge's (judge.go). It runs in the judge folder and
-// takes the judge title, so CleanupJudge, and uninstall, delete its
-// conversation as they delete a judge's, unchanged.
+// use no tool (the one-off command, judge.go). It runs in the judge folder
+// and takes the judge title, so CleanupJudge, and uninstall, delete its
+// conversation.
 
 const (
 	// synthAgent is the agent a writer runs with, handed to OpenCode for
@@ -36,7 +36,7 @@ const (
 var synthTimeout = core.SynthTimeout
 
 // synthConfig holds the writer agent and the refine agent: apart from
-// askConfig and judgeConfig, with every tool denied, the web tools too.
+// askConfig, with every tool denied, the web tools too.
 var synthConfig = func() string {
 	b, _ := json.Marshal(map[string]any{"agent": map[string]any{
 		synthAgent: map[string]any{
@@ -75,8 +75,8 @@ func writerArgs(agent, model string) []string {
 	return []string{"run", "--standalone", "--format", "json", "--agent", agent, "-m", model, "--title", synthTitle}
 }
 
-// checkSynthArgs accepts exactly what synthArgs makes from a valid model:
-// never the judge's or an ask's agent. The prompt goes on stdin.
+// checkSynthArgs accepts exactly what synthArgs or refineArgs makes from a
+// valid model: never an ask's or another agent. The prompt goes on stdin.
 func checkSynthArgs(args []string) error {
 	switch {
 	case len(args) != len(synthArgs("")):

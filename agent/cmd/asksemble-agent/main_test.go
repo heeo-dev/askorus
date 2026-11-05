@@ -63,33 +63,25 @@ func TestBilingualErrors(t *testing.T) {
 	}
 }
 
-// help names compare in both languages, with the note that the judging
-// AI's company gets the question and the answers.
-func TestHelpMentionsCompare(t *testing.T) {
+// help names no compare command since the judging went (C6d, #24).
+func TestHelpHasNoCompare(t *testing.T) {
 	var b bytes.Buffer
 	if err := run([]string{"help"}, strings.NewReader(""), &b); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{
-		"asksemble-agent compare -q FILE -answer AI=FILE ... [-model AI=MODEL] [-earlier FILE] [-judges A,B] [-json]",
-		"the judging AI's company receives the question and the answers",
-		"답을 문장으로 나눠 AI끼리 판정합니다 (판정하는 AI의 회사가 질문과 답을 받습니다)",
-	} {
-		if !strings.Contains(b.String(), want) {
-			t.Errorf("help lacks %q", want)
-		}
+	if strings.Contains(b.String(), "compare") || strings.Contains(b.String(), "판정") {
+		t.Errorf("help still names compare or judging:\n%s", b.String())
 	}
-	err := run([]string{"compare"}, strings.NewReader(""), &b)
-	if err == nil || !strings.Contains(err.Error(), "usage: asksemble-agent compare") || !strings.Contains(err.Error(), "사용법: asksemble-agent compare") {
-		t.Errorf("compare without flags: %v", err)
+	if err := run([]string{"compare"}, strings.NewReader(""), &b); err == nil || !strings.Contains(err.Error(), "unknown command") {
+		t.Errorf("compare: %v", err)
 	}
 }
 
-// info shows, for each AI that judges, the capability judge and its judge
-// model, effort and company, as /v1/info does; an AI too old to judge has
-// neither.
-func TestInfoShowsJudge(t *testing.T) {
-	ais := threeAIs()
+// info shows every AI's ask tiers and, for each AI that writes combined
+// answers, the capability synthesize, as /v1/info does; an AI too old to
+// write has none, and no AI shows judge (C6d, #24).
+func TestInfoShowsSynthesize(t *testing.T) {
+	ais := threeWriterAIs()
 	ais[1].version = "0.9.0" // older than its tested version
 	var b bytes.Buffer
 	if err := printInfo(context.Background(), adaptersOf(ais), testGate(t), &b); err != nil {
@@ -103,20 +95,20 @@ func TestInfoShowsJudge(t *testing.T) {
 		t.Fatalf("infos = %+v", infos)
 	}
 	c, x, o := infos[0], infos[1], infos[2]
-	if !slices.Contains(c.Capabilities, core.CapJudge) || c.Judge == nil || *c.Judge != (core.JudgeInfo{Model: "haiku", Effort: "medium", Family: "anthropic"}) {
-		t.Errorf("claude = %+v %+v", c, c.Judge)
+	if !slices.Equal(c.Capabilities, []core.Capability{core.CapAsk, core.CapSynthesize}) || c.Ask == nil {
+		t.Errorf("claude = %+v", c)
 	}
-	if slices.Contains(x.Capabilities, core.CapJudge) || x.Judge != nil {
-		t.Errorf("an old codex judges: %+v", x)
+	if slices.Contains(x.Capabilities, core.CapSynthesize) || x.Ask == nil {
+		t.Errorf("an old codex writes: %+v", x)
 	}
-	if o.Judge == nil || o.Judge.Family != "deepseek" || o.Ask == nil || o.Ask.Tiers[core.TierStandard].Model != "opencode-standard" {
+	if !slices.Contains(o.Capabilities, core.CapSynthesize) || o.Ask == nil || o.Ask.Tiers[core.TierStandard].Model != "opencode-standard" {
 		t.Errorf("opencode = %+v", o)
 	}
-	if !strings.Contains(b.String(), `"judge": {`) || !strings.Contains(b.String(), `"family": "anthropic"`) {
-		t.Errorf("info JSON:\n%s", b.String())
+	if strings.Contains(b.String(), "judge") {
+		t.Errorf("info JSON names judge:\n%s", b.String())
 	}
 	// The adapters' own capability lists are left as they were.
-	if caps := ais[0].Info(context.Background()).Capabilities; slices.Contains(caps, core.CapJudge) {
+	if caps := ais[0].Info(context.Background()).Capabilities; slices.Contains(caps, core.CapSynthesize) {
 		t.Errorf("the adapter's list changed: %v", caps)
 	}
 }

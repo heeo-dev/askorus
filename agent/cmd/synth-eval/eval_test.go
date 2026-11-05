@@ -90,8 +90,8 @@ func (f *fakePipeline) Ask(_ context.Context, q Question, _ RunInfo) (Record, er
 	}
 	rec := Record{
 		Answers: []AnswerRec{{Agent: "claude", Status: "done", Ms: 4000, Text: "답"}, {Agent: "codex", Status: "done", Ms: 6000, Text: "답"}},
-		Compare: &CompareRec{Status: "done", Ms: 20000, Counts: judge.Counts{Differ: 1, Agree: 2}},
-		Synth:   &SynthRec{Status: "done", Agent: "claude", Ms: 9000, Judged: true, Text: "서울은 수도입니다. 인구는 약 940만 명입니다."},
+		Compare: &CompareRec{Status: "done", Ms: 20000},
+		Synth:   &SynthRec{Status: "done", Agent: "claude", Ms: 9000, Text: "서울은 수도입니다. 인구는 약 940만 명입니다."},
 	}
 	if q.ID == f.stop {
 		rec.Answers[1] = AnswerRec{Agent: "codex", Status: "failed", Error: "ask_failed", Detail: "You've hit your usage limit. Try again at 5pm."}
@@ -148,19 +148,72 @@ func TestAnInterruptedQuestionIsNotSaved(t *testing.T) {
 	}
 }
 
+// A record of a run from before C6 holds the judging's fields and the C5
+// drafts' (written as the old code wrote them): it still loads, counts as
+// done, its task still makes the product prompt, and a record written
+// from it again leaves them out.
+func TestARecordFromBeforeC6StillLoads(t *testing.T) {
+	useRoot(t)
+	dir, _ := runDir("e2-old")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, dir, "q-g-1.json", `{
+  "v": 1, "seq": 1,
+  "question": {"id": "g-1", "file": "general.txt", "question": "상자의 가격은?"},
+  "run": {"name": "e2-old", "tier": "quick", "writer": "claude", "refine": "off"},
+  "at": "2026-11-04T12:00:00Z",
+  "answers": [{"agent": "claude", "status": "done", "ms": 1000, "text": "가격은 1원입니다."}, {"agent": "codex", "status": "done", "ms": 2000, "text": "가격은 2원입니다."}],
+  "compare": {"status": "done", "ms": 3000, "counts": {"differ": 1, "check": 1, "agree": 0, "onlyOne": 0, "notCompared": 0, "notJudged": 0}, "requests": 2, "failed": 0},
+  "synth": {"status": "done", "agent": "claude", "ms": 4000, "judged": true, "unnamedSides": 1, "text": "old"},
+  "synthTask": {"Question": "상자의 가격은?", "Earlier": null,
+    "Answers": [{"AI": "Claude", "Text": "가격은 1원입니다."}, {"AI": "Codex", "Text": "가격은 2원입니다."}],
+    "Differ": [{"Sides": [{"AIs": ["Claude"], "Says": ["가격은 1원입니다."]}, {"AIs": ["Codex"], "Says": ["가격은 2원입니다."]}], "NumbersDiffer": true}],
+    "Check": [{"AI": "Codex", "Says": ["가격은 2원입니다."], "Why": ["unsure"]}],
+    "Compared": true, "LeftOut": 0, "Spec": null},
+  "label": {"status": "done", "sections": [{"text": "old"}], "labels": []},
+  "topic": {"status": "done", "items": [{"key": "d1", "topic": "가격", "gists": ["1원", "2원"]}]},
+  "differs": {"status": "done", "places": [{"topic": "가격", "sides": [{"ais": ["Claude"], "gist": "1원", "quote": "가격은 1원입니다.", "found": true}]}]}
+}`)
+	rs, err := loadRecords(dir)
+	if err != nil || len(rs) != 1 || !done(dir, "g-1") {
+		t.Fatalf("records %+v, %v", rs, err)
+	}
+	r := rs[0]
+	if r.Compare.Ms != 3000 || r.Synth.Text != "old" || r.Task == nil || r.Task.Question != "상자의 가격은?" || len(r.Task.Answers) != 2 || r.Task.Answers[1].AI != "Codex" {
+		t.Fatalf("record %+v, task %+v", r, r.Task)
+	}
+	if p := judge.SynthPrompt(*r.Task, "0123456789abcdef"); !strings.HasPrefix(p, "[Asksemble synthesis v5]") || strings.Contains(p, "DIFFER") {
+		t.Fatalf("prompt:\n%s", p)
+	}
+	again, _ := runDir("e2-again")
+	if err := saveRecord(again, r); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(recordFile(again, "g-1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, old := range []string{"counts", "requests", "judged", "unnamedSides", "Differ", "Check", "Compared", "LeftOut", "label", "topic", "differs"} {
+		if strings.Contains(string(b), `"`+old+`"`) {
+			t.Errorf("the record written again keeps %q:\n%s", old, b)
+		}
+	}
+}
+
 func TestMetricsShapeLatinExtrasAndTimes(t *testing.T) {
 	text := "## 결론\n\n서울 인구는 약 940만 명입니다. Claude와 Codex가 다르게 말합니다.\n\n| AI | 인구 |\n| --- | --- |\n| {{Claude}} | 940만 |\n\n- 출처는 `API` 문서 https://example.com/x\n\n다음에 쓸 문장:\n- 부산 인구는?\n"
 	r := Record{
 		Question: Question{ID: "k-1", Text: "서울 인구는?"},
 		Answers:  []AnswerRec{{Status: "done", Ms: 5000, Text: "답"}, {Status: "failed"}},
-		Compare:  &CompareRec{Ms: 21000, Counts: judge.Counts{Differ: 1, Check: 2}},
-		Synth:    &SynthRec{Status: "done", Ms: 8000, Text: text, Unnamed: 1},
+		Compare:  &CompareRec{Ms: 21000},
+		Synth:    &SynthRec{Status: "done", Ms: 8000, Text: text},
 	}
 	m := metricsOf(r)
-	if m.Answered != 1 || m.Asked != 2 || m.AskMs != 5000 || m.TotalMs != 34000 || !m.SynthOK {
+	if m.Answered != 1 || m.Asked != 2 || m.AskMs != 5000 || m.CompareMs != 21000 || m.TotalMs != 34000 || !m.SynthOK {
 		t.Fatalf("times %+v", m)
 	}
-	if !m.Table || m.Headings != 1 || !m.StartsHeading || m.Bullets != 2 || !m.Korean || m.Unnamed != 1 || m.Differ != 1 || m.Check != 2 {
+	if !m.Table || m.Headings != 1 || !m.StartsHeading || m.Bullets != 2 || !m.Korean {
 		t.Fatalf("shape %+v", m)
 	}
 	if m.FirstSentence != len([]rune("서울 인구는 약 940만 명입니다.")) {
@@ -262,7 +315,7 @@ func TestRunFlagsGuardTheCalls(t *testing.T) {
 		t.Fatalf("a run that passes the checks did not make the pipeline (exit %d)", code)
 	}
 	code, s := run("questions", "-q", q)
-	if code != exitOK || !strings.Contains(s, "general-2    q2") || !strings.Contains(s, "up to 20 times") {
+	if code != exitOK || !strings.Contains(s, "general-2    q2") || !strings.Contains(s, "up to 8 times") {
 		t.Fatalf("questions: %d %q", code, s)
 	}
 }

@@ -153,19 +153,14 @@ func TestAnswerTemplates(t *testing.T) {
 	}
 }
 
-// synth-v4 (2026-11-04) reads the question itself: a refined question's
-// spec changes nothing in the prompt (synth-v3's SPEC line and FORM
-// paragraph are gone with C4). So does synth-v5 (C6), the prompt of a task
-// without judgments.
+// synth-v4 and v5 read the question itself: a refined question's spec
+// changes nothing in the prompt (synth-v3's SPEC line and FORM paragraph
+// are gone with C4).
 func TestSynthPromptIgnoresSpec(t *testing.T) {
-	s, items := synthSpec()
-	for _, judged := range []bool{true, false} {
-		task := BuildSynthTask(s, items, judged, synthName)
-		plain := SynthPrompt(task, synthGoldenNonce)
-		task.Spec = &QuestionSpec{Kind: "number", Intent: "첫 배 시간", Depth: "short", Language: "ko"}
-		rules := map[bool]string{true: SynthRulesJudged, false: SynthRules}[judged]
-		if got := SynthPrompt(task, synthGoldenNonce); got == "" || got != plain || SynthRulesOf(task) != rules {
-			t.Errorf("judged %v: a spec changed the prompt: %q", judged, got)
-		}
+	task := BuildSynthTask(synthSpec(), synthName)
+	plain := SynthPrompt(task, synthGoldenNonce)
+	task.Spec = &QuestionSpec{Kind: "number", Intent: "첫 배 시간", Depth: "short", Language: "ko"}
+	if got := SynthPrompt(task, synthGoldenNonce); got == "" || got != plain {
+		t.Errorf("a spec changed the prompt: %q", got)
 	}
 }

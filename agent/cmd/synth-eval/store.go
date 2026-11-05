@@ -20,7 +20,11 @@ import (
 // comparison and the combined answer, outside the repo (the person's own
 // questions and the AIs' answers).
 
-// Record is what one question gave.
+// Record is what one question gave. A record of a run from before C6 (#19,
+// 2026-11-05) may hold fields of the judging and of the C5 drafts (the
+// judges' items in its task, the combined answer's unnamed sides, label,
+// topic, differs …); they are not read, and a record written again leaves
+// them out.
 type Record struct {
 	V        int               `json:"v"`   // 1
 	Seq      int               `json:"seq"` // the question's place in the run, from 1
@@ -32,19 +36,10 @@ type Record struct {
 	Answers  []AnswerRec       `json:"answers"`
 	Compare  *CompareRec       `json:"compare,omitempty"`
 	Synth    *SynthRec         `json:"synth,omitempty"`
-	// Task is what the writer got: the answers, the judgments' 다른 말 and
-	// 확인 필요 items and the spec (C4, E0), so resynth can write again
-	// from the same answers and judgments. Runs before E0 have none.
+	// Task is what the writer got: the question, the answers and the spec
+	// (C4, E0), so resynth can write again from the same answers. Runs
+	// before E0 have none.
 	Task *judge.SynthTask `json:"synthTask,omitempty"`
-	// Label is the C5 board's draft B2: the combined answer cut at its
-	// headings and its parts labelled (label, c5label.go).
-	Label *LabelRec `json:"label,omitempty"`
-	// Topic is the C5 differ board's draft: each 다른 말 item named, with
-	// what each side says (topics, c5topic.go).
-	Topic *TopicRec `json:"topic,omitempty"`
-	// Differs is the C5 moderator experiment (#19): the places where the
-	// answers differ as the moderator lists them (differs, c5differs.go).
-	Differs *DiffRec `json:"differs,omitempty"`
 	// Stop is set when the question did not run through and is asked
 	// again on resume: usage_limit, or the pipeline's error code.
 	Stop string `json:"stop,omitempty"`
@@ -56,8 +51,8 @@ type RunInfo struct {
 	Tier   string `json:"tier"`
 	Writer string `json:"writer"`
 	Refine string `json:"refine"` // off, or on: the writer moderates (C2)
-	// From is the run whose answers and judgments resynth wrote from; the
-	// writer then wrote at SynthTier with the prompt Synth (C4, E0).
+	// From is the run whose answers resynth wrote from; the writer then
+	// wrote at SynthTier with the prompt Synth (C4, E0).
 	From      string `json:"from,omitempty"`
 	SynthTier string `json:"synthTier,omitempty"`
 	Synth     string `json:"synth,omitempty"`
@@ -117,31 +112,27 @@ type AnswerRec struct {
 	Detail string `json:"detail,omitempty"` // the AI's message, at most 300 characters
 }
 
-// CompareRec is the comparison: its state, how long the judges took after
-// the last answer, the cards' counts and the judge requests.
+// CompareRec is the comparison: its state and how long it took after the
+// last answer. Since C6 it only takes the answers and ends at once; until
+// then that was the judges' time.
 type CompareRec struct {
-	Status   string       `json:"status"`
-	Ms       int64        `json:"ms"`
-	Counts   judge.Counts `json:"counts"`
-	Requests int          `json:"requests"`
-	Failed   int          `json:"failed"`
-	Error    string       `json:"error,omitempty"`
-	Detail   string       `json:"detail,omitempty"`
+	Status string `json:"status"`
+	Ms     int64  `json:"ms"`
+	Error  string `json:"error,omitempty"`
+	Detail string `json:"detail,omitempty"`
 }
 
 // SynthRec is the combined answer.
 type SynthRec struct {
-	Status  string `json:"status"`
-	Agent   string `json:"agent,omitempty"`
-	Model   string `json:"model,omitempty"`
-	Ms      int64  `json:"ms,omitempty"`
-	In      int    `json:"inputTokens,omitempty"`
-	Out     int    `json:"outputTokens,omitempty"`
-	Judged  bool   `json:"judged"`
-	Unnamed int    `json:"unnamedSides,omitempty"`
-	Text    string `json:"text,omitempty"`
-	Error   string `json:"error,omitempty"`
-	Detail  string `json:"detail,omitempty"`
+	Status string `json:"status"`
+	Agent  string `json:"agent,omitempty"`
+	Model  string `json:"model,omitempty"`
+	Ms     int64  `json:"ms,omitempty"`
+	In     int    `json:"inputTokens,omitempty"`
+	Out    int    `json:"outputTokens,omitempty"`
+	Text   string `json:"text,omitempty"`
+	Error  string `json:"error,omitempty"`
+	Detail string `json:"detail,omitempty"`
 }
 
 var runNameRe = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,63}$`)

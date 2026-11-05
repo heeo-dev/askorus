@@ -69,14 +69,14 @@ func newEnv(t *testing.T, a core.Adapter, mutate func(*Options)) env {
 		mutate(&o)
 	}
 	srv := New(o)
-	// Asks and judges still running end with the test, before its folders
-	// are removed (cleanups run last in, first out).
+	// Asks and combined answers still running end with the test, before
+	// its folders are removed (cleanups run last in, first out).
 	t.Cleanup(srv.Close)
 	return env{h: srv.Handler(), srv: srv, token: tok, device: dev.ID, logs: logs, store: store}
 }
 
 // syncBuffer is a log buffer that the request goroutine and background
-// work (run parts, judges) may write at the same time.
+// work (run parts, comparisons) may write at the same time.
 type syncBuffer struct {
 	mu sync.Mutex
 	b  bytes.Buffer

@@ -8,11 +8,9 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"slices"
 	"strings"
 
 	"github.com/asksemble/asksemble/agent/internal/core"
-	"github.com/asksemble/asksemble/agent/internal/judge"
 )
 
 // FileName is the settings file inside the agent directory.
@@ -54,7 +52,8 @@ type Config struct {
 	OpenCodePath string `json:"opencodePath,omitempty"`
 	// Ask configures mode ask (Phase 2).
 	Ask AskConfig `json:"ask,omitzero"`
-	// Judge configures comparison judging (P2-3). Everything has a default.
+	// Judge configures the combined answers (P2-3; the name is the judging
+	// days'). Everything has a default.
 	Judge JudgeConfig `json:"judge,omitzero"`
 	// KeepAwake stops the PC from sleeping while a background session or a
 	// folder server runs (design: 절전). Off by default.
@@ -75,31 +74,25 @@ type AskConfig struct {
 	Tiers map[string]map[string]core.AskModel `json:"tiers,omitempty"`
 }
 
-// DefaultJudgePerAI is how many judge processes one AI runs at once when
-// the settings name no number (spec part 3, 'AI마다 2개').
+// DefaultJudgePerAI is how many one-off processes (combined answers,
+// refining) one AI runs at once when the settings name no number (spec
+// part 3, 'AI마다 2개').
 const DefaultJudgePerAI = 2
 
 // MaxJudgePerAI bounds judge.perAI. Every AI together runs at most six.
 const MaxJudgePerAI = 4
 
-// JudgeConfig is the judge settings (agent.json judge, P2-3). Everything
-// has a default, so a file without the block loads as before.
+// JudgeConfig is the settings of agent.json judge (P2-3), which since C6d
+// (#24) holds only what the combined answers use. Everything has a
+// default, so a file without the block loads as before.
 type JudgeConfig struct {
-	// Off turns judging off: no AI announces the capability judge.
+	// Off turns the combined answers off: no AI announces synthesize.
 	Off bool `json:"off,omitempty"`
-	// Models overrides one AI's judge model and effort, like ask.tiers:
-	// {"codex": {"model": "gpt-6-luna", "effort": "low"}}. A model of
-	// another company than the AI can tell makes it judge nothing.
-	Models map[string]core.AskModel `json:"models,omitempty"`
-	// PerAI is how many judge processes one AI runs at once, 1-4; 0 means
-	// DefaultJudgePerAI.
+	// PerAI is how many one-off processes one AI runs at once, 1-4; 0
+	// means DefaultJudgePerAI.
 	PerAI int `json:"perAI,omitempty"`
-	// Checks are the enabled checks (judge.AllChecks) that put a unit on
-	// the 확인 필요 card; empty means judge.DefaultChecks.
-	Checks []string `json:"checks,omitempty"`
-	// MaxUnits is how many units of an answer are judged, 1-40; 0 means
-	// judge.DefaultMaxUnits (30, S6 rule 4).
-	MaxUnits int `json:"maxUnits,omitempty"`
+	// models, checks and maxUnits went with the judging (C6d, #24): a file
+	// that still has them loads, and they are dropped when it is saved.
 }
 
 // PerAIOrDefault is PerAI, or DefaultJudgePerAI when it is 0.
@@ -110,69 +103,11 @@ func (j JudgeConfig) PerAIOrDefault() int {
 	return j.PerAI
 }
 
-// ChecksOrDefault is a copy of Checks, or of judge.DefaultChecks when
-// Checks is empty.
-func (j JudgeConfig) ChecksOrDefault() []string {
-	if len(j.Checks) == 0 {
-		return slices.Clone(judge.DefaultChecks)
-	}
-	return slices.Clone(j.Checks)
-}
-
-// MaxUnitsOrDefault is MaxUnits, or judge.DefaultMaxUnits when it is 0.
-func (j JudgeConfig) MaxUnitsOrDefault() int {
-	if j.MaxUnits == 0 {
-		return judge.DefaultMaxUnits
-	}
-	return j.MaxUnits
-}
-
-// ModelFor is the judge model and effort of agent, whose own default is
-// def (its adapter's JudgeDefault). When the settings name a model, it is
-// that model with the settings' effort, which may be empty: the adapter
-// then decides. Otherwise it is def, with the settings' effort when they
-// name one.
-func (j JudgeConfig) ModelFor(agent string, def core.AskModel) core.AskModel {
-	o, ok := j.Models[agent]
-	switch {
-	case !ok:
-		return def
-	case o.Model != "":
-		return core.AskModel{Model: o.Model, Effort: o.Effort}
-	case o.Effort != "":
-		def.Effort = o.Effort
-	}
-	return def
-}
-
 // validate checks the judge block. Its errors name the key, as ask.tiers'
 // do.
 func (j JudgeConfig) validate() error {
-	for agent, m := range j.Models {
-		switch {
-		case !idRe.MatchString(agent):
-			return fmt.Errorf("judge.models: %q is not an AI name", agent)
-		case m.Model != "" && !core.ValidAskModel(m.Model):
-			return fmt.Errorf("judge.models.%s: %q is not a model name", agent, m.Model)
-		case m.Effort != "" && !core.ValidAskEffort(m.Effort):
-			return fmt.Errorf("judge.models.%s: %q is not an effort level", agent, m.Effort)
-		}
-	}
 	if j.PerAI < 0 || j.PerAI > MaxJudgePerAI {
 		return fmt.Errorf("judge.perAI: %d must be 1-%d, or 0 for %d", j.PerAI, MaxJudgePerAI, DefaultJudgePerAI)
-	}
-	if j.MaxUnits < 0 || j.MaxUnits > judge.MaxUnits {
-		return fmt.Errorf("judge.maxUnits: %d must be 1-%d, or 0 for %d", j.MaxUnits, judge.MaxUnits, judge.DefaultMaxUnits)
-	}
-	seen := map[string]bool{}
-	for _, c := range j.Checks {
-		switch {
-		case !slices.Contains(judge.AllChecks, c):
-			return fmt.Errorf("judge.checks: %q is not a check (%s)", c, strings.Join(judge.AllChecks, ", "))
-		case seen[c]:
-			return fmt.Errorf("judge.checks: %q is listed twice", c)
-		}
-		seen[c] = true
 	}
 	return nil
 }

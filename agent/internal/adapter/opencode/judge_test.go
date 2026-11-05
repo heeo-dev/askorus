@@ -1,7 +1,6 @@
 package opencode
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -16,14 +15,14 @@ import (
 
 	"github.com/asksemble/asksemble/agent/internal/core"
 	"github.com/asksemble/asksemble/agent/internal/fakecli"
-	"github.com/asksemble/asksemble/agent/internal/judge"
 	"github.com/asksemble/asksemble/agent/internal/proc"
 )
 
 const testDefaultModel = "opencode-go/deepseek-v4.1-flash#high"
 
 // judgeSetup makes this test binary the fake opencode (internal/fakecli)
-// and returns the adapter, an ask folder and its judge folder.
+// and returns the adapter, an ask folder and its judge folder, where the
+// one-off calls run.
 func judgeSetup(t *testing.T) (a *Adapter, ask, jf string) {
 	t.Helper()
 	exe := fakecli.Use(t, fakecli.RoleOpenCode)
@@ -33,29 +32,6 @@ func judgeSetup(t *testing.T) (a *Adapter, ask, jf string) {
 		t.Fatal(err)
 	}
 	return New(Options{Path: exe}), ask, jf
-}
-
-// judgeTask has a number the other answer contradicts (a1) and a unit
-// without one (a2).
-func judgeTask() core.JudgeTask {
-	u := func(id, text string) core.JudgeUnit {
-		return core.JudgeUnit{ID: id, Kind: judge.UnitSentence, Text: text}
-	}
-	return core.JudgeTask{
-		Question: "사과는 몇 개인가요?", Shape: judge.ShapeDirected, Labels: judge.LabelsV1,
-		Units: []core.JudgeUnit{u("a1", "사과는 NUM 3개입니다."), u("a2", "좋은 하루 되세요.")},
-		Other: []core.JudgeUnit{u("b1", "사과는 NUM 4개입니다.")},
-	}
-}
-
-func judgeRequest(t *testing.T, folder string) core.JudgeRequest {
-	t.Helper()
-	tk := judgeTask()
-	p := judge.Prompt(tk, judge.Nonce(tk))
-	if p == "" {
-		t.Fatal("judge.Prompt refused the task")
-	}
-	return core.JudgeRequest{Folder: folder, Task: tk, Prompt: p}
 }
 
 func procResult(stdout []byte, stderr string, exit int) proc.Result {
@@ -91,128 +67,11 @@ func sessionIDs(ss []fakecli.Session) []string {
 	return out
 }
 
-func TestJudgeArgsEnvAndStdin(t *testing.T) {
-	a, _, jf := judgeSetup(t)
-	req := judgeRequest(t, jf)
-	res, err := a.Judge(context.Background(), req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	cs := fakecli.Calls(t)
-	if len(cs) != 1 {
-		t.Fatalf("%d calls, want 1", len(cs))
-	}
-	c := cs[0]
-	want := []string{"run", "--standalone", "--format", "json", "--agent", "asksemble-judge", "-m", testDefaultModel, "--title", "asksemble-judge"}
-	if !slices.Equal(c.Args, want) {
-		t.Errorf("args = %q, want %q", c.Args, want)
-	}
-	if c.Stdin != req.Prompt || c.Env["PWD"] != jf || !sameFolder(c.Dir, jf) {
-		t.Errorf("stdin same %v, PWD %q, dir %q; want folder %q", c.Stdin == req.Prompt, c.Env["PWD"], c.Dir, jf)
-	}
-	for _, arg := range c.Args {
-		if strings.Contains(arg, "NUM") || strings.Contains(arg, "사과") || strings.ContainsAny(arg, "\r\n") {
-			t.Errorf("argument %q carries the content", arg)
-		}
-	}
-
-	// The judge agent may use no tool at all, and is the only agent.
-	agents := agentConfig(t, c.Env["OPENCODE_CONFIG_CONTENT"])
-	ag, ok := agents["asksemble-judge"]
-	if len(agents) != 1 || !ok {
-		t.Fatalf("agents = %v", agents)
-	}
-	keys := make([]string, 0, len(ag))
-	for k := range ag {
-		keys = append(keys, k)
-	}
-	slices.Sort(keys)
-	perm, _ := json.Marshal(ag["permission"])
-	prompt, _ := ag["prompt"].(string)
-	if !slices.Equal(keys, []string{"description", "mode", "permission", "prompt"}) || ag["mode"] != "primary" ||
-		string(perm) != `{"*":"deny"}` || prompt == "" || strings.ContainsAny(prompt, "\r\n") {
-		t.Errorf("judge agent = %v", ag)
-	}
-
-	// The output is the fenced JSON, unchecked; internal/judge reads it.
-	if !bytes.HasPrefix(res.Output, []byte("```json\n")) {
-		t.Errorf("output = %q", res.Output)
-	}
-	v, err := judge.Validate(req.Task, res.Output)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(v.Missing) != 0 || len(v.Verdicts) != 2 || v.Verdicts[0].Label != judge.LabelOpposite ||
-		!slices.Equal(v.Verdicts[0].Evidence, []string{"b1"}) || v.Verdicts[1].Label != judge.LabelAbsent {
-		t.Errorf("validated = %+v", v)
-	}
-	ss := fakecli.Sessions(t)
-	if len(ss) != 1 || ss[0].ID != res.Cleanup || ss[0].Title != "asksemble-judge" || ss[0].Directory != jf {
-		t.Errorf("cleanup %q, sessions %+v", res.Cleanup, ss)
-	}
-	if res.Model != testDefaultModel || res.InputTokens != 120 || res.OutputTokens != 5 {
-		t.Errorf("result = model %q, %d/%d tokens", res.Model, res.InputTokens, res.OutputTokens)
-	}
-}
-
-func TestJudgeModelAndRefusals(t *testing.T) {
-	a, _, jf := judgeSetup(t)
-	for _, c := range []struct{ model, effort, want string }{
-		{"", "", testDefaultModel},
-		{"", "max", "opencode-go/deepseek-v4.1-flash#max"},
-		{"opencode-go/glm-5.2", "", "opencode-go/glm-5.2"},
-		{"openrouter/anthropic/claude-x#high", "", "openrouter/anthropic/claude-x#high"},
-		{"openrouter/anthropic/claude-x#high", "low", "openrouter/anthropic/claude-x#low"},
-	} {
-		req := judgeRequest(t, jf)
-		req.Model, req.Effort = c.model, c.effort
-		res, err := a.Judge(context.Background(), req)
-		if err != nil {
-			t.Fatalf("%+v: %v", c, err)
-		}
-		cs := fakecli.Calls(t)
-		if got := cs[len(cs)-1].Args[7]; got != c.want || res.Model != c.want {
-			t.Errorf("%q/%q: -m %q, model %q; want %q", c.model, c.effort, got, res.Model, c.want)
-		}
-	}
-
-	n := len(fakecli.Calls(t))
-	for name, c := range map[string]struct {
-		edit func(*core.JudgeRequest)
-		code string
-	}{
-		"no provider":       {func(r *core.JudgeRequest) { r.Model = "deepseek" }, core.ErrCodeBadModel},
-		"model as a flag":   {func(r *core.JudgeRequest) { r.Model = "--auto" }, core.ErrCodeBadModel},
-		"space in model":    {func(r *core.JudgeRequest) { r.Model = "opencode-go/x y" }, core.ErrCodeBadModel},
-		"bad variant":       {func(r *core.JudgeRequest) { r.Effort = "MAX" }, core.ErrCodeBadModel},
-		"variant as a flag": {func(r *core.JudgeRequest) { r.Effort = "--auto" }, core.ErrCodeBadModel},
-		"empty prompt":      {func(r *core.JudgeRequest) { r.Prompt = "" }, core.ErrCodeInternal},
-		"no folder":         {func(r *core.JudgeRequest) { r.Folder = "" }, core.ErrCodeInternal},
-		"relative folder":   {func(r *core.JudgeRequest) { r.Folder = "judge" }, core.ErrCodeInternal},
-		"missing folder":    {func(r *core.JudgeRequest) { r.Folder = filepath.Join(jf, "gone") }, core.ErrCodeInternal},
-	} {
-		req := judgeRequest(t, jf)
-		c.edit(&req)
-		res, err := a.Judge(context.Background(), req)
-		if core.ErrorCode(err) != c.code || res.Cleanup != "" || len(res.Output) != 0 {
-			t.Errorf("%s: %v, result %+v; want %s", name, err, res, c.code)
-		}
-	}
-	if got := len(fakecli.Calls(t)); got != n {
-		t.Errorf("refused judges ran opencode %d times", got-n)
-	}
-
-	missing := New(Options{Path: filepath.Join(t.TempDir(), "opencode.exe")})
-	if _, err := missing.Judge(context.Background(), judgeRequest(t, jf)); core.ErrorCode(err) != core.ErrCodeAgentUnavailable {
-		t.Errorf("missing opencode: %v", err)
-	}
-}
-
-// An ask after a judge still gets the ask agent with the web tools: the
-// two configs never mix.
-func TestAskAfterJudge(t *testing.T) {
+// An ask after a combined answer still gets the ask agent with the web
+// tools: the two configs never mix.
+func TestAskAfterWriter(t *testing.T) {
 	a, ask, jf := judgeSetup(t)
-	if _, err := a.Judge(context.Background(), judgeRequest(t, jf)); err != nil {
+	if _, err := a.Synthesize(context.Background(), synthRequest(t, jf)); err != nil {
 		t.Fatal(err)
 	}
 	res, err := a.Ask(context.Background(), core.AskRequest{Folder: ask, Prompt: "q", Tier: core.TierStandard})
@@ -227,169 +86,13 @@ func TestAskAfterJudge(t *testing.T) {
 	if !slices.Equal(c.Args, askArgs("opencode-go/deepseek-v4.1-flash#max", "")) || c.Env["PWD"] != ask || res.Answer != "fake: q" {
 		t.Errorf("ask call %q in %q, answer %q", c.Args, c.Env["PWD"], res.Answer)
 	}
-	if c.Env["OPENCODE_CONFIG_CONTENT"] != askConfig || j.Env["OPENCODE_CONFIG_CONTENT"] != judgeConfig || askConfig == judgeConfig {
-		t.Errorf("configs: ask %s, judge %s", c.Env["OPENCODE_CONFIG_CONTENT"], j.Env["OPENCODE_CONFIG_CONTENT"])
+	if c.Env["OPENCODE_CONFIG_CONTENT"] != askConfig || j.Env["OPENCODE_CONFIG_CONTENT"] != synthConfig || askConfig == synthConfig {
+		t.Errorf("configs: ask %s, writer %s", c.Env["OPENCODE_CONFIG_CONTENT"], j.Env["OPENCODE_CONFIG_CONTENT"])
 	}
 	agents := agentConfig(t, c.Env["OPENCODE_CONFIG_CONTENT"])
 	perm, _ := json.Marshal(agents["asksemble-ask"]["permission"])
 	if len(agents) != 1 || string(perm) != `{"*":"deny","webfetch":"allow","websearch":"allow"}` {
 		t.Errorf("ask agents = %v", agents)
-	}
-}
-
-func TestJudgeModes(t *testing.T) {
-	for _, c := range []struct {
-		mode   string
-		code   string // "" when Judge returns the output
-		check  string // what Validate makes of the output: valid, unsure, missing or bad
-		detail string // in the error's Detail
-	}{
-		{fakecli.ModeRule, "", "valid", ""},
-		{fakecli.ModeUnsure, "", "unsure", ""},
-		{fakecli.ModeMissingID, "", "missing", ""},
-		{fakecli.ModeProse, "", "bad", ""},
-		{fakecli.ModeBadJSON, "", "bad", ""},
-		{fakecli.ModeToolUse, core.ErrCodeJudgeUsedTool, "", ""},
-		{fakecli.ModeUsageLimit, core.ErrCodeJudgeFailed, "", fakecli.UsageLimitOpenCode},
-		{fakecli.ModeBadModel, core.ErrCodeBadModel, "", "Model unavailable: " + testDefaultModel},
-		{fakecli.ModeFailedWithOutput, core.ErrCodeJudgeFailed, "", "Provider is overloaded"},
-	} {
-		t.Run(c.mode, func(t *testing.T) {
-			a, _, jf := judgeSetup(t)
-			t.Setenv(fakecli.EnvJudge, c.mode)
-			req := judgeRequest(t, jf)
-			res, err := a.Judge(context.Background(), req)
-			// Every run left a conversation, and Judge names it whatever
-			// the error, so it is deleted.
-			ss := fakecli.Sessions(t)
-			if len(ss) != 1 || res.Cleanup != ss[0].ID {
-				t.Errorf("cleanup %q, sessions %+v", res.Cleanup, ss)
-			}
-			if res.Model != testDefaultModel {
-				t.Errorf("model %q", res.Model)
-			}
-			if core.ErrorCode(err) != c.code {
-				t.Fatalf("err = %v, want code %q", err, c.code)
-			}
-			if c.code != "" {
-				if len(res.Output) != 0 {
-					t.Errorf("an error came with output %q", res.Output)
-				}
-				if !strings.Contains(detail(err), c.detail) || strings.Contains(err.Error(), "judgments") {
-					t.Errorf("detail %q, want %q and no judge JSON", detail(err), c.detail)
-				}
-				return
-			}
-			v, verr := judge.Validate(req.Task, res.Output)
-			switch c.check {
-			case "valid", "unsure":
-				if verr != nil || len(v.Missing) != 0 || len(v.Verdicts) != 2 || v.Verdicts[0].Label != judge.LabelOpposite {
-					t.Fatalf("validated %+v, %v", v, verr)
-				}
-				for _, x := range v.Verdicts {
-					if x.Unsure != (c.check == "unsure") {
-						t.Errorf("verdict %+v", x)
-					}
-				}
-			case "missing":
-				if verr != nil || !slices.Equal(v.Missing, []string{"a1"}) {
-					t.Errorf("validated %+v, %v", v, verr)
-				}
-			case "bad":
-				var je *judge.Error
-				if !errors.As(verr, &je) || je.Code != core.ErrCodeJudgeBadOutput {
-					t.Errorf("Validate = %v", verr)
-				}
-			}
-			if c.mode == fakecli.ModeProse && string(res.Output) != fakecli.ProseText {
-				t.Errorf("prose output %q", res.Output)
-			}
-		})
-	}
-}
-
-func TestJudgeTimeout(t *testing.T) {
-	a, _, jf := judgeSetup(t)
-	t.Setenv(fakecli.EnvJudge, fakecli.ModeSlow)
-	t.Setenv(fakecli.EnvSleep, "60s")
-	req := judgeRequest(t, jf)
-
-	// A short deadline of the caller wins over JudgeTimeout.
-	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
-	start := time.Now()
-	_, err := a.Judge(ctx, req)
-	cancel()
-	if core.ErrorCode(err) != core.ErrCodeJudgeTimeout || time.Since(start) > 10*time.Second {
-		t.Errorf("300 ms: %v after %v", err, time.Since(start))
-	}
-
-	// A context that ended before the call starts nothing that lasts.
-	gone, cancelGone := context.WithCancel(context.Background())
-	cancelGone()
-	if _, err := a.Judge(gone, req); core.ErrorCode(err) != core.ErrCodeJudgeTimeout {
-		t.Errorf("ended context: %v", err)
-	}
-
-	// A judge ended once it named its conversation still returns it, and
-	// not the judge JSON it printed before it ended.
-	fakecli.SetSessions(t, nil)
-	ctx, cancel = context.WithCancel(context.Background())
-	defer cancel()
-	type result struct {
-		res core.JudgeResult
-		err error
-	}
-	done := make(chan result, 1)
-	go func() {
-		res, err := a.Judge(ctx, req)
-		done <- result{res, err}
-	}()
-	id := ""
-	for wait := time.Now().Add(30 * time.Second); id == "" && time.Now().Before(wait); {
-		if ss := fakecli.Sessions(t); len(ss) > 0 {
-			id = ss[0].ID
-		} else {
-			time.Sleep(20 * time.Millisecond)
-		}
-	}
-	if id == "" {
-		t.Fatal("the fake opencode never saved its conversation")
-	}
-	time.Sleep(300 * time.Millisecond) // it prints step_start and the judge JSON right after saving
-	start = time.Now()
-	cancel()
-	select {
-	case r := <-done:
-		if core.ErrorCode(r.err) != core.ErrCodeJudgeTimeout || r.res.Cleanup != id || len(r.res.Output) != 0 {
-			t.Errorf("ended: %v, cleanup %q (want %q), output %q", r.err, r.res.Cleanup, id, r.res.Output)
-		}
-		if d := time.Since(start); d > 10*time.Second {
-			t.Errorf("ended %v after the cancel", d)
-		}
-	case <-time.After(30 * time.Second):
-		t.Fatal("Judge did not end after its context did")
-	}
-}
-
-// Judge sets its own time limit: a caller with no deadline still gets
-// judge_timeout once judgeTimeout is up.
-func TestJudgeOwnTimeout(t *testing.T) {
-	if judgeTimeout != core.JudgeTimeout {
-		t.Fatalf("judgeTimeout = %v, want core.JudgeTimeout", judgeTimeout)
-	}
-	a, _, jf := judgeSetup(t)
-	t.Setenv(fakecli.EnvJudge, fakecli.ModeSlow)
-	t.Setenv(fakecli.EnvSleep, "20s")
-	old := judgeTimeout
-	judgeTimeout = 300 * time.Millisecond
-	t.Cleanup(func() { judgeTimeout = old })
-	start := time.Now()
-	res, err := a.Judge(context.Background(), judgeRequest(t, jf))
-	if core.ErrorCode(err) != core.ErrCodeJudgeTimeout || time.Since(start) > 10*time.Second {
-		t.Errorf("err = %v after %s", err, time.Since(start))
-	}
-	if len(res.Output) != 0 {
-		t.Errorf("output %s", res.Output)
 	}
 }
 
@@ -488,7 +191,7 @@ func TestCleanupJudge(t *testing.T) {
 			sess("fresh", judgeTitle, jf, time.Minute),                       // kept: may be another comparison's, still running
 			unknownAge, // kept
 			sess("othertitle", "asksemble-judge-x", jf, time.Hour),              // kept
-			sess("subfolder", judgeTitle, filepath.Join(jf, "live"), time.Hour), // kept: judge-eval's or LT-06a's
+			sess("subfolder", judgeTitle, filepath.Join(jf, "live"), time.Hour), // kept: a live test's
 			sess("ask", "fake ask", ask, time.Hour),                             // kept: an ask
 			sess("askfolder", judgeTitle, ask, time.Hour),                       // kept: not in the judge folder
 			sess("lookalike", judgeTitle, lookalike, time.Hour),                 // kept: another folder
@@ -503,7 +206,7 @@ func TestCleanupJudge(t *testing.T) {
 		}
 		var deleted []string
 		for _, c := range cs {
-			if c.Env["PWD"] != jf || c.Env["OPENCODE_CONFIG_CONTENT"] != judgeConfig || !sameFolder(c.Dir, jf) {
+			if c.Env["PWD"] != jf || c.Env["OPENCODE_CONFIG_CONTENT"] != synthConfig || !sameFolder(c.Dir, jf) {
 				t.Errorf("call %q ran with PWD %q in %q", c.Args, c.Env["PWD"], c.Dir)
 			}
 			if c.Args[1] == "delete" {
@@ -523,12 +226,12 @@ func TestCleanupJudge(t *testing.T) {
 		}
 	})
 
-	t.Run("after real judges", func(t *testing.T) {
+	t.Run("after real writers", func(t *testing.T) {
 		a, _, jf := judgeSetup(t)
-		t.Setenv(fakecli.EnvJudge, "tool_use_once")
+		t.Setenv(fakecli.EnvSynth, "tool_use_once")
 		var refs []string
 		for range 2 {
-			res, _ := a.Judge(ctx, judgeRequest(t, jf))
+			res, _ := a.Synthesize(ctx, synthRequest(t, jf))
 			refs = append(refs, res.Cleanup)
 		}
 		if err := a.CleanupJudge(ctx, jf, refs); err != nil {
@@ -630,8 +333,8 @@ func TestSameFolder(t *testing.T) {
 	}
 }
 
-// A judge conversation is never carried on as an ask, though the judge
-// folder is inside the ask folder.
+// A one-off conversation (the judge title, in the judge folder) is never
+// carried on as an ask, though the judge folder is inside the ask folder.
 func TestFollowUpRefusesJudgeSession(t *testing.T) {
 	a, ask, jf := judgeSetup(t)
 	sid := func(tag string) string { return "ses_" + tag + strings.Repeat("0", 26-len(tag)) }
@@ -668,44 +371,6 @@ func TestFollowUpRefusesJudgeSession(t *testing.T) {
 	}
 }
 
-func TestCheckJudgeArgs(t *testing.T) {
-	good := judgeArgs(testDefaultModel)
-	if err := checkJudgeArgs(good); err != nil {
-		t.Fatal(err)
-	}
-	with := func(edit func([]string) []string) []string { return edit(slices.Clone(good)) }
-	for name, args := range map[string][]string{
-		"auto":              with(func(a []string) []string { return append(a, "--auto") }),
-		"auto inside":       with(func(a []string) []string { return slices.Insert(a, 8, "--auto") }),
-		"build agent":       with(func(a []string) []string { a[5] = "build"; return a }),
-		"ask agent":         with(func(a []string) []string { a[5] = askAgent; return a }),
-		"no agent":          with(func(a []string) []string { return slices.Delete(a, 4, 6) }),
-		"no title":          with(func(a []string) []string { return a[:8] }),
-		"other title":       with(func(a []string) []string { a[9] = "notes"; return a }),
-		"title twice":       with(func(a []string) []string { return append(a, "--title", judgeTitle) }),
-		"session":           with(func(a []string) []string { return append(a, "--session", "ses_e773ef84effedagCyC2bkvl1W9") }),
-		"fork":              with(func(a []string) []string { return append(a, "--fork") }),
-		"prompt argument":   with(func(a []string) []string { return append(a, "compare these answers") }),
-		"share":             with(func(a []string) []string { return append(a, "--share") }),
-		"no standalone":     with(func(a []string) []string { return slices.Delete(a, 1, 2) }),
-		"text format":       with(func(a []string) []string { a[3] = "default"; return a }),
-		"permissions flag":  with(func(a []string) []string { return append(a, "--dangerously-skip-permissions") }),
-		"model as a flag":   judgeArgs("--auto"),
-		"model no provider": judgeArgs("deepseek"),
-		"model with space":  judgeArgs("opencode-go/x y"),
-		"ask args":          askArgs(testDefaultModel, ""),
-		"nothing":           nil,
-	} {
-		if err := checkJudgeArgs(args); err == nil {
-			t.Errorf("%s: %q accepted", name, args)
-		}
-	}
-	// Each checker refuses the other's command.
-	if err := checkArgs(good); err == nil {
-		t.Error("checkArgs accepted the judge command")
-	}
-}
-
 func TestCheckSessionArgs(t *testing.T) {
 	id := "ses_e773ef84effedagCyC2bkvl1W9"
 	for _, args := range [][]string{listArgs(), deleteArgs(id)} {
@@ -722,7 +387,7 @@ func TestCheckSessionArgs(t *testing.T) {
 		"delete, no standalone":  {"session", "delete", id},
 		"delete two":             {"session", "delete", id, id, "--standalone"},
 		"delete, standalone 1st": {"session", "delete", "--standalone", id},
-		"a run":                  judgeArgs(testDefaultModel),
+		"a run":                  synthArgs(testDefaultModel),
 	} {
 		if err := checkSessionArgs(args); err == nil {
 			t.Errorf("%s: %q accepted", name, args)
@@ -768,15 +433,9 @@ func TestFamily(t *testing.T) {
 	}
 }
 
-func TestJudgeDefault(t *testing.T) {
-	a := New(Options{Path: filepath.Join(t.TempDir(), "opencode.exe")})
-	d := a.JudgeDefault()
-	if d != (core.AskModel{Model: "opencode-go/deepseek-v4.1-flash", Effort: "high"}) || a.Family(d.Model) != "deepseek" {
-		t.Errorf("JudgeDefault = %+v", d)
-	}
-	if err := checkJudgeArgs(judgeArgs(modelArg(d.Model, d.Effort))); err != nil {
-		t.Error(err)
-	}
+// JudgeMinVersion is the one-off command's tested version; the fake plays
+// at least it.
+func TestJudgeMinVersion(t *testing.T) {
 	if JudgeMinVersion != "2.2.1" || !core.VersionAtLeast(fakecli.Versions[fakecli.RoleOpenCode], JudgeMinVersion) {
 		t.Errorf("JudgeMinVersion %q", JudgeMinVersion)
 	}

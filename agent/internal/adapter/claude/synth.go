@@ -15,14 +15,13 @@ import (
 	"github.com/asksemble/asksemble/agent/internal/proc"
 )
 
-// Combined answers (종합 답변, P2-3 S5b, spec part 20) run the judge's
-// locked-down `claude -p` (judge.go) with two changes: the model is the
+// Combined answers (종합 답변, P2-3 S5b, spec part 20) run the locked-down
+// one-off `claude -p` of the judging days (judge.go): the model is the
 // question's ask tier model, and --json-schema is core.SynthSchemaV1. No
 // tool, no MCP server, no saved conversation, --safe-mode, the prompt on
 // stdin, proc.Run with Runner.Path(); checkSynthArgs checks the exact
-// shape first, as checkJudgeArgs does for a judge, and each refuses the
-// other's. A question spec (질문 정제, milestone C) is the same command with
-// --json-schema core.RefineSchemaV1 and, by default, effort low.
+// shape first. A question spec (질문 정제, milestone C) is the same command
+// with --json-schema core.RefineSchemaV1 and, by default, effort low.
 
 // synthTimeout is the time limit Synthesize sets itself
 // (core.Synthesizer); a variable so a test can shorten it.
@@ -41,8 +40,9 @@ var (
 // (core.Named).
 func (a *Adapter) DisplayName() string { return "Claude" }
 
-// synthArgs builds the command line of one combined answer: judgeArgs with
-// the synth schema. The prompt is not in it.
+// synthArgs builds the command line of one combined answer: writerArgs
+// with the synth schema. The prompt is not in it; on Windows Go passes ""
+// as an empty argument ("").
 func synthArgs(model, effort string) []string { return writerArgs(model, effort, core.SynthSchemaV1) }
 
 // refineArgs builds the command line of one question spec: synthArgs with
@@ -60,7 +60,7 @@ const synthArgCount = 14
 
 // checkSynthArgs accepts exactly what synthArgs or refineArgs makes for a
 // valid model and effort, the synth or refine schema byte for byte: never
-// the judge schema, a permission flag, a tool, an MCP config, a resume or a
+// another schema, a permission flag, a tool, an MCP config, a resume or a
 // prompt argument.
 func checkSynthArgs(args []string) error {
 	if len(args) != synthArgCount {
@@ -118,7 +118,7 @@ func (a *Adapter) Synthesize(ctx context.Context, req core.SynthRequest) (core.S
 	case err != nil:
 		return r, core.Fail(core.ErrCodeJudgeFailed, "claude could not run")
 	}
-	// The judge's parser reads the same result object: structured_output,
+	// The one-off command's parser reads the result object: structured_output,
 	// permission denials, the model that answered and the tokens.
 	jr, err := parseJudgeOutput(res, model)
 	return core.SynthResult{Output: jr.Output, Model: jr.Model, InputTokens: jr.InputTokens, OutputTokens: jr.OutputTokens}, err

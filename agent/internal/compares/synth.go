@@ -11,14 +11,13 @@ import (
 	"github.com/asksemble/asksemble/agent/internal/judge"
 )
 
-// Combined answers (종합 답변, P2-3 S5b, spec part 20). Once a comparison's
-// judge round has ended, done or failed, one AI writes one combined answer
-// from the question, every answer with its AI's name and the 다른 말 and
-// 확인 필요 items, with its ask tier model and the judge's locked-down
-// command (core.Synthesizer). Only an AI asked for the question writes
-// (결정 5's rule): the one the person picked, else the first asked AI that
-// may. The writer takes the judges' process slots. The combined answer
-// has its own status beside the comparison's, which stays the judges'.
+// Combined answers (종합 답변, P2-3 S5b; the moderator alone since C6, #19).
+// Once a comparison has its answers, one AI, the moderator, writes one
+// combined answer from the question and every answer with its AI's name,
+// with its ask tier model and a locked-down one-off command
+// (core.Synthesizer). Only an AI asked for the question writes (결정 5's
+// rule): the one the person picked, else the first asked AI that may. The
+// combined answer has its own status beside the comparison's.
 // Logs carry codes and counts only, never the text, the prompt or the
 // nonce.
 
@@ -28,7 +27,7 @@ const SynthLimit = core.SynthTimeout + 30*time.Second
 
 // Combined-answer statuses (Synthesis.Status).
 const (
-	SynthWaiting = "waiting" // the judges are not done yet
+	SynthWaiting = "waiting" // the comparison has not taken its answers yet
 	SynthRunning = "running" // waiting for a process slot, or writing
 	SynthDone    = "done"
 	SynthFailed  = "failed" // Error says why
@@ -57,17 +56,10 @@ type Synthesis struct {
 	InputTokens  int    `json:"inputTokens,omitempty"`
 	OutputTokens int    `json:"outputTokens,omitempty"`
 	Text         string `json:"text,omitempty"` // Markdown
-	// Judged is true when the prompt carried the comparison's results: at
-	// least one judge request was done when it was made.
-	Judged bool `json:"judged"`
-	// UnnamedSides counts the 다른 말 sides given to the writer none of
-	// whose AI names the text has: the phone warns when it is over 0.
-	UnnamedSides int          `json:"unnamedSides,omitempty"`
-	Error        *judge.Error `json:"error,omitempty"`
-	// Topics names the 다른 말 items for the phone (C5, topics.go): none
-	// when Options.Topics is off, the comparison has no such item or the
-	// combined answer has not started.
-	Topics *Topics `json:"topics,omitempty"`
+	// Judged was true when the prompt carried the judges' results; always
+	// false since C6d (#24), and unnamedSides is never there (principle 4).
+	Judged bool         `json:"judged"`
+	Error  *judge.Error `json:"error,omitempty"`
 }
 
 // synthState is a comparison's combined answer. Manager.mu guards it.
@@ -80,12 +72,9 @@ type synthState struct {
 	ms        int64
 	in, out   int
 	text      string
-	judged    bool
-	unnamed   int
 	err       *judge.Error
 	cancelled bool
 	cancelCh  chan struct{} // closed by Cancel while it runs
-	topics    *topicsState  // the 다른 말 items named beside it (topics.go)
 }
 
 // newSynth is the combined answer a spec asks for: off without one.
@@ -160,7 +149,7 @@ func snapshotSynthLocked(c *comparison) *Synthesis {
 	s := c.synth
 	out := &Synthesis{
 		Status: s.status, Agent: s.spec.Agent, Model: s.model, Attempt: s.attempt, Ms: s.ms,
-		InputTokens: s.in, OutputTokens: s.out, Judged: s.judged, UnnamedSides: s.unnamed,
+		InputTokens: s.in, OutputTokens: s.out,
 	}
 	if out.Status == "" {
 		out.Status = SynthOff
@@ -175,14 +164,12 @@ func snapshotSynthLocked(c *comparison) *Synthesis {
 		e := *s.err
 		out.Error = &e
 	}
-	out.Topics = snapshotTopics(s.topics)
 	return out
 }
 
-// synthBusy reports whether c's combined answer waits or is written, or
-// its topics are being named.
+// synthBusy reports whether c's combined answer waits or is written.
 func synthBusy(c *comparison) bool {
-	return c.synth.status == SynthWaiting || c.synth.status == SynthRunning || topicsBusy(c)
+	return c.synth.status == SynthWaiting || c.synth.status == SynthRunning
 }
 
 // synthResetLocked makes c's combined answer wait for the next round's
@@ -195,19 +182,16 @@ func (m *Manager) synthResetLocked(c *comparison) {
 	c.synth = newSynth(&spec)
 }
 
-// synthAfterLocked starts c's combined answer when its judge round has
-// ended: finishLocked and endUnstartedLocked call it. It acts only on a
-// combined answer that waits: a broken comparison fails it with internal,
-// a cancelled one or a closed Manager with cancelled, fewer than two
-// answers with need_two_answers; else it starts at once, without waiting
-// for the judges' cleanup. Callers hold mu.
+// synthAfterLocked starts c's combined answer when its round has ended:
+// finishLocked and endUnstartedLocked call it. It acts only on a
+// combined answer that waits: a cancelled comparison or a closed Manager
+// fails it with cancelled, fewer than two
+// answers with need_two_answers; else it starts at once. Callers hold mu.
 func (m *Manager) synthAfterLocked(c *comparison) {
 	if c.synth.status != SynthWaiting {
 		return
 	}
 	switch {
-	case c.broken:
-		m.synthEndLocked(c, synthFailure(core.ErrCodeInternal, ""))
 	case c.cancelled:
 		m.synthEndLocked(c, synthFailure(core.ErrCodeCancelled, ""))
 	default:
@@ -227,9 +211,6 @@ func (m *Manager) synthStartLocked(c *comparison) {
 	switch {
 	case m.closed:
 		m.synthEndLocked(c, synthFailure(core.ErrCodeCancelled, msgSynthClosed))
-		return
-	case c.broken:
-		m.synthEndLocked(c, synthFailure(core.ErrCodeInternal, ""))
 		return
 	case ready < 2:
 		// Contract B, also when the comparison itself failed internal (its
@@ -254,7 +235,7 @@ func (m *Manager) synthEndLocked(c *comparison, err *judge.Error) {
 	s := &c.synth
 	code := ""
 	if err != nil {
-		s.status, s.err, s.text, s.unnamed = SynthFailed, err, "", 0
+		s.status, s.err, s.text = SynthFailed, err, ""
 		code = err.Code
 	} else {
 		s.status, s.err = SynthDone, nil
@@ -263,7 +244,7 @@ func (m *Manager) synthEndLocked(c *comparison, err *judge.Error) {
 		c.finishedAt = m.now()
 	}
 	m.log.Info("synthesis ended", "comparison", c.id, "writer", s.writer, "status", s.status, "code", code,
-		"attempt", s.attempt, "ms", s.ms, "unnamedSides", s.unnamed)
+		"attempt", s.attempt, "ms", s.ms)
 }
 
 // cancelSynthLocked cancels c's combined answer: one that waits fails with
@@ -275,11 +256,6 @@ func (m *Manager) cancelSynthLocked(c *comparison) {
 		m.synthEndLocked(c, synthFailure(core.ErrCodeCancelled, ""))
 	case SynthRunning:
 		if !c.synth.cancelled {
-			c.synth.cancelled = true
-			close(c.synth.cancelCh)
-		}
-	default: // the topics may still wait for a slot
-		if topicsBusy(c) && !c.synth.cancelled {
 			c.synth.cancelled = true
 			close(c.synth.cancelCh)
 		}
@@ -311,7 +287,8 @@ func (m *Manager) Synthesize(owner, id, agent string) (Comparison, error) {
 		spec.Agent = agent
 	}
 	c.synth = newSynth(&spec)
-	// An explicit write: a cancel of the judges does not stop it.
+	// An explicit write: an earlier cancel of the comparison does not stop
+	// it.
 	m.synthStartLocked(c)
 	m.touchLocked(c)
 	return m.snapshotLocked(c), nil
@@ -338,13 +315,11 @@ type synthInput struct {
 	spec    SynthSpec
 	tier    string
 	allowed []string // the AIs that may write, in order of preference after spec.Agent
-	anyAI   bool     // a direct comparison without judges: every AI that writes may
+	anyAI   bool     // a direct comparison that lists no AI: every AI that writes may
 	task    judge.Spec
-	items   []judge.Item
-	judged  bool
 	cancel  <-chan struct{}
 	// qspec is the run's question spec when it was refined (milestone C,
-	// off since 2026-11-04). It rides in the task; synth-v4 does not use it.
+	// off since 2026-11-04). It rides in the task; synth-v5 does not use it.
 	qspec *judge.QuestionSpec
 }
 
@@ -354,7 +329,6 @@ type synthInput struct {
 func (m *Manager) synthesize(c *comparison) {
 	err := synthFailure(core.ErrCodeInternal, "")
 	var text string
-	var unnamed int
 	defer func() {
 		if v := recover(); v != nil {
 			err = synthFailure(core.ErrCodeInternal, "")
@@ -362,44 +336,42 @@ func (m *Manager) synthesize(c *comparison) {
 		m.mu.Lock()
 		defer m.mu.Unlock()
 		if err == nil {
-			c.synth.text, c.synth.unnamed = text, unnamed
+			c.synth.text = text
 		}
 		m.synthEndLocked(c, err)
 		c.active--
 		m.touchLocked(c)
 	}()
-	text, unnamed, err = m.synthRun(c)
+	text, err = m.synthRun(c)
 }
 
 // synthRun picks the writer, makes the task, waits for a slot and asks the
 // writer, once more when the reply was not the combined answer. A new
 // nonce is drawn every time. After a cancel no writer is asked again.
-func (m *Manager) synthRun(c *comparison) (string, int, *judge.Error) {
+func (m *Manager) synthRun(c *comparison) (string, *judge.Error) {
 	var in synthInput
 	m.locked(func() { in = m.synthInputLocked(c) })
 
 	w, ok := pickWriter(m.Writers(m.base, in.tier), in)
 	if !ok {
-		return "", 0, synthFailure(core.ErrCodeNoJudge, "")
+		return "", synthFailure(core.ErrCodeNoJudge, "")
 	}
-	// The earlier questions are the ones every judge already got (part 20:
-	// earlier as for judging, R-35): a writer that is not one of the
-	// planned judges gets none.
-	if !slices.ContainsFunc(in.task.Judges, func(j judge.JudgeAI) bool { return j.Agent == w.Agent }) {
+	// The earlier questions are the ones every listed AI already got (part
+	// 20, R-35; the request's judges, spec.Listed): a writer that is not
+	// one of them gets none.
+	if !slices.Contains(in.task.Listed, w.Agent) {
 		in.task.Earlier = nil
 	}
 	names := m.answerNames(in.task.Answers)
-	task := judge.BuildSynthTask(in.task, in.items, in.judged, func(id string) string { return names[id] })
+	task := judge.BuildSynthTask(in.task, func(id string) string { return names[id] })
 	task.Spec = in.qspec
 	m.locked(func() {
-		c.synth.writer, c.synth.model, c.synth.judged = w.Agent, w.Model, in.judged
+		c.synth.writer, c.synth.model = w.Agent, w.Model
 		m.touchLocked(c)
 	})
-	m.log.Info("synthesis started", "comparison", c.id, "writer", w.Agent, "judged", in.judged, "rules", judge.SynthRulesOf(task),
-		"ais", len(task.Answers), "items", len(task.Differ)+len(task.Check), "leftOut", task.LeftOut)
-	m.topicsStart(c, w, in, names)
+	m.log.Info("synthesis started", "comparison", c.id, "writer", w.Agent, "rules", judge.SynthRules, "ais", len(task.Answers))
 	if err := makeFolder(m.o.Gate.Folder); err != nil {
-		return "", 0, synthFailure(core.ErrCodeInternal, "")
+		return "", synthFailure(core.ErrCodeInternal, "")
 	}
 
 	rd := &round{start: time.Now(), cancel: in.cancel}
@@ -407,11 +379,11 @@ func (m *Manager) synthRun(c *comparison) (string, int, *judge.Error) {
 	if failed != nil {
 		switch {
 		case failed.Code == core.ErrCodeJudgeTimeout:
-			return "", 0, synthFailure(core.ErrCodeJudgeTimeout, msgSynthQueue)
+			return "", synthFailure(core.ErrCodeJudgeTimeout, msgSynthQueue)
 		case m.base.Err() != nil:
-			return "", 0, synthFailure(core.ErrCodeCancelled, msgSynthClosed)
+			return "", synthFailure(core.ErrCodeCancelled, msgSynthClosed)
 		}
-		return "", 0, synthFailure(core.ErrCodeCancelled, "")
+		return "", synthFailure(core.ErrCodeCancelled, "")
 	}
 	called := false
 	var refs []string
@@ -425,11 +397,11 @@ func (m *Manager) synthRun(c *comparison) (string, int, *judge.Error) {
 	var firstErr *judge.Error // attempt 1's bad output
 	for attempt := 1; attempt <= 2; attempt++ {
 		if attempt == 2 && rd.stopped(m.base) {
-			return "", 0, firstErr
+			return "", firstErr
 		}
 		prompt := judge.SynthPrompt(task, judge.SynthNonce(task))
 		if prompt == "" {
-			return "", 0, synthFailure(core.ErrCodeInternal, "")
+			return "", synthFailure(core.ErrCodeInternal, "")
 		}
 		m.locked(func() {
 			c.synth.attempt = attempt
@@ -453,7 +425,7 @@ func (m *Manager) synthRun(c *comparison) (string, int, *judge.Error) {
 			m.touchLocked(c)
 		})
 		if m.base.Err() != nil {
-			return "", 0, synthFailure(core.ErrCodeCancelled, msgSynthClosed) // Close ended the writer
+			return "", synthFailure(core.ErrCodeCancelled, msgSynthClosed) // Close ended the writer
 		}
 		if err != nil {
 			f := synthCallFailure(err)
@@ -461,12 +433,12 @@ func (m *Manager) synthRun(c *comparison) (string, int, *judge.Error) {
 				firstErr = f
 				continue
 			}
-			return "", 0, f
+			return "", f
 		}
-		// As for judges (S2 decision 3): a model of another company than
-		// planned may be writing about its own company's answer.
+		// S2 decision 3: a model of another company than planned may be
+		// writing about its own company's answer.
 		if family := w.Judger.Family(res.Model); family == "" || !strings.EqualFold(family, w.Family) {
-			return "", 0, synthFailure(core.ErrCodeBadModel, msgSynthCompany)
+			return "", synthFailure(core.ErrCodeBadModel, msgSynthCompany)
 		}
 		text, verr := judge.ValidateSynth(res.Output)
 		if verr != nil {
@@ -475,11 +447,11 @@ func (m *Manager) synthRun(c *comparison) (string, int, *judge.Error) {
 				firstErr = f
 				continue
 			}
-			return "", 0, f
+			return "", f
 		}
-		return text, judge.UnnamedSides(task, text), nil
+		return text, nil
 	}
-	return "", 0, firstErr
+	return "", firstErr
 }
 
 // synthInputLocked reads what the combined answer of c needs. Callers
@@ -487,8 +459,7 @@ func (m *Manager) synthRun(c *comparison) (string, int, *judge.Error) {
 func (m *Manager) synthInputLocked(c *comparison) synthInput {
 	in := synthInput{
 		spec: c.synth.spec, tier: c.synth.spec.Tier, task: c.spec,
-		items: slices.Clone(c.summary.Items), cancel: c.synth.cancelCh,
-		judged: slices.ContainsFunc(c.requests, func(r judge.Request) bool { return r.Status == judge.RequestDone }),
+		cancel: c.synth.cancelCh,
 	}
 	in.task.Answers = slices.Clone(c.spec.Answers)
 	if c.run != nil && c.run.Refine != nil && c.run.Refine.Status == RefineDone && c.run.Refine.Spec != nil {
@@ -519,7 +490,7 @@ func (m *Manager) synthInputLocked(c *comparison) synthInput {
 
 // pickWriter is the AI that writes: in.spec.Agent when it may, else the
 // first AI of in.allowed that writes, else, for a direct comparison
-// without judges, the first AI that writes. An AI that was not asked
+// that lists no AI, the first AI that writes. An AI that was not asked
 // never writes.
 func pickWriter(writers []Writer, in synthInput) (Writer, bool) {
 	find := func(agent string) (Writer, bool) {
@@ -569,9 +540,9 @@ func (m *Manager) answerNames(answers []judge.Answer) map[string]string {
 	return out
 }
 
-// callSynth makes one Synthesize call within SynthLimit, as callJudge
-// does for a judge: a panic gives internal, the limit judge_timeout, and a
-// call that keeps going abandonAfter past it is left behind.
+// callSynth makes one Synthesize call within SynthLimit: a panic gives
+// internal, the limit judge_timeout, and a call that keeps going
+// abandonAfter past it is left behind.
 func (m *Manager) callSynth(w Writer, req core.SynthRequest) (core.SynthResult, error) {
 	ctx, cancel := context.WithTimeout(m.base, m.synthLimit)
 	defer cancel()
@@ -610,8 +581,8 @@ func (m *Manager) callSynth(w Writer, req core.SynthRequest) (core.SynthResult, 
 	}
 }
 
-// synthCleanup starts the cleanup of what the writer left behind, as a
-// judge AI's (endRequestLocked): it runs even when the Manager is closed
+// synthCleanup starts the cleanup of what the writer left behind: it runs
+// even when the Manager is closed
 // (R-30), and the comparison is not idle until it has ended. The synth
 // goroutine, one of the Manager's WaitGroup, calls it, so Add is safe.
 func (m *Manager) synthCleanup(c *comparison, w Writer, refs []string) {

@@ -76,15 +76,13 @@ func taskRecord(id string, seq int) Record {
 	task := judge.SynthTask{
 		Question: "상자의 가격은?",
 		Answers:  []judge.SynthAnswer{{AI: "Claude", Text: "가격은 1원입니다."}, {AI: "Codex", Text: "가격은 2원입니다."}},
-		Differ:   []judge.SynthDiffer{{Sides: []judge.SynthSide{{AIs: []string{"Claude"}, Says: []string{"가격은 1원입니다."}}, {AIs: []string{"Codex"}, Says: []string{"가격은 2원입니다."}}}, NumbersDiffer: true}},
-		Compared: true,
 	}
 	return Record{
 		V: 1, Seq: seq, Question: Question{ID: id, File: "general.txt", Text: task.Question},
 		Run:     RunInfo{Name: "base", Tier: core.TierQuick, Writer: "claude", Refine: "off"},
 		Answers: []AnswerRec{{Agent: "claude", Status: "done", Ms: 1000, Text: task.Answers[0].Text}, {Agent: "codex", Status: "done", Ms: 2000, Text: task.Answers[1].Text}},
-		Compare: &CompareRec{Status: "done", Ms: 3000, Counts: judge.Counts{Differ: 1}},
-		Synth:   &SynthRec{Status: "done", Agent: "claude", Ms: 4000, Judged: true, Text: "old"},
+		Compare: &CompareRec{Status: "done", Ms: 3000},
+		Synth:   &SynthRec{Status: "done", Agent: "claude", Ms: 4000, Text: "old"},
 		Task:    &task,
 	}
 }
@@ -128,7 +126,7 @@ func TestResynthWritesFromTheSameAnswersAsksAgainOnceAndStopsOnALimit(t *testing
 		t.Fatalf("out %s", out.String())
 	}
 	for _, c := range f.calls {
-		if c.Agent != "claude" || c.Tier != core.TierStandard || c.Refine || !strings.HasPrefix(c.Prompt, "[Asksemble synthesis v4]") {
+		if c.Agent != "claude" || c.Tier != core.TierStandard || c.Refine || !strings.HasPrefix(c.Prompt, "[Asksemble synthesis v5]") {
 			t.Fatalf("call %+v", c)
 		}
 	}
@@ -138,7 +136,7 @@ func TestResynthWritesFromTheSameAnswersAsksAgainOnceAndStopsOnALimit(t *testing
 		t.Fatalf("records %v %v", rs, err)
 	}
 	got := rs[0]
-	if got.Synth.Status != "done" || got.Synth.Ms != 11000 || got.Synth.Model != "claude-sonnet" || got.Synth.Unnamed != 0 || !strings.Contains(got.Synth.Text, "{{Codex}}") {
+	if got.Synth.Status != "done" || got.Synth.Ms != 11000 || got.Synth.Model != "claude-sonnet" || !strings.Contains(got.Synth.Text, "{{Codex}}") {
 		t.Fatalf("synth %+v", got.Synth)
 	}
 	if got.Run.From != "base" || got.Run.SynthTier != core.TierStandard || got.Run.Synth != "product" || got.Run.Tier != core.TierQuick || got.Run.Name != "std" {

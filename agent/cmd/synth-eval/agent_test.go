@@ -69,15 +69,32 @@ func TestTheAgentPipelineAsksComparesAndWrites(t *testing.T) {
 		}
 	}
 	c := rec.Compare
-	if c == nil || c.Status != "done" || c.Requests == 0 || c.Counts.Differ != 1 || c.Counts.Agree == 0 {
+	if c == nil || c.Status != "done" {
 		t.Fatalf("compare %+v", c)
 	}
 	s := rec.Synth
-	if s == nil || s.Status != "done" || s.Agent != "claude" || s.Text == "" || !s.Judged {
+	if s == nil || s.Status != "done" || s.Agent != "claude" || s.Text == "" {
 		t.Fatalf("synth %+v", s)
 	}
-	if m := metricsOf(rec); !m.SynthOK || m.Answered != 3 || m.Differ != 1 {
+	if m := metricsOf(rec); !m.SynthOK || m.Answered != 3 {
 		t.Fatalf("metrics %+v", m)
+	}
+	// No AI judged (C6): the AIs were asked, then the writer wrote, once.
+	// Calls without a prompt (OpenCode's session commands) do not count.
+	asked, written := 0, 0
+	for _, call := range fakecli.Calls(t) {
+		switch {
+		case call.Stdin == "":
+		case strings.HasPrefix(call.Stdin, "[Asksemble] "):
+			asked++
+		case strings.HasPrefix(call.Stdin, "[Asksemble synthesis v5]"):
+			written++
+		default:
+			t.Errorf("%s got another prompt:\n%.80s", call.Role, call.Stdin)
+		}
+	}
+	if asked != 3 || written != 1 {
+		t.Fatalf("asked %d, written %d", asked, written)
 	}
 }
 
@@ -117,7 +134,7 @@ func TestTheAgentPipelineRefinesFirst(t *testing.T) {
 	asked := 0
 	for _, c := range fakecli.Calls(t) {
 		if !strings.HasPrefix(c.Stdin, "[Asksemble] ") {
-			continue // the moderator, judges, writer
+			continue // the moderator, the writer
 		}
 		asked++
 		if !strings.Contains(c.Stdin, rf.Template) {
@@ -135,7 +152,8 @@ func TestTheAgentPipelineRefinesFirst(t *testing.T) {
 // The record keeps the writer's task (C4, E0): made again from it, the
 // prompt is the one the writer got, byte for byte (its nonce aside), and
 // a writer call through the agent's adapters writes the same combined
-// answer again. With refining, the task carries the spec (kept in the record; synth-v4 does not use it).
+// answer again. With refining, the task carries the spec (kept in the
+// record; synth-v5 does not use it).
 func TestTheRecordKeepsTheWritersTaskForResynth(t *testing.T) {
 	for _, refine := range []string{"off", "on"} {
 		t.Run(refine, func(t *testing.T) {
@@ -166,7 +184,7 @@ func TestTheRecordKeepsTheWritersTaskForResynth(t *testing.T) {
 				t.Fatal(err)
 			}
 			task := rec.Task
-			if task == nil || len(task.Answers) != 3 || len(task.Differ) != 1 || !task.Compared || task.Answers[0].AI != "Claude" {
+			if task == nil || task.Question != "이 상자의 가격과 높이는 얼마인가요?" || len(task.Answers) != 3 || task.Answers[0].AI != "Claude" {
 				t.Fatalf("task %+v", task)
 			}
 			if (task.Spec != nil) != (refine == "on") {
@@ -238,7 +256,7 @@ func TestTheAgentPipelineLightAndLiveFormats(t *testing.T) {
 	asked := 0
 	for _, c := range fakecli.Calls(t) {
 		if !strings.HasPrefix(c.Stdin, "[Asksemble] ") {
-			continue // the moderator, judges, writer
+			continue // the moderator, the writer
 		}
 		asked++
 		if !strings.Contains(c.Stdin, q.Text+"\n\n"+want) {

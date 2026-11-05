@@ -272,10 +272,9 @@ func checkCmd(dir string, out io.Writer) error {
 	if folder, err := cfg.AskFolder(); err == nil {
 		c.line("ok", m("asks run in %s", "묻기는 %s에서 돕니다", folder))
 	}
-	// Comparison judging (P2-3; off since C6, then only who writes the
-	// combined answers), and where the answers go.
-	st := judgeStatuses(ctx, append([]core.Adapter{adapter}, askOnly...), judgeGate(cfg))
-	for _, l := range judgeLines(st, cfg.Judge.Off, judgingOn) {
+	// Who writes the combined answers, and where the answers go.
+	st := writerStatuses(ctx, append([]core.Adapter{adapter}, askOnly...), judgeGate(cfg))
+	for _, l := range writerLines(st, cfg.Judge.Off) {
 		c.line(l.level, l.text)
 	}
 
@@ -400,8 +399,12 @@ var (
 // cleanupJudgeTimeout bounds uninstall's cleanup of the judge folder.
 const cleanupJudgeTimeout = 5 * time.Minute
 
-// cleanupJudgeFolder deletes the judge conversations OpenCode left in the
-// judge folder, as a comparison does after its OpenCode requests. With no
+// oldJudgeSchemaFile is the judge schema file codex read until C6d (#24),
+// in the agent folder; uninstall still removes it.
+const oldJudgeSchemaFile = "judge-schema-v1.json"
+
+// cleanupJudgeFolder deletes the one-off conversations OpenCode left in the
+// judge folder, as a comparison does after its OpenCode calls. With no
 // refs, CleanupJudge deletes only those unchanged for over 10 minutes, so
 // one from the last minutes before uninstall can stay (S3 decision 5). A
 // missing folder or a missing opencode leaves nothing to delete.
@@ -452,7 +455,9 @@ func uninstallCmd(dir string, args []string, in io.Reader, out io.Writer) error 
 		judgeFolder = core.JudgeFolder(ask)
 		plan = append(plan, m("delete OpenCode's leftover judge conversations in the judge folder", "판정 폴더에 남은 OpenCode 판정 대화를 지움"))
 	}
-	schemaFile := filepath.Join(dir, core.JudgeSchemaFile)
+	// The judge schema file of the judging days (codex's --output-schema,
+	// until C6d, #24) may still be on a PC: uninstall removes it too.
+	schemaFile := filepath.Join(dir, oldJudgeSchemaFile)
 	synthSchemaFile := filepath.Join(dir, core.SynthSchemaFile)
 	refineSchemaFile := filepath.Join(dir, core.RefineSchemaFile)
 	plan = append(plan, m("delete %s", "%s 삭제", schemaFile), m("delete %s", "%s 삭제", synthSchemaFile), m("delete %s", "%s 삭제", refineSchemaFile))
@@ -487,9 +492,9 @@ func uninstallCmd(dir string, args []string, in io.Reader, out io.Writer) error 
 	for _, f := range []string{devices.FileName, "pairing.json", "pairing-request.json", "pairing-decision.json", "pairing-result.json", "pairing-qr.png"} {
 		os.Remove(filepath.Join(dir, f))
 	}
-	// The agent is stopped, so none of its judges runs. Without refs,
-	// CleanupJudge leaves the conversations of the last 10 minutes, such
-	// as those of a CLI compare that still runs.
+	// The agent is stopped, so none of its one-off calls runs. Without
+	// refs, CleanupJudge leaves the conversations of the last 10 minutes,
+	// such as those of another agent process that still runs.
 	if judgeFolder != "" {
 		if err := uninstallJudgeCleanup(ctx, cfg, judgeFolder); err != nil {
 			say(out, m("could not delete every OpenCode judge conversation (%s); they stay in %s, which only the agent uses",

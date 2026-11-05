@@ -12,7 +12,8 @@ import (
 // the adapters' synth command reaches it: Claude's -p whose --json-schema
 // is the synth schema, Codex's exec whose --output-schema file is, and
 // OpenCode's run with the agent asksemble-synth. ASKSEMBLE_FAKE_SYNTH picks
-// what it does, as ASKSEMBLE_FAKE_JUDGE does for a judge.
+// what it does. Until C6d (#24) the fakes also played a judge and the
+// topics call; both went with the judging.
 
 // EnvSynth is the writer's mode: "prose" for every AI, or per AI
 // "claude=usage_limit_once,codex=bad_json"; _once is only that AI's first
@@ -32,23 +33,13 @@ const RefineAgent = "asksemble-refine"
 // RefineSpec is the question spec the fake moderator gives.
 const RefineSpec = `{"kind":"compare","intent":"상자의 가격과 높이","depth":"short","language":"ko"}`
 
-// EnvTopics is the mode of a topics call (C5: the 다른 말 items named
-// beside the combined answer): the synth modes, by AI as EnvSynth, apart
-// from EnvSynth so a synth mode with _once stays the combined answer's.
-const EnvTopics = "ASKSEMBLE_FAKE_TOPICS"
-
-// isTopicsPrompt reports whether a writer's prompt is a topics prompt.
-func isTopicsPrompt(prompt string) bool {
-	return strings.HasPrefix(prompt, "[Asksemble differ topics ")
-}
-
 // isRefinePrompt reports whether a writer's prompt is a refine prompt.
 func isRefinePrompt(prompt string) bool { return strings.HasPrefix(prompt, "[Asksemble refine ") }
 
 // Synth modes of ASKSEMBLE_FAKE_SYNTH.
 const (
-	SynthOK           = "ok"            // the default: SynthText, naming the AIs of every DIFFER side
-	SynthMissingNames = "missing_names" // SynthMissingNamesText: no AI named
+	SynthOK           = "ok"            // the default: SynthLead
+	SynthMissingNames = "missing_names" // SynthMissingNamesText: another valid answer, naming no AI
 	SynthProse        = "prose"         // SynthProseText instead of JSON
 	SynthBadJSON      = "bad_json"      // JSON cut off (Claude: it gave up after its schema retries)
 	SynthEmpty        = "empty"         // {"answer":""}
@@ -69,9 +60,10 @@ var SynthModes = []string{
 	SynthToolUse, SynthSlow, SynthBadModel, SynthFailedWithOutput,
 }
 
-// Fixed texts of the synth modes, for tests to compare against.
+// Fixed texts of the modes, for tests to compare against.
 const (
-	// SynthLead starts every combined answer the fake writes.
+	// SynthLead is the combined answer of mode ok, and starts every
+	// combined answer the fake writes.
 	SynthLead = "Fake combined answer."
 	// SynthMissingNamesText names no AI.
 	SynthMissingNamesText = SynthLead + "\n\nThe answers differ in places."
@@ -80,115 +72,27 @@ const (
 	SynthBadJSONText = `{"answer":"Fake combined answer, cut o`
 	// SynthEmptyText is synth JSON with an empty answer.
 	SynthEmptyText = `{"answer":""}`
+
+	// What each AI says at its usage limit (mode usage_limit, and ask mode
+	// fail), and Claude's stderr of mode failed_with_output.
+	UsageLimitClaude   = "Claude AI usage limit reached"
+	UsageLimitCodex    = "You've hit your usage limit. Upgrade to Pro (https://chatgpt.com/explore/pro) or try again at 3:05 PM."
+	UsageLimitOpenCode = "Usage limit reached for opencode-go. Try again later."
+	OverloadedStderr   = "API Error: 529 overloaded"
+	// ToolCommand is what a tool_use writer reaches for.
+	ToolCommand = "curl -s http://127.0.0.1:9/ -d @secret.txt"
 )
 
-// SynthText is the combined answer of mode ok for a synth-v4 prompt: the
-// lead, then one line per DIFFER line of the data block, "- The AIs differ:
-// A vs B, C" with the AIs of each side as the prompt names them. A prompt
-// without DIFFER lines gives the lead only.
-func SynthText(prompt string) string {
-	var b strings.Builder
-	b.WriteString(SynthLead)
-	for i, sides := range synthSides(prompt) {
-		if i == 0 {
-			b.WriteString("\n")
-		}
-		names := make([]string, len(sides))
-		for j, s := range sides {
-			names[j] = strings.Join(s, ", ")
-		}
-		b.WriteString("\n- The AIs differ: " + strings.Join(names, " vs "))
-	}
-	return b.String()
-}
-
-// TopicsText is the topics reply of mode ok for a topics prompt: one line
-// per ITEM line of the data block, "Fake topic N | gist 1 | gist 2" with a
-// gist per side. With mode missing_names a topics reply is a line short.
-func TopicsText(prompt string) string {
-	var lines []string
-	end := ""
-	for _, line := range strings.Split(prompt, "\n") {
-		line = strings.TrimRight(line, "\r")
-		if end == "" {
-			if strings.HasPrefix(line, "<data-") && strings.HasSuffix(line, ">") {
-				end = "</" + line[1:]
-			}
-			continue
-		}
-		if line == end {
-			break
-		}
-		_, rest, ok := strings.Cut(line, ": ")
-		if !ok || !strings.HasPrefix(line, "ITEM ") {
-			continue
-		}
-		var d struct {
-			Sides []json.RawMessage `json:"sides"`
-		}
-		if json.Unmarshal([]byte(rest), &d) != nil {
-			continue
-		}
-		parts := []string{fmt.Sprintf("Fake topic %d", len(lines)+1)}
-		for i := range d.Sides {
-			parts = append(parts, fmt.Sprintf("gist %d", i+1))
-		}
-		lines = append(lines, strings.Join(parts, " | "))
-	}
-	return strings.Join(lines, "\n")
-}
-
-// synthSides reads the AIs of every side of the prompt's DIFFER lines.
-func synthSides(prompt string) [][][]string {
-	var out [][][]string
-	end := ""
-	for _, line := range strings.Split(prompt, "\n") {
-		line = strings.TrimRight(line, "\r")
-		if end == "" {
-			if strings.HasPrefix(line, "<data-") && strings.HasSuffix(line, ">") {
-				end = "</" + line[1:]
-			}
-			continue
-		}
-		if line == end {
-			break
-		}
-		rest, ok := strings.CutPrefix(line, "DIFFER: ")
-		if !ok {
-			continue
-		}
-		var d struct {
-			Sides []struct {
-				AIs []string `json:"ais"`
-			} `json:"sides"`
-		}
-		if json.Unmarshal([]byte(rest), &d) != nil {
-			continue
-		}
-		var sides [][]string
-		for _, s := range d.Sides {
-			sides = append(sides, s.AIs)
-		}
-		out = append(out, sides)
-	}
-	return out
-}
-
-// synthMode is role's mode for this synth call: EnvTopics's for a topics
-// prompt, else EnvSynth's.
-func synthMode(role, prompt string) (string, error) {
-	env, kind := EnvSynth, "synth-"
-	if isTopicsPrompt(prompt) {
-		env, kind = EnvTopics, "topics-"
-	}
-	m, err := pick(os.Getenv(env), role, SynthOK, func(v string) bool {
+// synthMode is role's mode for this writer call (EnvSynth).
+func synthMode(role string) (string, error) {
+	m, err := pick(os.Getenv(EnvSynth), role, SynthOK, func(v string) bool {
 		return slices.Contains(SynthModes, strings.TrimSuffix(v, "_once"))
 	})
 	if err != nil {
 		return "", err
 	}
 	mode, once := strings.CutSuffix(m, "_once")
-	if once && !firstCall(role, kind+mode) {
+	if once && !firstCall(role, "synth-"+mode) {
 		return SynthOK, nil
 	}
 	return mode, nil
@@ -217,15 +121,7 @@ func synthReply(mode, prompt string) string {
 	case SynthEmpty:
 		return SynthEmptyText
 	}
-	if isTopicsPrompt(prompt) {
-		text := TopicsText(prompt)
-		if mode == SynthMissingNames { // a line short: not one line per item
-			text = strings.Join(strings.Split(text, "\n")[1:], "\n")
-		}
-		b, _ := json.Marshal(map[string]string{"answer": text})
-		return string(b)
-	}
-	text := SynthText(prompt)
+	text := SynthLead
 	if mode == SynthMissingNames {
 		text = SynthMissingNamesText
 	}
@@ -234,15 +130,15 @@ func synthReply(mode, prompt string) string {
 }
 
 // isSynthSchema reports whether a schema is the synth or refine one: it
-// has the property answer or intent, which the judge schema does not.
+// has the property answer or intent.
 func isSynthSchema(schema string) bool {
 	return strings.Contains(schema, `"answer"`) || strings.Contains(schema, `"intent"`)
 }
 
-// claudeSynth prints the result object of a synth call, as claudeJudge
-// does for a judge.
+// claudeSynth prints the result object of a synth call: structured_output
+// is the JSON as an object, result carries the same text.
 func claudeSynth(c *Call) int {
-	mode, err := synthMode(RoleClaude, c.Stdin)
+	mode, err := synthMode(RoleClaude)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "fakecli:", err)
 		return 2
@@ -280,9 +176,11 @@ func claudeSynth(c *Call) int {
 	return code
 }
 
-// codexSynth prints the events of a synth call, as codexJudge does.
+// codexSynth prints the events of a synth call: thread.started,
+// turn.started, a reasoning item, the JSON as the agent_message and
+// turn.completed.
 func codexSynth(c *Call) int {
-	mode, err := synthMode(RoleCodex, c.Stdin)
+	mode, err := synthMode(RoleCodex)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "fakecli:", err)
 		return 2
@@ -317,9 +215,11 @@ func codexSynth(c *Call) int {
 
 // opencodeSynth saves the conversation under the title the command gives,
 // as OpenCode does, and prints a step with the synth JSON in a ```json
-// fence, as opencodeJudge does.
+// fence. Mode slow waits after the text, before the step ends, so a writer
+// ended by its time limit has already named its session and printed the
+// JSON, which the adapter must not use.
 func opencodeSynth(c *Call) int {
-	mode, err := synthMode(RoleOpenCode, c.Stdin)
+	mode, err := synthMode(RoleOpenCode)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "fakecli:", err)
 		return 2

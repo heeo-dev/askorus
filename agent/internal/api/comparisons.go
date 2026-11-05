@@ -31,8 +31,8 @@ type ComparisonStatus struct {
 
 // ComparisonAnswer is one answer of POST /v1/comparisons. Via is "pc" for
 // an answer of an AI program on this PC (Agent is its name, Model the
-// model that answered: without it the answer's company is unknown and no
-// judge can be picked for it) or "handoff" for one pasted from an official
+// model that answered: without it the answer's company is unknown) or
+// "handoff" for one pasted from an official
 // app (Agent is the app: chatgpt, claude, gemini).
 type ComparisonAnswer struct {
 	ID    string `json:"id"`
@@ -53,13 +53,14 @@ type ComparisonRequest struct {
 	Earlier            []string           `json:"earlier,omitempty"`
 	Answers            []ComparisonAnswer `json:"answers"`
 	Judges             []string           `json:"judges,omitempty"`
-	// Synthesis asks for the combined answer once the judges are done
+	// Synthesis asks for the combined answer once the answers are taken
 	// (S5b); absent is off.
 	Synthesis *ComparisonSynthesis `json:"synthesis,omitempty"`
 }
 
 // ComparisonSynthesis is ComparisonRequest.synthesis: the AI that should
-// write ("" lets the agent pick among the answers' AIs and the judges),
+// write ("" lets the agent pick among the answers' AIs and the listed
+// judges),
 // off, and the ask tier whose model writes ("" is standard).
 type ComparisonSynthesis struct {
 	Agent string `json:"agent,omitempty"`
@@ -89,8 +90,7 @@ const msgComparisonNotFound = "no such comparison (ended more than 30 minutes ag
 // answer waits or runs.
 func comparisonStatus(c compares.Comparison) ComparisonStatus {
 	st := ComparisonStatus{Comparison: c}
-	busy := c.Synthesis != nil && (c.Synthesis.Status == compares.SynthWaiting || c.Synthesis.Status == compares.SynthRunning ||
-		c.Synthesis.Topics != nil && c.Synthesis.Topics.Status == compares.TopicsRunning)
+	busy := c.Synthesis != nil && (c.Synthesis.Status == compares.SynthWaiting || c.Synthesis.Status == compares.SynthRunning)
 	if c.Status == compares.Waiting || c.Status == compares.Running || busy {
 		st.PollAfterMs = compares.PollMs
 	}
@@ -98,7 +98,7 @@ func comparisonStatus(c compares.Comparison) ComparisonStatus {
 }
 
 // startComparison is POST /v1/comparisons. It answers 202 at once; GET
-// /v1/comparisons/{id} then shows the cards as the judges answer. The
+// /v1/comparisons/{id} then shows the combined answer as it is written. The
 // question and the answers are never logged (the request log has method,
 // path and status only), and errors go out through writeError with fixed
 // text, never actionError, which logs an error's detail.
@@ -122,7 +122,7 @@ func (s *Server) startComparison(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, err := s.askFolder(); err != nil {
-		// Judges run in the ask folder's judge folder.
+		// The combined answer runs in the ask folder's judge folder.
 		if s.o.Logger != nil {
 			s.o.Logger.Error("ask folder", "err", err.Error())
 		}
@@ -151,7 +151,7 @@ func (s *Server) startComparison(w http.ResponseWriter, r *http.Request) {
 	case errors.Is(err, compares.ErrTooMany):
 		writeError(w, http.StatusTooManyRequests, core.ErrCodeTooManyComparisons, "the PC is still comparing other answers")
 	case errors.Is(err, compares.ErrNoJudge):
-		writeError(w, http.StatusServiceUnavailable, core.ErrCodeNoJudge, "no AI on this PC judges comparisons now")
+		writeError(w, http.StatusServiceUnavailable, core.ErrCodeNoJudge, "no AI on this PC writes combined answers now")
 	default:
 		writeError(w, http.StatusInternalServerError, CodeInternal, "the agent could not make the comparison")
 	}
@@ -168,9 +168,9 @@ func (s *Server) getComparison(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, comparisonStatus(c))
 }
 
-// retryComparison is POST /v1/comparisons/{id}/retry: the failed requests
-// of an ended comparison run again (202). An ended comparison with none
-// comes back as it is.
+// retryComparison is POST /v1/comparisons/{id}/retry: a comparison that
+// never took its answers (cancelled while it waited, or its run was gone)
+// starts over (202). Any other ended comparison comes back as it is.
 func (s *Server) retryComparison(w http.ResponseWriter, r *http.Request) {
 	c, err := s.compares.Retry(deviceOf(r), r.PathValue("id"))
 	switch {
@@ -219,9 +219,9 @@ func (s *Server) writeSynthesis(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// cancelComparison is POST /v1/comparisons/{id}/cancel: queued requests
-// are dropped and no judge is asked again; requests that run finish. A
-// combined answer that waits or runs is cancelled too, also of an ended
+// cancelComparison is POST /v1/comparisons/{id}/cancel: a comparison that
+// waits for its run, or takes its answers, ends cancelled. A combined
+// answer that waits or runs is cancelled too, also of an ended
 // comparison. An ended comparison otherwise stays as it is.
 func (s *Server) cancelComparison(w http.ResponseWriter, r *http.Request) {
 	c, err := s.compares.Cancel(deviceOf(r), r.PathValue("id"))

@@ -17,8 +17,8 @@ type pipeline interface {
 	Ask(ctx context.Context, q Question, run RunInfo) (Record, error)
 }
 
-// usageLimitWords mark an AI's message that names a usage limit (as
-// judge-eval): the run stops there, and resume asks that question again.
+// usageLimitWords mark an AI's message that names a usage limit: the run
+// stops there, and resume asks that question again.
 var usageLimitWords = []string{
 	"usage limit", "rate limit", "rate-limit", "limit reached", "hit your limit", "quota",
 	"too many requests", "try again at", "try again later", "weekly limit", "5-hour", "credit balance",
@@ -42,9 +42,9 @@ func usageLimited(r Record) bool {
 }
 
 // callsPerQuestion is what one question costs at most on a PC with three
-// AIs: three answers, two judges per answer and one combined answer (a
-// bad output asked again comes on top).
-const callsPerQuestion = 10
+// AIs: three answers and one combined answer (a bad output asked again
+// comes on top). Until C6 two judges per answer came on top too.
+const callsPerQuestion = 4
 
 // runQuestions asks each question in turn and saves its record; with
 // resume, a question the run already has is skipped. It stops on a usage
@@ -93,8 +93,7 @@ func progressLine(r Record) string {
 	}
 	line := fmt.Sprintf("%-12s answers %d/%d", r.Question.ID, ok, len(r.Answers))
 	if c := r.Compare; c != nil {
-		line += fmt.Sprintf(" · compare %s %.1fs (differ %d, check %d, agree %d, only one %d)",
-			c.Status, float64(c.Ms)/1000, c.Counts.Differ, c.Counts.Check, c.Counts.Agree, c.Counts.OnlyOne)
+		line += fmt.Sprintf(" · compare %s %.1fs", c.Status, float64(c.Ms)/1000)
 	}
 	if s := r.Synth; s != nil {
 		line += fmt.Sprintf(" · combined %s", s.Status)

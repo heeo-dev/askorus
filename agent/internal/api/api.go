@@ -95,13 +95,15 @@ type Options struct {
 	// outside every project. Sessions there get the ask badge and it is
 	// never offered for new sessions. Empty turns asks off. Sessions in
 	// its judge folder (core.JudgeFolder) are left out of the list, and
-	// no session action reaches them. Without it no AI judges.
+	// no session action reaches them. Without it no AI writes combined
+	// answers.
 	AskFolder string
-	// Judge is agent.json's judge block (P2-3).
+	// Judge is agent.json's judge block (P2-3): combined answers off, and
+	// the one-off processes per AI.
 	Judge config.JudgeConfig
 	// JudgeMinVersions maps an AI to the oldest version of its CLI the
-	// judge command was tested with (its adapter's JudgeMinVersion). An AI
-	// not listed never judges.
+	// one-off command was tested with (its adapter's JudgeMinVersion). An
+	// AI not listed never writes.
 	JudgeMinVersions map[string]string
 	// Refine turns 질문 정제 on (milestone C): a run's refine field then
 	// asks the moderator first and every AI gets the question with its
@@ -109,15 +111,6 @@ type Options struct {
 	// combined answer better; the user's decision): the field is ignored
 	// and every AI gets the question as written. The code stays.
 	Refine bool
-	// Topics names the 다른 말 items beside the combined answer (C5, #11,
-	// compares/topics.go). Off in the agent since C6: with no judging there
-	// are no items.
-	Topics bool
-	// NoJudging leaves comparison judging out (C6, #19, 2026-11-05, the
-	// user's decision): a comparison only has the moderator write the
-	// combined answer (compares.Options.NoJudging). The agent sets it; the
-	// tests of judging leave it unset.
-	NoJudging bool
 }
 
 // Server serves /v1.
@@ -127,7 +120,8 @@ type Server struct {
 	limiter *limiter
 	jobs    *jobs.Manager
 	runs    *runs.Manager
-	// gate decides which AIs judge; /v1/info and the comparisons share it.
+	// gate decides which AIs write combined answers; /v1/info and the
+	// comparisons share it.
 	gate     compares.Gate
 	compares *compares.Manager
 }
@@ -158,7 +152,7 @@ func New(o Options) *Server {
 	if filepath.IsAbs(o.AskFolder) {
 		s.gate.Folder = core.JudgeFolder(o.AskFolder)
 	}
-	s.compares = compares.New(compares.Options{Adapters: o.Adapters, Gate: s.gate, Runs: s.runs, Logger: o.Logger, Topics: o.Topics, NoJudging: o.NoJudging})
+	s.compares = compares.New(compares.Options{Adapters: o.Adapters, Gate: s.gate, Runs: s.runs, Logger: o.Logger})
 	// A run's comparison starts when its last answer is in (P2-3).
 	s.runs.OnEnd = s.compares.RunEnded
 	return s
@@ -332,9 +326,9 @@ type InfoResponse struct {
 	Agents       []core.AdapterInfo `json:"agents"`
 	Capabilities []core.Capability  `json:"capabilities"` // union over agents
 	Reserved     []core.Capability  `json:"reserved"`     // known names not offered yet
-	// Judging is how comparisons are judged here; set when any AI
-	// announces judge (P2-3).
-	Judging *compares.JudgingInfo `json:"judging,omitempty"`
+	// judging (how comparisons were judged, P2-3) went with the judging
+	// (C6d, #24): it was only sent when an AI judged, so it is just never
+	// there now.
 	// Integrations are the services outside the PC the agent sends to
 	// itself. There are none (N1): it is always [].
 	Integrations []IntegrationInfo `json:"integrations"`
@@ -357,8 +351,8 @@ func (s *Server) info(w http.ResponseWriter, r *http.Request) {
 		Integrations: []IntegrationInfo{},
 	}
 	// The CLI's info calls Announce too, so the two cannot disagree on
-	// the ask tiers or on which AIs judge.
-	infos, engines := compares.Announce(r.Context(), s.o.Adapters, s.gate)
+	// the ask tiers or on which AIs write combined answers.
+	infos, _ := compares.Announce(r.Context(), s.o.Adapters, s.gate)
 	for _, ai := range infos {
 		resp.Agents = append(resp.Agents, ai)
 		for _, c := range ai.Capabilities {
@@ -371,10 +365,6 @@ func (s *Server) info(w http.ResponseWriter, r *http.Request) {
 		if !slices.Contains(resp.Capabilities, c) {
 			resp.Reserved = append(resp.Reserved, c)
 		}
-	}
-	if len(engines) > 0 {
-		j := s.gate.Judging()
-		resp.Judging = &j
 	}
 	writeJSON(w, http.StatusOK, resp)
 }
@@ -396,8 +386,8 @@ func (s *Server) sessions(w http.ResponseWriter, r *http.Request) {
 		Hidden: s.o.HiddenFolders,
 	}
 	if s.o.AskFolder != "" {
-		// Judges run in <ask folder>\judge (P2-3). Concat makes a new slice,
-		// so the settings' list is never appended to.
+		// The one-off calls run in <ask folder>\judge (P2-3). Concat makes a
+		// new slice, so the settings' list is never appended to.
 		f.Hidden = slices.Concat(s.o.HiddenFolders, []string{core.JudgeFolder(s.o.AskFolder)})
 	}
 	if len(f.Query) > maxQuery || len(f.Folder) > 1024 {

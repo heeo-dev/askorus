@@ -10,7 +10,7 @@ import (
 
 // SynthSchemaV1 is strict as Codex wants it: one object whose only
 // property, answer, is a string, required, and no other property allowed.
-// It is apart from the judge schema byte for byte.
+// It is apart from the refine schema byte for byte.
 func TestSynthSchemaV1(t *testing.T) {
 	var schema struct {
 		Type       string                     `json:"type"`
@@ -31,8 +31,8 @@ func TestSynthSchemaV1(t *testing.T) {
 	if err := json.Unmarshal(schema.Properties["answer"], &answer); err != nil || len(answer) != 1 || answer["type"] != "string" {
 		t.Errorf("answer = %s (%v)", schema.Properties["answer"], err)
 	}
-	if SynthSchemaV1 == JudgeSchemaV1 || strings.Contains(SynthSchemaV1, "judgments") || strings.Contains(JudgeSchemaV1, `"answer"`) {
-		t.Error("the synth schema and the judge schema must tell each other apart")
+	if SynthSchemaV1 == RefineSchemaV1 || strings.Contains(RefineSchemaV1, `"answer"`) {
+		t.Error("the synth schema and the refine schema must tell each other apart")
 	}
 	// Written by hand: no white space, as the adapters compare it byte for
 	// byte.
@@ -48,7 +48,7 @@ func TestSynthNamesAndLimits(t *testing.T) {
 	if AllCapabilities[len(AllCapabilities)-1] != CapSynthesize {
 		t.Errorf("synthesize is added at the end: %v", AllCapabilities)
 	}
-	if SynthSchemaFile != "synth-schema-v1.json" || SynthSchemaFile == JudgeSchemaFile {
+	if SynthSchemaFile != "synth-schema-v1.json" || SynthSchemaFile == RefineSchemaFile {
 		t.Errorf("SynthSchemaFile = %q", SynthSchemaFile)
 	}
 	if SynthTimeout != 3*time.Minute {

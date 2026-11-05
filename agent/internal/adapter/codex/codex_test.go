@@ -17,8 +17,8 @@ import (
 	"github.com/asksemble/asksemble/agent/internal/proc"
 )
 
-// The test binary doubles as a fake codex. The judge tests use the shared
-// fake (internal/fakecli). The ask tests keep their own: with
+// The test binary doubles as a fake codex. The combined-answer and refine
+// tests use the shared fake (internal/fakecli). The ask tests keep their own: with
 // ASKSEMBLE_FAKE_CODEX=1 it records {args, cwd, stdin} to
 // ASKSEMBLE_FAKE_ARGS and prints what `codex exec --json` prints.
 // ASKSEMBLE_FAKE_MODE: "badmodel", "noresume", "nothing" (exit 0, no turn).
@@ -130,7 +130,8 @@ func TestInfo(t *testing.T) {
 }
 
 // wantOff is featuresOff written out: a name dropped from, added to or
-// moved in the list fails the exact-argument tests of asks and judges.
+// moved in the list fails the exact-argument tests of asks and combined
+// answers.
 var wantOff = []string{
 	"shell_tool", "unified_exec", "hooks", "apps", "plugins", "remote_plugin",
 	"multi_agent", "browser_use", "browser_use_external", "in_app_browser", "computer_use",
@@ -313,12 +314,13 @@ func TestCheckArgs(t *testing.T) {
 	}
 }
 
-// TestAskDisablesTheJudgeFeatures: an ask, new or resumed, turns off the
-// same features as a judge (P2-3 S2 decision 4), and keeps its web search.
-func TestAskDisablesTheJudgeFeatures(t *testing.T) {
+// TestAskDisablesTheWriterFeatures: an ask, new or resumed, turns off the
+// same features as the one-off command of a combined answer (P2-3 S2
+// decision 4), and keeps its web search.
+func TestAskDisablesTheWriterFeatures(t *testing.T) {
 	a := New(Options{Path: filepath.Join(t.TempDir(), "codex.exe"), SchemaDir: t.TempDir()})
 	ask, follow := askArgs("gpt-6-luna", "medium", ""), askArgs("gpt-6-luna", "medium", testThread)
-	judged := judgeArgs("gpt-6-luna", "medium", a.schemaPath())
+	written := synthArgs("gpt-6-luna", "medium", a.synthSchemaPath())
 
 	if !slices.Equal(featuresOff, wantOff) {
 		t.Errorf("featuresOff = %q\nwant %q", featuresOff, wantOff)
@@ -343,7 +345,7 @@ func TestAskDisablesTheJudgeFeatures(t *testing.T) {
 		t.Error("disableArgs shares its slice")
 	}
 
-	for name, args := range map[string][]string{"ask": ask, "follow-up": follow, "judge": judged} {
+	for name, args := range map[string][]string{"ask": ask, "follow-up": follow, "combined answer": written} {
 		// Every --disable is one of a run of pairs that equals featuresOff.
 		var off []string
 		firstOff, lastOff, lastC := -1, -1, -1
@@ -380,7 +382,7 @@ func TestAskDisablesTheJudgeFeatures(t *testing.T) {
 		}
 		for _, arg := range args {
 			if strings.Contains(arg, "web_search") || arg == "--ephemeral" || arg == "--output-schema" {
-				t.Errorf("%s carries the judge's %q", name, arg)
+				t.Errorf("%s carries the combined answer's %q", name, arg)
 			}
 		}
 	}
@@ -389,8 +391,8 @@ func TestAskDisablesTheJudgeFeatures(t *testing.T) {
 	if follow[len(follow)-2] != testThread || follow[len(follow)-3] != featuresOff[len(featuresOff)-1] || ask[len(ask)-2] != featuresOff[len(featuresOff)-1] {
 		t.Errorf("follow-up = %q", follow)
 	}
-	if judged[0] != "exec" || !slices.Contains(judged, `web_search="disabled"`) || slices.Contains(judged, "--search") {
-		t.Errorf("judge = %q", judged)
+	if written[0] != "exec" || !slices.Contains(written, `web_search="disabled"`) || slices.Contains(written, "--search") {
+		t.Errorf("combined answer = %q", written)
 	}
 
 	// Each checker takes its own shape and refuses the other's.
@@ -398,17 +400,17 @@ func TestAskDisablesTheJudgeFeatures(t *testing.T) {
 		if err := checkArgs(args); err != nil {
 			t.Errorf("ask check refused the %s: %v", name, err)
 		}
-		if err := a.checkJudgeArgs(args); err == nil {
-			t.Errorf("judge check accepted the %s: %q", name, args)
+		if err := a.checkSynthArgs(args); err == nil {
+			t.Errorf("synth check accepted the %s: %q", name, args)
 		}
 	}
-	if err := a.checkJudgeArgs(judged); err != nil {
-		t.Errorf("judge check refused the judge: %v", err)
+	if err := a.checkSynthArgs(written); err != nil {
+		t.Errorf("synth check refused the combined answer: %v", err)
 	}
 	for name, args := range map[string][]string{
-		"judge":             judged,
-		"judge with search": slices.Concat([]string{"--search"}, judged),
-		"judge as resume":   slices.Concat([]string{"--search"}, judged[:3], []string{"resume"}, judged[3:len(judged)-1], []string{testThread, "-"}),
+		"combined answer":             written,
+		"combined answer with search": slices.Concat([]string{"--search"}, written),
+		"combined answer as resume":   slices.Concat([]string{"--search"}, written[:3], []string{"resume"}, written[3:len(written)-1], []string{testThread, "-"}),
 	} {
 		if err := checkArgs(args); err == nil {
 			t.Errorf("ask check accepted the %s: %q", name, args)

@@ -11,26 +11,21 @@ import (
 	"time"
 )
 
-// The judge agent and title the OpenCode adapter uses (spec part 8).
-const (
-	JudgeAgent = "asksemble-judge"
-	JudgeTitle = "asksemble-judge"
-)
+// JudgeTitle is the title of the OpenCode adapter's one-off conversations
+// (a writer's, a moderator's), the judging days' title (spec part 8).
+const JudgeTitle = "asksemble-judge"
 
 // ProjectID is the projectId of the sessions the fake saves.
 const ProjectID = "fakeproject0000000000000000000000000000"
 
-// opencodeMain plays opencode: run with --agent asksemble-judge is a
-// judge, run with --agent asksemble-synth a combined-answer writer (and
-// asksemble-refine a moderator refining a question), any
-// other run an ask; `session list --format json --standalone`
+// opencodeMain plays opencode: run with --agent asksemble-synth is a
+// combined-answer writer (and asksemble-refine a moderator refining a
+// question), any other run an ask; `session list --format json --standalone`
 // prints every saved session, whatever its folder, and `session delete
 // <id> --standalone` removes one.
 func opencodeMain(c *Call) int {
 	a := c.Args
 	switch {
-	case len(a) > 0 && a[0] == "run" && flagValue(a, "--agent") == JudgeAgent:
-		return opencodeJudge(c)
 	case len(a) > 0 && a[0] == "run" && (flagValue(a, "--agent") == SynthAgent || flagValue(a, "--agent") == RefineAgent):
 		return opencodeSynth(c)
 	case len(a) > 0 && a[0] == "run":
@@ -102,50 +97,6 @@ func opencodeStepFinish(session, reason string) {
 	opencodeEvent("step_finish", session, opencodePart("step-finish", map[string]any{
 		"reason": reason, "tokens": map[string]any{"input": 100, "output": 5, "cache": map[string]int{"read": 20, "write": 0}},
 	}))
-}
-
-// opencodeJudge saves the conversation, as OpenCode does, and prints a
-// step with the judge JSON in a ```json fence. Mode slow waits after the
-// text, before the step ends, so a judge ended by its time limit has
-// already named its session and printed the judge JSON, which the adapter
-// must not use.
-func opencodeJudge(c *Call) int {
-	mode, err := judgeMode(RoleOpenCode)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "fakecli:", err)
-		return 2
-	}
-	id := newSessionID()
-	if err := saveSession(c, id, flagValue(c.Args, "--title")); err != nil {
-		fmt.Fprintln(os.Stderr, "fakecli:", err)
-		return 2
-	}
-	opencodeEvent("step_start", id, opencodePart("step-start", nil))
-	text := judgeText(mode, c.Stdin)
-	if mode != ModeProse {
-		text = "```json\n" + text + "\n```"
-	}
-	switch mode {
-	case ModeUsageLimit:
-		return opencodeError(id, "provider.rate-limit", UsageLimitOpenCode)
-	case ModeBadModel:
-		return opencodeError(id, "provider.no-route", "Model unavailable: "+flagValue(c.Args, "-m"))
-	case ModeToolUse:
-		opencodeEvent("tool_use", id, opencodePart("tool", map[string]any{
-			"tool": "bash", "state": map[string]any{"status": "error", "input": map[string]string{"command": ToolCommand}, "error": "Permission denied: bash"},
-		}))
-		opencodeStepFinish(id, "tool-calls")
-		opencodeEvent("step_start", id, opencodePart("step-start", nil))
-	}
-	opencodeEvent("text", id, opencodePart("text", map[string]any{"text": text}))
-	if mode == ModeSlow {
-		sleepSlow()
-	}
-	if mode == ModeFailedWithOutput {
-		return opencodeError(id, "provider.overloaded", "Provider is overloaded")
-	}
-	opencodeStepFinish(id, "stop")
-	return 0
 }
 
 // AskTitle is the title of the ask conversations the fake saves.

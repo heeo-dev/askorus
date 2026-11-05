@@ -19,8 +19,8 @@ import (
 // command (core.SynthRequest.Refine) and the quick tier's model. The run
 // then asks every AI the question with the spec's answer template under
 // it (judge.RefinedQuestion), and its combined answer follows the spec.
-// Refining waits for no judge slot (it is one short call before any
-// judging of the run), takes at most refineLimit, and when it fails the
+// Refining waits for no process slot (it is one short call before the
+// run's asks), takes at most refineLimit, and when it fails the
 // question goes as written: it never stops a question.
 
 // Refine states.
@@ -122,7 +122,7 @@ func (m *Manager) Refine(ctx context.Context, s RefineSpec) (out Refined) {
 }
 
 // refineCleanup removes what the moderator left (OpenCode's conversation),
-// in the background as a judge's cleanup, even when the Manager closes.
+// in the background as a writer's cleanup, even when the Manager closes.
 func (m *Manager) refineCleanup(w Writer, refs []string) {
 	m.wg.Add(1)
 	go func() {

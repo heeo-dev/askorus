@@ -53,7 +53,8 @@ func (r *cleanupRecorder) calls() []string {
 }
 
 // uninstallDir is an agent folder whose settings name an ask folder, with
-// the judge schema file codex judges read.
+// the judge schema file codex read until C6d (#24), which a PC may still
+// have.
 func uninstallDir(t *testing.T) (dir, ask string) {
 	t.Helper()
 	dir = filepath.Join(t.TempDir(), "agent")
@@ -64,7 +65,7 @@ func uninstallDir(t *testing.T) (dir, ask string) {
 	if err := config.Save(dir, cfg); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, core.JudgeSchemaFile), []byte(core.JudgeSchemaV1), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, oldJudgeSchemaFile), []byte(`{"type":"object"}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	return dir, ask
@@ -95,7 +96,7 @@ func TestUninstallDeclinedKeepsJudgeFiles(t *testing.T) {
 	if err := uninstallCmd(dir, nil, strings.NewReader("n\n"), &out); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(dir, core.JudgeSchemaFile)); err != nil {
+	if _, err := os.Stat(filepath.Join(dir, oldJudgeSchemaFile)); err != nil {
 		t.Error("declined uninstall deleted the judge schema file")
 	}
 	if calls := judgeCleanups.calls(); len(calls) != 0 {
@@ -103,7 +104,7 @@ func TestUninstallDeclinedKeepsJudgeFiles(t *testing.T) {
 	}
 	for _, want := range []string{
 		"delete OpenCode's leftover judge conversations in the judge folder / 판정 폴더에 남은 OpenCode 판정 대화를 지움",
-		"delete " + filepath.Join(dir, core.JudgeSchemaFile) + " / " + filepath.Join(dir, core.JudgeSchemaFile) + " 삭제",
+		"delete " + filepath.Join(dir, oldJudgeSchemaFile) + " / " + filepath.Join(dir, oldJudgeSchemaFile) + " 삭제",
 	} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("the plan lacks %q:\n%s", want, out.String())
@@ -111,17 +112,21 @@ func TestUninstallDeclinedKeepsJudgeFiles(t *testing.T) {
 	}
 }
 
-// Uninstall without -all removes the judge schema file and cleans the
+// Uninstall without -all removes the old judge schema file and cleans the
 // judge folder of the configured ask folder once, after the agent is
 // stopped.
 func TestUninstallRemovesJudgeFiles(t *testing.T) {
+	// The name codex's judges wrote until C6d (#24), on PCs that had them.
+	if oldJudgeSchemaFile != "judge-schema-v1.json" {
+		t.Fatalf("oldJudgeSchemaFile = %q", oldJudgeSchemaFile)
+	}
 	judgeCleanups.reset(nil)
 	dir, ask := uninstallDir(t)
 	var out bytes.Buffer
 	if err := uninstallCmd(dir, []string{"-yes"}, strings.NewReader(""), &out); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(dir, core.JudgeSchemaFile)); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(dir, oldJudgeSchemaFile)); !os.IsNotExist(err) {
 		t.Errorf("the judge schema file stayed: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(dir, config.FileName)); err != nil {
@@ -153,7 +158,7 @@ func TestUninstallJudgeCleanupFails(t *testing.T) {
 	if !strings.Contains(got, "uninstalled") {
 		t.Errorf("uninstall stopped: %s", got)
 	}
-	if _, err := os.Stat(filepath.Join(dir, core.JudgeSchemaFile)); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(dir, oldJudgeSchemaFile)); !os.IsNotExist(err) {
 		t.Errorf("the judge schema file stayed: %v", err)
 	}
 }
@@ -228,7 +233,7 @@ func TestSetupTipsTrustTheAskFolder(t *testing.T) {
 	}
 }
 
-// Uninstall deletes the combined-answer schema file next to the judge's,
+// Uninstall deletes the combined-answer schema file next to the old judge one,
 // and says so in its plan; saying no keeps it.
 func TestUninstallRemovesSynthSchema(t *testing.T) {
 	judgeCleanups.reset(nil)
@@ -255,7 +260,7 @@ func TestUninstallRemovesSynthSchema(t *testing.T) {
 	if err := uninstallCmd(dir, []string{"-yes"}, strings.NewReader(""), &out); err != nil {
 		t.Fatal(err)
 	}
-	for _, f := range []string{synth, filepath.Join(dir, core.JudgeSchemaFile), filepath.Join(dir, core.RefineSchemaFile)} {
+	for _, f := range []string{synth, filepath.Join(dir, oldJudgeSchemaFile), filepath.Join(dir, core.RefineSchemaFile)} {
 		if _, err := os.Stat(f); !os.IsNotExist(err) {
 			t.Errorf("%s stayed: %v", f, err)
 		}

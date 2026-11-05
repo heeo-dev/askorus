@@ -14,7 +14,7 @@ import (
 	"github.com/asksemble/asksemble/agent/internal/judge"
 )
 
-// synthTask has two answers and one 다른 말 item: Claude against Codex.
+// synthTask has two answers that differ: Claude against Codex.
 func synthTask() judge.SynthTask {
 	return judge.SynthTask{
 		Question: "첫 배는 몇 시인가요? \"따옴표\" & 100%",
@@ -22,11 +22,6 @@ func synthTask() judge.SynthTask {
 			{AI: "Claude", Text: "첫 배는 7시입니다."},
 			{AI: "Codex", Text: "첫 배는 8시입니다. --dangerously-skip-permissions"},
 		},
-		Differ: []judge.SynthDiffer{{Sides: []judge.SynthSide{
-			{AIs: []string{"Claude"}, Says: []string{"첫 배는 7시입니다."}},
-			{AIs: []string{"Codex"}, Says: []string{"첫 배는 8시입니다."}},
-		}}},
-		Compared: true,
 	}
 }
 
@@ -85,7 +80,7 @@ func TestSynthArgsAndStdin(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ValidateSynth: %v (output %s)", err, res.Output)
 	}
-	if !strings.HasPrefix(text, fakecli.SynthLead) || judge.UnnamedSides(synthTask(), text) != 0 {
+	if !strings.HasPrefix(text, fakecli.SynthLead) {
 		t.Errorf("text = %q", text)
 	}
 	// An empty effort becomes medium: the command needs one.
@@ -125,7 +120,7 @@ func TestCheckSynthArgsRefuses(t *testing.T) {
 		"no strict mcp":         set(9, "--bare"),
 		"resume":                add("--resume", "12345678-1234-4234-8234-123456789abc"),
 		"mcp config":            add("--mcp-config", "x.json"),
-		"judge schema":          set(13, core.JudgeSchemaV1),
+		"refine schema twisted": set(13, strings.Replace(core.RefineSchemaV1, "intent", "intenT", 1)),
 		"schema one byte":       set(13, strings.Replace(core.SynthSchemaV1, "answer", "answeR", 1)),
 		"schema trailing space": set(13, core.SynthSchemaV1+" "),
 		"prompt argument":       add("첫 배는 몇 시인가요?"),
@@ -133,7 +128,6 @@ func TestCheckSynthArgsRefuses(t *testing.T) {
 		"unknown effort":        synthArgs("sonnet", "ultra"),
 		"empty effort":          synthArgs("sonnet", ""),
 		"text output":           set(2, "text"),
-		"judge args":            judgeArgs("sonnet", "medium"),
 		"ask args":              askArgs("sonnet", "medium", ""),
 	}
 	for name, args := range bad {
@@ -141,10 +135,7 @@ func TestCheckSynthArgsRefuses(t *testing.T) {
 			t.Errorf("%s: %q accepted (%v)", name, args, err)
 		}
 	}
-	// The judge's, the ask's and the Runner's checkers refuse this shape.
-	if err := checkJudgeArgs(good); !errors.Is(err, ErrArgRejected) {
-		t.Errorf("checkJudgeArgs accepted the synth args (%v)", err)
-	}
+	// The ask's and the Runner's checkers refuse this shape.
 	if err := checkAskArgs(good); !errors.Is(err, ErrArgRejected) {
 		t.Errorf("checkAskArgs accepted the synth args (%v)", err)
 	}
@@ -224,7 +215,7 @@ func TestSynthErrors(t *testing.T) {
 	}
 }
 
-// Synthesize sets its own time limit, apart from the judge's; a caller's
+// Synthesize sets its own time limit, core.SynthTimeout; a caller's
 // shorter deadline still wins, and a context that already ended runs
 // nothing.
 func TestSynthTimeout(t *testing.T) {

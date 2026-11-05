@@ -29,7 +29,6 @@ import (
 	"github.com/asksemble/asksemble/agent/internal/core"
 	"github.com/asksemble/asksemble/agent/internal/devices"
 	"github.com/asksemble/asksemble/agent/internal/fakecli"
-	"github.com/asksemble/asksemble/agent/internal/judge"
 	"github.com/asksemble/asksemble/agent/internal/logx"
 )
 
@@ -40,11 +39,10 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-// The question and the keyed answers of the scenarios (fakecli rule
-// mode): Claude and Codex give different prices, all three the same
-// height, and only Claude a colour number. OpenCode's second sentence has
-// no number, so no judge calls it core: since S5c it is on 한 AI만 after
-// Claude's colour (before, it was hidden).
+// The question and the answers of the scenarios: Claude and Codex give
+// different prices, all three the same height, and only Claude a colour
+// number. The "NUM key=n" marks were the judging days' fake rule (until
+// C6d, #24); now they are only text the combined answer's prompt carries.
 const question = "이 상자의 가격과 높이는 얼마인가요?"
 
 var answers = map[string]string{
@@ -79,12 +77,6 @@ type rigOptions struct {
 	env     map[string]string // set before the adapters are made
 	judge   config.JudgeConfig
 	refine  bool // api.Options.Refine: off, as in the agent, unless a test turns it on
-	// noTopics turns api.Options.Topics off; it is on, as before C6.
-	noTopics bool
-	// noJudging is api.Options.NoJudging, as in the agent since C6
-	// (2026-11-05): no judge, the moderator alone writes the combined
-	// answer. The tests of judging leave it off.
-	noJudging bool
 }
 
 type rig struct {
@@ -146,8 +138,7 @@ func (r *rig) start() {
 	r.server = api.New(api.Options{
 		Version: "it", Hostname: "PC", Adapters: r.adapters, Devices: r.store,
 		Logger:    logx.New(r.logs, slog.LevelDebug),
-		AskFolder: r.askDir, Judge: r.o.judge, Refine: r.o.refine, Topics: !r.o.noTopics,
-		NoJudging: r.o.noJudging,
+		AskFolder: r.askDir, Judge: r.o.judge, Refine: r.o.refine,
 		JudgeMinVersions: map[string]string{
 			claude.Name: claude.JudgeMinVersion, codex.Name: codex.JudgeMinVersion, opencode.Name: opencode.JudgeMinVersion,
 		},
@@ -300,8 +291,7 @@ func (r *rig) waitComparison(id string) (api.ComparisonStatus, []byte) {
 // being written.
 func synthBusy(c api.ComparisonStatus) bool {
 	st := synthStatus(c)
-	topics := c.Synthesis != nil && c.Synthesis.Topics != nil && c.Synthesis.Topics.Status == compares.TopicsRunning
-	return st == compares.SynthWaiting || st == compares.SynthRunning || topics
+	return st == compares.SynthWaiting || st == compares.SynthRunning
 }
 
 // synthStatus is the status of the comparison's combined answer, "" when
@@ -343,35 +333,46 @@ func (r *rig) compareRun(compare any) (api.RunStatus, api.ComparisonStatus, []by
 	return run, c, b
 }
 
+// sentences are the pieces of the answers and the question that must
+// never reach an argument or the log.
+func sentences() []string {
+	out := []string{question}
+	for _, a := range answers {
+		for _, s := range strings.SplitAfter(a, "다. ") {
+			out = append(out, strings.TrimSpace(s))
+		}
+	}
+	return out
+}
+
+// noContentIn fails when what holds the question or an answer.
+func noContentIn(t *testing.T, where, what string) {
+	t.Helper()
+	for _, s := range sentences() {
+		if s != "" && strings.Contains(what, s) {
+			t.Errorf("%s holds %q", where, s)
+		}
+	}
+	if strings.Contains(what, "NUM ") {
+		t.Errorf("%s holds an answer's NUM", where)
+	}
+}
+
 // --- fakecli's record ---
 
 // Kinds of recorded calls.
 const (
 	kindAsk    = "ask"
-	kindJudge  = "judge"
 	kindSynth  = "synth"  // a combined-answer writer (S5b)
 	kindRefine = "refine" // a moderator refining a question (milestone C)
-	kindTopics = "topics" // the writer naming the 다른 말 items (C5): the synth command, a topics prompt
 	kindList   = "list"   // OpenCode session list
 	kindDelete = "delete" // OpenCode session delete
-	kindOther  = "other"  // claude agents
+	kindOther  = "other"  // claude agents, and any other command
 )
 
-// kindOf is what a recorded call was. A writer's command is a judge's
-// with another schema or agent, so it is told apart first; a topics call
-// is the synth command with a topics prompt.
+// kindOf is what a recorded call was: the writer's and the moderator's
+// commands are told apart by their schema or agent.
 func kindOf(c fakecli.Call) string {
-	k := callKind(c)
-	if k == kindSynth && strings.HasPrefix(c.Stdin, judgeTopicsHead) {
-		return kindTopics
-	}
-	return k
-}
-
-// judgeTopicsHead starts every topics prompt (judge/topics.go).
-const judgeTopicsHead = "[Asksemble differ topics "
-
-func callKind(c fakecli.Call) string {
 	switch c.Role {
 	case fakecli.RoleClaude:
 		switch {
@@ -379,9 +380,7 @@ func callKind(c fakecli.Call) string {
 			return kindSynth
 		case flag(c.Args, "--json-schema") == core.RefineSchemaV1:
 			return kindRefine
-		case slices.Contains(c.Args, "--json-schema"):
-			return kindJudge
-		case len(c.Args) > 0 && c.Args[0] == "-p":
+		case len(c.Args) > 0 && c.Args[0] == "-p" && !slices.Contains(c.Args, "--json-schema"):
 			return kindAsk
 		}
 	case fakecli.RoleCodex:
@@ -390,9 +389,7 @@ func callKind(c fakecli.Call) string {
 			return kindSynth
 		case slices.Contains(c.Args, "--output-schema") && filepath.Base(flag(c.Args, "--output-schema")) == core.RefineSchemaFile:
 			return kindRefine
-		case slices.Contains(c.Args, "--output-schema"):
-			return kindJudge
-		case slices.Contains(c.Args, "exec"):
+		case slices.Contains(c.Args, "exec") && !slices.Contains(c.Args, "--output-schema"):
 			return kindAsk
 		}
 	case fakecli.RoleOpenCode:
@@ -401,8 +398,6 @@ func callKind(c fakecli.Call) string {
 			return kindSynth
 		case len(c.Args) > 0 && c.Args[0] == "run" && flag(c.Args, "--agent") == fakecli.RefineAgent:
 			return kindRefine
-		case len(c.Args) > 0 && c.Args[0] == "run" && flag(c.Args, "--agent") == fakecli.JudgeAgent:
-			return kindJudge
 		case len(c.Args) > 0 && c.Args[0] == "run":
 			return kindAsk
 		case len(c.Args) > 1 && c.Args[0] == "session" && c.Args[1] == "list":
@@ -428,6 +423,18 @@ func calls(t *testing.T, from int, kind, role string) []fakecli.Call {
 	return out
 }
 
+// onlyAsksAndWriters fails the test for a recorded call that is no ask,
+// combined answer, refining, OpenCode session list or delete, or claude's
+// agents list: no judge runs (C6).
+func onlyAsksAndWriters(t *testing.T) {
+	t.Helper()
+	for _, c := range calls(t, 0, kindOther, "") {
+		if c.Role != fakecli.RoleClaude || strings.Join(c.Args, " ") != "agents --json --all" {
+			t.Errorf("a call that is no ask or writer: %s %q", c.Role, c.Args)
+		}
+	}
+}
+
 // flag is the value after name in args, or "".
 func flag(args []string, name string) string {
 	for i := 0; i+1 < len(args); i++ {
@@ -449,7 +456,7 @@ func disabled(args []string) []string {
 	return out
 }
 
-// nonceOf is the nonce of a judge prompt: the N of its "<data-N>" line,
+// nonceOf is the nonce of a prompt: the N of its "<data-N>" line,
 // and how many times the open and the close line occur.
 func nonceOf(prompt string) (nonce string, opens, closes int) {
 	lines := strings.Split(prompt, "\n")
@@ -469,7 +476,7 @@ func nonceOf(prompt string) (nonce string, opens, closes int) {
 	return nonce, opens, closes
 }
 
-// dataLines are the lines of a judge prompt's data block.
+// dataLines are the lines of a prompt's data block.
 func dataLines(prompt, nonce string) []string {
 	lines := strings.Split(prompt, "\n")
 	open := slices.Index(lines, "<data-"+nonce+">")
@@ -478,37 +485,4 @@ func dataLines(prompt, nonce string) []string {
 		return nil
 	}
 	return lines[open+1 : end]
-}
-
-// --- the snapshot ---
-
-// itemsOf are the cards' items of kind.
-func itemsOf(c api.ComparisonStatus, kind string) []judge.Item {
-	var out []judge.Item
-	for _, it := range c.Items {
-		if it.Kind == kind {
-			out = append(out, it)
-		}
-	}
-	return out
-}
-
-// unitsOf are every unit of an item's positions.
-func unitsOf(it judge.Item) []string {
-	var out []string
-	for _, p := range it.Positions {
-		out = append(out, p.Units...)
-	}
-	return out
-}
-
-// requestsBy are the comparison's requests judged by agent.
-func requestsBy(c api.ComparisonStatus, agent string) []judge.Request {
-	var out []judge.Request
-	for _, rq := range c.Requests {
-		if rq.Judge == agent {
-			out = append(out, rq)
-		}
-	}
-	return out
 }

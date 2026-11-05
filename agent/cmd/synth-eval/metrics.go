@@ -12,9 +12,9 @@ import (
 
 // Metrics are what a record gives that can be counted without judging the
 // writing (#12): times, the combined answer's shape, English mixed into a
-// Korean answer, extras left in, and 다른 말 sides it does not name. Whether
-// its first sentence really answers is for a person (or later a judge
-// model) to say; firstSentence only gives its length.
+// Korean answer and extras left in. Whether its first sentence really
+// answers is for a person (or later a judge model) to say; firstSentence
+// only gives its length.
 type Metrics struct {
 	ID       string `json:"id"`
 	Question string `json:"question"`
@@ -24,15 +24,12 @@ type Metrics struct {
 	Kind     string `json:"kind,omitempty"`
 	Depth    string `json:"depth,omitempty"`
 	AskMs    int64  `json:"askMs"` // the slowest answer done, refining taken out
-	// CompareMs is from the last answer to the judges' end, SynthMs the
-	// writer's own time; TotalMs is refining and the three in a row.
+	// CompareMs is from the last answer to the comparison's end (the
+	// judges' time before C6), SynthMs the writer's own time; TotalMs is
+	// refining and the three in a row.
 	CompareMs int64 `json:"compareMs"`
 	SynthMs   int64 `json:"synthMs"`
 	TotalMs   int64 `json:"totalMs"`
-	Differ    int   `json:"differ"`
-	Check     int   `json:"check"`
-	Agree     int   `json:"agree"`
-	OnlyOne   int   `json:"onlyOne"`
 	// SynthOK is a combined answer written; the rest describe it.
 	SynthOK       bool    `json:"synthOk"`
 	SynthStatus   string  `json:"synthStatus"`
@@ -47,7 +44,6 @@ type Metrics struct {
 	LatinShare    float64 `json:"latinShare"` // of its letters, Latin (Korean questions; AI names, "AI", code and links left out)
 	Extras        bool    `json:"extras"`     // the combined answer ends with extras (judge.ExtrasStart)
 	AnswerExtras  int     `json:"answerExtras"`
-	Unnamed       int     `json:"unnamedSides"`
 	Stop          string  `json:"stop,omitempty"`
 }
 
@@ -75,12 +71,10 @@ func metricsOf(r Record) Metrics {
 	}
 	if c := r.Compare; c != nil {
 		m.CompareMs = c.Ms
-		m.Differ, m.Check, m.Agree, m.OnlyOne = c.Counts.Differ, c.Counts.Check, c.Counts.Agree, c.Counts.OnlyOne
 	}
 	if s := r.Synth; s != nil {
 		m.SynthStatus = s.Status
 		m.SynthMs = s.Ms
-		m.Unnamed = s.Unnamed
 		if s.Status == "done" && strings.TrimSpace(s.Text) != "" {
 			m.SynthOK = true
 			shape(&m, s.Text)
