@@ -43,6 +43,9 @@ type Record struct {
 	// Stop is set when the question did not run through and is asked
 	// again on resume: usage_limit, or the pipeline's error code.
 	Stop string `json:"stop,omitempty"`
+	// Debate is how Synth came out of a debate between the AIs (debate,
+	// C7); nil for a combined answer written at once.
+	Debate *DebateRec `json:"debate,omitempty"`
 }
 
 // RunInfo is how a run asks.
