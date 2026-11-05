@@ -84,6 +84,13 @@ const usage = `synth-eval measures the combined answer (milestone C). A run uses
             the blind A/B page's data: sides drawn at random, kept apart in key.json (no AI call)
   picks     -name NAME -in FILE [-score NAME]
             the person's picks from the page, mapped back to the runs; with -score, how far the judges agree
+  debate    -from RUN -run NAME [-only ID,ID] [-tier quick|standard|deep] [-moderator claude|codex|opencode] [-workers 1-4]
+            [-ways m2,r2,m1] -expect N
+            the AIs debate where their answers differ (C7): runs NAME-<way> for each way, by default m2 (a chat
+            the moderator leads) and m1 (every point at once); r2 refines taste points together (C8)
+  rewrite   -from RUN[,RUN] -base RUN[,RUN] -run NAME -style short|plus|edit [-only ID,ID] [-tier …] [-moderator …] -expect N
+            writes the answers after debate runs' debates again (C9, up to 2 calls each); -base is the run each
+            debate came from: edit changes its combined answer only where the debate changed something
 A question file has one question per line; blank lines and lines starting with # are skipped.
 -expect is the number of questions the run will ask (each uses the PC's AIs up to 4 times, 6 with -refine on, light or live).
 `
@@ -119,6 +126,10 @@ func runMain(ctx context.Context, args []string, out, errOut io.Writer) int {
 		return pairsCmd(args[1:], out, errOut)
 	case "picks":
 		return picksCmd(args[1:], out, errOut)
+	case "debate":
+		return debateCmd(ctx, args[1:], out, errOut)
+	case "rewrite":
+		return rewriteCmd(ctx, args[1:], out, errOut)
 	}
 	fmt.Fprint(errOut, usage)
 	return exitFlags

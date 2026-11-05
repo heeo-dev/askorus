@@ -15,3 +15,5 @@ HTTP와 HTTPS의 차이를 정리해줘.
 TLS가 하는 일을 쉽게 설명해줘.
 # English
 What does a CPU cache do? Keep it short.
+# creative: no right answer, hard to argue someone out of a taste (debate test, C7)
+여러 AI에게 한 번에 묻는 앱의 이름을 지어줘. 질문 하나를 Claude, ChatGPT, Gemini 같은 AI 여러 개에게 동시에 보내고, 사회자 AI가 모든 답을 읽어 하나의 종합 답변으로 정리해 줘. AI끼리 답이 다른 곳은 AI 이름과 함께 보여 주고, AI끼리 토론을 시켜 더 나은 답을 만드는 기능도 넣을 거야. 이미 낸 AI 구독을 자기 PC에서 그대로 쓰고, 개발자는 같은 앱으로 PC의 코딩 AI를 폰에서 이어 쓸 수 있어. 한국과 해외에 같이 낼 거라 영어로 부르기 쉬운 이름이면 좋겠어. 이름 후보 5개를 짧은 이유와 함께 추천해줘.

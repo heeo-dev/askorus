@@ -519,13 +519,15 @@ func TestPairsHideTheRunsAndPicksMapBack(t *testing.T) {
 }
 
 // The question set of C4: the general ones, then the eight whose intent a
-// fixed format may miss, with stable IDs.
+// fixed format may miss, with stable IDs. general-8 (the app's name, a
+// taste question for the debate, C7) came after them, at the end of its
+// file, so no ID moved.
 func TestTheIntentQuestionsLoad(t *testing.T) {
 	qs, err := readQuestions([]string{"testdata/general.txt", "testdata/intent.txt"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(qs) != 15 || qs[7].ID != "intent-1" || qs[14].ID != "intent-8" || !strings.Contains(qs[10].Text, "한 줄로") {
+	if len(qs) != 16 || qs[7].ID != "general-8" || !strings.Contains(qs[7].Text, "앱의 이름") || qs[8].ID != "intent-1" || qs[15].ID != "intent-8" || !strings.Contains(qs[11].Text, "한 줄로") {
 		t.Fatalf("questions %+v", qs)
 	}
 }

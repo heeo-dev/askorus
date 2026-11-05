@@ -298,17 +298,27 @@ const maxScoreAnswer = 12000
 // apart.
 func scorePrompt(first, second Record) string {
 	content := []string{first.Question.Text, first.Synth.Text, second.Synth.Text}
+	debated := false
 	for _, r := range []Record{first, second} {
 		for _, a := range r.Answers {
 			content = append(content, a.Text)
+		}
+		for _, t := range debateTurns(r) {
+			content = append(content, t.Text)
+			debated = true
 		}
 	}
 	n := newNonce(content...)
 	if n == "" {
 		return ""
 	}
+	head, tail := scoreHead, scoreTail
+	if debated {
+		head = strings.Replace(head, " Judge which", scoreDebateNote+" Judge which", 1)
+		tail = strings.Replace(tail, "no claim that no answer makes", "no claim that no answer or debate line makes", 1)
+	}
 	var b strings.Builder
-	b.WriteString(strings.ReplaceAll(scoreHead, "{N}", n))
+	b.WriteString(strings.ReplaceAll(head, "{N}", n))
 	b.WriteString("<data-" + n + ">\n")
 	line := func(label, text string) {
 		q, _ := json.Marshal(text)
@@ -330,11 +340,43 @@ func scorePrompt(first, second Record) string {
 		answers("ANSWER FOR COMBINED 1 BY ", first)
 		answers("ANSWER FOR COMBINED 2 BY ", second)
 	}
+	for k, r := range []Record{first, second} {
+		for _, t := range debateTurns(r) {
+			line(fmt.Sprintf("DEBATE BEFORE COMBINED %d BY %s", k+1, t.AI), clip("Point: "+t.topic+"\n"+t.Text, maxScoreAnswer))
+		}
+	}
 	line("COMBINED 1", first.Synth.Text)
 	line("COMBINED 2", second.Synth.Text)
 	b.WriteString("</data-" + n + ">\n")
-	b.WriteString(scoreTail)
+	b.WriteString(tail)
 	return b.String()
+}
+
+// scoreDebateNote is said when a combined answer was written after a
+// debate (C7): what the AIs said in it is a source as their answers are,
+// so the judge does not take it for a claim no answer makes.
+const scoreDebateNote = " Before a combined answer was written, the AIs may also have debated the points where their answers differed: each DEBATE line is what one AI said then, a source for that combined answer as the answers are."
+
+type scoreTurn struct {
+	DebateTurn
+	topic string
+}
+
+// debateTurns are what the AIs said in the debate before r's combined
+// answer, none when there was none.
+func debateTurns(r Record) []scoreTurn {
+	if r.Debate == nil {
+		return nil
+	}
+	var ts []scoreTurn
+	for _, p := range r.Debate.Points {
+		for _, t := range p.Turns {
+			if t.Error == "" && strings.TrimSpace(t.Text) != "" {
+				ts = append(ts, scoreTurn{t, p.Topic})
+			}
+		}
+	}
+	return ts
 }
 
 func sameAnswers(x, y Record) bool {
