@@ -110,8 +110,14 @@ type Options struct {
 	// and every AI gets the question as written. The code stays.
 	Refine bool
 	// Topics names the 다른 말 items beside the combined answer (C5, #11,
-	// compares/topics.go): the agent turns it on.
+	// compares/topics.go). Off in the agent since C6: with no judging there
+	// are no items.
 	Topics bool
+	// NoJudging leaves comparison judging out (C6, #19, 2026-11-05, the
+	// user's decision): a comparison only has the moderator write the
+	// combined answer (compares.Options.NoJudging). The agent sets it; the
+	// tests of judging leave it unset.
+	NoJudging bool
 }
 
 // Server serves /v1.
@@ -152,7 +158,7 @@ func New(o Options) *Server {
 	if filepath.IsAbs(o.AskFolder) {
 		s.gate.Folder = core.JudgeFolder(o.AskFolder)
 	}
-	s.compares = compares.New(compares.Options{Adapters: o.Adapters, Gate: s.gate, Runs: s.runs, Logger: o.Logger, Topics: o.Topics})
+	s.compares = compares.New(compares.Options{Adapters: o.Adapters, Gate: s.gate, Runs: s.runs, Logger: o.Logger, Topics: o.Topics, NoJudging: o.NoJudging})
 	// A run's comparison starts when its last answer is in (P2-3).
 	s.runs.OnEnd = s.compares.RunEnded
 	return s

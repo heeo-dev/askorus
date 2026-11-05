@@ -79,8 +79,12 @@ type rigOptions struct {
 	env     map[string]string // set before the adapters are made
 	judge   config.JudgeConfig
 	refine  bool // api.Options.Refine: off, as in the agent, unless a test turns it on
-	// noTopics turns api.Options.Topics off; it is on, as in the agent.
+	// noTopics turns api.Options.Topics off; it is on, as before C6.
 	noTopics bool
+	// noJudging is api.Options.NoJudging, as in the agent since C6
+	// (2026-11-05): no judge, the moderator alone writes the combined
+	// answer. The tests of judging leave it off.
+	noJudging bool
 }
 
 type rig struct {
@@ -143,6 +147,7 @@ func (r *rig) start() {
 		Version: "it", Hostname: "PC", Adapters: r.adapters, Devices: r.store,
 		Logger:    logx.New(r.logs, slog.LevelDebug),
 		AskFolder: r.askDir, Judge: r.o.judge, Refine: r.o.refine, Topics: !r.o.noTopics,
+		NoJudging: r.o.noJudging,
 		JudgeMinVersions: map[string]string{
 			claude.Name: claude.JudgeMinVersion, codex.Name: codex.JudgeMinVersion, opencode.Name: opencode.JudgeMinVersion,
 		},

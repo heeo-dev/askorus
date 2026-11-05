@@ -122,6 +122,15 @@ Settings live in %s (override with ASKSEMBLE_AGENT_DIR).
 // it is off.
 var refineOn = false
 
+// judgingOn turns comparison judging on: the AIs judging each other's
+// answers sentence by sentence (P2-3), its cards, and the topics of the
+// 다른 말 items (C5). Off since 2026-11-05 (C6, #19, the user's decision):
+// six judge requests took too long, and the moderator alone wrote a better
+// combined answer from the answers (synth-v5). The code stays until the
+// user has seen the change on the phone; check says nothing of judging
+// while it is off.
+var judgingOn = false
+
 func main() {
 	if err := run(os.Args[1:], os.Stdin, os.Stdout); err != nil {
 		printError(os.Stderr, err)
@@ -383,7 +392,8 @@ func serve(dir string, args []string) error {
 		Judge:            cfg.Judge,
 		JudgeMinVersions: judgeMinVersions(),
 		Refine:           refineOn,
-		Topics:           true,
+		Topics:           judgingOn,
+		NoJudging:        !judgingOn,
 	})
 	srv := api.HTTPServer(apiSrv.Handler())
 	ln, err := api.Listen(cfg.Port)

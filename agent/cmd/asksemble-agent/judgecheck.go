@@ -94,20 +94,27 @@ func judgeStatuses(ctx context.Context, adapters []core.Adapter, g compares.Gate
 // tested with), which AIs write combined answers, and where the question
 // and the answers go. The last line, that the agent itself sends nothing
 // outside this PC, is always there.
-func judgeLines(st []judgeStatus, off bool) []checkLine {
+//
+// With judging false (judgingOn, off since C6) nothing is said of judging:
+// the AIs only write combined answers, so the off line, the too-old and
+// unknown-company warnings speak of those, the verification lines go, and
+// the company of the writing AI receives the question and the answers.
+func judgeLines(st []judgeStatus, off, judging bool) []checkLine {
 	var lines []checkLine
 	add := func(level string, x msg) { lines = append(lines, checkLine{level, x}) }
-	if off {
+	if off && !judging {
+		add("info", m("combined answers are off (agent.json judge.off)", "종합 답변이 꺼져 있습니다 (agent.json judge.off)"))
+	} else if off {
 		add("info", m("comparison judging is off (agent.json judge.off)", "비교 판정이 꺼져 있습니다 (agent.json judge.off)"))
 	} else {
-		var judging []string
+		var judges []string
 		for _, s := range st {
 			if s.why == "" && s.info != nil {
-				judging = append(judging, s.name+" "+s.info.Model)
+				judges = append(judges, s.name+" "+s.info.Model)
 			}
 		}
-		if len(judging) > 0 {
-			list := strings.Join(judging, " · ")
+		if len(judges) > 0 && judging {
+			list := strings.Join(judges, " · ")
 			add("ok", m("comparison judging: %s", "비교 판정: %s", list))
 		}
 		var writing []string
@@ -123,6 +130,17 @@ func judgeLines(st []judgeStatus, off bool) []checkLine {
 		}
 		for _, s := range st {
 			switch {
+			case s.why == compares.WhyOld && !judging:
+				have, min := orUnknown(s.version), orUnknown(s.min)
+				add("warn", m("%s %s is older than %s, the oldest version its one-off command was tested with; it does not write combined answers until it is updated",
+					"%s %s 판은 일회성 명령을 시험한 가장 오래된 판(%s)보다 오래되어 업데이트할 때까지 종합 답변을 쓰지 않습니다", s.name, have, min))
+			case s.why == compares.WhyNoFamily && !judging:
+				model := ""
+				if s.info != nil {
+					model = s.info.Model
+				}
+				add("warn", m("the judge model %[2]s set for %[1]s is of a company the agent cannot tell, so it does not write combined answers",
+					"%[1]s에 설정한 판정 모델 %[2]s의 회사를 알 수 없어 종합 답변을 쓰지 않습니다", s.name, model))
 			case s.why == compares.WhyOld:
 				have, min := orUnknown(s.version), orUnknown(s.min)
 				add("warn", m("%s %s is older than %s, the oldest version the judge was tested with; it does not judge until it is updated",
@@ -138,7 +156,7 @@ func judgeLines(st []judgeStatus, off bool) []checkLine {
 		}
 		for _, s := range st {
 			switch {
-			case s.why != "" || s.info == nil:
+			case !judging || s.why != "" || s.info == nil:
 			case s.verified != "":
 				if !sameVersion(s.version, s.verified) {
 					add("info", m("the judging was verified on %s with %s %s; this PC has %s",
@@ -149,13 +167,18 @@ func judgeLines(st []judgeStatus, off bool) []checkLine {
 					"%[1]s에 %[2]s %[3]s 판으로 판정 명령을 시험했습니다. 이 PC는 %[4]s입니다", judgeTestedOn, s.name, s.min, s.version))
 			}
 		}
-		if len(judging) > 0 {
+		if len(judges) > 0 && judging {
 			add("info", m("when answers are compared, the judging AI's company receives the question and the other AIs' answers",
 				"비교할 때는 판정하는 AI의 회사가 질문과 다른 AI들의 답을 받습니다"))
 		}
-		if len(writing) > 0 {
+		if len(writing) > 0 && !judging {
+			add("info", m("when a combined answer is written, the writing AI's company receives the question and every answer with the AIs' names",
+				"종합 답변을 쓸 때는 쓰는 AI의 회사가 질문과 AI 이름이 붙은 모든 답을 받습니다"))
+		} else if len(writing) > 0 {
 			add("info", m("when a combined answer is written, the writing AI's company receives the question, every answer with the AIs' names and the comparison's results",
 				"종합 답변을 쓸 때는 쓰는 AI의 회사가 질문, AI 이름이 붙은 모든 답, 비교 결과를 받습니다"))
+		}
+		if len(writing) > 0 {
 			if refineOn {
 				add("info", m("when a question is refined, the moderator's company (one of the AIs asked) receives the question once more, with up to 3 earlier questions",
 					"질문을 정제할 때는 사회자 AI의 회사(질문을 받는 AI 중 하나)가 질문을 한 번 더, 앞 질문 3개까지와 함께 받습니다"))
