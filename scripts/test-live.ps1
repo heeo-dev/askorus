@@ -30,12 +30,22 @@
 #   deleted and none left; no Claude transcript or Codex rollout may hold
 #   the marker; nothing of the question may be logged.
 #
+# LT-11, a debate (P2-5, #26, agent/internal/live/debate_live_test.go):
+#   the agent with the real claude and codex on the quick tier, in the live
+#   ask folder; two answers that differ on a fact (the boiling point),
+#   claude moderates. It must end done with a debated point, a turn with a
+#   reply and an answer after the debate that keeps 100; the turns run in
+#   the judge folder, which the session list leaves out. About 6 to 8 AI
+#   calls, 1 or 2 of them Codex asks.
+#
 # One full run writes one combined answer with Codex (LT-08 1), refines
-# once with Codex (LT-09 1) and asks Codex 3 times (LT-05).
+# once with Codex (LT-09 1), asks Codex 3 times (LT-05) and lets Codex
+# speak once or twice in a debate (LT-11).
 #
 #   powershell -NoProfile -File scripts\test-live.ps1              # every LT
 #   powershell -NoProfile -File scripts\test-live.ps1 -Run LT08    # only LT-08
 #   powershell -NoProfile -File scripts\test-live.ps1 -Run LT09    # only LT-09
+#   powershell -NoProfile -File scripts\test-live.ps1 -Run LT11    # only LT-11
 param([string]$Run)
 $go = Join-Path $env:USERPROFILE 'sdk\go1.27.3\bin'
 if (Test-Path $go) { $env:Path = "$go;" + $env:Path }

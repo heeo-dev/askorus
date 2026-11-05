@@ -25,6 +25,7 @@ import { AnswerActions, AnswerBlock } from './AnswerBlock';
 import { AnsweringList } from './AnsweringList';
 import { Button } from './Button';
 import { CombinedAnswerCard } from './CombinedAnswer';
+import { type DebateActions, DebateSection } from './Debate';
 import { Markdown } from './Markdown';
 import { themed, useTheme } from './theme';
 import { RefineLine } from './Refine';
@@ -45,6 +46,8 @@ export type TurnActions = {
   only: (agent: string) => (() => void) | undefined;
   /** Carry Claude's ask on in the Claude app; null when it cannot. */
   carryOn: (key: string, p: RunPart) => (() => void) | undefined;
+  /** The debate on the combined answer (P2-5). */
+  debate: DebateActions;
 };
 
 export function TurnView({
@@ -242,6 +245,9 @@ function Result({
         {status}
         {body}
       </CombinedAnswerCard>
+
+      {/* The debate on the combined answer, and the answer after it (P2-5). */}
+      <DebateSection turn={turn} info={info} note={notes[`${turn.id}/debate`]} act={act.debate} />
 
       {/* Under the grey lines the cards keep a little more room (F-Ask-Comparing). */}
       <View style={stepList.length ? s.cards : undefined}>

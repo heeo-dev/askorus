@@ -4,6 +4,8 @@
 import type {
   Comparison,
   ComparisonRequest,
+  Debate,
+  DebateRequest,
   FolderList,
   Info,
   Job,
@@ -302,6 +304,49 @@ export class AgentClient {
    */
   writeSynthesis(id: string, agent?: string, signal?: AbortSignal) {
     return this.request<Comparison>('POST', `comparisons/${encodeURIComponent(id)}/synthesis`, agent ? { agent } : {}, signal);
+  }
+
+  /** One debate (P2-5). 404 debate_not_found: gone from the PC (30 min, restart). */
+  debate(id: string, signal?: AbortSignal) {
+    return this.request<Debate>('GET', `debates/${encodeURIComponent(id)}`, undefined, signal);
+  }
+
+  /** Starts a debate (202); like startComparison, a dropped request goes again only with a clientDebateId. */
+  async startDebate(req: DebateRequest, signal?: AbortSignal): Promise<Debate> {
+    for (let tries = 1; ; tries++) {
+      try {
+        return await this.request<Debate>('POST', 'debates', req, signal);
+      } catch (e) {
+        if (!(e instanceof NetworkError) || !req.clientDebateId || tries >= 2) throw e;
+      }
+    }
+  }
+
+  /**
+   * Asks for a debate until it has ended (no pollAfterMs), handing each
+   * look to onUpdate; dropped requests are retried like waitComparison.
+   */
+  async waitDebate(id: string, wait: WaitOptions & { onUpdate?: (d: Debate) => void } = {}): Promise<Debate> {
+    let misses = 0;
+    for (;;) {
+      let cur: Debate;
+      try {
+        cur = await this.debate(id, wait.signal);
+      } catch (e) {
+        if (!(e instanceof NetworkError) || misses++ >= maxMisses) throw e;
+        await this.sleep(1000, wait.signal);
+        continue;
+      }
+      misses = 0;
+      wait.onUpdate?.(cur);
+      if (!cur.pollAfterMs) return cur;
+      await this.sleep(cur.pollAfterMs, wait.signal);
+    }
+  }
+
+  /** Stops a debate: it ends stopped at once; an ended one comes back as it is. */
+  stopDebate(id: string) {
+    return this.request<Debate>('POST', `debates/${encodeURIComponent(id)}/stop`);
   }
 
   /** Stops a comparison: a combined answer not started yet is dropped, one being written finishes. */

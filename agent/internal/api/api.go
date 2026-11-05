@@ -195,6 +195,9 @@ func (s *Server) Handler() http.Handler {
 	route("POST", "/v1/comparisons/{id}/retry", s.retryComparison)
 	route("POST", "/v1/comparisons/{id}/cancel", s.cancelComparison)
 	route("POST", "/v1/comparisons/{id}/synthesis", s.writeSynthesis)
+	route("POST", "/v1/debates", s.startDebate)
+	route("GET", "/v1/debates/{id}", s.getDebate)
+	route("POST", "/v1/debates/{id}/stop", s.stopDebate)
 	route("GET", "/v1/folders", s.folders)
 	route("PUT", "/v1/folders/{id}/server", s.setFolderServer)
 	route("DELETE", "/v1/devices/self", s.forgetSelf)
@@ -332,6 +335,9 @@ type InfoResponse struct {
 	// Integrations are the services outside the PC the agent sends to
 	// itself. There are none (N1): it is always [].
 	Integrations []IntegrationInfo `json:"integrations"`
+	// Debate is there when the agent runs debates (P2-5, #26): the phone
+	// shows '토론하기' only then, so an older agent never gets one.
+	Debate *DebateInfo `json:"debate,omitempty"`
 }
 
 // IntegrationInfo is one service outside the PC the agent would send to.
@@ -349,6 +355,7 @@ func (s *Server) info(w http.ResponseWriter, r *http.Request) {
 		Hostname: s.o.Hostname, OS: runtime.GOOS,
 		Agents: []core.AdapterInfo{}, Capabilities: []core.Capability{}, Reserved: []core.Capability{},
 		Integrations: []IntegrationInfo{},
+		Debate:       s.debateInfo(),
 	}
 	// The CLI's info calls Announce too, so the two cannot disagree on
 	// the ask tiers or on which AIs write combined answers.

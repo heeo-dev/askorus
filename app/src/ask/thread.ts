@@ -10,12 +10,13 @@
 // followCompare follow the PC and patch the turn; the screen only draws.
 
 import { type AgentClient, AgentError, CancelledError } from '@/api/client';
-import type { Comparison, Info, Run, RunCompare, RunPart, RunRequest, RunTarget, SynthesisRequest, Tier } from '@/api/types';
+import type { Comparison, Debate, Info, Run, RunCompare, RunPart, RunRequest, RunTarget, SynthesisRequest, Tier } from '@/api/types';
 
 import {
   compares,
   directRequest,
   earlierFor,
+  errorCode,
   polling,
   refineRequest,
   synthRequest,
@@ -24,6 +25,7 @@ import {
   withSnap,
   writersOf,
 } from './compare';
+import { debateRequest, type TurnDebate } from './debate';
 
 /**
  * A turn's comparison. start, judges, earlier and synth are fixed at send
@@ -58,6 +60,8 @@ export type Turn = {
   // Not sent yet: it waits until the conversation left running before it
   // is done (#23), then goes as it is.
   queued?: boolean;
+  // The debate on its combined answer (토론, P2-5), kept with the turn.
+  debate?: TurnDebate;
 };
 
 /** Who a follow-up goes to: everyone turned on, or one AI. */
@@ -262,9 +266,70 @@ export async function followCompare(
 }
 
 /**
+ * followDebate follows a turn's debate (토론, P2-5): 'start' sends a new
+ * one (the same clientDebateId again after a lost request), 'poll' follows
+ * the one the turn has until it has ended, 'stop' asks the PC to stop it.
+ * Errors become a code on the turn's debate.
+ */
+export async function followDebate(
+  client: AgentClient,
+  turn: Turn,
+  info: Info | null,
+  how: 'start' | 'poll' | 'stop',
+  deps: FollowDeps,
+): Promise<void> {
+  const key = `${turn.id}/debate`;
+  if (how === 'start' && deps.follows.has(key)) return; // the same press again
+  if (how === 'stop') {
+    const id = turn.debate?.id;
+    if (!id) return;
+    try {
+      const snap = await client.stopDebate(id);
+      deps.follows.get(key)?.abort();
+      deps.update(turn.id, (t) => (t.debate ? { debate: withDebate(t.debate, snap) } : {}));
+    } catch (e) {
+      if (!(e instanceof CancelledError)) deps.update(turn.id, (t) => (t.debate ? { debate: { ...t.debate, error: errorCode(e) } } : {}));
+    }
+    return;
+  }
+  deps.follows.get(key)?.abort();
+  const ctl = new AbortController();
+  deps.follows.set(key, ctl);
+  const patch = (f: (d: TurnDebate) => TurnDebate) => {
+    if (!ctl.signal.aborted) deps.update(turn.id, (t) => ({ debate: f(t.debate ?? {}) }));
+  };
+  let id = how === 'poll' ? turn.debate?.id : undefined;
+  try {
+    if (how === 'start') {
+      // A new debate replaces one that ended in a way it may fix; a lost request goes again with its key.
+      const k = turn.debate?.key ?? deps.newId();
+      const req = debateRequest(turn, info, k);
+      if (!req) return;
+      patch(() => ({ key: k }));
+      const snap = await client.startDebate(req, ctl.signal);
+      id = snap.debateId;
+      patch((d) => withDebate({ ...d, key: undefined }, snap));
+    } else {
+      patch((d) => ({ ...d, error: undefined }));
+    }
+    if (id) await client.waitDebate(id, { signal: ctl.signal, onUpdate: (s) => patch((d) => withDebate(d, s)) });
+  } catch (e) {
+    // An answered POST is done with its key; only an unanswered one is sent again.
+    if (!(e instanceof CancelledError)) patch((d) => ({ ...(e instanceof AgentError ? { ...d, key: undefined } : d), error: errorCode(e) }));
+  } finally {
+    if (deps.follows.get(key) === ctl) deps.follows.delete(key);
+  }
+}
+
+/** withDebate keeps the latest snapshot; an answer from the PC clears an earlier error. */
+export function withDebate(d: TurnDebate, s: Debate): TurnDebate {
+  return { ...d, id: s.debateId, snap: s, error: undefined };
+}
+
+/**
  * stopAll stops following everything (새 질문) and asks the PC to stop the
  * comparisons that are not final (also one whose combined answer is still
- * being written), without waiting for it.
+ * being written) and the debates that run, without waiting for it.
  */
 export function stopAll(client: AgentClient | undefined, turns: Turn[], follows: Map<string, AbortController>): void {
   follows.forEach((c) => c.abort());
@@ -279,7 +344,7 @@ export function stopAll(client: AgentClient | undefined, turns: Turn[], follows:
  */
 export function stopTurns(client: AgentClient | undefined, turns: Turn[], follows: Map<string, AbortController>): void {
   for (const t of turns) {
-    for (const key of [t.id, `${t.id}/compare`]) {
+    for (const key of [t.id, `${t.id}/compare`, `${t.id}/debate`]) {
       follows.get(key)?.abort();
       follows.delete(key);
     }
@@ -289,6 +354,11 @@ export function stopTurns(client: AgentClient | undefined, turns: Turn[], follow
 
 function stopComparisons(client: AgentClient | undefined, turns: Turn[]): void {
   if (!client) return;
+  for (const t of turns) {
+    // A debate that still runs stops too (its turn's conversation is gone).
+    const d = t.debate;
+    if (d?.id && !d.error && d.snap?.debateId === d.id && d.snap.pollAfterMs) client.stopDebate(d.id).catch(() => undefined);
+  }
   for (const t of turns) {
     const c = t.compare;
     if (!c?.id || c.error === 'comparison_not_found') continue;

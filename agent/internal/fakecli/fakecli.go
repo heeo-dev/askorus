@@ -44,6 +44,9 @@
 //	                           "opencode=fail,codex=empty"; fail is the AI's
 //	                           usage limit (exit 1), empty an answer with
 //	                           no text, ok (the default) an answer
+//	ASKSEMBLE_FAKE_DEBATE      the debate (debate.go): "" one point, "two"
+//	                           a taste point too, "next" one more turn at
+//	                           every check that may, "none" no point
 package fakecli
 
 import (
@@ -291,6 +294,9 @@ func askMode(role string) (string, error) {
 // askText is what an ask of role answers: its text in the answers file,
 // or prefix and the prompt's last line.
 func askText(role, prefix, prompt string) (string, error) {
+	if text, ok := debateTurn(role, prompt); ok {
+		return text, nil
+	}
 	if p := os.Getenv(EnvAnswers); p != "" {
 		b, err := os.ReadFile(p)
 		if err != nil {
@@ -484,7 +490,7 @@ func setEnv(t testing.TB, role string) {
 	t.Setenv(EnvRole, role)
 	t.Setenv(EnvRecord, t.TempDir())
 	t.Setenv(EnvState, t.TempDir())
-	for _, k := range []string{EnvSynth, EnvSleep, EnvVersion, EnvFail, EnvAnswers, EnvAsk} {
+	for _, k := range []string{EnvSynth, EnvSleep, EnvVersion, EnvFail, EnvAnswers, EnvAsk, EnvDebate} {
 		t.Setenv(k, "")
 	}
 }

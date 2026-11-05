@@ -544,7 +544,12 @@ func (m *Manager) answerNames(answers []judge.Answer) map[string]string {
 // internal, the limit judge_timeout, and a call that keeps going
 // abandonAfter past it is left behind.
 func (m *Manager) callSynth(w Writer, req core.SynthRequest) (core.SynthResult, error) {
-	ctx, cancel := context.WithTimeout(m.base, m.synthLimit)
+	return m.callSynthIn(m.base, w, req)
+}
+
+// callSynthIn is callSynth under parent, which a debate's stop ends.
+func (m *Manager) callSynthIn(parent context.Context, w Writer, req core.SynthRequest) (core.SynthResult, error) {
+	ctx, cancel := context.WithTimeout(parent, m.synthLimit)
 	defer cancel()
 	type result struct {
 		res core.SynthResult

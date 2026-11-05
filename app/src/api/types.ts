@@ -74,7 +74,12 @@ export type Info = {
   capabilities: string[];
   reserved: string[];
   integrations?: Integration[];
+  /** The agent runs debates (P2-5, #26); an older agent leaves it out, and the phone offers none. */
+  debate?: DebateInfo;
 };
+
+/** /v1/info's debate: its limits and the prompts' version. */
+export type DebateInfo = { maxPoints: number; maxTurns: number; rules: string };
 
 export type ServeStatus = {
   state: string; // off | starting | running | failed | untrusted | external
@@ -300,4 +305,68 @@ export type ComparisonRequest = {
   judges?: string[];
   /** The combined answer (S5b), with the question's tier ('' or left out: standard). */
   synthesis?: SynthesisRequest & { tier?: Tier };
+};
+
+// Debates (토론, P2-5, #26): POST /v1/debates, GET /v1/debates/{id},
+// POST /v1/debates/{id}/stop. AIs are named by their agent codes.
+
+/** A debate's status; the phone polls while pollAfterMs is there. */
+export type DebateStatus = 'planning' | 'debating' | 'writing' | 'done' | 'stopped' | 'failed' | (string & {});
+
+/** One debater's turn: the moderator's question and the reply (ms runs on while it runs). */
+export type DebateTurn = {
+  ai: string;
+  ask: string;
+  status: 'running' | 'done' | 'failed' | (string & {});
+  text?: string;
+  stance?: 'keep' | 'change' | 'partly' | (string & {});
+  model?: string;
+  ms: number;
+  error?: CodeError;
+};
+
+/** One point where the answers differ; one that is not debated has no turns. */
+export type DebatePoint = {
+  id: string;
+  topic: string;
+  nature: 'fact' | 'reasoning' | 'judgment' | 'taste' | (string & {});
+  debate: boolean;
+  goal?: string;
+  sides: { ais: string[]; says: string }[];
+  turns: DebateTurn[];
+  result?: 'agreed' | 'conditional' | 'differ' | 'kept' | (string & {});
+  line?: string;
+  checking?: boolean;
+};
+
+export type Debate = {
+  debateId: string;
+  status: DebateStatus;
+  pollAfterMs?: number;
+  moderator?: string;
+  model?: string;
+  tier?: string;
+  points: DebatePoint[];
+  /** The answer after the debate (토론 뒤 정리), Markdown. */
+  after?: { text: string; agent: string; model?: string; ms: number };
+  calls: number;
+  ms: number;
+  error?: CodeError;
+};
+
+/** An answer a debate starts from: via pc (it speaks) or handoff (a side only). */
+export type DebateAnswer = { agent: string; via: 'pc' | 'handoff'; model?: string; text: string };
+
+export type DebateRequest = {
+  /** The phone's own id, so a retried request makes one debate. */
+  clientDebateId?: string;
+  question: string;
+  earlier?: string[];
+  /** The AIs the earlier questions may go to (as a comparison's judges). */
+  judges?: string[];
+  answers: DebateAnswer[];
+  /** The combined answer's text the debate starts from. */
+  synthesis: string;
+  moderator?: string;
+  tier?: Tier;
 };
