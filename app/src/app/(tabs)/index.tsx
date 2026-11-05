@@ -31,7 +31,7 @@ import { conversations, recentQuestions, useConversations } from '@/ask/conversa
 import { features } from '@/ask/features';
 import { aiStatus, askErrorText, displayModel, metaLine, onlyTarget, partViews, rowValue } from '@/ask/present';
 import { type AskPrefs, defaultAskPrefs, loadAskPrefs, saveAskPrefs } from '@/ask/prefs';
-import { askers, type FollowDeps, followCompare, followRun, newTurn, running, stopTurns, type Target, type Turn } from '@/ask/thread';
+import { askers, type FollowDeps, followCompare, followDebate, followRun, newTurn, running, stopTurns, type Target, type Turn } from '@/ask/thread';
 import { connect } from '@/connections/open';
 import { type Cause, cause } from '@/connections/reach';
 import { type Connection, ConnectionStore } from '@/connections/store';
@@ -320,6 +320,13 @@ export default function Ask() {
         if (cmp.key) track(turn.id, followCompare(p.client, turn, 'start', deps));
         else if (cmp.id && (!cmp.snap || cmp.snap.comparisonId !== cmp.id || polling(cmp.snap)))
           track(turn.id, followCompare(p.client, turn, 'poll', deps));
+        // A debate that was on its way or still ran goes on being followed (P2-5).
+        const dbt = turn.debate;
+        if (!dbt || dbt.error) continue;
+        // The combined answer it starts from is kept with the turn: no info is needed.
+        if (dbt.key) track(turn.id, followDebate(p.client, turn, null, 'start', deps));
+        else if (dbt.id && (!dbt.snap || dbt.snap.debateId !== dbt.id || dbt.snap.pollAfterMs))
+          track(turn.id, followDebate(p.client, turn, null, 'poll', deps));
       }
     },
     [currentId, deps, fresh, pcs, startQueued, track],
@@ -442,6 +449,24 @@ export default function Ask() {
     copy,
     only: (agent) => onlyOf(agent),
     carryOn,
+    debate: {
+      start: () => {
+        const p = pcRef.current;
+        if (p) track(turn.id, followDebate(p.client, turn, info, 'start', deps));
+      },
+      stop: () => {
+        const p = pcRef.current;
+        if (p) followDebate(p.client, turn, info, 'stop', deps);
+      },
+      poll: () => {
+        const p = pcRef.current;
+        if (p) track(turn.id, followDebate(p.client, turn, info, 'poll', deps));
+      },
+      copy,
+      openAIs: () => setSheet({ kind: 'ais', turn: turn.id }),
+      noticed: prefs.debateNoticed,
+      notice: () => change({ debateNoticed: true }),
+    },
   });
 
   // The last AI that is on stays on (UX-10): a question always has an AI to go to.

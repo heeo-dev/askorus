@@ -10,7 +10,7 @@
 // the writing (running) and the one after ends it (combinedText).
 
 import { agentName } from '@/api/agents';
-import type { AdapterInfo, CodeError, Comparison, Folder, Preview, Session, Synthesis } from '@/api/types';
+import type { AdapterInfo, CodeError, Comparison, Debate, DebatePoint, Folder, Preview, Session, Synthesis } from '@/api/types';
 
 export const HOST = 'desktop-test.tail0.ts.net';
 export const PORT = 8790;
@@ -60,6 +60,12 @@ const utf8 = (s: string) => new TextEncoder().encode(s).length;
 function combinedText(names: string[]): string {
   return ['Fake combined answer.', `From ${names.map((n) => `{{${n}}}`).join(', ')}.`].join('\n\n');
 }
+
+// A debate: the request it was made from and how far it went (each GET is a step).
+type FakeDebate = { id: string; key?: string; body: any; step: number; stopped?: boolean; reply: FakeAgent['debateReply'] };
+
+/** The fake moderator's answer after the debate, naming the AIs that spoke. */
+export const DEBATE_AFTER = 'Fake answer after the debate.';
 
 export function session(over: Partial<Session> & { id: string }): Session {
   return {
@@ -124,6 +130,17 @@ export class FakeAgent {
   private synthOn = false;
   private comparisons = new Map<string, FakeComparison>();
   private made: FakeComparison[] = [];
+  /**
+   * Debates (P2-5): what the moderator does: a debate on one point (each
+   * GET moves it one step: planned, a turn running, done, the next…, the
+   * check, the outcome, the answer after it), no point worth one, a failed
+   * plan, or one that stops at the first turn running.
+   */
+  debateReply: 'ok' | 'none' | 'fail' | 'hold' = 'ok';
+  /** POST /v1/debates answers this error instead (for example 429 too_many_debates). */
+  debateError: { status: number; code: string } | null = null;
+  private debateOn = false;
+  private debates = new Map<string, FakeDebate>();
   /** How the PC can be reached: fine, agent stopped behind serve, or not at all. */
   reach: 'ok' | 'agent_down' | 'offline' = 'ok';
   private jobs = new Map<string, any>();
@@ -179,6 +196,112 @@ export class FakeAgent {
     this.synthOn = true;
     if (!this.capabilities.includes('synthesize')) this.capabilities = [...this.capabilities, 'synthesize'];
     this.askAgents = this.askAgents.map((a) => (a.available ? { ...a, capabilities: [...new Set([...a.capabilities, 'synthesize'])] } : a));
+  }
+
+  /** enableDebate makes the agent run debates (P2-5: /v1/info's debate and /v1/debates); call it after enableSynth. */
+  enableDebate() {
+    this.debateOn = true;
+  }
+
+  /** The bodies of every POST /v1/debates, in order. */
+  debateRequests(): any[] {
+    return this.callsTo('POST', '/v1/debates').map((c) => c.body);
+  }
+
+  /** Like an agent restart: every debate is gone (404 debate_not_found). */
+  forgetDebates() {
+    this.debates.clear();
+  }
+
+  // debateSnap is a debate as far as its step: planned, then each of the
+  // two turns running and done, the check, the outcome, writing and done.
+  private debateSnap(d: FakeDebate): Debate {
+    const pcs: string[] = (d.body.answers ?? []).filter((a: any) => a.via === 'pc').map((a: any) => a.agent);
+    const [a, b] = [pcs[0] ?? 'claude', pcs[1] ?? 'codex'];
+    const base = { debateId: d.id, moderator: d.body.moderator || a, model: 'claude-sonnet', tier: d.body.tier || 'standard', calls: d.step, ms: d.step * 10000 };
+    const live = (x: Debate): Debate => (d.stopped ? x : { ...x, pollAfterMs: 1 });
+    if (d.step === 0) return live({ ...base, status: 'planning', points: [] });
+    if (d.reply === 'none') return { ...base, status: 'done', points: [] };
+    if (d.reply === 'fail') return { ...base, status: 'failed', points: [], error: { code: 'judge_bad_output', message: 'bad' } };
+    const turn = (ai: string, i: number, running: boolean) => ({
+      ai,
+      ask: `Question to ${agentName(ai)}?`,
+      status: running ? 'running' : 'done',
+      ms: 3000 + i * 1000,
+      ...(running ? {} : { text: `${agentName(ai)} turn: the timetable says 8 a.m.`, stance: i === 0 ? 'keep' : 'change', model: `${ai}-std` }),
+    });
+    const p1: DebatePoint = {
+      id: 'p1',
+      topic: 'First ferry time',
+      nature: 'fact',
+      debate: true,
+      goal: 'the time checked with a source',
+      sides: [
+        { ais: [a], says: '7 a.m.' },
+        { ais: pcs.slice(1).length ? pcs.slice(1) : [b], says: '8 a.m.' },
+      ],
+      turns: [],
+    };
+    const p2: DebatePoint = {
+      id: 'p2',
+      topic: 'Where to buy tickets',
+      nature: 'judgment',
+      debate: false,
+      sides: [
+        { ais: [a], says: 'the port' },
+        { ais: [b], says: 'the app' },
+      ],
+      turns: [],
+    };
+    const step = d.step;
+    if (step >= 2) p1.turns.push(turn(a, 0, step === 2));
+    if (step >= 4) p1.turns.push(turn(b, 1, step === 4));
+    if (step === 6) p1.checking = true;
+    if (step >= 7) Object.assign(p1, { result: 'agreed', line: `The first ferry is at 8 a.m. ({{${agentName(a)}}} changed).` });
+    const points = [p1, p2];
+    if (d.stopped) {
+      for (const p of points) {
+        delete p.checking;
+        for (const x of p.turns) if (x.status === 'running') Object.assign(x, { status: 'failed', error: { code: 'cancelled', message: 'stopped' } });
+      }
+      return { ...base, status: 'stopped', points };
+    }
+    if (step <= 7) return live({ ...base, status: 'debating', points });
+    if (step === 8) return live({ ...base, status: 'writing', points });
+    const after = `${DEBATE_AFTER}\n\nFrom {{${agentName(a)}}} and {{${agentName(b)}}}.`;
+    return { ...base, status: 'done', points, after: { text: after, agent: base.moderator, model: 'claude-sonnet', ms: 9000 } };
+  }
+
+  // debateRoute answers /v1/debates and its sub-routes, or gives null.
+  private debateRoute(c: Call): Response | null {
+    if (!c.path.startsWith('/v1/debates')) return null;
+    if (!this.debateOn) return err(404, 'not_found');
+    if (c.method === 'POST' && c.path === '/v1/debates') {
+      if (this.debateError) return err(this.debateError.status, this.debateError.code);
+      const b = c.body ?? {};
+      const again = b.clientDebateId ? [...this.debates.values()].find((x) => x.key === b.clientDebateId) : undefined;
+      if (again) return json(202, this.debateSnap(again));
+      if (!Array.isArray(b.answers) || b.answers.length < 2) return err(400, 'need_two_answers');
+      if (typeof b.synthesis !== 'string' || !b.synthesis.trim()) return err(400, 'bad_request');
+      if ([...this.debates.values()].some((x) => this.debateSnap(x).pollAfterMs)) return err(429, 'too_many_debates');
+      const d: FakeDebate = { id: `dbt-${++this.n}`, key: b.clientDebateId, body: b, step: 0, reply: this.debateReply };
+      this.debates.set(d.id, d);
+      return json(202, this.debateSnap(d));
+    }
+    const m = c.path.match(/^\/v1\/debates\/([^/]+)(?:\/(stop))?$/);
+    if (!m) return err(404, 'not_found');
+    const d = this.debates.get(decodeURIComponent(m[1]));
+    if (!d) return err(404, 'debate_not_found');
+    if (c.method === 'GET' && !m[2]) {
+      const hold = d.reply === 'hold' && d.step >= 2;
+      if (!hold && this.debateSnap(d).pollAfterMs) d.step++;
+      return json(200, this.debateSnap(d));
+    }
+    if (c.method === 'POST' && m[2] === 'stop') {
+      if (this.debateSnap(d).pollAfterMs) d.stopped = true;
+      return json(200, this.debateSnap(d));
+    }
+    return err(404, 'not_found');
   }
 
   /** The bodies of every POST /v1/comparisons/{id}/synthesis, in order. */
@@ -529,6 +652,7 @@ export class FakeAgent {
         agents: [this.claudeInfo(), ...this.askAgents],
         capabilities: this.capabilities,
         reserved: [],
+        ...(this.debateOn ? { debate: { maxPoints: 2, maxTurns: 4, rules: 'debate-v4' } } : {}),
       });
     }
     if (key === 'DELETE /v1/devices/self') {
@@ -669,7 +793,7 @@ export class FakeAgent {
       if (result.failed) return json(200, { jobId: j[1], kind: 'open', status: 'failed', error: result.failed });
       return json(200, { jobId: j[1], kind: 'open', status: 'done', result });
     }
-    return this.compareRoute(c) ?? err(404, 'not_found');
+    return this.compareRoute(c) ?? this.debateRoute(c) ?? err(404, 'not_found');
   }
 }
 

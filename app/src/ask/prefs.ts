@@ -7,6 +7,8 @@
 // question first; off unless turned on, and only used while the feature is
 // on (features.ts, off since 2026-11-04). The compare switch of P2-3 went
 // with judging (C6d): a value saved for it is no longer read.
+// debateNoticed (P2-5): the person has seen, once, what a debate sends
+// where.
 
 import { tiers, type Tier } from '@/api/types';
 import { type KeyValue, secureKeyValue } from '@/connections/store';
@@ -26,10 +28,12 @@ export type AskPrefs = {
   synth: boolean;
   synthAgent: string;
   refine: boolean;
+  /** The person has seen, once, what a debate sends where (P2-5). */
+  debateNoticed: boolean;
 };
 
 const key = 'ask.v1';
-export const defaultAskPrefs: AskPrefs = { tier: 'standard', off: [], models: {}, pc: '', synth: true, synthAgent: 'claude', refine: false };
+export const defaultAskPrefs: AskPrefs = { tier: 'standard', off: [], models: {}, pc: '', synth: true, synthAgent: 'claude', refine: false, debateNoticed: false };
 
 export async function loadAskPrefs(kv: KeyValue = secureKeyValue): Promise<AskPrefs> {
   try {
@@ -46,6 +50,7 @@ export async function loadAskPrefs(kv: KeyValue = secureKeyValue): Promise<AskPr
       synth: typeof v.synth === 'boolean' ? v.synth : true,
       synthAgent: (synthWriters as readonly unknown[]).includes(v.synthAgent) ? v.synthAgent : 'claude',
       refine: typeof v.refine === 'boolean' ? v.refine : false,
+      debateNoticed: v.debateNoticed === true,
     };
   } catch {
     return defaultAskPrefs;
