@@ -42,6 +42,9 @@ type Record struct {
 	// Topic is the C5 differ board's draft: each 다른 말 item named, with
 	// what each side says (topics, c5topic.go).
 	Topic *TopicRec `json:"topic,omitempty"`
+	// Differs is the C5 moderator experiment (#19): the places where the
+	// answers differ as the moderator lists them (differs, c5differs.go).
+	Differs *DiffRec `json:"differs,omitempty"`
 	// Stop is set when the question did not run through and is asked
 	// again on resume: usage_limit, or the pipeline's error code.
 	Stop string `json:"stop,omitempty"`

@@ -74,7 +74,7 @@ const usage = `synth-eval measures the combined answer (milestone C). A run uses
             -synth off writes no combined answer (resynth writes it later)
   report    -run NAME[,NAME] [-json] [-texts]
   resynth   -from RUN -run NAME [-only ID,ID] [-tier quick|standard|deep] [-writer claude|codex|opencode]
-            [-synth product|c5-b] [-resume] -expect N
+            [-synth product|c5-b|c5-nj|c5-m|c5-one|c5-one2|c5-solo|c5-sel|c5-nat|c5-sn|c5-sf|c5-sfd|c5-si|c5-sq] [-resume] -expect N
             writes RUN's combined answers again from the same answers and judgments (up to 2 calls each)
   refine    -q FILE[,FILE] [-only ID,ID] -run NAME [-tier quick|standard|deep] [-writer claude|codex|opencode]
             [-form fixed|live] [-resume] -expect N
@@ -91,6 +91,8 @@ const usage = `synth-eval measures the combined answer (milestone C). A run uses
             C5 draft B2: labels the parts of RUN's combined answers main, differ, only or extra
   topics    -from RUN -run NAME [-only ID,ID] [-tier quick|standard|deep] [-writer claude|codex|opencode] [-resume] -expect N
             C5 differ draft: names RUN's 다른 말 items (a topic, and a gist per side)
+  differs   -from RUN -run NAME [-only ID,ID] [-tier quick|standard|deep] [-writer claude|codex|opencode] [-resume] -expect N
+            C5 moderator draft (#19): lists where RUN's answers differ, without judgments
             (1 call an answer with headings, up to 2; -expect is the number of such answers)
 A question file has one question per line; blank lines and lines starting with # are skipped.
 -expect is the number of questions the run will ask (each uses the PC's AIs up to 10 times, 12 with -refine on).
@@ -131,6 +133,8 @@ func runMain(ctx context.Context, args []string, out, errOut io.Writer) int {
 		return labelCmd(ctx, args[1:], out, errOut)
 	case "topics":
 		return topicsCmd(ctx, args[1:], out, errOut)
+	case "differs":
+		return differsCmd(ctx, args[1:], out, errOut)
 	}
 	fmt.Fprint(errOut, usage)
 	return exitFlags
