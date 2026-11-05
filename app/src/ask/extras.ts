@@ -1,6 +1,6 @@
 // An answer's trailing extras (#4): a closing section of messages or
 // questions to send next, or a last paragraph offering more. The agent
-// leaves them out of judging and the combined answer (judge.ExtrasStart in
+// leaves them out of the combined answer (judge.ExtrasStart in
 // agent/internal/judge/extras.go); the phone folds them under the answer.
 // Same rules, same cases (agent/internal/judge/testdata/extras.json):
 // change both together. Offsets here are UTF-16, the agent's bytes; the

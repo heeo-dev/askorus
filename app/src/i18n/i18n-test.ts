@@ -1,15 +1,12 @@
 import { AgentError, NetworkError } from '../api/client';
-import { cardKinds, checkNames, compareCodes, labels, synthCodes } from '../ask/compare';
+import { compareCodes, synthCodes } from '../ask/compare';
 import en from './en.json';
 import { errorText, has, label, pickLang, setLang, t } from './index';
 import ko from './ko.json';
 
-// P2-3: every code the comparison screens show has words in both languages.
-test('every card, check, label and comparison error has words', () => {
+// P2-3: every code the comparison and its combined answer show has words in both languages.
+test('every comparison and combined answer error has words', () => {
   const keys = [
-    ...cardKinds.flatMap((k) => [`compare.kind.${k}`, `compare.short.${k}`]),
-    ...checkNames.map((c) => `compare.why.${c}`),
-    ...labels.map((l) => `compare.label.${l}`),
     ...compareCodes.map((c) => `compare.error.${c}`),
     // S5b: the combined answer's own words; its other codes take the comparison's.
     ...synthCodes.map((c) => `compare.synth.error.${c}`),
@@ -20,10 +17,10 @@ test('every card, check, label and comparison error has words', () => {
 
 // Korean screen text is 합니다체, with -세요 for what the person does.
 test('Korean comparison sentences end in 니다 or 세요', () => {
-  const intros = ['ask.introCompare', 'ask.introSynth'];
+  const intros = ['ask.introModerator', 'ask.willSynth'];
   const keys = (Object.keys(ko) as Array<keyof typeof ko>).filter((k) => k.startsWith('compare.') || intros.includes(k));
-  expect(keys).toEqual(expect.arrayContaining(['ask.introSynth', 'compare.synth.mayErr', 'compare.synth.error.no_judge']));
-  expect(keys.length).toBeGreaterThan(60);
+  expect(keys).toEqual(expect.arrayContaining(['ask.introModerator', 'compare.synth.mayErr', 'compare.synth.error.no_judge']));
+  expect(keys.length).toBeGreaterThan(30);
   const bad: string[] = [];
   for (const k of keys) {
     for (const sentence of ko[k].split(/(?<=\.)\s+|\n/)) {

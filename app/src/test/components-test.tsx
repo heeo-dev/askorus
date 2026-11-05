@@ -6,7 +6,6 @@ import * as SystemUI from 'expo-system-ui';
 import { Keyboard, Platform, StyleSheet, Text } from 'react-native';
 import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 
-import type { UnitView } from '@/ask/compare';
 import type { KeyValue } from '@/connections/store';
 import { AICardStrip } from '@/ui/AICardStrip';
 import { AISheet } from '@/ui/AISheet';
@@ -15,16 +14,12 @@ import { Button } from '@/ui/Button';
 import { CombinedAnswerCard } from '@/ui/CombinedAnswer';
 import { Composer, FollowBar } from '@/ui/Composer';
 import { Chip, Mark, PillChoice, Segment, SwitchRow } from '@/ui/controls';
-import { DifferBundle } from '@/ui/DifferBundle';
-import { EvidenceCounts, EvidenceSections } from '@/ui/Evidence';
 import { Icon, IconButton, iconNames } from '@/ui/Icon';
 import { Group, Row } from '@/ui/List';
 import { RefineLine } from '@/ui/Refine';
 import { Sheet } from '@/ui/Sheet';
 import { aiPalettes, palettes, ThemeProvider, useAIColours, useTheme, useThemeChoice } from '@/ui/theme';
 import { ThreadBubble } from '@/ui/ThreadBubble';
-
-const unit = (id: string, text: string, agent = 'claude'): UnitView => ({ id, answer: agent, agent, kind: 'sentence', text, math: [] });
 
 type HostNode = { type: string; parent: HostNode | null; children: Array<HostNode | string> };
 /** inText: whether an element sits inside a Text (on Android a nested Text is part of that Text's node). */
@@ -229,11 +224,11 @@ describe('lists and sheets', () => {
     const user = userEvent.setup();
     const onClose = jest.fn();
     await render(
-      <Sheet open onClose={onClose} title="Judging details" subtitle="answers 12 s">
+      <Sheet open onClose={onClose} title="Answer format sent" subtitle="answers 12 s">
         <Text>inside</Text>
       </Sheet>,
     );
-    expect(screen.getByText('Judging details')).toBeTruthy();
+    expect(screen.getByText('Answer format sent')).toBeTruthy();
     expect(screen.getByText('answers 12 s')).toBeTruthy();
     expect(screen.getByText('inside')).toBeTruthy();
     // The dimmed screen is for a touch; a screen reader gets the one Close button.
@@ -390,137 +385,38 @@ describe('the combined answer', () => {
     expect(textOf(meta as unknown as HostNode)).toBe('answers 11 s · combined in 10 s');
   });
 
-  test('steps: the next one is read as the next step, the active one with its count', async () => {
-    const user = userEvent.setup();
-    const info = jest.fn();
+  test('while it is written: its one step, read aloud, over grey lines', async () => {
     await render(
       <CombinedAnswerCard
         pile={{ agents: ['claude', 'codex', 'opencode'], label: 'AIs that answered: 3 (Claude, Codex, OpenCode). Details', onPress: () => undefined }}
         title="Combined answer"
         meta="answers 12 s"
-        steps={[
-          { key: 'compare', label: 'Comparing…', count: '3/6', detail: 'usually 40 s', state: 'active' },
-          { key: 'synth', label: 'Writing the combined answer…', state: 'pending' },
-        ]}
-        info={{ label: 'Judging details', onPress: info }}
+        steps={[{ key: 'synth', label: 'Writing the combined answer…' }]}
         skeleton
       />,
     );
-    expect(screen.getByLabelText('Comparing… 3/6 usually 40 s')).toBeTruthy();
-    expect(screen.getByLabelText('Next step: Writing the combined answer…')).toBeTruthy();
+    expect(screen.getByLabelText('Writing the combined answer…')).toBeTruthy();
     expect(screen.getByText('answers 12 s')).toBeTruthy();
     expect(screen.getByTestId('skeleton', { includeHiddenElements: true })).toBeTruthy();
-    // R-59 (#3): the details button is on the title row, not beside the steps.
+    // The title row has the pile alone to press (no details button since C6d).
     const head = screen.getByRole('header', { name: 'Combined answer' }).parent!;
-    await user.press(within(head).getByRole('button', { name: 'Judging details' }));
-    expect(info).toHaveBeenCalled();
+    expect(within(head).getAllByRole('button').map((b) => b.props.accessibilityLabel)).toEqual(['AIs that answered: 3 (Claude, Codex, OpenCode). Details']);
   });
 
-  test('done: the body and the footnote; the details button stays on the title row', async () => {
+  test('done: the body and the footnote, no step or grey lines', async () => {
     await render(
       <CombinedAnswerCard
         pile={{ agents: ['claude', 'codex'], label: 'AIs', onPress: () => undefined }}
         title="Combined answer"
         footnote="An AI wrote this combined answer, so it can be wrong."
-        info={{ label: 'Judging details', onPress: () => undefined }}
       >
         <Text>body</Text>
       </CombinedAnswerCard>,
     );
     expect(screen.getByText('body')).toBeTruthy();
     expect(screen.getByText('An AI wrote this combined answer, so it can be wrong.')).toBeTruthy();
-    // R-59 (#3): it moved to the foot once the steps were gone and went unseen.
-    const head = screen.getByRole('header', { name: 'Combined answer' }).parent!;
-    expect(within(head).getByRole('button', { name: 'Judging details' })).toBeTruthy();
-    expect(screen.getAllByRole('button', { name: 'Judging details' })).toHaveLength(1);
+    expect(screen.queryByLabelText('Writing the combined answer…')).toBeNull();
     expect(screen.queryByTestId('skeleton', { includeHiddenElements: true })).toBeNull();
-  });
-
-  test('where the AI answers differ: one link line with the topics, an item per place, its sentences under it (C5)', async () => {
-    const user = userEvent.setup();
-    const toggle = jest.fn();
-    const toggleItem = jest.fn();
-    const openAnswer = jest.fn();
-    const rows = [
-      { key: 'claude:1', agent: 'claude', name: 'Claude', unit: unit('claude:1', '15~20년, 30만 km 넘게 씁니다.'), spans: [{ unit: 'claude:1', start: 0, end: 6 }] },
-      { key: 'codex:1', agent: 'codex', name: 'Codex', unit: unit('codex:1', '보통 10~15년 씁니다.', 'codex'), spans: [] },
-    ];
-    const bundle = (topics: boolean) => ({
-      count: 2,
-      topics: topics ? ['Life span', 'Battery'] : [],
-      items: [
-        { key: 'd:1', title: topics ? 'Life span' : 'Claude 15~20년, Codex 10~15년', gists: topics ? [{ agents: ['claude'], text: '15~20 years' }, { agents: ['codex'], text: '10~15 years' }] : [], rows },
-        { key: 'd:2', title: topics ? 'Battery' : '배터리는 8년 뒤에…', gists: [], rows },
-      ],
-    });
-    const view = (o: { topics: boolean; open: boolean; opened?: string[] }) => (
-      <DifferBundle view={bundle(o.topics)} open={o.open} onToggle={toggle} opened={o.opened ?? []} onToggleItem={toggleItem} onOpenAnswer={openAnswer} />
-    );
-    // Folded: the count, the link and the topics, one button with its state.
-    await render(view({ topics: true, open: false }));
-    const link = screen.getByRole('button', { name: 'Where the AI answers differ: 2. Life span · Battery' });
-    expect(link).toBeCollapsed();
-    expect(screen.getByText('Life span · Battery')).toBeTruthy();
-    expect(screen.queryByTestId('differ-panel')).toBeNull();
-    await user.press(link);
-    expect(toggle).toHaveBeenCalled();
-
-    // Open: an item per place with its topic and gists; the topics line goes.
-    await render(view({ topics: true, open: true }));
-    expect(screen.getByRole('button', { name: 'Where the AI answers differ: 2. Life span · Battery' })).toBeExpanded();
-    expect(screen.queryByText('Life span · Battery')).toBeNull();
-    const item = screen.getByRole('button', { name: 'Life span: Claude 15~20 years, Codex 10~15 years' });
-    expect(item).toBeCollapsed();
-    expect(screen.queryByRole('button', { name: 'Claude: 15~20년, 30만 km 넘게 씁니다.' })).toBeNull();
-    await user.press(item);
-    expect(toggleItem).toHaveBeenCalledWith('d:1');
-
-    // An item opened: the AIs' own sentences, each opening its answer.
-    await render(view({ topics: true, open: true, opened: ['d:1'] }));
-    expect(screen.getByRole('button', { name: 'Life span: Claude 15~20 years, Codex 10~15 years' })).toBeExpanded();
-    expect(screen.getByText('15~20년')).toBeTruthy(); // the differing number, bold
-    await user.press(screen.getByRole('button', { name: 'Claude: 15~20년, 30만 km 넘게 씁니다.' }));
-    expect(openAnswer).toHaveBeenCalledWith('claude');
-
-    // Without topics: the count alone, the items by their headline.
-    await render(view({ topics: false, open: false }));
-    expect(screen.getByRole('button', { name: 'Where the AI answers differ: 2' })).toBeCollapsed();
-    await render(view({ topics: false, open: true }));
-    expect(screen.getByRole('button', { name: 'Claude 15~20년, Codex 10~15년' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: '배터리는 8년 뒤에…' })).toBeTruthy();
-  });
-
-  test('an opened place shows two sentences per AI, then n more, which opens the rest of that AI (C5)', async () => {
-    const user = userEvent.setup();
-    const toggleItem = jest.fn();
-    const cx = (n: number) => ({ key: `codex:${n}`, agent: 'codex', name: 'Codex', unit: unit(`codex:${n}`, `Codex sentence ${n}.`, 'codex'), spans: [] });
-    const rows = [{ key: 'claude:1', agent: 'claude', name: 'Claude', unit: unit('claude:1', 'Claude sentence 1.'), spans: [] }, cx(1), cx(2), cx(3), cx(4)];
-    const view = (opened: string[]) => (
-      <DifferBundle
-        view={{ count: 1, topics: ['Specs'], items: [{ key: 'd:1', title: 'Specs', gists: [], rows }] }}
-        open
-        onToggle={() => undefined}
-        opened={opened}
-        onToggleItem={toggleItem}
-        onOpenAnswer={() => undefined}
-      />
-    );
-    await render(view(['d:1']));
-    expect(screen.getByRole('button', { name: 'Claude: Claude sentence 1.' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Codex: Codex sentence 2.' })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Codex: Codex sentence 3.' })).toBeNull();
-    // One AI's sentence or two: no 'more' line for it.
-    expect(screen.queryByRole('button', { name: /from Claude$/ })).toBeNull();
-    const more = screen.getByRole('button', { name: 'Show 2 more from Codex' });
-    expect(more).toBeCollapsed();
-    expect(screen.getByText('2 more')).toBeTruthy();
-    await user.press(more);
-    expect(toggleItem).toHaveBeenCalledWith('d:1|codex');
-
-    await render(view(['d:1', 'd:1|codex']));
-    expect(screen.getByRole('button', { name: 'Codex: Codex sentence 4.' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Show less from Codex' })).toBeExpanded();
-    expect(screen.getByText('Show less')).toBeTruthy();
   });
 
   test('AI cards: the one a follow-up goes to says so', async () => {
@@ -543,82 +439,6 @@ describe('the combined answer', () => {
     expect(screen.getByText('sonnet')).toBeTruthy();
     await user.press(screen.getByRole('button', { name: "Claude's answer" }));
     expect(open).toHaveBeenCalled();
-  });
-});
-
-describe('evidence', () => {
-  test('folded: four counts, … while judging, the differ count marked', async () => {
-    const user = userEvent.setup();
-    const onOpen = jest.fn();
-    await render(
-      <EvidenceCounts
-        title="Evidence"
-        onOpen={onOpen}
-        tiles={[
-          { kind: 'differ', label: 'Differ', count: 1, a11yLabel: 'Differ: 1. Show' },
-          { kind: 'check', label: 'Check this', count: null, a11yLabel: 'Check this: still comparing' },
-          { kind: 'agree', label: 'Agree', count: 3, a11yLabel: 'Agree: 3. Show' },
-          { kind: 'onlyOne', label: 'Only one', count: 0, a11yLabel: 'Only one: 0. Show' },
-        ]}
-      />,
-    );
-    expect(screen.getByText('…')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Differ: 1. Show' })).not.toBeExpanded();
-    await user.press(screen.getByRole('button', { name: 'Agree: 3. Show' }));
-    expect(onOpen).toHaveBeenCalledWith('agree');
-  });
-
-  test('open: each section with its sentences, an empty one says so, more and hide', async () => {
-    const user = userEvent.setup();
-    const pair = jest.fn();
-    const more = jest.fn();
-    const hide = jest.fn();
-    await render(
-      <EvidenceSections
-        title="Evidence"
-        collapseLabel="Hide"
-        onCollapse={hide}
-        info={{ label: 'Judging details', onPress: () => undefined }}
-        sections={[
-          {
-            kind: 'differ',
-            label: 'Differ',
-            count: 1,
-            caption: 'The AIs said different things',
-            items: [
-              {
-                key: 'd:claude:1',
-                unit: unit('claude:1', '15~20년 씁니다.'),
-                spans: [],
-                who: [{ text: 'Claude ↔ Codex ' }, { text: '10~15년', bold: true }],
-                onPress: pair,
-              },
-            ],
-          },
-          { kind: 'check', label: 'Check this', count: 0, caption: 'Check these yourself', items: [], empty: 'No sentences here.' },
-          {
-            kind: 'agree',
-            label: 'Agree',
-            count: 4,
-            caption: 'That does not make it right',
-            items: [{ key: 'a:1', unit: unit('codex:2', '보증은 8년입니다.', 'codex'), spans: [], who: [{ text: 'Codex · OpenCode' }] }],
-            more: { label: 'Show 3 more', onPress: more },
-          },
-          { kind: 'onlyOne', label: 'Only one', count: 0, caption: 'It may be right or wrong', items: [], empty: 'No sentences here.', notes: ["Codex's answer is long."] },
-        ]}
-      />,
-    );
-    expect(screen.getAllByText('No sentences here.')).toHaveLength(2);
-    expect(screen.getByText('Codex · OpenCode')).toBeTruthy();
-    expect(screen.getByText("Codex's answer is long.")).toBeTruthy();
-    await user.press(screen.getByRole('button', { name: '15~20년 씁니다.. Claude ↔ Codex 10~15년' }));
-    expect(pair).toHaveBeenCalled();
-    await user.press(screen.getByRole('button', { name: 'Show 3 more' }));
-    expect(more).toHaveBeenCalled();
-    const hideButton = screen.getByRole('button', { name: 'Hide' });
-    expect(hideButton).toBeExpanded();
-    await user.press(hideButton);
-    expect(hide).toHaveBeenCalled();
   });
 });
 

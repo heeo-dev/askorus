@@ -2,37 +2,38 @@
 // answers of the AIs it went to. Follow-ups carry each AI's own session on
 // (follow-up method A). Kept in memory for now; the phone history is P2-6.
 //
-// P2-3: a turn to every AI turned on may also compare the answers. Whether
-// it does, who judges and which earlier questions go along are fixed when
-// it is sent (newTurn), so 비교하기 later sends the same. followRun and
+// P2-3: a turn to every AI turned on may also compare the answers, which
+// since C6 (#19) means the moderator writes them into one combined answer
+// (S5b). Whether it does, who may write it, which earlier questions go
+// along and whether it is written at once are fixed when it is sent
+// (newTurn), so 다시 비교 later sends the same. followRun and
 // followCompare follow the PC and patch the turn; the screen only draws.
-//
-// S5b: on a PC that writes combined answers, the turn also fixes at send
-// time whether one AI then writes the answers into one, and who.
 
 import { type AgentClient, AgentError, CancelledError } from '@/api/client';
 import type { Comparison, Info, Run, RunCompare, RunPart, RunRequest, RunTarget, SynthesisRequest, Tier } from '@/api/types';
 
 import {
-  canSynthesize,
-  compareStart,
+  compares,
   directRequest,
   earlierFor,
-  refineRequest,
-  judgesOf,
   polling,
+  refineRequest,
   synthRequest,
   withError,
   withRun,
   withSnap,
+  writersOf,
 } from './compare';
 
 /**
  * A turn's comparison. start, judges, earlier and synth are fixed at send
- * time. key is the clientComparisonId of a POST /v1/comparisons not
- * answered yet (cleared on its 202); error is a code, its words chosen when
- * drawn. synth (S5b) is set only on a PC that writes combined answers: the
- * writer asked for, or off.
+ * time: start is 'auto' (compared once the answers are in), judges the
+ * asked AIs that may write the combined answer, synth the writer asked for
+ * or off. Conversations kept before C6 may also hold 'manual' (compared
+ * only on 비교하기) and 'noJudgeOff' or 'noJudgeNone' (two AIs, never
+ * compared), and turns with no synth (a PC that did not write). key is the
+ * clientComparisonId of a POST /v1/comparisons not answered yet (cleared on
+ * its 202); error is a code, its words chosen when drawn.
  */
 export type TurnCompare = {
   start: 'auto' | 'manual' | 'noJudgeOff' | 'noJudgeNone';
@@ -107,11 +108,10 @@ export function request(opts: {
 }
 
 /**
- * newTurn makes the next turn: its run, and whether and how it compares.
- * With auto compare the run asks the PC to compare once the answers are in.
- * synth is the person's combined-answer setting (on, and the writer); a
- * turn that compares on a PC that can write sends it ({agent} or off), a
- * two-AI turn has no comparison and so no combined answer.
+ * newTurn makes the next turn: its run, and whether it compares (compares:
+ * two or more AIs on a PC that can write). A turn that compares asks the PC
+ * to once the answers are in, with the combined-answer setting (synth: on,
+ * and the writer), as {agent} or off.
  */
 export function newTurn(o: {
   id: string;
@@ -122,7 +122,6 @@ export function newTurn(o: {
   turns: Turn[];
   models: Record<string, string>;
   info: Info;
-  auto: boolean;
   synth: { on: boolean; agent: string };
   /** Refine the question first (milestone C): the setting and the moderator; left out is off. */
   refine?: { on: boolean; agent: string };
@@ -130,15 +129,14 @@ export function newTurn(o: {
 }): Turn {
   const req = request({ question: o.question, tier: o.tier, to: o.to, on: o.on, turns: o.turns, models: o.models, id: o.id });
   const asked = (req.agents ?? []).map((a) => a.agent);
-  const start = compareStart({ info: o.info, asked, to: o.to, auto: o.auto });
-  const compares = start === 'auto' || start === 'manual';
-  const judges = compares ? judgesOf(o.info, asked) : [];
-  const earlier = judges.length ? earlierFor(o.turns, judges) : [];
   const turn: Turn = { id: o.id, question: o.question, req, agents: asked, at: o.at };
-  if (start) turn.compare = { start, judges, earlier };
-  const synth = compares && canSynthesize(o.info) ? synthRequest(o.info, o.synth) : undefined;
-  if (turn.compare && synth) turn.compare.synth = synth;
-  if (start === 'auto') req.compare = synth ? { earlier, judges, synthesis: synth } : { earlier, judges };
+  if (compares({ info: o.info, asked, to: o.to })) {
+    const judges = writersOf(o.info, asked);
+    const earlier = earlierFor(o.turns, judges);
+    const synth = synthRequest(o.info, o.synth);
+    turn.compare = { start: 'auto', judges, earlier, synth };
+    req.compare = { earlier, judges, synthesis: synth };
+  }
   const refine = o.refine ? refineRequest(o.info, o.refine) : undefined;
   if (refine) req.refine = refine;
   return turn;
@@ -170,7 +168,7 @@ export type FollowDeps = {
 
 /**
  * followRun sends (or, with a run id, picks up) a turn's run and patches in
- * its answers as they come. With auto compare it then follows the
+ * its answers as they come. A turn that compares then follows the
  * comparison the PC made of them.
  */
 export async function followRun(client: AgentClient, turn: Turn, deps: FollowDeps, runId?: string): Promise<void> {
@@ -203,9 +201,9 @@ export async function followRun(client: AgentClient, turn: Turn, deps: FollowDep
  * followCompare follows a turn's comparison until it is final: 'poll' asks
  * for the one the turn has, 'start' sends the answers for a new one (the
  * same clientComparisonId again after a lost request), 'retry' asks the PC
- * to judge the failed pairs again, 'synth' asks it to write the combined
- * answer (S5b; opts.agent the writer, left out the PC picks). Errors become
- * a code on the turn.
+ * to start a comparison that failed over, 'synth' asks it to write the
+ * combined answer (S5b; opts.agent the writer, left out the PC picks).
+ * Errors become a code on the turn.
  */
 export async function followCompare(
   client: AgentClient,

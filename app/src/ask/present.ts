@@ -1,49 +1,24 @@
 // What the 한 번에 (Ask) screen shows of a turn (S5c), as plain values the
-// screen draws: the AIs' names, models and times, the steps of making the
-// combined answer, the AI rows and cards, where the AIs differ (the
-// headline in the combined answer), the evidence sections and the judgments
-// grouped by direction. compare.ts and thread.ts decide the states; this
-// only words and orders them, so it is tested without a screen.
+// screen draws: the AIs' names, models and times, the combined answer's
+// title and step, the AI rows and cards, and answers in plain text.
+// compare.ts and thread.ts decide the states; this only words and orders
+// them, so it is tested without a screen. (The judging's headline,
+// evidence and details went with C6d, #24.)
 //
 // Fixes from the S5b phone check (docs/phase2-plan.md part 23):
-// - R-38 the second step ('종합 답변 쓰는 중…') waits as the next step while
-//   the AIs still compare; it becomes the current step only once the
-//   comparison is final and the combined answer is being written.
 // - R-39 a model shows without its variant ('#high') and provider
 //   ('opencode-go/') everywhere.
 // - R-40 every accessibility value is an object (rowValue).
-// - R-41 the judgments of one direction (judge, sentences, answer) are one
-//   line with how often each label came.
-// - R-42 an empty evidence section says so.
 
 import { agentName } from '@/api/agents';
 import { AgentError } from '@/api/client';
-import type { Comparison, DifferTopic, Info, NumberSpan, RunPart } from '@/api/types';
-import {
-  type CardKind,
-  cardKinds,
-  type CardView,
-  compareErrorText,
-  compareState,
-  firstShown,
-  type ItemView,
-  judging,
-  type JudgmentLine,
-  labelText,
-  pieces,
-  progress,
-  requestLines,
-  synthState,
-  type UnitView,
-  whyText,
-} from '@/ask/compare';
+import type { Comparison, Info, RunPart } from '@/api/types';
+import { compareState, synthState } from '@/ask/compare';
 import { parts, type Target, type Turn } from '@/ask/thread';
 import { errorText, has, type MessageKey, t } from '@/i18n';
 import type { StepView } from '@/ui/CombinedAnswer';
-import type { EvidenceItemView, EvidenceSectionView, TileView, WhoPiece } from '@/ui/Evidence';
 import { inlineMathSpans, texOfSpan } from '@/ui/inlineMath';
 import { texToUnicode } from '@/ui/tex';
-import { features } from './features';
 
 // ---- Errors ----
 
@@ -88,7 +63,7 @@ export function displayModel(model?: string | null): string {
 /** whole seconds of a time in ms, for lists ('9 s'). */
 export const wholeSeconds = (ms: number) => Math.max(0, Math.round(ms / 1000));
 
-/** seconds with tenths, for one answer's or one judgment's time ('9.8 s'). */
+/** seconds with tenths, for one answer's time ('9.8 s'). */
 export const tenths = (ms: number) => t('ask.seconds', { s: (ms / 1000).toFixed(1) });
 
 // ---- The AIs of a turn ----
@@ -166,31 +141,24 @@ export function snapshotOf(turn: Turn): Comparison | undefined {
 
 /**
  * turnTimes: how long the answers took (the slowest AI that ended) and,
- * once the judges are done, how long the comparison took (its slowest
- * judging request: snapshots carry no start or end times).
+ * once it is written, how long the combined answer took.
  */
-export function turnTimes(turn: Turn): { answersMs?: number; compareMs?: number; synthMs?: number } {
-  const out: { answersMs?: number; compareMs?: number; synthMs?: number } = {};
+export function turnTimes(turn: Turn): { answersMs?: number; synthMs?: number } {
+  const out: { answersMs?: number; synthMs?: number } = {};
   const answers = (turn.run?.parts ?? [])
     .filter((p) => turn.agents.includes(p.agent) && p.status !== 'running' && typeof p.ms === 'number')
     .map((p) => p.ms as number);
   if (answers.length) out.answersMs = Math.max(...answers);
-  const s = snapshotOf(turn);
-  if (s && !judging(s)) {
-    const judged = (s.requests ?? []).filter((r) => r.judge && typeof r.ms === 'number').map((r) => r.ms as number);
-    if (judged.length) out.compareMs = Math.max(...judged);
-  }
-  // C6: with no judging the wait after the answers is the combined answer's.
-  if (!features.judging && s?.synthesis?.status === 'done' && typeof s.synthesis.ms === 'number') out.synthMs = s.synthesis.ms;
+  const y = snapshotOf(turn)?.synthesis;
+  if (y?.status === 'done' && typeof y.ms === 'number') out.synthMs = y.ms;
   return out;
 }
 
-/** metaLine: 'answers 12 s · compared in 25 s' (C6: '· combined in 15 s'), each part when known. */
+/** metaLine: 'answers 12 s · combined in 15 s', each part when known. */
 export function metaLine(turn: Turn): string {
-  const { answersMs, compareMs, synthMs } = turnTimes(turn);
+  const { answersMs, synthMs } = turnTimes(turn);
   return [
     answersMs !== undefined ? t('ask.metaAnswers', { s: wholeSeconds(answersMs) }) : '',
-    compareMs !== undefined ? t('ask.metaCompare', { s: wholeSeconds(compareMs) }) : '',
     synthMs !== undefined ? t('ask.metaSynth', { s: wholeSeconds(synthMs) }) : '',
   ]
     .filter(Boolean)
@@ -211,9 +179,9 @@ export function synthExpected(turn: Turn): boolean {
 }
 
 /**
- * blockTitle: 종합 답변 while the AIs compare or once they did, when one is
- * coming or came (also failed); else 비교 (also before 비교하기, after a lost
- * or forgotten comparison, and with one answer).
+ * blockTitle: 종합 답변 while the comparison runs or once it did, when one
+ * is coming or came (also failed); else 비교 (also before 비교하기, after a
+ * lost or forgotten comparison, with one answer, and while it is off).
  */
 export function blockTitle(turn: Turn, info: Info | null): string {
   const kind = compareState(turn)?.kind;
@@ -225,372 +193,16 @@ export function blockTitle(turn: Turn, info: Info | null): string {
 
 /**
  * steps are the steps of making the combined answer (F-Ask-Comparing):
- * while the AIs compare, 'Comparing… 3/6' (with 'usually 40 s' once the
- * judging is measured) and, when a combined answer is coming, its step
- * as the next one. It becomes the current step only once the comparison
- * is final and the answer waits to be written or is being written (R-38);
- * the comparison's step is then done (or failed, when every judge failed
- * and the answer is written from the answers alone). Otherwise none.
+ * since C6 only one, 'Writing the combined answer…', while one is coming:
+ * as the comparison starts, or once it is final and the answer waits to be
+ * written or is being written. Otherwise none.
  */
 export function steps(turn: Turn, info: Info | null): StepView[] {
   const st = compareState(turn);
   if (!st) return [];
-  const synth: StepView = { key: 'synth', label: t('compare.step.synth'), state: 'pending' };
-  if (!features.judging) {
-    // C6: no judging step; the combined answer is the only one.
-    const y = synthState(turn, info);
-    const coming = st.kind === 'comparing' ? synthExpected(turn) : (st.kind === 'done' || st.kind === 'failed') && (y?.kind === 'waiting' || y?.kind === 'writing');
-    return coming ? [{ ...synth, state: 'active' }] : [];
-  }
-  if (st.kind === 'comparing') {
-    const typical = info?.judging?.verified && info.judging.typicalMs ? wholeSeconds(info.judging.typicalMs) : 0;
-    const compare: StepView = { key: 'compare', label: t('compare.comparingStart'), state: 'active' };
-    if (st.total) compare.count = `${st.ended}/${st.total}`;
-    if (typical) compare.detail = t('compare.typicalShort', { s: typical });
-    return synthExpected(turn) ? [compare, synth] : [compare];
-  }
   const y = synthState(turn, info);
-  if ((st.kind === 'done' || st.kind === 'failed') && (y?.kind === 'waiting' || y?.kind === 'writing')) {
-    const s = snapshotOf(turn);
-    const compare: StepView =
-      st.kind === 'done'
-        ? { key: 'compare', label: t('compare.judgeCount', { n: s ? progress(s).total : 0 }), state: 'done' }
-        : { key: 'compare', label: t('compare.title'), state: 'failed' };
-    return [compare, { ...synth, state: 'active' }];
-  }
-  return [];
-}
-
-// ---- A unit's numbers ----
-
-/**
- * numbersOf: the numbers of a unit the PC marked (its number spans), as
- * text, in order, with ' / ' between them so two numbers of one sentence
- * do not read as one (UX-2): ', ' already parts the sides of a headline
- * and ' · ' those of a who line.
- */
-export function numbersOf(unit: UnitView, spans: NumberSpan[]): string {
-  return pieces(
-    unit.text,
-    unit.math,
-    spans.filter((x) => x.unit === unit.id),
-  )
-    .filter((p) => p.bold)
-    .map((p) => (p.math ? (texToUnicode(p.math.tex) ?? p.math.tex) : p.text).trim())
-    .filter(Boolean)
-    .join(' / ');
-}
-
-// ---- Where the AIs differ, in the combined answer ----
-
-/**
- * differHeadline is the highlighted part of 'AI마다 다릅니다: …': each
- * side's AIs and its numbers ('Claude 15~20년, Codex 10~15년, OpenCode
- * 8~10년'), while that is short (three sides at most, each with numbers,
- * none a whole answer); else how many AIs' answers differ, counting the
- * whole answers (COR-1). summary says it is the count, which stands
- * alone: 'AI마다 다릅니다:' in front of it would say the same twice (UX-6).
- */
-export function differHeadline(item: ItemView): { text: string; summary: boolean } {
-  const sides = item.sides.map((sd) => ({ names: sd.agents.join('·'), nums: numbersOf(sd.units[0], sd.numberSpans) }));
-  if (sides.length <= 3 && !item.whole.length && sides.every((x) => x.nums)) {
-    return { text: sides.map((x) => `${x.names} ${x.nums}`).join(', '), summary: false };
-  }
-  const n = new Set([...item.sides.flatMap((sd) => sd.agents), ...item.whole]).size;
-  return { text: t('compare.differSummary', { n }), summary: true };
-}
-
-/** answerAgents maps a snapshot's answer ids to their AIs (codes). */
-export function answerAgents(s: Comparison | undefined): Map<string, string> {
-  return new Map((s?.answers ?? []).map((a) => [a.id, a.agent]));
-}
-
-/** A row under the headline: one AI's own sentence, leading to its answer. */
-export type DifferRow = { key: string; agent: string; name: string; unit: UnitView; spans: NumberSpan[] };
-
-/** differRows: every unit of every side, in the item's order. */
-export function differRows(s: Comparison | undefined, item: ItemView): DifferRow[] {
-  const agents = answerAgents(s);
-  return item.sides.flatMap((sd) =>
-    sd.units.map((u) => ({ key: u.id, agent: agents.get(u.answer) ?? u.answer, name: u.agent, unit: u, spans: sd.numberSpans })),
-  );
-}
-
-/** One side's gist under a topic: its AIs (codes) and a few words. */
-export type DifferGist = { agents: string[]; text: string };
-/** One item of the 'AI 답이 다른 곳' list: its title, the sides' gists ([] without a topic) and its rows. */
-export type DifferTopicView = { key: string; title: string; gists: DifferGist[]; rows: DifferRow[] };
-/** The 'AI 답이 다른 곳' line (C5): how many items, the titles the folded line lists ([] without topics) and the items. */
-export type DifferBundleView = { count: number; topics: string[]; items: DifferTopicView[] };
-
-/**
- * differBundle is the one folded line under the combined answer (C5, #11):
- * an item per Differ item, titled by the topic the PC named (with a gist
- * per side), else by differHeadline, else, when that only counts the AIs,
- * by the first words of the first side's sentence. The folded line lists
- * the titles only once the PC named an item: before that (still naming,
- * failed, an older agent) it is the count alone. null without Differ items.
- */
-export function differBundle(s: Comparison | undefined, items: ItemView[], named?: DifferTopic[]): DifferBundleView | null {
-  if (!items.length) return null;
-  const agents = answerAgents(s);
-  const byKey = new Map((named ?? []).map((n) => [n.key, n]));
-  let any = false;
-  const views = items.map((item): DifferTopicView => {
-    const n = byKey.get(item.key);
-    const topic = n?.topic.trim() ?? '';
-    if (topic) any = true;
-    const gists = topic
-      ? item.sides
-          .map((sd) => ({
-            agents: [...new Set(sd.units.map((u) => agents.get(u.answer) ?? u.answer))],
-            text: (sd.pos !== undefined ? (n?.gists[sd.pos] ?? '') : '').trim(),
-          }))
-          .filter((g) => g.text)
-      : [];
-    return { key: item.key, title: topic || fallbackTitle(item), gists, rows: differRows(s, item) };
-  });
-  return { count: views.length, topics: any ? views.map((v) => v.title) : [], items: views };
-}
-
-const titleChars = 28;
-
-// fallbackTitle: the headline, unless it only counts the AIs; then the
-// first words of the first side's sentence, cut with '…'.
-function fallbackTitle(item: ItemView): string {
-  const head = differHeadline(item);
-  const first = (item.sides[0]?.units[0]?.text ?? '').replace(/\s+/g, ' ').trim();
-  if (!head.summary || !first) return head.text;
-  const chars = [...first];
-  return chars.length > titleChars ? `${chars.slice(0, titleChars - 1).join('').trimEnd()}…` : first;
-}
-
-// ---- The evidence ----
-
-const numberChecks = ['numberMismatch', 'numbersAbsent'];
-
-/** tiles are the four folded counts; null ('…') while the judges still run, except Differ. */
-export function tiles(cs: CardView[], ended: boolean): TileView[] {
-  return cardKinds.map((kind) => {
-    const n = cs.find((c) => c.kind === kind)?.items.length ?? 0;
-    const count = kind === 'differ' || ended ? n : null;
-    const name = t(`compare.kind.${kind}`);
-    return {
-      kind,
-      label: name,
-      count,
-      a11yLabel: count === null ? t('compare.tilePending', { kind: name }) : t('compare.tileA11y', { kind: name, n: count }),
-    };
-  });
-}
-
-/**
- * whoOf is an item's second line: who said it and, for Differ, what the
- * other sides say; a side that is a whole answer is its AIs' names
- * (COR-1), and with no other side at all there is no '↔'.
- */
-export function whoOf(item: ItemView): WhoPiece[] {
-  const [first, ...others] = item.sides;
-  const unit = first.units[0];
-  switch (item.kind) {
-    case 'differ': {
-      const names = first.agents.join(', ');
-      if (!others.length && !item.whole.length) return [{ text: names }];
-      const out: WhoPiece[] = [{ text: `${names} ↔ ` }];
-      others.forEach((sd, i) => {
-        const nums = numbersOf(sd.units[0], sd.numberSpans);
-        out.push({ text: `${i ? ' · ' : ''}${sd.agents.join(', ')}${nums ? ' ' : ''}` });
-        if (nums) out.push({ text: nums, bold: true });
-      });
-      item.whole.forEach((name, i) => out.push({ text: `${others.length || i ? ' · ' : ''}${name}` }));
-      return out;
-    }
-    case 'check': {
-      const why = item.check.map(whyText).filter((x): x is string => !!x);
-      return [{ text: [t('compare.sentenceOf', { name: unit.agent }), ...why].join(' · ') }];
-    }
-    case 'agree': {
-      const names = [...new Set(item.sides.flatMap((sd) => sd.agents))];
-      return [{ text: names.join(' · ') }];
-    }
-    default:
-      return [{ text: t('compare.only', { name: first.agents[0] ?? unit.agent }) }];
-  }
-}
-
-/** sectionCaption: what a section means, short; Check this says the numbers differ when every reason is a number check. */
-export function sectionCaption(kind: CardKind, items: ItemView[]): string {
-  if (kind === 'check' && items.length && items.every((it) => it.check.length > 0 && it.check.every((c) => numberChecks.includes(c)))) {
-    return t('compare.numbersDiffer');
-  }
-  return t(`compare.short.${kind}`);
-}
-
-/**
- * evidenceSections are the four sections, always all four (F-Result-
- * Evidence): their first three items, then 'Show n more'; Differ and Check
- * this lead to the pair sheet. While judges run, the sections other than
- * Differ have nothing yet and say so; once every judge ended an empty
- * section says there is nothing (R-42), Differ in its own words (or, when
- * no sentence could be compared at all, that).
- */
-export function evidenceSections(o: {
-  cards: CardView[];
-  ended: boolean;
-  partial: boolean;
-  failed: string[];
-  more: readonly CardKind[];
-  onMore: (kind: CardKind) => void;
-  onPair: (key: string) => void;
-}): EvidenceSectionView[] {
-  const none = o.ended && o.cards.every((c) => c.items.length === 0);
-  return cardKinds.map((kind) => {
-    const all = o.cards.find((c) => c.kind === kind)?.items ?? [];
-    const shown = o.more.includes(kind) ? all : all.slice(0, firstShown);
-    const rest = all.length - shown.length;
-    const items: EvidenceItemView[] = shown.map((it) => {
-      const side = it.sides[0];
-      const v: EvidenceItemView = { key: it.key, unit: side.units[0], spans: side.numberSpans, who: whoOf(it) };
-      if (it.missing.length) v.note = t('compare.cantCompare', { names: it.missing.join(', ') });
-      v.a11yLabel = spoken([v.unit.text, v.who.map((p) => p.text).join(''), v.note ?? '']);
-      if (kind === 'differ' || kind === 'check') v.onPress = () => o.onPair(it.key);
-      return v;
-    });
-    const sec: EvidenceSectionView = {
-      kind,
-      label: t(`compare.kind.${kind}`),
-      count: kind === 'differ' || o.ended ? all.length : null,
-      caption: sectionCaption(kind, all),
-      items,
-    };
-    if (rest > 0) sec.more = { label: t('compare.more', { n: rest }), onPress: () => o.onMore(kind) };
-    if (!all.length) sec.empty = emptyLine(kind, o.ended, none, o.partial, o.failed);
-    return sec;
-  });
-}
-
-// spoken joins lines into what a screen reader says, with a stop between them unless one is there.
-function spoken(lines: string[]): string {
-  return lines
-    .map((l) => l.trim())
-    .filter(Boolean)
-    .reduce((out, l) => (out ? `${out}${/[.!?。…:)]$/.test(out) ? ' ' : '. '}${l}` : l), '');
-}
-
-function emptyLine(kind: CardKind, ended: boolean, none: boolean, partial: boolean, failed: string[]): string {
-  if (!ended) return t('compare.comparingStart');
-  if (kind !== 'differ') return t('compare.none');
-  if (none) return t('compare.noCore');
-  if (!partial) return t('compare.noDiffer');
-  return [t('compare.noDifferPartial'), failed.length ? t('compare.cantCompare', { names: failed.join(', ') }) : ''].filter(Boolean).join(' ');
-}
-
-// ---- The pair sheet ----
-
-/** One direction's judgments as one line (R-41): who judged whose sentences against whose answer, and the labels. */
-export type JudgmentGroup = { key: string; text: string };
-
-/**
- * groupJudgments makes one line per (judge, sentences, answer): an item
- * with two of Claude's sentences has one line for each direction, not one
- * per sentence. Each label shows once, with how often it came when more
- * than once ('Same ×2'), and 'not sure' after the unsure ones.
- */
-export function groupJudgments(lines: JudgmentLine[]): JudgmentGroup[] {
-  type Label = { label: string; unsure: boolean; n: number };
-  const groups: Array<{ judge: string; from: string; against: string; labels: Label[] }> = [];
-  for (const l of lines) {
-    let g = groups.find((x) => x.judge === l.judge && x.from === l.from && x.against === l.against);
-    if (!g) {
-      g = { judge: l.judge, from: l.from, against: l.against, labels: [] };
-      groups.push(g);
-    }
-    let e = g.labels.find((x) => x.label === l.label && x.unsure === l.unsure);
-    if (!e) {
-      e = { label: l.label, unsure: l.unsure, n: 0 };
-      g.labels.push(e);
-    }
-    e.n++;
-  }
-  return groups.map((g) => {
-    const label = g.labels
-      .map((e) => {
-        const word = labelText(e.label);
-        const base = e.n > 1 ? t('compare.labelTimes', { label: word, n: e.n }) : word;
-        return e.unsure ? `${base} · ${t('compare.unsure')}` : base;
-      })
-      .join(', ');
-    return { key: JSON.stringify([g.judge, g.from, g.against]), text: t('compare.judgment', { judge: g.judge, from: g.from, against: g.against, label }) };
-  });
-}
-
-// ---- The judging details sheet ----
-
-/** One judging request in the sheet: 'Claude → Codex' and how it went. */
-export type RequestRow = { id: string; text: string; a11y: string; status: string; failed: boolean };
-/** The requests one AI judged (agent '' for pairs no AI could judge). */
-export type JudgeGroup = { key: string; agent: string; name: string; model: string; rows: RequestRow[] };
-
-/**
- * judgeGroups puts a comparison's requests under the AI that judged them,
- * in the turn's AI order (others after), with the pairs no AI could judge
- * last. Each row reads 'from → against' with its time, its state or why it
- * failed in the AI's words.
- */
-export function judgeGroups(s: Comparison, order: string[]): JudgeGroup[] {
-  const lines = requestLines(s);
-  const groups = new Map<string, JudgeGroup>();
-  (s.requests ?? []).forEach((r, i) => {
-    const l = lines[i];
-    if (!l) return;
-    const key = r.judge || '';
-    let g = groups.get(key);
-    if (!g) {
-      g = { key: key || '-', agent: r.judge, name: r.judge ? agentName(r.judge) : '', model: displayModel(r.model), rows: [] };
-      groups.set(key, g);
-    }
-    if (!g.model && r.model) g.model = displayModel(r.model);
-    const status = requestStatus(l);
-    if (!r.judge) {
-      g.rows.push({ id: r.id, text: `${l.from} ↔ ${l.against}`, a11y: `${l.from} ↔ ${l.against}, ${status.text}`, status: status.text, failed: true });
-      return;
-    }
-    const only = l.judgeOnly ? ` ${t('compare.judgeOnly')}` : '';
-    g.rows.push({
-      id: r.id,
-      text: t('compare.requestShort', { from: l.from, against: l.against }) + only,
-      a11y: `${t('compare.requestA11y', { from: l.from, against: l.against })}${only}, ${status.text}`,
-      status: status.text,
-      failed: !!status.failed,
-    });
-  });
-  const at = (agent: string) => {
-    if (!agent) return Number.MAX_SAFE_INTEGER;
-    const i = order.indexOf(agent);
-    return i < 0 ? order.length : i;
-  };
-  return [...groups.values()].map((g, i) => ({ g, i })).sort((a, b) => at(a.g.agent) - at(b.g.agent) || a.i - b.i).map((x) => x.g);
-}
-
-function requestStatus(l: { judge: string; status: string; ms?: number; error?: { code: string; message?: string } }): { text: string; failed?: boolean } {
-  if (!l.judge) return { text: compareErrorText('no_judge'), failed: true };
-  switch (l.status) {
-    case 'done':
-      return { text: l.ms !== undefined ? tenths(l.ms) : '' };
-    case 'queued':
-      return { text: t('compare.req.queued') };
-    case 'running':
-      return { text: t('compare.req.running') };
-    case 'failed':
-      return { text: compareErrorText(l.error?.code ?? 'internal', l.error?.message), failed: true };
-    default:
-      return { text: l.status };
-  }
-}
-
-/** judgedCount: the judging requests of a comparison (no_judge records are not judgments). */
-export function judgedCount(s: Comparison): number {
-  return progress(s).total;
+  const coming = st.kind === 'comparing' ? synthExpected(turn) : (st.kind === 'done' || st.kind === 'failed') && (y?.kind === 'waiting' || y?.kind === 'writing');
+  return coming ? [{ key: 'synth', label: t('compare.step.synth') }] : [];
 }
 
 // ---- The AI sheet and the AI cards ----

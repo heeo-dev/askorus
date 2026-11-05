@@ -250,7 +250,7 @@ export class AgentClient {
 
   /**
    * Asks for a comparison at once and then until it is final, handing each
-   * state to onUpdate so the cards fill in as judges finish. It keeps
+   * state to onUpdate so the combined answer shows as it is written. It keeps
    * asking while the PC says so (pollAfterMs), also for a status this app
    * does not know yet. Dropped requests are retried like waitRun; agent
    * errors (404) and cancelling end it.
@@ -289,7 +289,7 @@ export class AgentClient {
     }
   }
 
-  /** Judges the failed pairs again (202). 409 comparison_running while it still runs. */
+  /** Starts a comparison that failed over (202). 409 comparison_running while it still runs. */
   retryComparison(id: string, signal?: AbortSignal) {
     return this.request<Comparison>('POST', `comparisons/${encodeURIComponent(id)}/retry`, undefined, signal);
   }
@@ -298,13 +298,13 @@ export class AgentClient {
    * Writes a comparison's combined answer (S5b), again after it failed or
    * when it was off (202). agent is the AI the person picked; left out, the
    * PC picks. One already written comes back unchanged. 409
-   * comparison_running while the judging or the writing still runs.
+   * comparison_running while the comparison or the writing still runs.
    */
   writeSynthesis(id: string, agent?: string, signal?: AbortSignal) {
     return this.request<Comparison>('POST', `comparisons/${encodeURIComponent(id)}/synthesis`, agent ? { agent } : {}, signal);
   }
 
-  /** Stops a comparison: queued judgments are dropped, running ones finish. */
+  /** Stops a comparison: a combined answer not started yet is dropped, one being written finishes. */
   cancelComparison(id: string) {
     return this.request<Comparison>('POST', `comparisons/${encodeURIComponent(id)}/cancel`);
   }

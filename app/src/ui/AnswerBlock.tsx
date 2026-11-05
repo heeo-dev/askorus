@@ -1,11 +1,11 @@
 // One AI's answer in a turn that is not compared (S5c): a follow-up to one
-// AI, a PC whose AIs do not judge, or a turn to two AIs. Its avatar, name,
-// model and time, the answer drawn from its Markdown (selectable), and what
-// can be done with it: copy, ask only this AI next, and carry Claude's
-// conversation on in the Claude app. The same actions are in AnswerActions
-// for the answer sheet. What an AI adds at the end of an answer (#4:
-// messages to send next, an offer) is folded under it, as judging and the
-// combined answer leave it out.
+// AI, a PC whose AIs do not write, or a turn of two AIs kept from before C6.
+// Its avatar, name, model and time, the answer drawn from its Markdown
+// (selectable), and what can be done with it: copy, ask only this AI next,
+// and carry Claude's conversation on in the Claude app. The same actions
+// are in AnswerActions for the answer sheet. What an AI adds at the end of
+// an answer (#4: messages to send next, an offer) is folded under it, as
+// the combined answer leaves it out.
 
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';

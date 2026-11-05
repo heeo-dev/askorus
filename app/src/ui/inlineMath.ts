@@ -1,10 +1,8 @@
 // Math written inside a line of an answer: "$…$", "\(…\)" and the same
 // marks for display ("$$…$$", "\[…\]"). Markdown.tsx draws answers with
-// these rules, and the agent's answer units (P2-3) keep math whole by the
-// same rules (agent/internal/judge/math.go, InlineMath): both run the cases
-// in docs/judge/testdata/inline-math.json. A unit's math comes from the
-// agent as spans; the phone draws math only there and never scans a unit's
-// text for "$" itself (S1 decision 1).
+// these rules, and plainPreview (present.ts) reads card previews by them;
+// the cases are in inline-math-cases.json. (Until C6d the agent's judged
+// units kept math whole by the same rules.)
 
 // Math: "$$…$$" or "\[…\]" on lines of their own is a formula (display);
 // "$…$", "\(…\)" and the same marks inside a line are math in the text.

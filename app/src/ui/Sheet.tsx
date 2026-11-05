@@ -1,4 +1,4 @@
-// A sheet from the bottom (S5c, B2-Many-Sheet and F-Sheet-Judges): rounded
+// A sheet from the bottom (S5c, B2-Many-Sheet and the boards' sheets): rounded
 // top, a handle, a title with a close button, at most 85% of the screen.
 // Tapping the dimmed screen above it closes it too. The Modal fades, so the
 // dimmed screen darkens where it is, and only the sheet slides up (#2: a

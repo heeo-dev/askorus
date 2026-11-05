@@ -1,57 +1,41 @@
-// Answer comparison on the phone (P2-3): who judges, what a turn sends, the
-// state the 정리 (Summary) tab shows, and the cards drawn from the PC's
-// snapshot (GET /v1/comparisons/{id}). Everything here is pure: the screen
-// draws what these give and thread.ts follows the comparison.
+// Answer comparison on the phone (P2-3): what a turn sends, the state of
+// its comparison and its combined answer, from the PC's snapshot (GET
+// /v1/comparisons/{id}). Everything here is pure: the screen draws what
+// these give and thread.ts follows the comparison.
 //
-// The snapshot is the PC's word. The phone only orders, drops what it cannot
-// show (an unknown card kind, a unit it cannot find) and picks the words;
-// unknown codes from a newer agent still show as their code. Item keys pass
-// through unchanged, so a card (and an open sheet) stays put while judges
-// finish. Lengths the agent limits are UTF-8 bytes: measure them with
-// utf8Bytes and cutUtf8, never with .length.
+// Since C6 (#19, 2026-11-05, the user's decision) a comparison is only the
+// moderator's combined answer: the PC judges no more, so a comparison is
+// done as soon as the answers are in, and then the moderator writes (S5b,
+// the snapshot's synthesis, with a status of its own; the PC keeps
+// pollAfterMs while the writing is not done). The judging's cards, evidence
+// and details left the app with C6d (#24). Conversations kept before it
+// may still hold their snapshots: only what is read here matters.
 //
-// S5b: once the judging ended, one AI may write the answers into one
-// combined answer (the snapshot's synthesis). It has its own status: the
-// comparison's status stays the judges', and the PC keeps pollAfterMs while
-// the writing is not done. With a combined answer the cards fold under it
-// as evidence; without one (off, failed, an older agent) they show as in S5.
+// The snapshot is the PC's word. Unknown codes from a newer agent still
+// show as their code. Lengths the agent limits are UTF-8 bytes: measure
+// them with utf8Bytes and cutUtf8, never with .length.
 
 import { agentName } from '@/api/agents';
 import { AgentError, CancelledError, NetworkError, comparisonPolling } from '@/api/client';
 import type {
   AdapterInfo,
-  CodeError,
-  CompareAnswer,
   Comparison,
   ComparisonAnswer,
   ComparisonRequest,
-  DifferTopic,
   Info,
-  Judgment,
-  NumberSpan,
   RefineRequest,
   Run,
   RunPart,
-  Synthesis,
   SynthesisRequest,
-  UnitMath,
 } from '@/api/types';
 import type { Target, Turn, TurnCompare } from '@/ask/thread';
-import { has, type MessageKey, t } from '@/i18n';
-import { texOfSpan } from '@/ui/inlineMath';
-import { features } from './features';
+import { has, t } from '@/i18n';
 
-/** The cards of the Summary tab, always in this order. */
-export const cardKinds = ['differ', 'check', 'agree', 'onlyOne'] as const;
-export type CardKind = (typeof cardKinds)[number];
-
-/** Checks the agent may report on an item (why it needs a look). */
-export const checkNames = ['unsure', 'noEvidence', 'crossDirection', 'numberMismatch', 'numbersAbsent'] as const;
-
-/** Judgment labels (labels v1). */
-export const labels = ['same', 'opposite', 'absent'] as const;
-
-/** Error codes of comparisons, each with its own words (compare.error.*). */
+/**
+ * Error codes of comparisons, each with its own words (compare.error.*).
+ * The judge_* and no_judge codes came from judging: a conversation kept
+ * before C6 may still show them.
+ */
 export const compareCodes = [
   'judge_failed',
   'judge_timeout',
@@ -70,7 +54,12 @@ export const compareCodes = [
   'bad_request',
 ] as const;
 
-/** Error codes of a combined answer with words of their own (compare.synth.error.*); others take the compare words. */
+/**
+ * Error codes of a combined answer with words of their own
+ * (compare.synth.error.*); others take the compare words. The agent names
+ * the writer's failures with the judge_* codes and a missing writer
+ * no_judge, as when the AIs judged.
+ */
 export const synthCodes = [
   'judge_failed',
   'judge_timeout',
@@ -83,8 +72,6 @@ export const synthCodes = [
   'internal',
 ] as const;
 
-/** Items shown in a card before 'Show n more'. */
-export const firstShown = 3;
 // The agent's limits (POST /v1/runs compare, POST /v1/comparisons).
 export const maxEarlier = 3;
 export const maxEarlierBytes = 4096;
@@ -93,7 +80,7 @@ export const maxQuestionBytes = 32768;
 
 // Codes after which the screen offers a direct comparison (비교하기).
 const startAfter = ['too_many_comparisons', 'internal', 'bad_compare', 'ask_folder_unavailable'];
-// Codes a retry cannot change.
+// Codes a retry cannot change (no_judge: a snapshot kept from before C6).
 const noRetry = ['no_judge', 'need_two_answers'];
 
 // ---- Lengths (UTF-8 bytes, as the agent counts them) ----
@@ -135,9 +122,7 @@ export function cutUtf8(s: string, maxBytes: number): string {
   return s;
 }
 
-// ---- Who judges, and what a turn sends ----
-
-const canJudge = (a: AdapterInfo) => a.available && (a.capabilities ?? []).includes('judge');
+// ---- Who writes, and what a turn sends ----
 
 const canWrite = (a: AdapterInfo) => a.available && (a.capabilities ?? []).includes('synthesize');
 
@@ -173,44 +158,37 @@ export function refineRequest(info: Info, o: { on: boolean; agent: string }): Re
   return agent ? { agent } : {};
 }
 
-/** judgesOf gives the asked AIs (in asked order) that can judge on this PC. */
-export function judgesOf(info: Info, asked: string[]): string[] {
-  return asked.filter((agent) => (info.agents ?? []).some((a) => a.agent === agent && canJudge(a)));
+/**
+ * writersOf gives the asked AIs (in asked order) that can write the
+ * combined answer on this PC. They go as the request's judges (the name
+ * from P2-3): the agent gives the earlier questions to a writer among them.
+ */
+export function writersOf(info: Info, asked: string[]): string[] {
+  return asked.filter((agent) => (info.agents ?? []).some((a) => a.agent === agent && canWrite(a)));
 }
 
 /**
- * compareStart decides at send time whether a turn gets a Summary tab and
- * how it compares. null keeps the turn as in P2-2: a follow-up to one AI, a
- * one-AI turn, or a PC where no AI judges (an older agent too). Two AIs
- * cannot judge each other (the judge must not have written either answer),
- * so a two-AI turn shows why instead.
+ * compares decides at send time whether a turn is compared, which since C6
+ * means the moderator's combined answer (on, or off with 'Write a combined
+ * answer' once the answers are in): a question to every AI turned on, two
+ * or more of them, on a PC whose AIs can write. A follow-up to one AI, a
+ * one-AI turn or an older agent shows each answer in full.
  */
-export function compareStart(o: { info: Info; asked: string[]; to: Target; auto: boolean }): TurnCompare['start'] | null {
-  if (o.to !== 'all' || o.asked.length < 2) return null;
-  // C6: no judging, so two AIs are compared too, always as the answers
-  // come in; the combined answer's own switch says whether it is written.
-  if (!features.judging) return canSynthesize(o.info) ? 'auto' : null;
-  const pcJudges = (o.info.agents ?? []).filter(canJudge);
-  if (!pcJudges.length) return null;
-  if (o.asked.length === 2) {
-    const off = pcJudges.some((a) => (a.capabilities ?? []).includes('ask') && !o.asked.includes(a.agent));
-    return off ? 'noJudgeOff' : 'noJudgeNone';
-  }
-  if (!judgesOf(o.info, o.asked).length) return null;
-  return o.auto ? 'auto' : 'manual';
+export function compares(o: { info: Info; asked: string[]; to: Target }): boolean {
+  return o.to === 'all' && o.asked.length >= 2 && canSynthesize(o.info);
 }
 
 const doneWith = (turn: Turn, agent: string) => (turn.run?.parts ?? []).some((p) => p.agent === agent && p.status === 'done');
 
 /**
- * earlierFor gives the earlier questions every judge's company already got
- * (each judge answered them), so the judges read this answer in its
+ * earlierFor gives the earlier questions every writer's company already got
+ * (each writer answered them), so the moderator reads this answer in its
  * conversation: the latest three, oldest first, each cut to 4 KiB.
  */
-export function earlierFor(turns: Turn[], judges: string[]): string[] {
-  if (!judges.length) return [];
+export function earlierFor(turns: Turn[], writers: string[]): string[] {
+  if (!writers.length) return [];
   return turns
-    .filter((x) => judges.every((j) => doneWith(x, j)))
+    .filter((x) => writers.every((w) => doneWith(x, w)))
     .slice(-maxEarlier)
     .map((x) => cutUtf8(x.question.replace(/\u0000/g, ''), maxEarlierBytes));
 }
@@ -226,9 +204,10 @@ export function readyParts(turn: Turn): RunPart[] {
 }
 
 /**
- * directRequest is the POST /v1/comparisons body for a turn (비교하기, or
- * 다시 비교 after the PC lost the comparison): the answers that came, each
- * cut to the agent's 64 KiB, with the judges and earlier questions fixed
+ * directRequest is the POST /v1/comparisons body for a turn (다시 비교
+ * after the PC lost the comparison, or 비교하기 on a turn kept from before
+ * C6 that was never compared): the answers that came, each cut to the
+ * agent's 64 KiB, with the writers (judges) and earlier questions fixed
  * when the turn was sent. null when there are not two answers.
  */
 export function directRequest(turn: Turn, key: string): ComparisonRequest | null {
@@ -249,23 +228,6 @@ export function directRequest(turn: Turn, key: string): ComparisonRequest | null
   const synth = turn.compare?.synth;
   if (synth) req.synthesis = turn.req.tier ? { ...synth, tier: turn.req.tier } : { ...synth };
   return req;
-}
-
-// synthAsked: the turn asks for a combined answer (fixed at send time).
-const synthAsked = (turn: Turn) => !!turn.compare?.synth && !turn.compare.synth.off;
-
-/**
- * startCost is how many more times 비교하기 uses the PC's AIs: every
- * ordered pair of answers once; two answers need a judge that wrote none.
- * A combined answer asked for adds one more. 0: nothing to start.
- */
-export function startCost(turn: Turn): number {
-  const ready = readyParts(turn);
-  const k = ready.length;
-  let n = 0;
-  if (k >= 3) n = k * (k - 1);
-  else if (k === 2 && (turn.compare?.judges ?? []).some((j) => !ready.some((p) => p.agent === j))) n = 2;
-  return n > 0 && synthAsked(turn) ? n + 1 : n;
 }
 
 // ---- State updates (the same object back when nothing changes) ----
@@ -311,49 +273,44 @@ export function isFinal(s: Pick<Comparison, 'status' | 'pollAfterMs'>): boolean 
 }
 
 /**
- * judging: the judges still run. Unlike polling, a done or failed
- * comparison whose combined answer is still being written is not judging;
- * a status this app does not know is judging while the PC asks to be polled.
+ * comparing: the comparison itself still runs (it waits for the answers,
+ * or is being made). Unlike polling, a done or failed comparison whose
+ * combined answer is still being written is not comparing; a status this
+ * app does not know is comparing while the PC asks to be polled.
  */
-export function judging(s: Pick<Comparison, 'status' | 'pollAfterMs'>): boolean {
+export function comparing(s: Pick<Comparison, 'status' | 'pollAfterMs'>): boolean {
   if (s.status === 'waiting' || s.status === 'running') return true;
   if (s.status === 'done' || s.status === 'failed') return false;
   return (s.pollAfterMs ?? 0) > 0;
 }
 
-const judgedFailed = (s: Comparison) => (s.requests ?? []).some((r) => r.status === 'failed' && r.judge !== '');
-
-/** canRetry: a final comparison with judgments that failed, or that failed as a whole for a reason a retry may fix. */
+/** canRetry: a final comparison that failed as a whole for a reason a retry may fix (the PC starts it over). */
 export function canRetry(s?: Comparison): boolean {
   if (!s || polling(s)) return false;
-  return judgedFailed(s) || (s.status === 'failed' && !noRetry.includes(s.error?.code ?? ''));
+  return s.status === 'failed' && !noRetry.includes(s.error?.code ?? '');
 }
 
-/** progress counts the judgments that ended; no_judge records are not judgments. */
-export function progress(s: Comparison): { ended: number; total: number } {
-  const judged = (s.requests ?? []).filter((r) => r.judge !== '');
-  return { ended: judged.filter((r) => r.status === 'done' || r.status === 'failed').length, total: judged.length };
-}
-
-// ---- What the Summary tab shows ----
+// ---- What the combined answer's block shows ----
 
 export type CompareState =
   | { kind: 'answering' }
-  | { kind: 'manual'; cost: number }
-  | { kind: 'noJudge'; why: 'off' | 'none' }
+  | { kind: 'manual' }
   | { kind: 'oneAnswer' }
-  | { kind: 'comparing'; ended: number; total: number }
-  | { kind: 'done'; partial: boolean; retry: boolean }
+  | { kind: 'comparing' }
+  | { kind: 'done' }
   | { kind: 'failed'; code: string; message?: string; action: 'retry' | 'start' | null }
   | { kind: 'notFound' }
   | { kind: 'lost'; action: 'start' | 'poll' };
 
-/** compareState is the Summary tab's state; null for a turn without one. */
+/**
+ * compareState is the state of a turn's comparison; null for a turn
+ * without one. A turn kept from before C6 that had none (two AIs, or a PC
+ * where no AI judged) shows each answer in full; one that waited for
+ * 비교하기 (manual) still offers it.
+ */
 export function compareState(turn: Turn): CompareState | null {
   const c = turn.compare;
-  if (!c) return null;
-  if (c.start === 'noJudgeOff') return { kind: 'noJudge', why: 'off' };
-  if (c.start === 'noJudgeNone') return { kind: 'noJudge', why: 'none' };
+  if (!c || c.start === 'noJudgeOff' || c.start === 'noJudgeNone') return null;
   if (!turn.run || turn.run.status === 'running') return { kind: 'answering' };
   const ready = readyParts(turn).length;
   if (c.error) {
@@ -364,28 +321,24 @@ export function compareState(turn: Turn): CompareState | null {
   }
   if (ready < 2) return { kind: 'oneAnswer' };
   // A direct comparison on its way to the PC (also one replacing a lost one).
-  if (c.key) return { kind: 'comparing', ended: 0, total: 0 };
-  if (!c.id) {
-    // No pair has a judge (two answers, each judge wrote one): Compare could only fail.
-    const cost = startCost(turn);
-    return cost > 0 ? { kind: 'manual', cost } : { kind: 'failed', code: 'no_judge', action: null };
-  }
+  if (c.key) return { kind: 'comparing' };
+  // No comparison from the run: 비교하기 makes one from the answers.
+  if (!c.id) return { kind: 'manual' };
   const s = c.snap;
-  if (!s || s.comparisonId !== c.id) return { kind: 'comparing', ended: 0, total: 0 };
-  if (judging(s)) return { kind: 'comparing', ...progress(s) };
+  if (!s || s.comparisonId !== c.id || comparing(s)) return { kind: 'comparing' };
   if (s.status === 'failed') {
     if (s.error?.code === 'need_two_answers') return { kind: 'oneAnswer' };
     return { kind: 'failed', code: s.error?.code ?? 'internal', message: s.error?.message, action: canRetry(s) ? 'retry' : null };
   }
-  return { kind: 'done', partial: judgedFailed(s), retry: canRetry(s) };
+  return { kind: 'done' };
 }
 
 // ---- Words ----
 
 /**
  * compareErrorText explains a comparison error: its compare words, else the
- * ask words, else the general ones, else the code. A judging AI's own
- * message follows on the next line.
+ * ask words, else the general ones, else the code. An AI's own message
+ * follows judge_failed on the next line.
  */
 export function compareErrorText(code: string, message?: string): string {
   const own = `compare.error.${code}`;
@@ -406,7 +359,7 @@ export function compareErrorText(code: string, message?: string): string {
 export type SynthState =
   | { kind: 'waiting' }
   | { kind: 'writing' }
-  | { kind: 'done'; text: string; agent: string; model?: string; ms?: number; judged: boolean; unnamed: number; topics?: DifferTopic[] }
+  | { kind: 'done'; text: string; agent: string; model?: string; ms?: number }
   | { kind: 'failed'; code: string; message?: string; retry: boolean }
   | { kind: 'off'; cost: 1 };
 
@@ -417,13 +370,13 @@ const snapOf = (turn: Turn) => {
 };
 
 /**
- * synthState is the combined answer the Summary tab shows; null shows none
- * and leaves the cards open as in S5: no snapshot of this comparison, a
- * snapshot without synthesis (an older agent), an error on the turn, a
- * Summary tab that is not comparing, done or failed, a status this app
- * does not know, or too few answers. Off offers 'Write a combined answer'
- * only once the comparison is final, on a PC that can write. A failed one
- * may be written again once the comparison is final (else the PC says 409).
+ * synthState is the combined answer the block shows; null shows none: no
+ * snapshot of this comparison, a snapshot without synthesis (an older
+ * agent), an error on the turn, a comparison that is not comparing, done
+ * or failed, a status this app does not know, or too few answers. Off
+ * offers 'Write a combined answer' only once the comparison is final, on
+ * a PC that can write. A failed one may be written again once the
+ * comparison is final (else the PC says 409).
  */
 export function synthState(turn: Turn, info: Info | null): SynthState | null {
   const s = snapOf(turn);
@@ -437,16 +390,9 @@ export function synthState(turn: Turn, info: Info | null): SynthState | null {
     case 'running':
       return { kind: 'writing' };
     case 'done': {
-      const out: SynthState = {
-        kind: 'done',
-        text: y.text ?? '',
-        agent: y.agent ?? '',
-        judged: !!y.judged,
-        unnamed: Math.max(0, y.unnamedSides ?? 0),
-      };
+      const out: SynthState = { kind: 'done', text: y.text ?? '', agent: y.agent ?? '' };
       if (y.model) out.model = y.model;
       if (y.ms !== undefined) out.ms = y.ms;
-      if (y.topics?.status === 'done' && Array.isArray(y.topics.items)) out.topics = y.topics.items;
       return out;
     }
     case 'failed': {
@@ -461,22 +407,6 @@ export function synthState(turn: Turn, info: Info | null): SynthState | null {
     default:
       return null;
   }
-}
-
-/** evidenceFolded: the cards fold under a combined answer that is coming or came. */
-export function evidenceFolded(st: SynthState | null): boolean {
-  return st?.kind === 'waiting' || st?.kind === 'writing' || st?.kind === 'done';
-}
-
-/**
- * synthOn: the writing AI's company gets the answers, so the footer says
- * so: the snapshot's synthesis is not off, or before a snapshot the turn
- * asks for one. A snapshot without synthesis (an older agent) writes none.
- */
-export function synthOn(turn: Turn): boolean {
-  const s = snapOf(turn);
-  if (s) return !!s.synthesis && s.synthesis.status !== 'off';
-  return synthAsked(turn);
 }
 
 /**
@@ -496,39 +426,6 @@ export function synthBy(o: { agent: string; model?: string; ms?: number }): stri
   const who = [agentName(o.agent), o.model ?? ''].filter(Boolean).join(' ');
   const time = o.ms !== undefined ? t('ask.seconds', { s: (o.ms / 1000).toFixed(1) }) : '';
   return [who, time].filter(Boolean).join(' · ');
-}
-
-/** synthLine is the combined answer's line in the Judged by sheet; null when there is none to show. */
-export function synthLine(s: Comparison | undefined): { what: string; text: string; failed?: boolean } | null {
-  const y: Synthesis | undefined = s?.synthesis;
-  if (!y || y.status === 'off') return null;
-  const what = y.agent ? t('compare.synth.line', { name: agentName(y.agent) }) : t('compare.synth.title');
-  switch (y.status) {
-    case 'waiting':
-      return { what, text: t('compare.req.queued') };
-    case 'running':
-      return { what, text: t('compare.synth.writing') };
-    case 'done': {
-      const time = y.ms !== undefined ? t('ask.seconds', { s: (y.ms / 1000).toFixed(1) }) : '';
-      return { what, text: [time, y.model ?? ''].filter(Boolean).join(' · ') };
-    }
-    case 'failed':
-      return { what, text: synthErrorText(y.error?.code || 'internal', y.error?.message), failed: true };
-    default:
-      return { what, text: y.status };
-  }
-}
-
-/** whyText: why an item needs a look, or null for a check this app does not know. */
-export function whyText(check: string): string | null {
-  const key = `compare.why.${check}`;
-  return has(key) ? t(key) : null;
-}
-
-/** labelText: a judgment label in words, or its code when unknown. */
-export function labelText(label: string): string {
-  const key = `compare.label.${label}`;
-  return has(key) ? t(key as MessageKey) : label;
 }
 
 // ---- Tabs and the lines above them ----
@@ -564,310 +461,4 @@ export function answeringLines(turn: Turn, now: number): { agent: string; s: num
       return !p || p.status === 'running';
     })
     .map((agent) => ({ agent: agentName(agent), s }));
-}
-
-// ---- Cards ----
-
-/** One unit to draw. answer is the answer id; agent is the AI's display name. */
-export type UnitView = { id: string; answer: string; agent: string; kind: string; text: string; context?: string; math: UnitMath[] };
-/** One side of an item: the AIs that say it (display names) and their units; pos is its place among the item's positions. */
-export type SideView = { agents: string[]; units: UnitView[]; numberSpans: NumberSpan[]; pos?: number };
-/**
- * missing: the AIs (display names) whose answers this item could not be
- * compared with. whole: the AIs (display names) of the sides that are a
- * whole answer, with no sentence (an opposite no evidence pointed into);
- * they are not drawn as sides but still named and counted.
- */
-export type ItemView = { key: string; kind: CardKind; sides: SideView[]; numbersDiffer: boolean; check: string[]; missing: string[]; whole: string[] };
-export type CardView = { kind: CardKind; items: ItemView[] };
-
-const isCardKind = (k: string): k is CardKind => (cardKinds as readonly string[]).includes(k);
-
-// Lookups over a snapshot's answers and units.
-function index(s: Comparison) {
-  const answers = new Map<string, CompareAnswer>();
-  const unitAnswer = new Map<string, CompareAnswer>();
-  const units = new Map<string, UnitView>();
-  for (const a of s.answers ?? []) {
-    answers.set(a.id, a);
-    for (const u of a.units ?? []) {
-      unitAnswer.set(u.id, a);
-      const v: UnitView = { id: u.id, answer: a.id, agent: agentName(a.agent), kind: u.kind, text: u.text ?? '', math: u.math ?? [] };
-      if (u.context) v.context = u.context;
-      units.set(u.id, v);
-    }
-  }
-  // An answer id as the AI's name; an id the snapshot does not know shows as it is.
-  const nameOf = (id: string) => {
-    const a = answers.get(id);
-    return a ? agentName(a.agent) : id;
-  };
-  return { answers, unitAnswer, units, nameOf };
-}
-
-/**
- * cards are the four cards in their fixed order, items in the snapshot's
- * order. What cannot be shown is left out: an unknown kind, a repeated key
- * (the first stays), units no answer has, sides none of whose units are
- * known, items without sides. A side with no units at all is a whole
- * answer: its AIs go to the item's whole (COR-1).
- */
-export function cards(s: Comparison): CardView[] {
-  const { units, nameOf } = index(s);
-  const byKind = new Map<CardKind, ItemView[]>(cardKinds.map((k) => [k, []]));
-  const seen = new Set<string>();
-  for (const it of s.items ?? []) {
-    if (!isCardKind(it.kind) || seen.has(it.key)) continue;
-    const sides: SideView[] = [];
-    const whole: string[] = [];
-    for (const [pos, p] of (it.positions ?? []).entries()) {
-      const us = (p.units ?? []).map((id) => units.get(id)).filter((u): u is UnitView => !!u);
-      if (us.length) sides.push({ agents: (p.agents ?? []).map(nameOf), units: us, numberSpans: p.numberSpans ?? [], pos });
-      else if (!(p.units ?? []).length) whole.push(...(p.agents ?? []).map(nameOf));
-    }
-    if (!sides.length) continue;
-    seen.add(it.key);
-    byKind.get(it.kind)?.push({
-      key: it.key,
-      kind: it.kind,
-      sides,
-      numbersDiffer: !!it.numbersDiffer,
-      check: it.check ?? [],
-      missing: (it.missing ?? []).map(nameOf),
-      whole,
-    });
-  }
-  return cardKinds.map((kind) => ({ kind, items: byKind.get(kind) ?? [] }));
-}
-
-/** chipCounts counts the items the cards show (not the snapshot's counts). */
-export function chipCounts(cs: CardView[]): Record<CardKind, number> {
-  const out = { differ: 0, check: 0, agree: 0, onlyOne: 0 };
-  for (const c of cs) out[c.kind] = c.items.length;
-  return out;
-}
-
-/**
- * shownCards: one card when a chip is picked; while judges still run only
- * Differ (the rest come when all ended); at the end Differ always (with its
- * no-differ sentence) and the others when they have items.
- */
-export function shownCards(cs: CardView[], o: { only: CardKind | null; ended: boolean }): CardView[] {
-  if (o.only) return cs.filter((c) => c.kind === o.only);
-  if (!o.ended) return cs.filter((c) => c.kind === 'differ');
-  return cs.filter((c) => c.kind === 'differ' || c.items.length > 0);
-}
-
-/**
- * usableJudgments leaves out judgments no one may use: of a unit or answer
- * the snapshot does not know, by the AI that wrote the unit or the answer
- * it was read against (저자 판정 버림), or of an answer against itself.
- */
-export function usableJudgments(s: Comparison): Judgment[] {
-  const { answers, unitAnswer } = index(s);
-  return (s.judgments ?? []).filter((j) => {
-    const from = unitAnswer.get(j.unit);
-    const against = answers.get(j.against);
-    if (!from || !against || from.id === against.id) return false;
-    return j.judge !== from.agent && j.judge !== against.agent;
-  });
-}
-
-// ---- Drawing a unit's text ----
-
-export type Piece = { text: string; bold?: boolean; math?: { tex: string; display: boolean } };
-type Span = { start: number; end: number };
-
-/**
- * pieces splits a unit's text for drawing: math only at the spans the PC
- * gave (the text is never scanned for "$", S1 decision 1), bold where the
- * number spans are. Spans that do not fit the text are dropped (math) or
- * clamped (bold), an end inside an emoji is moved out of it, and math that
- * overlaps earlier math is dropped. A math piece keeps its marks as text,
- * for when the TeX cannot be drawn.
- */
-export function pieces(text: string, math: UnitMath[] | undefined, bold: Span[]): Piece[] {
-  const n = text.length;
-  const inPair = (i: number) => i > 0 && i < n && high(text.charCodeAt(i - 1)) && low(text.charCodeAt(i));
-  const snap = (sp: Span): Span => ({ start: inPair(sp.start) ? sp.start - 1 : sp.start, end: inPair(sp.end) ? sp.end + 1 : sp.end });
-  const ints = (sp: Span) => Number.isInteger(sp.start) && Number.isInteger(sp.end);
-
-  const maths: Array<Span & { tex: { tex: string; display: boolean } | null }> = [];
-  const candidates = (math ?? [])
-    .filter((m) => ints(m) && m.start >= 0 && m.start < m.end && m.end <= n)
-    .map(snap)
-    .sort((a, b) => a.start - b.start);
-  for (const m of candidates) {
-    if (maths.length && m.start < maths[maths.length - 1].end) continue;
-    maths.push({ ...m, tex: texOfSpan(text.slice(m.start, m.end)) });
-  }
-
-  const clamp = (i: number) => Math.min(n, Math.max(0, i));
-  const bolds: Span[] = [];
-  for (const b of (bold ?? [])
-    .filter(ints)
-    .map((b) => snap({ start: clamp(b.start), end: clamp(b.end) }))
-    .filter((b) => b.start < b.end)
-    .sort((a, b) => a.start - b.start)) {
-    const last = bolds[bolds.length - 1];
-    if (last && b.start <= last.end) last.end = Math.max(last.end, b.end);
-    else bolds.push({ ...b });
-  }
-
-  const out: Piece[] = [];
-  const plain = (from: number, to: number) => {
-    let at = from;
-    for (const b of bolds) {
-      if (b.end <= at || b.start >= to) continue;
-      if (b.start > at) out.push({ text: text.slice(at, b.start) });
-      const end = Math.min(b.end, to);
-      out.push({ text: text.slice(Math.max(at, b.start), end), bold: true });
-      at = end;
-    }
-    if (at < to) out.push({ text: text.slice(at, to) });
-  };
-  let at = 0;
-  for (const m of maths) {
-    plain(at, m.start);
-    if (m.tex) {
-      const p: Piece = { text: text.slice(m.start, m.end), math: m.tex };
-      if (bolds.some((b) => b.start < m.end && b.end > m.start)) p.bold = true;
-      out.push(p);
-    } else {
-      plain(m.start, m.end);
-    }
-    at = m.end;
-  }
-  plain(at, n);
-  return out;
-}
-
-// ---- The sheets ----
-
-/** One judgment of a unit, in display names; label is the code (labelText gives the words). */
-export type JudgmentLine = { judge: string; from: string; against: string; unit: string; label: string; unsure: boolean };
-/** why: the known checks of the item; agents: the AIs (codes, as the tab keys) whose answers the item quotes. */
-export type PairView = { item: ItemView; lines: JudgmentLine[]; why: string[]; agents: string[] };
-
-/** pairView is what the sheet of one item shows; null when the item is not in the snapshot. */
-export function pairView(s: Comparison, key: string): PairView | null {
-  const item = cards(s)
-    .flatMap((c) => c.items)
-    .find((i) => i.key === key);
-  if (!item) return null;
-  const { unitAnswer, nameOf } = index(s);
-  const unitIds = new Set(item.sides.flatMap((sd) => sd.units.map((u) => u.id)));
-  const lines: JudgmentLine[] = usableJudgments(s)
-    .filter((j) => unitIds.has(j.unit))
-    .map((j) => ({
-      judge: agentName(j.judge),
-      from: nameOf(unitAnswer.get(j.unit)?.id ?? ''),
-      against: nameOf(j.against),
-      unit: j.unit,
-      label: j.label,
-      unsure: !!j.unsure,
-    }));
-  const why = item.check.filter((c) => (checkNames as readonly string[]).includes(c));
-  const agents: string[] = [];
-  for (const sd of item.sides)
-    for (const u of sd.units) {
-      const a = unitAnswer.get(u.id)?.agent;
-      if (a && !agents.includes(a)) agents.push(a);
-    }
-  return { item, lines, why, agents };
-}
-
-/** One judging request in display names; judge is '' for a pair no AI could judge (no_judge). */
-export type RequestLine = {
-  id: string;
-  judge: string;
-  from: string;
-  against: string;
-  judgeOnly: boolean;
-  model?: string;
-  status: string;
-  ms?: number;
-  error?: CodeError;
-};
-
-export function requestLines(s: Comparison): RequestLine[] {
-  const { nameOf } = index(s);
-  return (s.requests ?? []).map((r) => {
-    const line: RequestLine = {
-      id: r.id,
-      judge: r.judge ? agentName(r.judge) : '',
-      from: nameOf(r.from),
-      against: nameOf(r.against),
-      judgeOnly: !!r.judgeOnly,
-      status: r.status,
-    };
-    if (r.model) line.model = r.model;
-    if (r.ms !== undefined) line.ms = r.ms;
-    if (r.error) line.error = r.error;
-    return line;
-  });
-}
-
-const unique = (xs: string[]) => xs.filter((x, i) => xs.indexOf(x) === i);
-
-// inOrder sorts AI codes by their place in order (the turn's or the
-// snapshot's answers), those not in it last as they came, so names read in
-// the same order as the tabs.
-function inOrder(codes: string[], order: string[]): string[] {
-  const at = (x: string) => {
-    const i = order.indexOf(x);
-    return i < 0 ? order.length : i;
-  };
-  return codes.map((x, i) => ({ x, i })).sort((a, b) => at(a.x) - at(b.x) || a.i - b.i).map((v) => v.x);
-}
-
-/**
- * judgeModels: the judges (display names) and their models for the footer,
- * in the turn's order, from the snapshot's requests; before one, the turn's
- * judges with the models the PC reports.
- */
-export function judgeModels(turn: Turn, info: Info | null): { agent: string; model?: string }[] {
-  const c = turn.compare;
-  const s = c?.snap && c.snap.comparisonId === c.id ? c.snap : undefined;
-  if (s && (s.requests ?? []).length) {
-    const models = new Map<string, string | undefined>();
-    for (const r of s.requests ?? []) if (r.judge && !models.has(r.judge)) models.set(r.judge, r.model || undefined);
-    return inOrder([...models.keys()], turn.agents).map((j) => {
-      const model = models.get(j);
-      return model ? { agent: agentName(j), model } : { agent: agentName(j) };
-    });
-  }
-  return (c?.judges ?? []).map((agent) => {
-    const model = info?.agents.find((a) => a.agent === agent)?.judge?.model;
-    return model ? { agent: agentName(agent), model } : { agent: agentName(agent) };
-  });
-}
-
-/** judgedBy: who judged an answer's units (display names), in the snapshot's answer order. */
-export function judgedBy(s: Comparison | undefined, answerId: string): string[] {
-  if (!s) return [];
-  // A judge whose judging of this answer failed did not judge it.
-  const judges = unique((s.requests ?? []).filter((r) => r.from === answerId && r.judge && r.status !== 'failed').map((r) => r.judge));
-  return unique(inOrder(judges, (s.answers ?? []).map((a) => a.agent)).map(agentName));
-}
-
-/** failedWith: the AIs (display names) in pairs whose judging failed, in answer order. */
-export function failedWith(s: Comparison): string[] {
-  const ids = new Set<string>();
-  for (const r of s.requests ?? []) {
-    if (r.status !== 'failed' || !r.judge) continue;
-    ids.add(r.from);
-    ids.add(r.against);
-  }
-  const { nameOf } = index(s);
-  const ordered = (s.answers ?? []).map((a) => a.id).filter((id) => ids.has(id));
-  for (const id of ids) if (!ordered.includes(id)) ordered.push(id);
-  return unique(ordered.map(nameOf));
-}
-
-/** longAnswers: answers the PC compared only the start of, with how many units were judged. */
-export function longAnswers(s: Comparison): { agent: string; judged: number }[] {
-  return (s.answers ?? [])
-    .filter((a) => (a.notJudged ?? 0) > 0)
-    .map((a) => ({ agent: agentName(a.agent), judged: (a.units ?? []).filter((u) => u.judged).length }));
 }

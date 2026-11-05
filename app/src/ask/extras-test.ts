@@ -1,5 +1,5 @@
 // R-61 (#4): the agent's cases (agent/internal/judge/testdata/extras.json)
-// read the same here, so the phone folds exactly what judging left out.
+// read the same here, so the phone folds exactly what the combined answer leaves out.
 
 import { extrasStart, splitExtras } from './extras';
 

@@ -1,14 +1,13 @@
 // C6 (#19, 2026-11-05, the user's decision): no judging. The moderator AI
 // alone writes the combined answer from the answers, for two AIs as for
 // three; the screen shows that answer, the AIs' own answers and no cards,
-// 'AI 답이 다른 곳' or judging details (features.judging off, the fake
-// agent's noJudging as api.Options.NoJudging). Every user event is awaited
+// 'AI 답이 다른 곳' or judging details (C6d removed them; the fake agent
+// judges no more, as the agent since C6). Every user event is awaited
 // (R-07).
 
 import { act, userEvent } from '@testing-library/react-native';
 import { renderRouter, screen, waitFor } from 'expo-router/testing-library';
 
-import { features } from '@/ask/features';
 import { defaultAskPrefs, saveAskPrefs, type AskPrefs } from '@/ask/prefs';
 import { ConnectionStore } from '@/connections/store';
 import { setLang } from '@/i18n';
@@ -27,12 +26,9 @@ const written = () => screen.findByText('Fake combined answer.', {}, { timeout: 
 const later = () => act(() => jest.advanceTimersByTimeAsync(200));
 
 beforeEach(() => {
-  features.judging = false;
   agent = new FakeAgent();
   agent.enableAsk();
-  agent.enableJudge();
   agent.enableSynth();
-  agent.noJudging = true;
   agent.askReplies = { ...answers };
   globalThis.fetch = agent.fetch;
 });
@@ -113,7 +109,7 @@ test('asking one AI: no combined answer, its answer in full', async () => {
 });
 
 test('the combined answer switched off: compared as the answers come, written on a press', async () => {
-  const user = await open({ synth: false, compare: false });
+  const user = await open({ synth: false });
   await ask(user, 'Tell me about Seoul');
   const write = await screen.findByRole('button', { name: 'Write a combined answer' }, { timeout: 5000 });
   expect(agent.runRequests()[0].compare).toEqual({ earlier: [], judges: ['claude', 'codex', 'opencode'], synthesis: { off: true } });

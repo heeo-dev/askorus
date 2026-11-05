@@ -1,7 +1,7 @@
 // S5c: the 한 번에 screen ('/', where the app opens) against a pretend agent:
 // no PC, an older agent, the empty screen (what happens to a question,
 // recent questions, the AI picker and the tier), questions that are not
-// compared (a PC whose AIs do not judge, a follow-up to one AI), New
+// compared (a PC whose AIs do not write, a follow-up to one AI), New
 // question, the drawer's history and reopening, another PC, and Korean.
 // Every user event is awaited (R-07). The shell reads GET /v1/sessions
 // now and then, so those calls are never counted exactly.
@@ -88,7 +88,7 @@ test('an agent without asks says to update it; one with no AI that can answer sa
 test('the empty screen asks what to ask and says where a question goes', async () => {
   await open();
   expect(await screen.findByRole('header', { name: 'What would you like to ask?' })).toBeTruthy();
-  // This PC's AIs do not judge: the plain intro, nothing about companies.
+  // This PC's AIs do not write: the plain intro, nothing about companies.
   expect(screen.getByText('One question goes to every AI turned on, at once.')).toBeTruthy();
   expect(screen.queryByText(/company receives/)).toBeNull();
   expect(screen.queryByText('Recent questions')).toBeNull();
@@ -108,13 +108,14 @@ test('on a PC whose AIs do not write, no question is refined', async () => {
   expect(screen.queryByText('Sent without refining')).toBeNull();
 });
 
-test('on a PC whose AIs judge and write, the intro says the companies get the answers (R-34)', async () => {
-  agent.enableJudge();
+test('on a PC whose AIs write, the intro says the moderator writes and its company gets the answers (R-34)', async () => {
   agent.enableSynth();
   await open();
-  expect(await screen.findByText(/^One question goes to every AI turned on, at once\. Once the answers are in, the AIs judge/)).toBeTruthy();
-  expect(screen.getByText(/the judging AI's company receives the question and the other AIs' answers\.$/)).toBeTruthy();
-  expect(screen.getByText(/^Once the answers are compared, one AI writes a combined answer/)).toBeTruthy();
+  expect(await screen.findByText('One question goes to every AI turned on, at once.')).toBeTruthy();
+  expect(
+    screen.getByText('Once the answers are in, the moderator AI reads them all and writes a combined answer. Its company receives the question and every answer.'),
+  ).toBeTruthy();
+  expect(screen.queryByText(/judg/)).toBeNull();
 });
 
 test('the AI picker turns AIs on and off and picks a model; they and the tier go with the question and stay', async () => {
