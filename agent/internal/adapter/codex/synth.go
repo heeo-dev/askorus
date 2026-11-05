@@ -1,9 +1,9 @@
 package codex
 
 // Combined answers with codex (종합 답변, P2-3 S5b, spec part 20): the
-// judge's locked-down `codex exec` (judge.go) with two changes: the model
-// is the question's ask tier model, and --output-schema is the
-// combined-answer schema file, synth-schema-v1.json, next to the judge's.
+// locked-down one-off `codex exec` of the judging days (judge.go): the
+// model is the question's ask tier model, and --output-schema is the
+// combined-answer schema file, synth-schema-v1.json.
 // Read-only, the person's config left out, web search off, no session
 // file, the featuresOff features off, any tool item thrown away, the
 // prompt on stdin.
@@ -56,8 +56,8 @@ func synthArgs(model, effort, schema string) []string {
 }
 
 // checkSynthArgs accepts exactly what synthArgs makes from a valid model,
-// a codex effort and this adapter's synth schema file: never the judge
-// schema file, and no other option.
+// a codex effort and this adapter's synth or refine schema file: never
+// another schema file, and no other option.
 func (a *Adapter) checkSynthArgs(args []string) error {
 	if len(args) != 16+2*len(featuresOff) {
 		return fmt.Errorf("codex synth: %d arguments refused", len(args))
@@ -181,7 +181,7 @@ func (a *Adapter) Synthesize(ctx context.Context, req core.SynthRequest) (core.S
 	case err != nil:
 		return r, core.Fail(core.ErrCodeJudgeFailed, "codex could not run")
 	}
-	// The judge's parser reads the same events: a tool item is
+	// The one-off command's parser reads the events: a tool item is
 	// judge_used_tool, the last agent message is the output.
 	jr, err := parseJudgeOutput(res, model)
 	return core.SynthResult{Output: jr.Output, Model: jr.Model, InputTokens: jr.InputTokens, OutputTokens: jr.OutputTokens}, err

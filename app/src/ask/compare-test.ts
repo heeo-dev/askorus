@@ -1,5 +1,5 @@
 import { AgentError, CancelledError, NetworkError } from '@/api/client';
-import type { AdapterInfo, CardItem, Comparison, Info, JudgeRequest, Judgment, Run, RunPart, Synthesis } from '@/api/types';
+import type { AdapterInfo, Comparison, Info, Run, RunPart, Synthesis } from '@/api/types';
 import { setLang } from '@/i18n';
 
 import {
@@ -7,56 +7,33 @@ import {
   answeringLines,
   canRetry,
   canSynthesize,
-  cards,
-  chipCounts,
   compareErrorText,
-  compareStart,
+  compares,
   compareState,
+  comparing,
   cutUtf8,
   directRequest,
   earlierFor,
   errorCode,
-  evidenceFolded,
-  failedWith,
   isFinal,
-  judgedBy,
-  judging,
-  judgeModels,
-  judgesOf,
-  labelText,
-  longAnswers,
-  pairView,
-  pieces,
   polling,
-  progress,
-  requestLines,
-  shownCards,
-  startCost,
   synthBy,
   synthErrorText,
-  synthLine,
-  synthOn,
   synthRequest,
   synthState,
   tabs,
-  usableJudgments,
   utf8Bytes,
-  whyText,
   withError,
   withRun,
   withSnap,
   writerFor,
+  writersOf,
 } from './compare';
 import type { Turn, TurnCompare } from './thread';
 
 // ---- Fixtures ----
 
-const ai = (agent: string, family: string, caps = ['ask', 'judge'], available = true): AdapterInfo => ({
-  agent,
-  available,
-  capabilities: caps,
-  ...(caps.includes('judge') ? { judge: { model: `${agent}-quick`, family } } : {}),
-});
+const ai = (agent: string, caps = ['ask', 'synthesize'], available = true): AdapterInfo => ({ agent, available, capabilities: caps });
 
 const infoOf = (agents: AdapterInfo[]): Info => ({
   name: 'asksemble-agent',
@@ -69,7 +46,9 @@ const infoOf = (agents: AdapterInfo[]): Info => ({
   reserved: [],
 });
 
-const three = infoOf([ai('claude', 'anthropic'), ai('codex', 'openai'), ai('opencode', 'deepseek')]);
+const three = infoOf([ai('claude'), ai('codex'), ai('opencode')]);
+// An S5 agent or older: its AIs answer but do not write.
+const askOnly = infoOf([ai('claude', ['ask']), ai('codex', ['ask']), ai('opencode', ['ask'])]);
 const all = ['claude', 'codex', 'opencode'];
 
 const done = (agent: string, answer: string, model: string | null = `${agent}-standard`): RunPart =>
@@ -97,263 +76,18 @@ const answers3 = [
 ];
 const doneTurn = (compare: Partial<TurnCompare> = {}, parts = answers3) => turnOf({ run: runOf('done', parts), compare: tc(compare) });
 
-const unit = (id: string, n: number, text: string, over: object = {}) => ({ id, n, kind: 'sentence', text, start: 0, end: text.length, judged: true, ...over });
-const req = (id: string, from: string, against: string, judge: string, over: Partial<JudgeRequest> = {}): JudgeRequest => ({
-  id,
-  from,
-  against,
-  judge,
-  judgeOnly: false,
-  model: judge ? `${judge}-quick` : undefined,
-  status: 'done',
-  attempt: 1,
-  ...over,
-});
-const judgment = (unitId: string, against: string, judge: string, label = 'same', over: Partial<Judgment> = {}): Judgment => ({
-  unit: unitId,
-  against,
-  request: 'r1',
-  judge,
-  core: true,
-  label,
-  evidence: [],
-  unsure: false,
-  flags: [],
-  ...over,
-});
-const counts = { differ: 0, check: 0, agree: 0, onlyOne: 0, notCompared: 0, notJudged: 0 };
-
-const differItem: CardItem = {
-  key: 'd:claude:2~codex:2',
-  kind: 'differ',
-  positions: [
-    { agents: ['claude'], units: ['claude:2'], numberSpans: [{ unit: 'claude:2', start: 7, end: 10 }] },
-    {
-      agents: ['codex', 'opencode'],
-      units: ['codex:2', 'opencode:2'],
-      numberSpans: [
-        { unit: 'codex:2', start: 7, end: 10 },
-        { unit: 'opencode:2', start: 7, end: 10 },
-      ],
-    },
-  ],
-  numbersDiffer: true,
-  check: [],
-  missing: [],
-};
-
-// The snapshot's items come in an order the cards must not follow, with an
-// unknown kind, a unit no answer has and a repeated key.
+// A snapshot as the agent sends it since C6: done at once, no judging.
 function snapshot(over: Partial<Comparison> = {}): Comparison {
-  return {
-    comparisonId: 'c1',
-    status: 'done',
-    source: 'run',
-    runId: 'r1',
-    engine: 'pc',
-    answers: [
-      {
-        id: 'claude',
-        agent: 'claude',
-        via: 'pc',
-        family: 'anthropic',
-        model: 'claude-standard',
-        status: 'ready',
-        notJudged: 0,
-        units: [unit('claude:1', 1, 'Seoul is the capital.'), unit('claude:2', 2, 'It has 9.4 million people.'), unit('claude:3', 3, 'Try the palace.')],
-      },
-      {
-        id: 'codex',
-        agent: 'codex',
-        via: 'pc',
-        family: 'openai',
-        status: 'ready',
-        notJudged: 0,
-        units: [unit('codex:1', 1, 'Seoul is the capital.'), unit('codex:2', 2, 'It has 9.7 million people.')],
-      },
-      {
-        id: 'opencode',
-        agent: 'opencode',
-        via: 'pc',
-        family: 'deepseek',
-        status: 'ready',
-        notJudged: 0,
-        units: [
-          unit('opencode:1', 1, 'Seoul is the capital.'),
-          unit('opencode:2', 2, 'It has 9.7 million people.'),
-          unit('opencode:3', 3, 'Eat at the market.'),
-        ],
-      },
-    ],
-    requests: [
-      req('r1', 'claude', 'codex', 'opencode'),
-      req('r2', 'codex', 'claude', 'opencode'),
-      req('r3', 'claude', 'opencode', 'codex'),
-      req('r4', 'opencode', 'claude', 'codex'),
-      req('r5', 'codex', 'opencode', 'claude'),
-      req('r6', 'opencode', 'codex', 'claude'),
-    ],
-    judgments: [
-      judgment('claude:2', 'codex', 'opencode', 'opposite', { evidence: ['codex:2'] }),
-      judgment('codex:2', 'claude', 'opencode', 'opposite', { evidence: ['claude:2'] }),
-      judgment('claude:1', 'codex', 'opencode'),
-    ],
-    items: [
-      { key: 'o:claude:3', kind: 'onlyOne', positions: [{ agents: ['claude'], units: ['claude:3'] }], check: [], missing: [] },
-      {
-        key: 'a:claude:1',
-        kind: 'agree',
-        positions: [{ agents: ['claude', 'codex', 'opencode'], units: ['claude:1', 'codex:1', 'opencode:1'] }],
-        check: [],
-        missing: [],
-      },
-      { key: 'x:1', kind: 'brandNew', positions: [{ agents: ['claude'], units: ['claude:1'] }], check: [], missing: [] },
-      differItem,
-      { key: 'c:claude:9', kind: 'check', positions: [{ agents: ['claude'], units: ['claude:9'] }], check: ['unsure'], missing: [] },
-      { key: 'a:claude:1', kind: 'agree', positions: [{ agents: ['codex'], units: ['codex:1'] }], check: [], missing: [] },
-      { key: 'o:opencode:3', kind: 'onlyOne', positions: [{ agents: ['opencode'], units: ['opencode:3'] }], check: [], missing: [] },
-    ],
-    counts: { ...counts, differ: 1, agree: 1, onlyOne: 2 },
-    ...over,
-  };
+  return { comparisonId: 'c1', status: 'done', source: 'run', runId: 'r1', engine: 'pc', ...over };
 }
-
-const running = (over: Partial<Comparison> = {}) => snapshot({ status: 'running', pollAfterMs: 1000, ...over });
-
-// ---- Cards ----
-
-test('cards keep their order whatever the snapshot order, and items keep the snapshot order', () => {
-  const cs = cards(snapshot());
-  expect(cs.map((c) => c.kind)).toEqual(['differ', 'check', 'agree', 'onlyOne']);
-  expect(cs.map((c) => c.items.map((i) => i.key))).toEqual([['d:claude:2~codex:2'], [], ['a:claude:1'], ['o:claude:3', 'o:opencode:3']]);
-  const differ = cs[0].items[0];
-  expect(differ.sides.map((s) => s.agents)).toEqual([['Claude'], ['Codex', 'OpenCode']]);
-  expect(differ.sides[0].units[0]).toEqual({
-    id: 'claude:2',
-    answer: 'claude',
-    agent: 'Claude',
-    kind: 'sentence',
-    text: 'It has 9.4 million people.',
-    math: [],
-  });
-  expect(differ.sides[0].numberSpans).toEqual([{ unit: 'claude:2', start: 7, end: 10 }]);
-  expect(differ.numbersDiffer).toBe(true);
-  // A snapshot with nothing in it still has the four cards.
-  expect(cards(snapshot({ items: [], answers: [] })).map((c) => c.items.length)).toEqual([0, 0, 0, 0]);
-});
-
-test('what cannot be shown is left out: unknown kinds, unknown units, empty sides, repeated keys', () => {
-  const s = snapshot({
-    items: [
-      { key: 'k1', kind: 'agree', positions: [{ agents: ['claude', 'ghost'], units: ['claude:1', 'ghost:1'] }, { agents: ['x'], units: ['nope:1'] }], check: [], missing: ['ghost'] },
-      { key: 'k1', kind: 'agree', positions: [{ agents: ['codex'], units: ['codex:1'] }], check: [], missing: [] },
-      { key: 'k2', kind: 'onlyOne', positions: [{ agents: ['codex'], units: ['nope:2'] }], check: [], missing: [] },
-      { key: 'k3', kind: 'check', positions: [], check: [], missing: [] },
-      { key: 'k4', kind: 'tomorrow', positions: [{ agents: ['codex'], units: ['codex:1'] }], check: [], missing: [] },
-      // Missing arrays (a sloppy snapshot) are read as empty.
-      { key: 'k5', kind: 'onlyOne', positions: [{ agents: ['codex'], units: ['codex:2'] }] } as unknown as CardItem,
-    ],
-  });
-  const cs = cards(s);
-  const agree = cs.find((c) => c.kind === 'agree')?.items ?? [];
-  expect(agree.map((i) => i.key)).toEqual(['k1']);
-  expect(agree[0].sides).toHaveLength(1);
-  expect(agree[0].sides[0].units.map((u) => u.id)).toEqual(['claude:1']);
-  // An answer id the snapshot does not know shows as it is.
-  expect(agree[0].sides[0].agents).toEqual(['Claude', 'ghost']);
-  expect(agree[0].missing).toEqual(['ghost']);
-  expect(cs.find((c) => c.kind === 'onlyOne')?.items.map((i) => i.key)).toEqual(['k5']);
-  expect(cs.find((c) => c.kind === 'check')?.items).toEqual([]);
-  expect(cs.flatMap((c) => c.items).find((i) => i.key === 'k4')).toBeUndefined();
-});
-
-test('chips count the shown items, and a chip shows one card', () => {
-  const cs = cards(snapshot());
-  // The snapshot's own counts are not used (the check item there cannot be shown).
-  expect(chipCounts(cs)).toEqual({ differ: 1, check: 0, agree: 1, onlyOne: 2 });
-  expect(shownCards(cs, { only: 'agree', ended: true }).map((c) => c.kind)).toEqual(['agree']);
-  expect(shownCards(cs, { only: 'check', ended: true }).map((c) => c.kind)).toEqual(['check']);
-  expect(shownCards(cs, { only: 'onlyOne', ended: false }).map((c) => c.kind)).toEqual(['onlyOne']);
-});
-
-test('while judges run only Differ shows; at the end empty cards hide but Differ stays', () => {
-  const cs = cards(snapshot());
-  expect(shownCards(cs, { only: null, ended: false }).map((c) => c.kind)).toEqual(['differ']);
-  expect(shownCards(cs, { only: null, ended: true }).map((c) => c.kind)).toEqual(['differ', 'agree', 'onlyOne']);
-  const none = cards(snapshot({ items: [] }));
-  expect(shownCards(none, { only: null, ended: true }).map((c) => c.kind)).toEqual(['differ']);
-  expect(shownCards(none, { only: null, ended: false }).map((c) => c.kind)).toEqual(['differ']);
-});
-
-test('item keys pass through unchanged from a running to a done snapshot', () => {
-  const early = running({ items: [differItem], requests: snapshot().requests.map((r, i) => (i < 3 ? r : { ...r, status: 'queued' })) });
-  const late = snapshot();
-  const keyOf = (s: Comparison) => cards(s)[0].items[0].key;
-  expect(keyOf(early)).toBe('d:claude:2~codex:2');
-  expect(keyOf(late)).toBe(keyOf(early));
-  expect(pairView(early, keyOf(early))?.item.sides[0].units[0].text).toBe(pairView(late, keyOf(early))?.item.sides[0].units[0].text);
-});
-
-test('judgments by the author of either side, of an answer against itself or of unknown ids are dropped', () => {
-  const keep1 = judgment('claude:2', 'codex', 'opencode', 'opposite');
-  const keep2 = judgment('codex:2', 'claude', 'opencode', 'opposite');
-  const s = snapshot({
-    judgments: [
-      keep1,
-      judgment('claude:2', 'codex', 'claude'), // wrote the unit
-      judgment('claude:2', 'codex', 'codex'), // wrote the answer it was read against
-      judgment('claude:2', 'claude', 'opencode'), // the same answer
-      judgment('nope:1', 'codex', 'opencode'),
-      judgment('claude:2', 'nobody', 'opencode'),
-      keep2,
-    ],
-  });
-  expect(usableJudgments(s)).toEqual([keep1, keep2]);
-  expect(usableJudgments(snapshot({ judgments: undefined as unknown as Judgment[] }))).toEqual([]);
-});
-
-test('the pair sheet: both sides, judgments per direction in names, known checks, the AIs to open', () => {
-  const s = snapshot();
-  const pv = pairView(s, 'd:claude:2~codex:2');
-  expect(pv?.item.kind).toBe('differ');
-  expect(pv?.lines).toEqual([
-    { judge: 'OpenCode', from: 'Claude', against: 'Codex', unit: 'claude:2', label: 'opposite', unsure: false },
-    { judge: 'OpenCode', from: 'Codex', against: 'Claude', unit: 'codex:2', label: 'opposite', unsure: false },
-  ]);
-  expect(pv?.agents).toEqual(['claude', 'codex', 'opencode']);
-  expect(pv?.why).toEqual([]);
-  expect(pairView(s, 'no-such-key')).toBeNull();
-  expect(pairView(s, 'x:1')).toBeNull(); // an unknown kind is not shown, so it has no sheet
-
-  const checked = snapshot({
-    items: [{ key: 'c:claude:2', kind: 'check', positions: [{ agents: ['claude'], units: ['claude:2'] }], check: ['brandNewCheck', 'unsure', 'noEvidence'], missing: [] }],
-    judgments: [judgment('claude:2', 'codex', 'opencode', 'tomorrow', { unsure: true })],
-  });
-  const cv = pairView(checked, 'c:claude:2');
-  expect(cv?.why).toEqual(['unsure', 'noEvidence']);
-  expect(cv?.lines).toEqual([{ judge: 'OpenCode', from: 'Claude', against: 'Codex', unit: 'claude:2', label: 'tomorrow', unsure: true }]);
-  expect(cv?.agents).toEqual(['claude']);
-});
-
-test('words for checks and labels; unknown ones are safe', () => {
-  expect(whyText('unsure')).toBe('The judging AI was not sure.');
-  expect(whyText('numbersAbsent')).toBe('Judged not mentioned, but the other answer has other numbers.');
-  expect(whyText('brandNewCheck')).toBeNull();
-  expect(labelText('same')).toBe('Same');
-  expect(labelText('opposite')).toBe('Differs');
-  expect(labelText('absent')).toBe('Not mentioned');
-  expect(labelText('tomorrow')).toBe('tomorrow');
-});
 
 // ---- State ----
 
-test('compareState: no Summary tab, no judge, still answering', () => {
+test('compareState: no comparison, one kept from before C6 that had none, still answering', () => {
   expect(compareState(turnOf())).toBeNull();
-  expect(compareState(turnOf({ compare: tc({ start: 'noJudgeOff', judges: [] }) }))).toEqual({ kind: 'noJudge', why: 'off' });
-  expect(compareState(turnOf({ compare: tc({ start: 'noJudgeNone', judges: [] }), run: runOf('done', answers3) }))).toEqual({
-    kind: 'noJudge',
-    why: 'none',
-  });
+  // Two AIs before C6: no comparison, each answer in full.
+  expect(compareState(turnOf({ compare: tc({ start: 'noJudgeOff', judges: [] }) }))).toBeNull();
+  expect(compareState(turnOf({ compare: tc({ start: 'noJudgeNone', judges: [] }), run: runOf('done', answers3) }))).toBeNull();
   expect(compareState(turnOf({ compare: tc() }))).toEqual({ kind: 'answering' });
   expect(compareState(turnOf({ compare: tc({ id: 'c1' }), run: runOf('running', answers3.slice(0, 1)) }))).toEqual({ kind: 'answering' });
 });
@@ -374,137 +108,87 @@ test('compareState: errors kept on the turn', () => {
 test('compareState: before the comparison', () => {
   const one = [answers3[0], { agent: 'codex', status: 'failed', error: { code: 'ask_timeout' } }, done('opencode', '   ')];
   expect(compareState(doneTurn({}, one))).toEqual({ kind: 'oneAnswer' });
-  expect(compareState(doneTurn({ key: 'k' }))).toEqual({ kind: 'comparing', ended: 0, total: 0 });
+  expect(compareState(doneTurn({ key: 'k' }))).toEqual({ kind: 'comparing' });
   // 다시 비교 after a 404: the new POST is on its way, the old id still set.
-  expect(compareState(doneTurn({ key: 'k', id: 'old' }))).toEqual({ kind: 'comparing', ended: 0, total: 0 });
-  expect(compareState(doneTurn({ start: 'manual' }))).toEqual({ kind: 'manual', cost: 6 });
-  // auto, but the agent made no comparison: the person can still start one.
-  expect(compareState(doneTurn())).toEqual({ kind: 'manual', cost: 6 });
-  expect(compareState(doneTurn({ id: 'c1' }))).toEqual({ kind: 'comparing', ended: 0, total: 0 });
-  expect(compareState(doneTurn({ id: 'c2', snap: snapshot() }))).toEqual({ kind: 'comparing', ended: 0, total: 0 });
+  expect(compareState(doneTurn({ key: 'k', id: 'old' }))).toEqual({ kind: 'comparing' });
+  // Compare by hand, kept from before C6, or a PC that made none: 비교하기 makes one.
+  expect(compareState(doneTurn({ start: 'manual' }))).toEqual({ kind: 'manual' });
+  expect(compareState(doneTurn())).toEqual({ kind: 'manual' });
+  expect(compareState(doneTurn({ id: 'c1' }))).toEqual({ kind: 'comparing' });
+  expect(compareState(doneTurn({ id: 'c2', snap: snapshot() }))).toEqual({ kind: 'comparing' });
 });
 
-test('compareState: comparing, with no_judge records left out of the total', () => {
-  const rs = [
-    req('r1', 'claude', 'codex', 'opencode'),
-    req('r2', 'codex', 'claude', 'opencode', { status: 'failed', error: { code: 'judge_timeout' } }),
-    req('r3', 'claude', 'opencode', 'codex', { status: 'running' }),
-    req('r4', 'opencode', 'claude', 'codex', { status: 'queued' }),
-    req('r5', 'codex', 'opencode', '', { status: 'failed', error: { code: 'no_judge' } }),
-  ];
-  const s = running({ requests: rs });
-  expect(progress(s)).toEqual({ ended: 2, total: 4 });
-  expect(compareState(doneTurn({ id: 'c1', snap: s }))).toEqual({ kind: 'comparing', ended: 2, total: 4 });
-  expect(compareState(doneTurn({ id: 'c1', snap: snapshot({ status: 'waiting', pollAfterMs: 1000, requests: [] }) }))).toEqual({
-    kind: 'comparing',
-    ended: 0,
-    total: 0,
-  });
+test('compareState: comparing while the PC makes it, then done or failed', () => {
+  expect(compareState(doneTurn({ id: 'c1', snap: snapshot({ status: 'waiting', pollAfterMs: 1000 }) }))).toEqual({ kind: 'comparing' });
+  expect(compareState(doneTurn({ id: 'c1', snap: snapshot() }))).toEqual({ kind: 'done' });
+  // A turn kept from before C6 that was compared by hand shows the same way.
+  expect(compareState(doneTurn({ start: 'manual', id: 'c1', snap: snapshot() }))).toEqual({ kind: 'done' });
+  const stopped = snapshot({ status: 'failed', error: { code: 'cancelled', message: 'cancelled' } });
+  expect(compareState(doneTurn({ id: 'c1', snap: stopped }))).toEqual({ kind: 'failed', code: 'cancelled', message: 'cancelled', action: 'retry' });
+  const two = snapshot({ status: 'failed', error: { code: 'need_two_answers' } });
+  expect(compareState(doneTurn({ id: 'c1', snap: two }))).toEqual({ kind: 'oneAnswer' });
+  const noJudge = snapshot({ status: 'failed', error: { code: 'no_judge' } });
+  expect(compareState(doneTurn({ id: 'c1', snap: noJudge }))).toEqual({ kind: 'failed', code: 'no_judge', message: undefined, action: null });
+  const bare = snapshot({ status: 'failed' });
+  expect(compareState(doneTurn({ id: 'c1', snap: bare }))).toEqual({ kind: 'failed', code: 'internal', message: undefined, action: 'retry' });
 });
 
 test('compareState: an unknown status polls while the PC asks to, and is final otherwise', () => {
   const later = snapshot({ status: 'paused', pollAfterMs: 500 });
   expect(polling(later)).toBe(true);
-  expect(compareState(doneTurn({ id: 'c1', snap: later }))).toEqual({ kind: 'comparing', ended: 6, total: 6 });
+  expect(compareState(doneTurn({ id: 'c1', snap: later }))).toEqual({ kind: 'comparing' });
   const archived = snapshot({ status: 'archived' });
   expect(isFinal(archived)).toBe(true);
-  expect(compareState(doneTurn({ id: 'c1', snap: archived }))).toEqual({ kind: 'done', partial: false, retry: false });
+  expect(compareState(doneTurn({ id: 'c1', snap: archived }))).toEqual({ kind: 'done' });
 });
 
-test('compareState: done, partial and failed', () => {
-  expect(compareState(doneTurn({ id: 'c1', snap: snapshot() }))).toEqual({ kind: 'done', partial: false, retry: false });
-  const someFailed = snapshot({
-    requests: [
-      ...snapshot().requests.slice(0, 4),
-      req('r5', 'codex', 'opencode', 'claude', { status: 'failed', error: { code: 'judge_failed', message: 'usage limit reached' } }),
-      req('r6', 'opencode', 'codex', 'claude', { status: 'failed', error: { code: 'judge_failed', message: 'usage limit reached' } }),
-    ],
-  });
-  expect(compareState(doneTurn({ id: 'c1', snap: someFailed }))).toEqual({ kind: 'done', partial: true, retry: true });
-  // A pair no AI could judge is not a failed judgment.
-  const noJudgeRecord = snapshot({ requests: [...snapshot().requests, req('r7', 'codex', 'opencode', '', { status: 'failed', error: { code: 'no_judge' } })] });
-  expect(compareState(doneTurn({ id: 'c1', snap: noJudgeRecord }))).toEqual({ kind: 'done', partial: false, retry: false });
-
-  const allFailed = snapshot({
-    status: 'failed',
-    error: { code: 'judge_failed', message: 'usage limit reached' },
-    requests: snapshot().requests.map((r) => ({ ...r, status: 'failed', error: { code: 'judge_failed', message: 'usage limit reached' } })),
-    items: [],
-  });
-  expect(compareState(doneTurn({ id: 'c1', snap: allFailed }))).toEqual({
-    kind: 'failed',
-    code: 'judge_failed',
-    message: 'usage limit reached',
-    action: 'retry',
-  });
-  const two = snapshot({ status: 'failed', error: { code: 'need_two_answers' }, requests: [] });
-  expect(compareState(doneTurn({ id: 'c1', snap: two }))).toEqual({ kind: 'oneAnswer' });
-  const noJudge = snapshot({ status: 'failed', error: { code: 'no_judge' }, requests: [req('r1', 'claude', 'codex', '', { status: 'failed' })] });
-  expect(compareState(doneTurn({ id: 'c1', snap: noJudge }))).toEqual({ kind: 'failed', code: 'no_judge', message: undefined, action: null });
-  const bare = snapshot({ status: 'failed', requests: [] });
-  expect(compareState(doneTurn({ id: 'c1', snap: bare }))).toEqual({ kind: 'failed', code: 'internal', message: undefined, action: 'retry' });
-});
-
-test('canRetry: only final comparisons with failed judgments or a failure a retry may fix', () => {
+test('canRetry: only a final comparison that failed for a reason a retry may fix', () => {
   expect(canRetry(undefined)).toBe(false);
   expect(canRetry(snapshot())).toBe(false);
-  const failedOne = snapshot({ requests: [req('r1', 'claude', 'codex', 'opencode', { status: 'failed' })] });
-  expect(canRetry(failedOne)).toBe(true);
-  expect(canRetry({ ...failedOne, status: 'running', pollAfterMs: 1000 })).toBe(false);
-  expect(canRetry(snapshot({ requests: [req('r1', 'claude', 'codex', '', { status: 'failed' })] }))).toBe(false);
-  expect(canRetry(snapshot({ status: 'failed', error: { code: 'cancelled' }, requests: [] }))).toBe(true);
-  expect(canRetry(snapshot({ status: 'failed', error: { code: 'no_judge' }, requests: [] }))).toBe(false);
-  expect(canRetry(snapshot({ status: 'failed', error: { code: 'need_two_answers' }, requests: [] }))).toBe(false);
+  expect(canRetry(snapshot({ status: 'failed', error: { code: 'cancelled' } }))).toBe(true);
+  expect(canRetry(snapshot({ status: 'failed', error: { code: 'cancelled' }, pollAfterMs: 1000 }))).toBe(false);
+  expect(canRetry(snapshot({ status: 'failed', error: { code: 'no_judge' } }))).toBe(false);
+  expect(canRetry(snapshot({ status: 'failed', error: { code: 'need_two_answers' } }))).toBe(false);
 });
 
 test('compareErrorText looks in compare, then ask, then general words, then the code', () => {
-  expect(compareErrorText('judge_timeout')).toBe('The judging did not finish in time.');
-  expect(compareErrorText('judge_timeout', 'ignored')).toBe('The judging did not finish in time.');
+  expect(compareErrorText('cancelled')).toBe('The comparison was stopped.');
+  expect(compareErrorText('cancelled', 'ignored')).toBe('The comparison was stopped.');
   expect(compareErrorText('ask_folder_unavailable')).toBe('The PC could not make its ask folder.');
   expect(compareErrorText('workspace_not_trusted', 'C:/ask')).toContain('C:/ask');
   expect(compareErrorText('unauthorized')).toBe('This phone is no longer paired with the PC. Pair again.');
   expect(compareErrorText('network')).toContain('Tailscale');
   expect(compareErrorText('brand_new')).toBe('Something went wrong (brand_new).');
+  // A judging error kept from before C6 still reads, with the AI's words.
   expect(compareErrorText('judge_failed', 'usage limit reached')).toBe('The judging AI reported an error.\nusage limit reached');
   expect(compareErrorText('judge_failed')).toBe('The judging AI reported an error.');
   // Codes with words in both compare and ask take the compare words (S5 review, R-34).
   expect(compareErrorText('internal')).toBe('Something went wrong on the PC while comparing.');
-  expect(compareErrorText('bad_model')).toBe("The judge model could not be used: unknown, or it answered with another company's model.");
-  expect(compareErrorText('agent_unavailable')).toBe('That judging AI can no longer judge on this PC.');
 });
 
-// ---- Who judges, and what goes ----
+// ---- Who writes, and what goes ----
 
-test('judgesOf: the asked AIs that can judge, in asked order', () => {
-  const info = infoOf([ai('claude', 'anthropic'), ai('codex', 'openai', ['ask']), ai('opencode', 'deepseek', ['ask', 'judge'], false), ai('gemini', 'google')]);
-  expect(judgesOf(info, ['gemini', 'codex', 'claude', 'opencode', 'nobody'])).toEqual(['gemini', 'claude']);
-  expect(judgesOf(three, ['opencode', 'claude'])).toEqual(['opencode', 'claude']);
+test('writersOf: the asked AIs that can write, in asked order', () => {
+  const info = infoOf([ai('claude'), ai('codex', ['ask']), ai('opencode', ['ask', 'synthesize'], false), ai('gemini')]);
+  expect(writersOf(info, ['gemini', 'codex', 'claude', 'opencode', 'nobody'])).toEqual(['gemini', 'claude']);
+  expect(writersOf(three, ['opencode', 'claude'])).toEqual(['opencode', 'claude']);
+  expect(writersOf(askOnly, all)).toEqual([]);
 });
 
-test('compareStart', () => {
-  expect(compareStart({ info: three, asked: all, to: 'all', auto: true })).toBe('auto');
-  expect(compareStart({ info: three, asked: all, to: 'all', auto: false })).toBe('manual');
-  // Two asked while a third AI that could judge is turned off.
-  expect(compareStart({ info: three, asked: ['claude', 'codex'], to: 'all', auto: true })).toBe('noJudgeOff');
-  // Two asked and no other AI to judge.
-  const twoOnly = infoOf([ai('claude', 'anthropic'), ai('codex', 'openai')]);
-  expect(compareStart({ info: twoOnly, asked: ['claude', 'codex'], to: 'all', auto: true })).toBe('noJudgeNone');
-  const thirdDown = infoOf([ai('claude', 'anthropic'), ai('codex', 'openai'), ai('opencode', 'deepseek', ['ask', 'judge'], false)]);
-  expect(compareStart({ info: thirdDown, asked: ['claude', 'codex'], to: 'all', auto: true })).toBe('noJudgeNone');
-  const judgeOnly = infoOf([ai('claude', 'anthropic'), ai('codex', 'openai'), ai('opencode', 'deepseek', ['judge'])]);
-  expect(compareStart({ info: judgeOnly, asked: ['claude', 'codex'], to: 'all', auto: true })).toBe('noJudgeNone');
-  expect(compareStart({ info: three, asked: ['claude'], to: 'all', auto: true })).toBeNull();
-  expect(compareStart({ info: three, asked: ['codex'], to: { agent: 'codex' }, auto: true })).toBeNull();
-  // An older agent: no AI judges, so the turn stays as in P2-2.
-  const old = infoOf([ai('claude', 'anthropic', ['ask']), ai('codex', 'openai', ['ask']), ai('opencode', 'deepseek', ['ask'])]);
-  expect(compareStart({ info: old, asked: all, to: 'all', auto: true })).toBeNull();
-  expect(compareStart({ info: old, asked: ['claude', 'codex'], to: 'all', auto: true })).toBeNull();
-  // Three asked, none of them judges (a fourth AI would).
-  const elsewhere = infoOf([ai('claude', 'anthropic', ['ask']), ai('codex', 'openai', ['ask']), ai('opencode', 'deepseek', ['ask']), ai('gemini', 'google')]);
-  expect(compareStart({ info: elsewhere, asked: all, to: 'all', auto: true })).toBeNull();
+test('compares: two or more AIs asked together on a PC whose AIs can write', () => {
+  expect(compares({ info: three, asked: all, to: 'all' })).toBe(true);
+  // Two AIs are compared too (C6, #19).
+  expect(compares({ info: three, asked: ['claude', 'codex'], to: 'all' })).toBe(true);
+  // Any AI of the PC that writes will do: the PC picks the writer among the asked.
+  expect(compares({ info: infoOf([ai('claude', ['ask']), ai('codex', ['ask']), ai('opencode')]), asked: ['claude', 'codex'], to: 'all' })).toBe(true);
+  expect(compares({ info: three, asked: ['claude'], to: 'all' })).toBe(false);
+  expect(compares({ info: three, asked: ['codex'], to: { agent: 'codex' } })).toBe(false);
+  // An older agent: no AI writes, so the turn stays as in P2-2.
+  expect(compares({ info: askOnly, asked: all, to: 'all' })).toBe(false);
+  expect(compares({ info: infoOf([ai('claude', ['ask', 'synthesize'], false), ai('codex', ['ask'])]), asked: ['claude', 'codex'], to: 'all' })).toBe(false);
 });
 
-test('earlierFor: questions every judge answered, the latest three, oldest first', () => {
+test('earlierFor: questions every writer answered, the latest three, oldest first', () => {
   const t = (question: string, parts: RunPart[]) => turnOf({ question, run: runOf('done', parts) });
   const turns = [
     t('first', answers3),
@@ -554,14 +238,14 @@ test('utf8Bytes and cutUtf8 count like UTF-8, a lone surrogate as U+FFFD', () =>
   expect(cutUtf8('short', 4096)).toBe('short');
 });
 
-test('directRequest: the answers that came, with models, judges and earlier questions fixed at send time', () => {
+test('directRequest: the answers that came, with models, writers and earlier questions fixed at send time', () => {
   const parts: RunPart[] = [
     done('opencode', 'C'),
     done('claude', 'A'),
     done('codex', 'B', null),
     { agent: 'gemini', status: 'failed' },
   ];
-  const turn = turnOf({ agents: ['claude', 'codex', 'opencode', 'gemini'], run: runOf('done', parts), compare: tc({ start: 'manual', earlier: ['first'], judges: ['claude', 'codex'] }) });
+  const turn = turnOf({ agents: ['claude', 'codex', 'opencode', 'gemini'], run: runOf('done', parts), compare: tc({ earlier: ['first'], judges: ['claude', 'codex'] }) });
   expect(directRequest(turn, 'k1')).toEqual({
     clientComparisonId: 'k1',
     question: 'Capital?',
@@ -594,21 +278,21 @@ test('directRequest cuts a long answer to 64 KiB and a long question to 32 KiB, 
   expect(r?.question).toBe('질'.repeat(10922));
 });
 
-test('startCost: every ordered pair once; two answers need a judge that wrote none', () => {
-  expect(startCost(doneTurn({ start: 'manual' }))).toBe(6);
-  const four = turnOf({
-    agents: ['claude', 'codex', 'opencode', 'gemini'],
-    run: runOf('done', [...answers3, done('gemini', 'G')]),
-    compare: tc({ start: 'manual', judges: ['claude', 'codex', 'opencode', 'gemini'] }),
-  });
-  expect(startCost(four)).toBe(12);
-  const twoAndJudge = doneTurn({ start: 'manual' }, [answers3[0], answers3[1], { agent: 'opencode', status: 'failed' }]);
-  expect(startCost(twoAndJudge)).toBe(2);
-  const twoNoJudge = doneTurn({ start: 'manual', judges: ['claude', 'codex'] }, [answers3[0], answers3[1], { agent: 'opencode', status: 'failed' }]);
-  expect(startCost(twoNoJudge)).toBe(0);
-  // Nothing to start: no Compare button, the no_judge state instead.
-  expect(compareState(twoNoJudge)).toEqual({ kind: 'failed', code: 'no_judge', action: null });
-  expect(startCost(doneTurn({ start: 'manual' }, [answers3[0]]))).toBe(0);
+test('directRequest carries the combined answer fixed at send time, with the tier', () => {
+  const withTier = (synth: TurnCompare['synth'], tier?: 'quick' | 'deep') => {
+    const t = doneTurn({ synth });
+    return { ...t, req: tier ? { ...t.req, tier } : t.req };
+  };
+  expect(directRequest(withTier({ agent: 'codex' }, 'deep'), 'k')?.synthesis).toEqual({ agent: 'codex', tier: 'deep' });
+  expect(directRequest(withTier({ off: true }, 'quick'), 'k')?.synthesis).toEqual({ off: true, tier: 'quick' });
+  expect(directRequest(withTier({}, 'quick'), 'k')?.synthesis).toEqual({ tier: 'quick' });
+  expect(directRequest(withTier({ agent: 'claude' }), 'k')?.synthesis).toEqual({ agent: 'claude' });
+  // A turn kept from an S5 PC (no synth): the S5 body.
+  expect('synthesis' in (directRequest(withTier(undefined, 'deep'), 'k') ?? {})).toBe(false);
+  // The turn's synth is not changed by the request.
+  const t = withTier({ agent: 'codex' }, 'deep');
+  directRequest(t, 'k');
+  expect(t.compare?.synth).toEqual({ agent: 'codex' });
 });
 
 // ---- State updates ----
@@ -640,65 +324,6 @@ test('withSnap and withError', () => {
   expect(withError(c, new NetworkError())).toEqual({ ...c, error: 'network' });
   expect(withError(c, new Error('boom'))).toEqual({ ...c, error: 'internal' });
   expect(errorCode(new AgentError('http_502', 502))).toBe('http_502');
-});
-
-// ---- Drawing a unit ----
-
-test('pieces never look for "$" themselves', () => {
-  expect(pieces('$HOME/bin:$PATH', [], [])).toEqual([{ text: '$HOME/bin:$PATH' }]);
-  expect(pieces('$HOME/bin:$PATH', undefined, [])).toEqual([{ text: '$HOME/bin:$PATH' }]);
-  expect(pieces('', [], [])).toEqual([]);
-});
-
-test('pieces draw math at the given spans, bold at the number spans', () => {
-  const text = 'Area is $\\pi r^2$ here';
-  expect(pieces(text, [{ start: 8, end: 17, display: false }], [])).toEqual([
-    { text: 'Area is ' },
-    { text: '$\\pi r^2$', math: { tex: '\\pi r^2', display: false } },
-    { text: ' here' },
-  ]);
-  expect(pieces('So $$x^2$$.', [{ start: 3, end: 10, display: true }], [])[1]).toEqual({ text: '$$x^2$$', math: { tex: 'x^2', display: true } });
-  expect(pieces('It has 9.4 million people.', [], [{ start: 7, end: 10 }])).toEqual([
-    { text: 'It has ' },
-    { text: '9.4', bold: true },
-    { text: ' million people.' },
-  ]);
-  // Bold over math marks the math piece.
-  expect(pieces('$9x$ y', [{ start: 0, end: 4, display: false }], [{ start: 1, end: 2 }])).toEqual([
-    { text: '$9x$', math: { tex: '9x', display: false }, bold: true },
-    { text: ' y' },
-  ]);
-  // A span without math marks stays text.
-  expect(pieces('abc def', [{ start: 0, end: 3, display: false }], [])).toEqual([{ text: 'abc' }, { text: ' def' }]);
-});
-
-test('pieces clamp bold, drop bad or overlapping math, and merge bold', () => {
-  const text = 'It has 9.4 million people.'; // 26
-  expect(pieces(text, [], [{ start: -5, end: 2 }])).toEqual([{ text: 'It', bold: true }, { text: text.slice(2) }]);
-  expect(pieces(text, [], [{ start: 20, end: 100 }])).toEqual([{ text: text.slice(0, 20) }, { text: text.slice(20), bold: true }]);
-  expect(pieces(text, [], [{ start: 1.5, end: 3 }, { start: 5, end: 5 }, { start: 9, end: 4 }])).toEqual([{ text }]);
-  // Overlapping and touching bold spans become one.
-  expect(pieces(text, [], [{ start: 2, end: 5 }, { start: 0, end: 3 }, { start: 5, end: 6 }])).toEqual([{ text: 'It has', bold: true }, { text: text.slice(6) }]);
-  const m = '$a$ $b$';
-  expect(pieces(m, [{ start: 0, end: 3, display: false }, { start: 1, end: 7, display: false }], [])).toEqual([
-    { text: '$a$', math: { tex: 'a', display: false } },
-    { text: ' $b$' },
-  ]);
-  expect(pieces(m, [{ start: 4, end: 9, display: false }, { start: 0, end: 0, display: false }, { start: 0.5, end: 3, display: false }], [])).toEqual([{ text: m }]);
-  // Out of order spans are read in order.
-  expect(pieces(m, [{ start: 4, end: 7, display: false }, { start: 0, end: 3, display: false }], []).filter((p) => p.math)).toHaveLength(2);
-});
-
-test('pieces keep emoji whole (UTF-16 offsets)', () => {
-  const text = '😀 $x$ 😀'; // emoji are two code units each
-  expect(pieces(text, [{ start: 3, end: 6, display: false }], [])).toEqual([
-    { text: '😀 ' },
-    { text: '$x$', math: { tex: 'x', display: false } },
-    { text: ' 😀' },
-  ]);
-  expect(pieces(text, [], [{ start: 1, end: 2 }])).toEqual([{ text: '😀', bold: true }, { text: ' $x$ 😀' }]);
-  expect(pieces(text, [], [{ start: 8, end: 9 }])).toEqual([{ text: '😀 $x$ ' }, { text: '😀', bold: true }]);
-  expect(pieces(text, [], [{ start: 0, end: 1 }])).toEqual([{ text: '😀', bold: true }, { text: ' $x$ 😀' }]);
 });
 
 // ---- Tabs and lines ----
@@ -735,220 +360,135 @@ test('answered and answeringLines', () => {
   expect(answeringLines(doneTurn(), 13500)).toEqual([]);
 });
 
-// ---- The judges ----
-
-test('requestLines, judgedBy, failedWith and longAnswers in names', () => {
-  const s = snapshot({
-    requests: [
-      req('r1', 'claude', 'codex', 'opencode', { ms: 4200 }),
-      req('r2', 'codex', 'claude', 'opencode', { status: 'failed', error: { code: 'judge_failed', message: 'usage limit reached' } }),
-      req('r3', 'opencode', 'codex', '', { status: 'failed', error: { code: 'no_judge' }, model: undefined }),
-      req('r4', 'claude', 'opencode', 'codex', { judgeOnly: true, status: 'running' }),
-    ],
-  });
-  expect(requestLines(s)).toEqual([
-    { id: 'r1', judge: 'OpenCode', from: 'Claude', against: 'Codex', judgeOnly: false, model: 'opencode-quick', status: 'done', ms: 4200 },
-    {
-      id: 'r2',
-      judge: 'OpenCode',
-      from: 'Codex',
-      against: 'Claude',
-      judgeOnly: false,
-      model: 'opencode-quick',
-      status: 'failed',
-      error: { code: 'judge_failed', message: 'usage limit reached' },
-    },
-    { id: 'r3', judge: '', from: 'OpenCode', against: 'Codex', judgeOnly: false, status: 'failed', error: { code: 'no_judge' } },
-    { id: 'r4', judge: 'Codex', from: 'Claude', against: 'OpenCode', judgeOnly: true, model: 'codex-quick', status: 'running' },
-  ]);
-  // In the snapshot's answer order, not the requests' order.
-  expect(judgedBy(s, 'claude')).toEqual(['Codex', 'OpenCode']);
-  // Codex's judging failed: only OpenCode judged Codex's answer.
-  expect(judgedBy(s, 'codex')).toEqual([]);
-  expect(judgedBy(s, 'opencode')).toEqual([]);
-  expect(judgedBy(undefined, 'claude')).toEqual([]);
-  // Only pairs with a judge count as failed, in answer order.
-  expect(failedWith(s)).toEqual(['Claude', 'Codex']);
-  expect(failedWith(snapshot())).toEqual([]);
-  expect(longAnswers(s)).toEqual([]);
-  const long = snapshot();
-  long.answers[0] = { ...long.answers[0], notJudged: 7, units: long.answers[0].units.map((u, i) => ({ ...u, judged: i < 2 })) };
-  expect(longAnswers(long)).toEqual([{ agent: 'Claude', judged: 2 }]);
-});
-
-test('judgeModels: from the snapshot, before it from the turn and the PC', () => {
-  const s = snapshot();
-  // In the turn's order (as the tabs), not the order the requests came in.
-  expect(judgeModels(doneTurn({ id: 'c1', snap: s }), three)).toEqual([
-    { agent: 'Claude', model: 'claude-quick' },
-    { agent: 'Codex', model: 'codex-quick' },
-    { agent: 'OpenCode', model: 'opencode-quick' },
-  ]);
-  // A judge the turn did not ask comes last.
-  expect(judgeModels({ ...doneTurn({ id: 'c1', snap: s }), agents: ['codex', 'opencode'] }, three)).toEqual([
-    { agent: 'Codex', model: 'codex-quick' },
-    { agent: 'OpenCode', model: 'opencode-quick' },
-    { agent: 'Claude', model: 'claude-quick' },
-  ]);
-  expect(judgeModels(doneTurn({ judges: ['claude', 'codex'] }), three)).toEqual([
-    { agent: 'Claude', model: 'claude-quick' },
-    { agent: 'Codex', model: 'codex-quick' },
-  ]);
-  expect(judgeModels(doneTurn({ judges: ['claude'] }), null)).toEqual([{ agent: 'Claude' }]);
-  // A snapshot of another comparison (a lost one) does not count.
-  expect(judgeModels(doneTurn({ id: 'c2', snap: s, judges: ['codex'] }), three)).toEqual([{ agent: 'Codex', model: 'codex-quick' }]);
-  expect(judgeModels(turnOf(), three)).toEqual([]);
-});
-
 // ---- The combined answer (S5b) ----
 
-const writer = (a: AdapterInfo): AdapterInfo => ({ ...a, capabilities: [...a.capabilities, 'synthesize'] });
-const threeW = infoOf([ai('claude', 'anthropic'), ai('codex', 'openai'), ai('opencode', 'deepseek')].map(writer));
-const syn = (over: Partial<Synthesis> = {}): Synthesis => ({ status: 'done', judged: true, ...over });
-const doneSyn: Synthesis = syn({ agent: 'claude', model: 'sonnet', ms: 15230, text: '# Seoul\n\nThe AIs differ.', unnamedSides: 0 });
+const syn = (over: Partial<Synthesis> = {}): Synthesis => ({ status: 'done', ...over });
+const doneSyn: Synthesis = syn({ agent: 'claude', model: 'sonnet', ms: 15230, text: '# Seoul\n\nThe AIs differ.' });
 // A comparison with its synthesis; the PC keeps pollAfterMs while the synthesis waits or runs.
 const withSyn = (y: Synthesis, over: Partial<Comparison> = {}) =>
   snapshot({ ...(y.status === 'waiting' || y.status === 'running' ? { pollAfterMs: 1000 } : {}), ...over, synthesis: y });
 const synTurn = (s: Comparison, c: Partial<TurnCompare> = {}) => doneTurn({ id: s.comparisonId, snap: s, synth: { agent: 'claude' }, ...c });
 
 test('canSynthesize, writerFor and synthRequest', () => {
-  expect(canSynthesize(threeW)).toBe(true);
-  expect(canSynthesize(three)).toBe(false); // an S5 agent
+  expect(canSynthesize(three)).toBe(true);
+  expect(canSynthesize(askOnly)).toBe(false); // an S5 agent or older
   expect(canSynthesize(null)).toBe(false);
-  expect(canSynthesize(infoOf([writer(ai('claude', 'anthropic', ['ask', 'judge'], false)), ai('codex', 'openai')]))).toBe(false);
-  expect(writerFor(threeW, 'codex')).toBe('codex');
-  expect(writerFor(threeW, 'gemini')).toBeUndefined();
-  expect(writerFor(threeW, '')).toBeUndefined();
+  expect(canSynthesize(infoOf([ai('claude', ['ask', 'synthesize'], false), ai('codex', ['ask'])]))).toBe(false);
+  expect(writerFor(three, 'codex')).toBe('codex');
+  expect(writerFor(three, 'gemini')).toBeUndefined();
+  expect(writerFor(three, '')).toBeUndefined();
   expect(writerFor(null, 'claude')).toBeUndefined();
   // Listed but unable to write is still named: the PC falls back to an asked AI that can.
-  expect(writerFor(infoOf([ai('claude', 'anthropic', ['ask'], false)]), 'claude')).toBe('claude');
-  expect(synthRequest(threeW, { on: true, agent: 'opencode' })).toEqual({ agent: 'opencode' });
-  expect(synthRequest(threeW, { on: true, agent: 'gemini' })).toEqual({});
-  expect(synthRequest(threeW, { on: false, agent: 'opencode' })).toEqual({ off: true });
+  expect(writerFor(infoOf([ai('claude', ['ask'], false)]), 'claude')).toBe('claude');
+  expect(synthRequest(three, { on: true, agent: 'opencode' })).toEqual({ agent: 'opencode' });
+  expect(synthRequest(three, { on: true, agent: 'gemini' })).toEqual({});
+  expect(synthRequest(three, { on: false, agent: 'opencode' })).toEqual({ off: true });
 });
 
-test('judging: the judges run; a done or failed comparison whose answer is being written is not judging', () => {
+test('comparing: the comparison runs; a done or failed one whose answer is being written is not comparing', () => {
   for (const status of ['waiting', 'running']) {
-    expect(judging({ status })).toBe(true);
-    expect(judging({ status, pollAfterMs: 1000 })).toBe(true);
+    expect(comparing({ status })).toBe(true);
+    expect(comparing({ status, pollAfterMs: 1000 })).toBe(true);
   }
   for (const status of ['done', 'failed']) {
-    expect(judging({ status, pollAfterMs: 1000 })).toBe(false);
+    expect(comparing({ status, pollAfterMs: 1000 })).toBe(false);
     expect(polling({ status, pollAfterMs: 1000 })).toBe(true);
-    expect(judging({ status })).toBe(false);
+    expect(comparing({ status })).toBe(false);
   }
-  expect(judging({ status: 'paused', pollAfterMs: 500 })).toBe(true);
-  expect(judging({ status: 'archived' })).toBe(false);
+  expect(comparing({ status: 'paused', pollAfterMs: 500 })).toBe(true);
+  expect(comparing({ status: 'archived' })).toBe(false);
 });
 
-test('compareState: a done comparison whose combined answer is being written is done, with no retry yet', () => {
-  const partial = snapshot({
-    requests: [...snapshot().requests.slice(0, 5), req('r6', 'opencode', 'codex', 'claude', { status: 'failed', error: { code: 'judge_failed' } })],
-  });
-  const writing = withSyn(syn({ status: 'running', agent: 'claude' }), { requests: partial.requests });
+test('compareState: a done comparison whose combined answer is being written is done; a stopped one is retried once the writing ended', () => {
+  const writing = withSyn(syn({ status: 'running', agent: 'claude' }));
   expect(polling(writing)).toBe(true);
-  expect(canRetry(writing)).toBe(false); // the PC says 409 while the synthesis runs
-  expect(compareState(synTurn(writing))).toEqual({ kind: 'done', partial: true, retry: false });
-  expect(compareState(synTurn(withSyn(doneSyn, { requests: partial.requests })))).toEqual({ kind: 'done', partial: true, retry: true });
-  // Every judge failed: still failed, and 다시 비교 only once the writing ended.
-  const allFailed = (y: Synthesis) =>
-    withSyn(y, {
-      status: 'failed',
-      error: { code: 'judge_failed', message: 'usage limit reached' },
-      requests: snapshot().requests.map((r) => ({ ...r, status: 'failed', error: { code: 'judge_failed' } })),
-      items: [],
-    });
-  expect(compareState(synTurn(allFailed(syn({ status: 'running', judged: false }))))).toMatchObject({ kind: 'failed', action: null });
-  expect(compareState(synTurn(allFailed(syn({ judged: false, text: 'x' }))))).toMatchObject({ kind: 'failed', action: 'retry' });
-  // The judges still run: comparing, whatever the synthesis says.
-  expect(compareState(synTurn(withSyn(syn({ status: 'waiting' }), { status: 'running', pollAfterMs: 1000 })))).toMatchObject({ kind: 'comparing' });
+  expect(compareState(synTurn(writing))).toEqual({ kind: 'done' });
+  expect(compareState(synTurn(withSyn(doneSyn)))).toEqual({ kind: 'done' });
+  // Failed (stopped): 다시 비교 only once the writing ended (the PC says 409 before).
+  const stopped = (y: Synthesis) => withSyn(y, { status: 'failed', error: { code: 'cancelled' } });
+  expect(canRetry(stopped(syn({ status: 'running' })))).toBe(false);
+  expect(compareState(synTurn(stopped(syn({ status: 'running' }))))).toMatchObject({ kind: 'failed', action: null });
+  expect(compareState(synTurn(stopped(syn({ text: 'x' }))))).toMatchObject({ kind: 'failed', action: 'retry' });
+  // The comparison still runs: comparing, whatever the synthesis says.
+  expect(compareState(synTurn(withSyn(syn({ status: 'waiting' }), { status: 'running', pollAfterMs: 1000 })))).toEqual({ kind: 'comparing' });
 });
 
 test('synthState: waiting, writing, done, failed and off', () => {
-  expect(synthState(synTurn(withSyn(syn({ status: 'waiting', agent: 'codex' }), { status: 'running', pollAfterMs: 1000 })), threeW)).toEqual({ kind: 'waiting' });
-  expect(synthState(synTurn(withSyn(syn({ status: 'waiting' }))), threeW)).toEqual({ kind: 'waiting' });
-  expect(synthState(synTurn(withSyn(syn({ status: 'running', agent: 'claude' }))), threeW)).toEqual({ kind: 'writing' });
-  expect(synthState(synTurn(withSyn(doneSyn)), threeW)).toEqual({
+  expect(synthState(synTurn(withSyn(syn({ status: 'waiting', agent: 'codex' }), { status: 'running', pollAfterMs: 1000 })), three)).toEqual({ kind: 'waiting' });
+  expect(synthState(synTurn(withSyn(syn({ status: 'waiting' }))), three)).toEqual({ kind: 'waiting' });
+  expect(synthState(synTurn(withSyn(syn({ status: 'running', agent: 'claude' }))), three)).toEqual({ kind: 'writing' });
+  expect(synthState(synTurn(withSyn(doneSyn)), three)).toEqual({
     kind: 'done',
     text: '# Seoul\n\nThe AIs differ.',
     agent: 'claude',
     model: 'sonnet',
     ms: 15230,
-    judged: true,
-    unnamed: 0,
   });
-  expect(synthState(synTurn(withSyn(syn({ agent: 'codex', judged: false, unnamedSides: 2 }))), threeW)).toEqual({
-    kind: 'done',
-    text: '',
-    agent: 'codex',
-    judged: false,
-    unnamed: 2,
-  });
-  expect(synthState(synTurn(withSyn(syn({ judged: undefined as unknown as boolean, unnamedSides: -1 }))), threeW)).toMatchObject({ judged: false, unnamed: 0 });
+  expect(synthState(synTurn(withSyn(syn({ agent: 'codex' }))), three)).toEqual({ kind: 'done', text: '', agent: 'codex' });
 
   const failed = syn({ status: 'failed', agent: 'claude', error: { code: 'judge_failed', message: 'usage limit reached' } });
-  expect(synthState(synTurn(withSyn(failed)), threeW)).toEqual({ kind: 'failed', code: 'judge_failed', message: 'usage limit reached', retry: true });
-  expect(synthState(synTurn(withSyn(syn({ status: 'failed' }))), threeW)).toEqual({ kind: 'failed', code: 'internal', retry: true });
-  expect(synthState(synTurn(withSyn(syn({ status: 'failed', error: { code: 'no_judge' } }))), threeW)).toMatchObject({ code: 'no_judge', retry: true });
-  // Failed while the judges still run (cancelled): writing again waits for them.
+  expect(synthState(synTurn(withSyn(failed)), three)).toEqual({ kind: 'failed', code: 'judge_failed', message: 'usage limit reached', retry: true });
+  expect(synthState(synTurn(withSyn(syn({ status: 'failed' }))), three)).toEqual({ kind: 'failed', code: 'internal', retry: true });
+  expect(synthState(synTurn(withSyn(syn({ status: 'failed', error: { code: 'no_judge' } }))), three)).toMatchObject({ code: 'no_judge', retry: true });
+  // Failed while the comparison still runs (cancelled): writing again waits for it.
   const cancelled = withSyn(syn({ status: 'failed', error: { code: 'cancelled' } }), { status: 'running', pollAfterMs: 1000 });
-  expect(synthState(synTurn(cancelled), threeW)).toEqual({ kind: 'failed', code: 'cancelled', retry: false });
+  expect(synthState(synTurn(cancelled), three)).toEqual({ kind: 'failed', code: 'cancelled', retry: false });
 
   // Off: 'Write a combined answer' once the comparison is final, on a PC that can write.
-  const off = syn({ status: 'off', judged: false });
-  expect(synthState(synTurn(withSyn(off), { synth: { off: true } }), threeW)).toEqual({ kind: 'off', cost: 1 });
-  expect(synthState(synTurn(withSyn(off, { status: 'failed', error: { code: 'judge_failed' } })), threeW)).toEqual({ kind: 'off', cost: 1 });
-  expect(synthState(synTurn(withSyn(off, { status: 'running', pollAfterMs: 1000 })), threeW)).toBeNull();
-  expect(synthState(synTurn(withSyn(off)), three)).toBeNull();
+  const off = syn({ status: 'off' });
+  expect(synthState(synTurn(withSyn(off), { synth: { off: true } }), three)).toEqual({ kind: 'off', cost: 1 });
+  expect(synthState(synTurn(withSyn(off, { status: 'failed', error: { code: 'cancelled' } })), three)).toEqual({ kind: 'off', cost: 1 });
+  expect(synthState(synTurn(withSyn(off, { status: 'running', pollAfterMs: 1000 })), three)).toBeNull();
+  expect(synthState(synTurn(withSyn(off)), askOnly)).toBeNull();
   expect(synthState(synTurn(withSyn(off)), null)).toBeNull();
 });
 
 test('synthState: nothing to show', () => {
   // An older agent: no synthesis in the snapshot.
-  expect(synthState(synTurn(snapshot()), threeW)).toBeNull();
+  expect(synthState(synTurn(snapshot()), three)).toBeNull();
   // No snapshot, or one of another comparison.
-  expect(synthState(doneTurn({ id: 'c1' }), threeW)).toBeNull();
-  expect(synthState(doneTurn({ id: 'c2', snap: withSyn(doneSyn) }), threeW)).toBeNull();
-  expect(synthState(turnOf(), threeW)).toBeNull();
+  expect(synthState(doneTurn({ id: 'c1' }), three)).toBeNull();
+  expect(synthState(doneTurn({ id: 'c2', snap: withSyn(doneSyn) }), three)).toBeNull();
+  expect(synthState(turnOf(), three)).toBeNull();
   // An error on the turn takes the status line; a direct comparison on its way.
-  expect(synthState(synTurn(withSyn(doneSyn), { error: 'network' }), threeW)).toBeNull();
-  expect(synthState(synTurn(withSyn(doneSyn), { error: 'internal' }), threeW)).toBeNull();
-  expect(synthState(synTurn(withSyn(doneSyn), { key: 'k', snap: undefined }), threeW)).toBeNull();
+  expect(synthState(synTurn(withSyn(doneSyn), { error: 'network' }), three)).toBeNull();
+  expect(synthState(synTurn(withSyn(doneSyn), { error: 'internal' }), three)).toBeNull();
+  expect(synthState(synTurn(withSyn(doneSyn), { key: 'k', snap: undefined }), three)).toBeNull();
   // Not comparing, done or failed: still answering, or one answer.
-  expect(synthState({ ...synTurn(withSyn(doneSyn)), run: runOf('running', answers3) }, threeW)).toBeNull();
-  const two = withSyn(syn({ status: 'failed', error: { code: 'need_two_answers' } }), { status: 'failed', error: { code: 'need_two_answers' }, requests: [] });
-  expect(synthState(synTurn(two), threeW)).toBeNull();
+  expect(synthState({ ...synTurn(withSyn(doneSyn)), run: runOf('running', answers3) }, three)).toBeNull();
+  const two = withSyn(syn({ status: 'failed', error: { code: 'need_two_answers' } }), { status: 'failed', error: { code: 'need_two_answers' } });
+  expect(synthState(synTurn(two), three)).toBeNull();
   // Too few answers for the writer alone, or a status this app does not know.
-  expect(synthState(synTurn(withSyn(syn({ status: 'failed', error: { code: 'need_two_answers' } }))), threeW)).toBeNull();
-  expect(synthState(synTurn(withSyn(syn({ status: 'paused' }))), threeW)).toBeNull();
+  expect(synthState(synTurn(withSyn(syn({ status: 'failed', error: { code: 'need_two_answers' } }))), three)).toBeNull();
+  expect(synthState(synTurn(withSyn(syn({ status: 'paused' }))), three)).toBeNull();
 });
 
-test('evidenceFolded: under a combined answer that is coming or came', () => {
-  expect(evidenceFolded({ kind: 'waiting' })).toBe(true);
-  expect(evidenceFolded({ kind: 'writing' })).toBe(true);
-  expect(evidenceFolded({ kind: 'done', text: 'x', agent: 'claude', judged: true, unnamed: 0 })).toBe(true);
-  expect(evidenceFolded({ kind: 'failed', code: 'judge_failed', retry: true })).toBe(false);
-  expect(evidenceFolded({ kind: 'off', cost: 1 })).toBe(false);
-  expect(evidenceFolded(null)).toBe(false);
-});
-
-test('synthOn: the snapshot says, before it the turn', () => {
-  expect(synthOn(synTurn(withSyn(doneSyn)))).toBe(true);
-  expect(synthOn(synTurn(withSyn(syn({ status: 'failed', error: { code: 'judge_failed' } }))))).toBe(true);
-  expect(synthOn(synTurn(withSyn(syn({ status: 'off' }))))).toBe(false);
-  expect(synthOn(synTurn(snapshot()))).toBe(false); // an older agent writes none
-  expect(synthOn(doneTurn({ synth: { agent: 'claude' } }))).toBe(true);
-  expect(synthOn(doneTurn({ synth: {} }))).toBe(true);
-  expect(synthOn(doneTurn({ synth: { off: true } }))).toBe(false);
-  expect(synthOn(doneTurn())).toBe(false);
-  expect(synthOn(turnOf())).toBe(false);
+// C6d (#24): conversations kept before C6 hold snapshots with the judging's
+// answers, requests, judgments, items and counts, and a synthesis with
+// judged, unnamedSides and topics. The phone reads none of it.
+test('a snapshot kept from before C6, judging and all, still gives its state and combined answer', () => {
+  const old = JSON.parse(
+    JSON.stringify({
+      ...snapshot(),
+      answers: [{ id: 'claude', agent: 'claude', via: 'pc', family: 'anthropic', status: 'ready', notJudged: 0, units: [{ id: 'claude:1', n: 1, kind: 'sentence', text: 'x', start: 0, end: 1, judged: true }] }],
+      requests: [{ id: 'r1', from: 'claude', against: 'codex', judge: 'opencode', judgeOnly: false, status: 'failed', attempt: 1, error: { code: 'judge_failed' } }],
+      judgments: [{ unit: 'claude:1', against: 'codex', request: 'r1', judge: 'opencode', core: true, label: 'opposite', evidence: [], unsure: false, flags: [] }],
+      items: [{ key: 'd:1', kind: 'differ', positions: [{ agents: ['claude'], units: ['claude:1'] }], check: [], missing: [] }],
+      counts: { differ: 1, check: 0, agree: 0, onlyOne: 0, notCompared: 0, notJudged: 0 },
+      synthesis: { ...doneSyn, judged: true, unnamedSides: 2, topics: { status: 'done', items: [{ key: 'd:1', topic: 'Population', gists: ['9.4'] }] } },
+    }),
+  ) as Comparison;
+  const turn = synTurn(old);
+  expect(compareState(turn)).toEqual({ kind: 'done' });
+  expect(canRetry(old)).toBe(false);
+  expect(synthState(turn, three)).toEqual({ kind: 'done', text: '# Seoul\n\nThe AIs differ.', agent: 'claude', model: 'sonnet', ms: 15230 });
 });
 
 test('synthErrorText: its own words, then the comparison words; judge_failed adds the AI words', () => {
   expect(synthErrorText('judge_failed', 'usage limit reached')).toBe('The writing AI reported an error.\nusage limit reached');
   expect(synthErrorText('judge_failed')).toBe('The writing AI reported an error.');
   expect(synthErrorText('judge_timeout', 'ignored')).toBe('The combined answer did not finish in time.');
-  expect(synthErrorText('no_judge')).toBe('No AI could write it: it takes an AI that got this question and can judge on this PC.');
+  expect(synthErrorText('no_judge')).toBe('No AI could write it: it takes an AI that got this question and can write combined answers on this PC.');
   expect(synthErrorText('internal')).toBe('Something went wrong on the PC while writing the combined answer.');
   // Codes without words of their own: the comparison's, then the ask's and the general ones.
   expect(synthErrorText('need_two_answers')).toBe('Comparing needs at least two answers.');
@@ -957,57 +497,15 @@ test('synthErrorText: its own words, then the comparison words; judge_failed add
   expect(synthErrorText('brand_new')).toBe('Something went wrong (brand_new).');
 });
 
-test('synthBy and synthLine', () => {
+test('synthBy: who wrote it, with what and how long', () => {
   expect(synthBy({ agent: 'claude', model: 'sonnet', ms: 15230 })).toBe('Claude sonnet · 15.2 s');
   expect(synthBy({ agent: 'opencode', ms: 900 })).toBe('OpenCode · 0.9 s');
   expect(synthBy({ agent: 'codex', model: 'gpt-6.1-terra' })).toBe('Codex gpt-6.1-terra');
   expect(synthBy({ agent: 'gemini' })).toBe('gemini');
-
-  expect(synthLine(undefined)).toBeNull();
-  expect(synthLine(snapshot())).toBeNull();
-  expect(synthLine(withSyn(syn({ status: 'off' })))).toBeNull();
-  expect(synthLine(withSyn(doneSyn))).toEqual({ what: 'Combined answer by Claude', text: '15.2 s · sonnet' });
-  expect(synthLine(withSyn(syn({ status: 'waiting' })))).toEqual({ what: 'Combined answer', text: 'Waiting' });
-  expect(synthLine(withSyn(syn({ status: 'waiting', agent: 'codex' })))).toEqual({ what: 'Combined answer by Codex', text: 'Waiting' });
-  expect(synthLine(withSyn(syn({ status: 'running', agent: 'codex' })))).toEqual({ what: 'Combined answer by Codex', text: 'Combining…' });
-  expect(synthLine(withSyn(syn({ status: 'failed', agent: 'codex', error: { code: 'judge_failed', message: 'quota' } })))).toEqual({
-    what: 'Combined answer by Codex',
-    text: 'The writing AI reported an error.\nquota',
-    failed: true,
-  });
-  expect(synthLine(withSyn(syn({ status: 'later', agent: 'codex' })))).toEqual({ what: 'Combined answer by Codex', text: 'later' });
-
   setLang('ko');
   try {
     expect(synthBy({ agent: 'claude', model: 'sonnet', ms: 15230 })).toBe('Claude sonnet · 15.2초');
-    expect(synthLine(withSyn(doneSyn))).toEqual({ what: 'Claude 종합 답변', text: '15.2초 · sonnet' });
   } finally {
     setLang('en');
   }
-});
-
-test('startCost and directRequest carry the combined answer fixed at send time', () => {
-  expect(startCost(doneTurn({ start: 'manual', synth: { agent: 'claude' } }))).toBe(7);
-  expect(startCost(doneTurn({ start: 'manual', synth: {} }))).toBe(7);
-  expect(startCost(doneTurn({ start: 'manual', synth: { off: true } }))).toBe(6);
-  const two = [answers3[0], answers3[1], { agent: 'opencode', status: 'failed' }];
-  expect(startCost(doneTurn({ start: 'manual', synth: { agent: 'claude' } }, two))).toBe(3);
-  // Nothing to start stays nothing: no pair has a judge.
-  expect(startCost(doneTurn({ start: 'manual', judges: ['claude', 'codex'], synth: { agent: 'claude' } }, two))).toBe(0);
-  expect(compareState(doneTurn({ start: 'manual', synth: { agent: 'claude' } }))).toEqual({ kind: 'manual', cost: 7 });
-
-  const withTier = (synth: TurnCompare['synth'], tier?: 'quick' | 'deep') => {
-    const t = doneTurn({ start: 'manual', synth });
-    return { ...t, req: tier ? { ...t.req, tier } : t.req };
-  };
-  expect(directRequest(withTier({ agent: 'codex' }, 'deep'), 'k')?.synthesis).toEqual({ agent: 'codex', tier: 'deep' });
-  expect(directRequest(withTier({ off: true }, 'quick'), 'k')?.synthesis).toEqual({ off: true, tier: 'quick' });
-  expect(directRequest(withTier({}, 'quick'), 'k')?.synthesis).toEqual({ tier: 'quick' });
-  expect(directRequest(withTier({ agent: 'claude' }), 'k')?.synthesis).toEqual({ agent: 'claude' });
-  // An S5 turn (no synth): the S5 body.
-  expect('synthesis' in (directRequest(withTier(undefined, 'deep'), 'k') ?? {})).toBe(false);
-  // The turn's synth is not changed by the request.
-  const t = withTier({ agent: 'codex' }, 'deep');
-  directRequest(t, 'k');
-  expect(t.compare?.synth).toEqual({ agent: 'codex' });
 });

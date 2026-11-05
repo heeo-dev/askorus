@@ -1,6 +1,6 @@
 # synth-eval: measures the combined answer (milestone C, design C-9, #12,
-# docs/phase2-plan.md) with the product's own ask, judge and combined-answer
-# path. This is measurement, not a test: a run USES THE PERSON'S AI
+# docs/phase2-plan.md) with the product's own ask and combined-answer path
+# (the moderator alone since C6). This is measurement, not a test: a run USES THE PERSON'S AI
 # SUBSCRIPTIONS (Claude Code, Codex, OpenCode quota; up to 10 calls a
 # question), so start one only when it was agreed. questions and report make
 # no model call.
@@ -8,8 +8,9 @@
 # It builds agent/cmd/synth-eval (-tags syntheval, never part of the agent)
 # into %LOCALAPPDATA%\Asksemble\synth-eval\bin and runs it with normal rights.
 # Runs go to %LOCALAPPDATA%\Asksemble\synth-eval\<run>, outside the repo. The
-# AIs answer in the agent's ask folder (as for the phone); judges run in its
-# judge folder. It never touches the running agent, Tailscale serve or the
+# AIs answer in the agent's ask folder (as for the phone); the writers and
+# the AIs that score run in its judge folder. It never touches the running
+# agent, Tailscale serve or the
 # Claude services.
 #
 #   powershell -NoProfile -File scripts\synth-eval.ps1 questions -q agent\cmd\synth-eval\testdata\general.txt,.local\synth-eval\mine.txt
@@ -31,7 +32,7 @@
 # Keep this file ASCII: Windows PowerShell 5.1 reads scripts without a BOM as
 # the ANSI code page.
 #
-# No param block, as scripts\judge-eval.ps1: every argument is passed on as
+# No param block: every argument is passed on as
 # a string; an array typed inside PowerShell is joined with commas.
 $Rest = @()
 foreach ($a in $args) {
@@ -51,7 +52,7 @@ if ($principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator))
 
 # The agent starts at logon, not inside a Claude Code session: when this runs
 # from one, drop that session's variables so the AIs see what they see under
-# the real agent (as judge-eval.ps1 and test-live.ps1).
+# the real agent (as test-live.ps1).
 Get-ChildItem env: | Where-Object { $_.Name -eq 'CLAUDECODE' -or $_.Name -eq 'CLAUDE_PID' -or $_.Name -like 'CLAUDE_CODE_*' } |
   Where-Object { $null -eq [Environment]::GetEnvironmentVariable($_.Name, 'User') -and $null -eq [Environment]::GetEnvironmentVariable($_.Name, 'Machine') } |
   ForEach-Object { Remove-Item "env:$($_.Name)" }

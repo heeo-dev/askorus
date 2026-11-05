@@ -8,9 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/asksemble/asksemble/agent/internal/config"
 	"github.com/asksemble/asksemble/agent/internal/core"
-	"github.com/asksemble/asksemble/agent/internal/judge"
 )
 
 func testGate(t *testing.T, ais ...core.Adapter) Gate {
@@ -21,18 +19,29 @@ func testGate(t *testing.T, ais ...core.Adapter) Gate {
 	return Gate{MinVersions: min, Folder: filepath.Join(t.TempDir(), "ask", core.JudgeFolderName)}
 }
 
+// synthOnlyAI is a fakeAI that writes combined answers but does not ask.
+type synthOnlyAI struct{ *fakeAI }
+
+func (s synthOnlyAI) Synthesize(context.Context, core.SynthRequest) (core.SynthResult, error) {
+	return core.SynthResult{}, nil
+}
+
+// Gate.Engine: the reasons, in the order it checks them (off, no_folder,
+// cannot_judge, unavailable, old_version), and no Judger or Cleaner with
+// a reason.
 func TestGateReasons(t *testing.T) {
+	ctx := context.Background()
 	claude := newFake("claude", "anthropic")
-	claude.fams = map[string]string{"gpt-x": ""} // a model it cannot place
 	g := testGate(t, claude)
-	if e, why := g.Engine(claude, claude.Info(context.Background())); why != "" || e.Judger == nil || e.Model != "claude-judge" || e.Effort != "medium" || e.Family != "anthropic" || e.Cleaner != nil {
-		t.Fatalf("judging AI: %+v %q", e, why)
+	if e, why := g.Engine(claude, claude.Info(ctx)); why != "" || e.Agent != "claude" || e.Judger == nil || e.Cleaner != nil {
+		t.Fatalf("an AI that passes: %+v %q", e, why)
 	}
 	oc := cleanerAI{newFake("opencode", "deepseek")}
-	if e, why := testGate(t, oc).Engine(oc, oc.Info(context.Background())); why != "" || e.Cleaner == nil {
+	if e, why := testGate(t, oc).Engine(oc, oc.Info(ctx)); why != "" || e.Cleaner == nil {
 		t.Errorf("a JudgeCleaner gets its Cleaner: %+v %q", e, why)
 	}
 
+	plain := &plainAI{name: "claude", version: "9.9.9"}
 	cases := []struct {
 		name string
 		a    core.Adapter
@@ -41,27 +50,28 @@ func TestGateReasons(t *testing.T) {
 		want string
 	}{
 		{"off", claude, func(g *Gate) { g.Settings.Off = true }, nil, WhyOff},
+		{"off before no folder", claude, func(g *Gate) { g.Settings.Off, g.Folder = true, "" }, nil, WhyOff},
 		{"off before unavailable", claude, func(g *Gate) { g.Settings.Off = true }, func(i *core.AdapterInfo) { i.Available = false }, WhyOff},
 		{"no folder", claude, func(g *Gate) { g.Folder = "" }, nil, WhyNoFolder},
 		{"relative folder", claude, func(g *Gate) { g.Folder = filepath.Join("ask", "judge") }, nil, WhyNoFolder},
-		{"not a judger", &plainAI{name: "claude", version: "9.9.9"}, nil, nil, WhyCannot},
+		{"no folder before not a judger", plain, func(g *Gate) { g.Folder = "" }, nil, WhyNoFolder},
+		{"not a judger", plain, nil, nil, WhyCannot},
+		{"not a judger before unavailable", plain, nil, func(i *core.AdapterInfo) { i.Available = false }, WhyCannot},
 		{"unavailable", claude, nil, func(i *core.AdapterInfo) { i.Available = false }, WhyUnavailable},
 		{"unavailable before old", claude, nil, func(i *core.AdapterInfo) { i.Available, i.Version = false, "0.1.0" }, WhyUnavailable},
+		{"a cleaner unavailable", oc, nil, func(i *core.AdapterInfo) { i.Available = false }, WhyUnavailable},
 		{"older", claude, func(g *Gate) { g.MinVersions["claude"] = "1.0.1" }, nil, WhyOld},
 		{"unreadable version", claude, nil, func(i *core.AdapterInfo) { i.Version = "v1.0.0" }, WhyOld},
 		{"no version", claude, nil, func(i *core.AdapterInfo) { i.Version = "" }, WhyOld},
 		{"no min", claude, func(g *Gate) { delete(g.MinVersions, "claude") }, nil, WhyOld},
 		{"unreadable min", claude, func(g *Gate) { g.MinVersions["claude"] = "latest" }, nil, WhyOld},
-		{"another company's model", claude, func(g *Gate) {
-			g.Settings.Models = map[string]core.AskModel{"claude": {Model: "gpt-x"}}
-		}, nil, WhyNoFamily},
 	}
 	for _, c := range cases {
 		g := testGate(t, claude)
 		if c.gate != nil {
 			c.gate(&g)
 		}
-		info := c.a.Info(context.Background())
+		info := c.a.Info(ctx)
 		if c.info != nil {
 			c.info(&info)
 		}
@@ -69,134 +79,23 @@ func TestGateReasons(t *testing.T) {
 		if why != c.want {
 			t.Errorf("%s: reason %q, want %q", c.name, why, c.want)
 		}
-		if e.Judger != nil || e.Cleaner != nil || e.Family != "" || e.Agent != "claude" {
-			t.Errorf("%s: an engine that does not judge must not carry a Judger: %+v", c.name, e)
-		}
-	}
-
-	// The settings' model and effort; an effort alone keeps the default model.
-	g = testGate(t, claude)
-	g.Settings.Models = map[string]core.AskModel{"claude": {Model: "claude-big", Effort: "high"}}
-	if e, why := g.Engine(claude, claude.Info(context.Background())); why != "" || e.Model != "claude-big" || e.Effort != "high" {
-		t.Errorf("override: %+v %q", e, why)
-	}
-	g.Settings.Models = map[string]core.AskModel{"claude": {Effort: "low"}}
-	if e, _ := g.Engine(claude, claude.Info(context.Background())); e.Model != "claude-judge" || e.Effort != "low" {
-		t.Errorf("effort override: %+v", e)
-	}
-	g.Settings.Models = map[string]core.AskModel{"claude": {Model: "gpt-x"}}
-	if e, why := g.Engine(claude, claude.Info(context.Background())); why != WhyNoFamily || e.Model != "gpt-x" {
-		t.Errorf("unknown company keeps the model for check: %+v %q", e, why)
-	}
-	// Info of a judging engine.
-	if ji := (Engine{Model: "m", Family: "f"}).Info(); ji != (core.JudgeInfo{Model: "m", Family: "f"}) {
-		t.Errorf("Info = %+v", ji)
-	}
-}
-
-func TestOverrideReachesJudge(t *testing.T) {
-	ais := threeAIs()
-	m, _ := newTestManager(t, ais, func(o *Options) {
-		o.Gate.Settings.Models = map[string]core.AskModel{"opencode": {Model: "oc-big", Effort: "max"}}
-	})
-	c := startDirect(t, m, threeAnswers("phone", ""))
-	c = waitIdle(t, m, "phone", c.ID)
-	if c.Status != Done {
-		t.Fatalf("status %s, %+v", c.Status, c.Error)
-	}
-	oc := fakeOf(ais[2])
-	calls := oc.judgeCalls()
-	if len(calls) != 2 {
-		t.Fatalf("opencode judged %d times, want 2", len(calls))
-	}
-	for _, r := range calls {
-		if r.Model != "oc-big" || r.Effort != "max" || r.Folder != m.o.Gate.Folder {
-			t.Errorf("judge request model %q effort %q folder %q", r.Model, r.Effort, r.Folder)
-		}
-	}
-	for _, r := range c.Requests {
-		if r.Judge == "opencode" && r.Model != "oc-big" {
-			t.Errorf("request %s model %q", r.ID, r.Model)
-		}
-	}
-}
-
-func TestJudgingInfo(t *testing.T) {
-	g := Gate{}
-	ji := g.Judging()
-	// S6 (11-01 user decision 4): verified on 2026-11-01 with these CLI
-	// versions, and the median wall time of a comparison at the quick tier.
-	if ji.Engine != "pc" || ji.Shape != judge.ShapeDirected || ji.Labels != judge.LabelsV1 || ji.Rules != judge.Rules ||
-		!slices.Equal(ji.Checks, []string{judge.CheckUnsure, judge.CheckNumberMismatch, judge.CheckNumbersAbsent}) || ji.Verified == nil || ji.TypicalMs != 40444 {
-		t.Errorf("Judging = %+v", ji)
-	}
-	b, _ := json.Marshal(ji)
-	want := `{"engine":"pc","shape":"directed","labels":"v1","rules":"judge-v1","checks":["unsure","numberMismatch","numbersAbsent"],` +
-		`"verified":{"date":"2026-11-01","versions":{"claude":"2.1.316","codex":"0.164.0","opencode":"2.2.1"}},"typicalMs":40444}`
-	if string(b) != want {
-		t.Errorf("JSON = %s\nwant %s", b, want)
-	}
-	// Each call gives its own copy: changing one changes neither the next
-	// nor JudgingVerified.
-	ji.Verified.Versions["claude"] = "x"
-	ji.Verified.Date = "x"
-	if again := g.Judging(); again.Verified.Versions["claude"] != "2.1.316" || again.Verified.Date != "2026-11-01" || JudgingVerified.Versions["claude"] != "2.1.316" {
-		t.Errorf("Judging shares JudgingVerified: %+v", again.Verified)
-	}
-	// The verification and typicalMs are only for what S6 measured
-	// (S6R-3): the adapters' own judge models and the default checks, in
-	// any order. judge.off, perAI and maxUnits (at most the 40 measured)
-	// keep them.
-	for _, s := range []config.JudgeConfig{
-		{Off: true, MaxUnits: 40, PerAI: 1},
-		{Checks: []string{judge.CheckNumbersAbsent, judge.CheckUnsure, judge.CheckNumberMismatch}},
-	} {
-		g.Settings = s
-		if ji := g.Judging(); ji.Verified == nil || ji.TypicalMs != TypicalMs {
-			t.Errorf("with %+v: %+v", s, ji)
-		}
-	}
-	// A judge model or a set of checks of agent.json was never measured:
-	// no verified and no typicalMs, so the phone keeps its 'not measured
-	// yet' footer and shows no time.
-	for _, s := range []config.JudgeConfig{
-		{Models: map[string]core.AskModel{"claude": {Model: "opus", Effort: "high"}}},
-		{Models: map[string]core.AskModel{"codex": {Effort: "low"}}},
-		{Checks: []string{judge.CheckUnsure}},
-		{Checks: []string{judge.CheckNoEvidence}},
-		{Checks: []string{judge.CheckUnsure, judge.CheckNumberMismatch, judge.CheckNumbersAbsent, judge.CheckNoEvidence}},
-	} {
-		g.Settings = s
-		ji := g.Judging()
-		if ji.Verified != nil || ji.TypicalMs != 0 || !slices.Equal(ji.Checks, s.ChecksOrDefault()) {
-			t.Errorf("with %+v: %+v", s, ji)
-		}
-		if b, _ := json.Marshal(ji); strings.Contains(string(b), "verified") || strings.Contains(string(b), "typicalMs") {
-			t.Errorf("with %+v: JSON %s", s, b)
-		}
-	}
-	g.Settings = config.JudgeConfig{Checks: []string{judge.CheckNoEvidence, judge.CheckNumberMismatch}}
-	if ji := g.Judging(); !slices.Equal(ji.Checks, g.Settings.Checks) {
-		t.Errorf("checks = %v", ji.Checks)
-	} else {
-		ji.Checks[0] = "x"
-		if g.Settings.Checks[0] != judge.CheckNoEvidence {
-			t.Error("Judging shares the settings' checks")
+		if e.Judger != nil || e.Cleaner != nil || e.Agent != c.a.Agent() {
+			t.Errorf("%s: an AI that does not pass must carry no Judger or Cleaner: %+v", c.name, e)
 		}
 	}
 }
 
 func TestAnnounce(t *testing.T) {
-	claude := newFake("claude", "anthropic")
+	claude := newWriter("claude", "anthropic", "Claude")
 	// The adapter's own slice has room, so an append in place would show.
 	own := make([]core.Capability, 1, 8)
 	own[0] = core.CapList
 	claude.caps = own
 	codex := askerAI{fakeAI: newFake("codex", "openai"), tiers: map[string]core.AskModel{core.TierStandard: {Model: "gpt-std"}}}
 	codex.caps = []core.Capability{core.CapAsk}
-	old := newFake("opencode", "deepseek")
+	old := newWriter("opencode", "deepseek", "OpenCode")
 	old.version = "0.9.0"
-	old.caps = []core.Capability{core.CapAsk, core.CapJudge} // it names judge itself
+	old.caps = []core.Capability{core.CapAsk, core.CapSynthesize} // it names synthesize itself
 	plain := &plainAI{name: "gemini", version: "1.0.0"}
 	noAsk := askerAI{fakeAI: newFake("kimi", "moonshot"), tiers: map[string]core.AskModel{core.TierStandard: {Model: "k"}}}
 
@@ -210,6 +109,10 @@ func TestAnnounce(t *testing.T) {
 		if info.Agent != ais[i].Agent() {
 			t.Errorf("infos[%d] is %s, want %s", i, info.Agent, ais[i].Agent())
 		}
+		// No AI announces judge since C6d (#24), nor any judge info.
+		if b, _ := json.Marshal(info); strings.Contains(string(b), "judge") {
+			t.Errorf("infos[%d] JSON = %s", i, b)
+		}
 	}
 	if got := own[:cap(own)][1]; got != "" {
 		t.Errorf("Announce wrote into the adapter's own capability slice: %q", got)
@@ -217,20 +120,19 @@ func TestAnnounce(t *testing.T) {
 	if len(claude.caps) != 1 {
 		t.Errorf("the adapter's capabilities changed: %v", claude.caps)
 	}
-	if !slices.Equal(infos[0].Capabilities, []core.Capability{core.CapList, core.CapJudge}) || infos[0].Judge == nil ||
-		*infos[0].Judge != (core.JudgeInfo{Model: "claude-judge", Effort: "medium", Family: "anthropic"}) || infos[0].Ask != nil {
-		t.Errorf("claude = %+v judge %+v", infos[0], infos[0].Judge)
+	if !slices.Equal(infos[0].Capabilities, []core.Capability{core.CapList, core.CapSynthesize}) || infos[0].Ask != nil {
+		t.Errorf("claude = %+v", infos[0])
 	}
-	if infos[1].Ask == nil || infos[1].Ask.Tiers[core.TierStandard].Model != "gpt-std" || !slices.Contains(infos[1].Capabilities, core.CapJudge) {
+	if infos[1].Ask == nil || infos[1].Ask.Tiers[core.TierStandard].Model != "gpt-std" || !slices.Equal(infos[1].Capabilities, []core.Capability{core.CapAsk}) {
 		t.Errorf("codex = %+v", infos[1])
 	}
-	if slices.Contains(infos[2].Capabilities, core.CapJudge) || infos[2].Judge != nil || !slices.Contains(infos[2].Capabilities, core.CapAsk) {
-		t.Errorf("an old AI that names judge itself: %+v", infos[2])
+	if !slices.Equal(infos[2].Capabilities, []core.Capability{core.CapAsk}) || infos[2].Ask == nil {
+		t.Errorf("an old AI that names synthesize itself: %+v", infos[2])
 	}
 	if len(old.caps) != 2 {
 		t.Errorf("the old adapter's capabilities changed: %v", old.caps)
 	}
-	if infos[3].Judge != nil || infos[3].Capabilities == nil || len(infos[3].Capabilities) != 0 {
+	if infos[3].Capabilities == nil || len(infos[3].Capabilities) != 0 {
 		t.Errorf("a plain adapter: %+v", infos[3])
 	}
 	if infos[4].Ask != nil {
@@ -243,21 +145,18 @@ func TestAnnounce(t *testing.T) {
 	if !slices.Equal(names, []string{"claude", "codex", "kimi"}) {
 		t.Errorf("engines = %v", names)
 	}
-	b, _ := json.Marshal(infos[0])
-	if !strings.Contains(string(b), `"capabilities":["list","judge"]`) || !strings.Contains(string(b), `"judge":{"model":"claude-judge","effort":"medium","family":"anthropic"}`) {
+	if b, _ := json.Marshal(infos[0]); !strings.Contains(string(b), `"capabilities":["list","synthesize"]`) {
 		t.Errorf("JSON = %s", b)
 	}
 
-	// Off: nobody judges, and the engines are an empty list.
+	// Off: no AI passes, and the engines are an empty list.
 	g.Settings.Off = true
 	infos, engines = Announce(context.Background(), ais, g)
 	if len(engines) != 0 || engines == nil {
 		t.Errorf("off: engines %v", engines)
 	}
-	for _, info := range infos {
-		if info.Judge != nil || slices.Contains(info.Capabilities, core.CapJudge) {
-			t.Errorf("off: %+v", info)
-		}
+	if !slices.Equal(infos[0].Capabilities, []core.Capability{core.CapList}) {
+		t.Errorf("off: claude %v", infos[0].Capabilities)
 	}
 	// The Manager's Engines agree with Announce.
 	m := New(Options{Adapters: ais, Gate: testGate(t, ais...)})
@@ -271,8 +170,8 @@ func TestAnnounce(t *testing.T) {
 	}
 }
 
-// Gate.Writer: the judge gate first, then Synthesizer and Asker, the tier
-// model and its company.
+// Gate.Writer: the gate first, then Synthesizer and Asker, the tier model
+// and its company.
 func TestGateWriter(t *testing.T) {
 	ctx := context.Background()
 	cl := newWriter("claude", "anthropic", "Claude")
@@ -290,7 +189,7 @@ func TestGateWriter(t *testing.T) {
 	if w, why := g.Writer(cl, cl.Info(ctx), core.TierDeep); why != WhyNoFamily || w.Synth != nil || w.Judger != nil {
 		t.Errorf("unknown company: %+v %q", w, why)
 	}
-	// The judge gate's reasons come first.
+	// The gate's reasons come first.
 	off := g
 	off.Settings.Off = true
 	if w, why := off.Writer(cl, cl.Info(ctx), core.TierQuick); why != WhyOff || w.Synth != nil {
@@ -301,14 +200,18 @@ func TestGateWriter(t *testing.T) {
 		t.Errorf("unavailable: %q", why)
 	}
 	cl.setAvailable(true)
-	// A judge that cannot write, or has no tier model.
-	judgeOnly := newFake("codex", "openai")
-	if _, why := testGate(t, judgeOnly).Writer(judgeOnly, judgeOnly.Info(ctx), core.TierQuick); why != WhyCannotWrite {
-		t.Errorf("judge only: %q", why)
+	// An AI that passes the gate but cannot write, or has no tier model.
+	neither := newFake("codex", "openai")
+	if _, why := testGate(t, neither).Writer(neither, neither.Info(ctx), core.TierQuick); why != WhyCannotWrite {
+		t.Errorf("neither asks nor writes: %q", why)
 	}
 	asker := askerAI{fakeAI: newFake("codex", "openai"), tiers: map[string]core.AskModel{core.TierStandard: {Model: "gpt"}}}
 	if _, why := testGate(t, asker).Writer(asker, asker.Info(ctx), core.TierQuick); why != WhyCannotWrite {
 		t.Errorf("asks but does not write: %q", why)
+	}
+	writeOnly := synthOnlyAI{newFake("codex", "openai")}
+	if _, why := testGate(t, writeOnly).Writer(writeOnly, writeOnly.Info(ctx), core.TierQuick); why != WhyCannotWrite {
+		t.Errorf("writes but does not ask: %q", why)
 	}
 	cl.tiers = map[string]core.AskModel{core.TierStandard: {Effort: "medium"}}
 	if _, why := g.Writer(cl, cl.Info(ctx), core.TierStandard); why != WhyCannotWrite {
@@ -321,36 +224,40 @@ func TestGateWriter(t *testing.T) {
 	}
 }
 
-// Announce gives synthesize to an AI that judges and can ask and write,
-// never on its own say, and judge.off takes both away.
+// Announce gives synthesize to an AI that passes the gate and can ask and
+// write, never on its own say, and judge.off takes it away.
 func TestAnnounceSynthesize(t *testing.T) {
 	cl := newWriter("claude", "anthropic", "Claude")
 	cl.caps = []core.Capability{core.CapAsk, core.CapSynthesize} // it names synthesize itself
 	old := newWriter("codex", "openai", "Codex")
 	old.version = "0.9.0"
 	old.caps = []core.Capability{core.CapAsk, core.CapSynthesize}
-	judgeOnly := askerAI{fakeAI: newFake("opencode", "deepseek"), tiers: map[string]core.AskModel{core.TierStandard: {Model: "x"}}}
-	judgeOnly.caps = []core.Capability{core.CapAsk}
-	ais := []core.Adapter{cl, old, judgeOnly}
+	asker := askerAI{fakeAI: newFake("opencode", "deepseek"), tiers: map[string]core.AskModel{core.TierStandard: {Model: "x"}}}
+	asker.caps = []core.Capability{core.CapAsk}
+	writeOnly := synthOnlyAI{newFake("kimi", "moonshot")}
+	writeOnly.caps = []core.Capability{core.CapSynthesize}
+	ais := []core.Adapter{cl, old, asker, writeOnly}
 	g := testGate(t, ais...)
-	g.MinVersions["codex"] = "1.0.0"
-	infos, _ := Announce(context.Background(), ais, g)
-	if !slices.Equal(infos[0].Capabilities, []core.Capability{core.CapAsk, core.CapJudge, core.CapSynthesize}) {
+	infos, engines := Announce(context.Background(), ais, g)
+	if !slices.Equal(infos[0].Capabilities, []core.Capability{core.CapAsk, core.CapSynthesize}) {
 		t.Errorf("claude: %v", infos[0].Capabilities)
 	}
-	if slices.Contains(infos[1].Capabilities, core.CapSynthesize) || slices.Contains(infos[1].Capabilities, core.CapJudge) {
+	if slices.Contains(infos[1].Capabilities, core.CapSynthesize) {
 		t.Errorf("an old AI that names synthesize itself: %v", infos[1].Capabilities)
 	}
-	if !slices.Contains(infos[2].Capabilities, core.CapJudge) || slices.Contains(infos[2].Capabilities, core.CapSynthesize) {
-		t.Errorf("a judge that cannot write: %v", infos[2].Capabilities)
+	if !slices.Equal(infos[2].Capabilities, []core.Capability{core.CapAsk}) {
+		t.Errorf("an AI that asks but cannot write: %v", infos[2].Capabilities)
 	}
-	if len(cl.caps) != 2 || len(old.caps) != 2 {
-		t.Errorf("the adapters' own lists changed: %v %v", cl.caps, old.caps)
+	if len(infos[3].Capabilities) != 0 || len(engines) != 3 {
+		t.Errorf("an AI that writes but does not ask: %v; %d engines", infos[3].Capabilities, len(engines))
+	}
+	if len(cl.caps) != 2 || len(old.caps) != 2 || len(writeOnly.caps) != 1 {
+		t.Errorf("the adapters' own lists changed: %v %v %v", cl.caps, old.caps, writeOnly.caps)
 	}
 	g.Settings.Off = true
 	infos, _ = Announce(context.Background(), ais, g)
 	for _, info := range infos {
-		if slices.Contains(info.Capabilities, core.CapSynthesize) || slices.Contains(info.Capabilities, core.CapJudge) {
+		if slices.Contains(info.Capabilities, core.CapSynthesize) {
 			t.Errorf("off: %v", info.Capabilities)
 		}
 	}

@@ -8,16 +8,15 @@ import (
 	"strings"
 )
 
-// claudeMain plays claude: -p with the synth schema as --json-schema is
-// a combined-answer writer, -p with any other --json-schema a judge, -p
-// without it an ask, and `agents --json --all` lists no running session.
+// claudeMain plays claude: -p with the synth or refine schema as
+// --json-schema is a combined-answer writer (or a moderator refining a
+// question), -p without --json-schema an ask, and `agents --json --all`
+// lists no running session. Any other --json-schema is unexpected.
 func claudeMain(c *Call) int {
 	switch {
 	case len(c.Args) > 0 && c.Args[0] == "-p" && isSynthSchema(flagValue(c.Args, "--json-schema")):
 		return claudeSynth(c)
-	case len(c.Args) > 0 && c.Args[0] == "-p" && slices.Contains(c.Args, "--json-schema"):
-		return claudeJudge(c)
-	case len(c.Args) > 0 && c.Args[0] == "-p":
+	case len(c.Args) > 0 && c.Args[0] == "-p" && !slices.Contains(c.Args, "--json-schema"):
 		return claudeAsk(c)
 	case strings.Join(c.Args, " ") == "agents --json --all":
 		fmt.Println("[]")
@@ -41,47 +40,6 @@ func claudeResult(model string) map[string]any {
 func printJSON(v any) {
 	b, _ := json.Marshal(v)
 	fmt.Println(string(b))
-}
-
-// claudeJudge prints the result object of a judge. structured_output is
-// the judge JSON as an object; result carries the same text.
-func claudeJudge(c *Call) int {
-	mode, err := judgeMode(RoleClaude)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "fakecli:", err)
-		return 2
-	}
-	if mode == ModeSlow {
-		sleepSlow()
-	}
-	model := flagValue(c.Args, "--model")
-	out := claudeResult(model)
-	text := judgeText(mode, c.Stdin)
-	code := 0
-	switch mode {
-	case ModeUsageLimit:
-		out["is_error"], out["result"], code = true, UsageLimitClaude, 1
-	case ModeBadModel:
-		fmt.Fprintf(os.Stderr, "[claude-code:unrecognized_model] {\"model\":%q}\n", model)
-		out["is_error"], out["result"], out["modelUsage"] = true, "There's an issue with the selected model ("+model+").", map[string]any{}
-		out["api_error_status"], code = 404, 1
-	case ModeProse:
-		out["result"] = text // no structured_output
-	case ModeBadJSON:
-		out["subtype"], out["is_error"], code = "error_max_structured_output_retries", true, 1
-	case ModeToolUse:
-		out["permission_denials"] = []any{map[string]any{
-			"tool_name": "Bash", "tool_use_id": "toolu_fake", "tool_input": map[string]string{"command": ToolCommand},
-		}}
-		out["result"], out["structured_output"] = text, json.RawMessage(text)
-	case ModeFailedWithOutput:
-		fmt.Fprintln(os.Stderr, OverloadedStderr)
-		out["is_error"], out["result"], out["structured_output"], code = true, text, json.RawMessage(text), 1
-	default: // rule, unsure, missing_id, slow
-		out["result"], out["structured_output"] = text, json.RawMessage(text)
-	}
-	printJSON(out)
-	return code
 }
 
 // claudeAsk answers like the claude fake of the adapter's own tests:

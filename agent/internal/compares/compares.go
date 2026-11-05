@@ -26,23 +26,22 @@ const (
 	MaxComparisons = 100
 	// MaxUnfinished bounds the comparisons that are waiting or running.
 	MaxUnfinished = 8
-	// MaxProcesses bounds the judge processes of every AI together, apart
-	// from the asks' runs.MaxRunning. Each AI runs at most judge.perAI.
+	// MaxProcesses bounds the one-off processes (combined answers,
+	// refining) of every AI together, apart from the asks'
+	// runs.MaxRunning. Each AI runs at most judge.perAI.
 	MaxProcesses = 6
-	// QueueLimit is how long a request may wait for a judge process slot,
-	// timed from the start of its round; then it fails with judge_timeout.
+	// QueueLimit is how long a one-off call may wait for a process slot;
+	// then it fails with judge_timeout.
 	QueueLimit = 5 * time.Minute
-	// JudgeLimit bounds one judge call. It is a safety net only: every
-	// adapter's Judge applies core.JudgeTimeout itself.
-	JudgeLimit = core.JudgeTimeout + 30*time.Second
 	// PollMs is the pollAfterMs of a comparison that is waiting or running.
 	PollMs = 1000
 	// closeWait is how long Close waits for the goroutines.
 	closeWait = 5 * time.Second
 )
 
-// abandonAfter is how long a judge call may go on after JudgeLimit before
-// the request stops waiting for it; a variable so tests can shorten it.
+// abandonAfter is how long a one-off call may go on after its limit
+// before the comparison stops waiting for it; a variable so tests can
+// shorten it.
 var abandonAfter = 5 * time.Second
 
 // Limits of a comparison made from answers (POST /v1/comparisons).
@@ -57,9 +56,9 @@ const (
 // Comparison statuses.
 const (
 	Waiting = "waiting" // its run's answers are not all in yet
-	Running = "running"
-	Done    = "done"   // every request ended and at least one is done
-	Failed  = "failed" // no request is done, or it could not be planned; Error says why
+	Running = "running" // taking its answers, for a moment
+	Done    = "done"    // it has its answers; the combined answer goes on in Synthesis
+	Failed  = "failed"  // fewer than two answers, cancelled or internal; Error says why
 )
 
 // Where the answers of a comparison came from.
@@ -76,8 +75,9 @@ var (
 	// ErrTooMany: MaxUnfinished comparisons are waiting or running
 	// (core.ErrCodeTooManyComparisons).
 	ErrTooMany = errors.New("too many unfinished comparisons")
-	// ErrNoJudge: no AI judges on this PC (core.ErrCodeNoJudge).
-	ErrNoJudge = errors.New("no AI judges on this PC")
+	// ErrNoJudge: no AI on this PC may write a combined answer
+	// (core.ErrCodeNoJudge, the code of the judging days).
+	ErrNoJudge = errors.New("no AI on this PC writes combined answers")
 )
 
 // Codes of a SpecError besides core.ErrCodeNeedTwoAnswers.
@@ -96,9 +96,9 @@ func (e *SpecError) Error() string { return e.Code + ": " + e.Message }
 
 // Comparison is a snapshot of one comparison, as GET /v1/comparisons/{id}
 // shows it; the API adds pollAfterMs. Every slice is [] rather than null.
-// There is no reason anywhere: a judge's words never leave the agent.
-// Fields may be added inside /v1, never removed (principle 4). A snapshot
-// shares its units, judgments and items with the Manager: read them only.
+// Fields may be added inside /v1, never removed (principle 4): requests,
+// judgments, items and counts were the judging's and are always empty
+// since C6d (#24).
 type Comparison struct {
 	ID     string `json:"comparisonId"`
 	Status string `json:"status"`
@@ -107,15 +107,14 @@ type Comparison struct {
 	Engine string `json:"engine"`
 	// Answers are in the turn's order, with their units; Text and Tail
 	// stay in the agent.
-	Answers   []judge.Answer   `json:"answers"`
-	Requests  []judge.Request  `json:"requests"`
-	Judgments []judge.Judgment `json:"judgments"` // the usable ones, with their flags
-	Items     []judge.Item     `json:"items"`
-	Counts    judge.Counts     `json:"counts"`
-	Error     *judge.Error     `json:"error,omitempty"`
+	Answers   []judge.Answer `json:"answers"`
+	Requests  []struct{}     `json:"requests"`
+	Judgments []struct{}     `json:"judgments"`
+	Items     []struct{}     `json:"items"`
+	Counts    judge.Counts   `json:"counts"`
+	Error     *judge.Error   `json:"error,omitempty"`
 	// Synthesis is the combined answer (종합 답변, S5b): always set, with
-	// status off when it was not asked for. Status above stays the
-	// judges'.
+	// status off when it was not asked for.
 	Synthesis *Synthesis `json:"synthesis,omitempty"`
 }
 
@@ -131,19 +130,9 @@ type Options struct {
 	Runs     RunSource // nil in the CLI, which only starts direct comparisons
 	Logger   *slog.Logger
 	Now      func() time.Time // time.Now when nil; tests move it for expiry
-	// Topics names the 다른 말 items beside the combined answer (C5,
-	// topics.go). The agent turns it on; tests that count writer calls
-	// leave it off.
-	Topics bool
-	// NoJudging leaves the judges out (C6, #19, 2026-11-05, the user's
-	// decision: the moderator alone writes the combined answer): a
-	// comparison asks no judge, makes no cards and ends as soon as it
-	// starts, and its combined answer is written from the answers alone
-	// (synth-v5). The agent sets it; the tests of judging leave it unset.
-	NoJudging bool
-	// QueueLimit, JudgeLimit and SynthLimit replace the constants when
-	// not zero, for tests.
-	QueueLimit, JudgeLimit, SynthLimit time.Duration
+	// QueueLimit and SynthLimit replace the constants when not zero, for
+	// tests.
+	QueueLimit, SynthLimit time.Duration
 }
 
 // RunSpec attaches a comparison to a run of POST /v1/runs.
@@ -151,11 +140,12 @@ type RunSpec struct {
 	Owner, RunID string
 	Question     string   // as the person wrote it: trimmed, without core.AskPreamble
 	Earlier      []string // earlier questions of a follow-up, oldest first
-	// Judges are the AIs that may judge, in order of preference, already
-	// cut to the asked ones (결정 5); empty means Asked.
+	// Judges are the AIs the phone listed with Earlier (the request's
+	// judges, a name kept from the judging days): each got every earlier
+	// question. A writer among them gets them; empty means Asked.
 	Judges []string
 	Asked  []string // the run's AIs in turn order
-	// Synth asks for the combined answer once the judges are done (S5b);
+	// Synth asks for the combined answer once the answers are in (S5b);
 	// nil is off. Its Tier is the run's.
 	Synth *SynthSpec
 }
@@ -176,29 +166,23 @@ type DirectSpec struct {
 	Question   string
 	Earlier    []string
 	Answers    []DirectAnswer
-	Judges     []string // in order of preference; empty means every AI that judges
-	// Synth asks for the combined answer once the judges are done (S5b);
-	// nil is off.
+	Judges     []string // the AIs Earlier may go to, as RunSpec's; empty means every AI that writes
+	// Synth asks for the combined answer at once (S5b); nil is off.
 	Synth *SynthSpec
 }
 
 // Manager keeps comparisons in memory. One mutex guards every comparison;
-// no adapter, Judger or run source is called while it is held.
+// no adapter or run source is called while it is held.
 type Manager struct {
 	o          Options
 	log        *slog.Logger
 	queueLimit time.Duration
-	judgeLimit time.Duration
 	synthLimit time.Duration
 	perAICap   int
-	checks     []string
-	maxUnits   int
 	base       context.Context
 	cancel     context.CancelFunc
 	global     chan struct{} // MaxProcesses slots
 	wg         sync.WaitGroup
-	// aggregate is judge.Aggregate; tests replace it to make it panic.
-	aggregate func(judge.AggregateInput) judge.Summary
 
 	mu     sync.Mutex
 	closed bool
@@ -217,7 +201,7 @@ type comparison struct {
 	err        *judge.Error
 	finishedAt time.Time
 	// active counts what still runs for it: the waiting slot or the
-	// round's planning, each request and each cleanup. It is idle at 0.
+	// round, the combined answer and each cleanup. It is idle at 0.
 	active  int
 	changed chan struct{} // closed and replaced on every change
 
@@ -229,16 +213,9 @@ type comparison struct {
 	started   bool // a round was spawned (a run's: RunEnded took it)
 	cancelled bool
 	cancelCh  chan struct{}
-	broken    bool // the cards could not be made: it ends failed with internal
 
-	planned        bool // Plan made its requests
-	spec           judge.Spec
-	families       map[string]string // judge AI → the company it was planned with
-	requests       []judge.Request
-	judgments      []judge.Judgment // every judgment so far, in the order they came
-	summary        judge.Summary
-	lastItems      []judge.Item
-	lastEndedItems []judge.Item
+	planned bool // the round took its answers (it may still have failed with need_two_answers)
+	spec    judge.Spec
 
 	synth synthState // the combined answer (synth.go)
 }
@@ -247,10 +224,9 @@ type comparison struct {
 func New(o Options) *Manager {
 	ctx, cancel := context.WithCancel(context.Background())
 	m := &Manager{
-		o: o, log: o.Logger, queueLimit: o.QueueLimit, judgeLimit: o.JudgeLimit, synthLimit: o.SynthLimit,
-		perAICap: o.Gate.Settings.PerAIOrDefault(), checks: o.Gate.Settings.ChecksOrDefault(),
-		maxUnits: o.Gate.Settings.MaxUnitsOrDefault(),
-		base:     ctx, cancel: cancel, global: make(chan struct{}, MaxProcesses), aggregate: judge.Aggregate,
+		o: o, log: o.Logger, queueLimit: o.QueueLimit, synthLimit: o.SynthLimit,
+		perAICap: o.Gate.Settings.PerAIOrDefault(),
+		base:     ctx, cancel: cancel, global: make(chan struct{}, MaxProcesses),
 		byID: map[string]*comparison{}, byRun: map[string]*comparison{}, byKey: map[string]*comparison{},
 		perAI: map[string]chan struct{}{},
 	}
@@ -259,9 +235,6 @@ func New(o Options) *Manager {
 	}
 	if m.queueLimit <= 0 {
 		m.queueLimit = QueueLimit
-	}
-	if m.judgeLimit <= 0 {
-		m.judgeLimit = JudgeLimit
 	}
 	if m.synthLimit <= 0 {
 		m.synthLimit = SynthLimit
@@ -378,8 +351,9 @@ func (m *Manager) ForRun(owner, runID string) (string, bool) {
 }
 
 // Start makes a comparison from the answers in s and starts it. It
-// returns a *SpecError for a spec it refuses, ErrNoJudge when no AI judges
-// on this PC and ErrTooMany when MaxUnfinished comparisons are unfinished.
+// returns a *SpecError for a spec it refuses, ErrNoJudge when no AI writes
+// combined answers on this PC and ErrTooMany when MaxUnfinished
+// comparisons are unfinished.
 // The same Owner and Key again give the first comparison.
 func (m *Manager) Start(s DirectSpec) (Comparison, error) {
 	if c, ok := m.byKeySnapshot(s.Owner, s.Key); ok {
@@ -412,7 +386,7 @@ func (m *Manager) Start(s DirectSpec) (Comparison, error) {
 	}
 	c.direct, c.directEngines = &d, engines
 	c.synth = newSynth(d.Synth)
-	c.status, c.started, c.active = Running, true, 1 // the round's planning
+	c.status, c.started, c.active = Running, true, 1 // the round takes the answers
 	if s.Key != "" {
 		m.byKey[key] = c
 	}
@@ -449,137 +423,40 @@ func (m *Manager) Get(owner, id string) (Comparison, bool) {
 	return m.snapshotLocked(c), true
 }
 
-// Retry runs the failed requests of an ended comparison again, with the
-// AIs that judge now: a judge that no longer does fails at once with
-// agent_unavailable, and one whose model is now of another company with
-// bad_model. A comparison that was never planned (need_two_answers,
-// no_judge, internal, or cancelled while it waited) starts over from its
-// run or its answers. With nothing to retry it returns the comparison
-// unchanged. It returns ErrNotFound, or ErrRunning while the comparison
-// or its combined answer is waiting or running. A retry that runs a judge
-// request again, or starts over, writes the combined answer again when
-// its round ends, unless it is off.
+// Retry starts over a comparison that never took its answers (cancelled
+// while it waited, or its run was gone), from its run or its answers.
+// Anything else has nothing to retry since the judging went (C6d): it
+// returns the comparison unchanged. It returns ErrNotFound, or ErrRunning
+// while the comparison or its combined answer is waiting or running.
 func (m *Manager) Retry(owner, id string) (Comparison, error) {
-	c, next, snap, err := m.retryBegin(owner, id)
-	switch next {
-	case retryCheckRun:
-		m.checkRun(c)
-		return m.mustGet(c), nil
-	case retryRequests:
-		var engines []Engine
-		var mkErr error
-		func() {
-			defer func() {
-				if v := recover(); v != nil {
-					engines, mkErr = nil, errors.New("internal")
-				}
-			}()
-			engines, mkErr = m.Engines(m.base), makeFolder(m.o.Gate.Folder)
-		}()
-		return m.retryRequests(c, engines, mkErr), nil
-	}
-	return snap, err
-}
-
-// What Retry does after retryBegin.
-const (
-	retryNothing  = iota // return the snapshot or the error
-	retryCheckRun        // look the run up again: it may have ended
-	retryRequests        // run the failed requests again
-)
-
-// retryBegin checks a Retry and does what needs no adapter.
-func (m *Manager) retryBegin(owner, id string) (c *comparison, next int, snap Comparison, err error) {
 	m.mu.Lock()
-	defer m.mu.Unlock()
-	c = m.byID[id]
+	c := m.byID[id]
 	switch {
 	case c == nil || c.owner != owner:
-		return nil, retryNothing, Comparison{}, ErrNotFound
+		m.mu.Unlock()
+		return Comparison{}, ErrNotFound
 	case c.status == Waiting || c.status == Running || synthBusy(c):
-		return nil, retryNothing, Comparison{}, ErrRunning
-	case !c.planned:
-		if m.restartLocked(c) {
-			return c, retryCheckRun, Comparison{}, nil
-		}
-	case !slices.ContainsFunc(c.requests, retryable):
-		if c.broken {
-			// Every request ended but the cards could not be made: make
-			// them again, and the combined answer after them.
-			m.reopenLocked(c)
-			m.synthResetLocked(c)
-			m.endRoundLocked(c, m.newRoundLocked(c, nil))
-			m.touchLocked(c)
-		}
-	default:
-		m.reopenLocked(c)
-		c.active++ // the retry's own slot until its requests are spawned
-		m.touchLocked(c)
-		return c, retryRequests, Comparison{}, nil
+		m.mu.Unlock()
+		return Comparison{}, ErrRunning
+	case !c.planned && m.restartLocked(c):
+		m.mu.Unlock()
+		m.checkRun(c)
+		return m.mustGet(c), nil
 	}
-	return c, retryNothing, m.snapshotLocked(c), nil
-}
-
-// retryRequests runs c's failed requests again with the engines that
-// judge now.
-func (m *Manager) retryRequests(c *comparison, engines []Engine, mkErr error) Comparison {
-	m.mu.Lock()
 	defer m.mu.Unlock()
-	byAgent := map[string]Engine{}
-	for _, e := range engines {
-		byAgent[e.Agent] = e
-	}
-	rd := m.newRoundLocked(c, byAgent)
-	var spawn []int
-	for i := range c.requests {
-		r := &c.requests[i]
-		if !retryable(*r) {
-			continue
-		}
-		r.Status, r.Error, r.Attempt, r.Ms, r.InputTokens, r.OutputTokens = judge.RequestQueued, nil, 0, 0, 0, 0
-		e, ok := byAgent[r.Judge]
-		switch {
-		case !ok:
-			r.Status, r.Error = judge.RequestFailed, failure(core.ErrCodeAgentUnavailable, "")
-		case !strings.EqualFold(e.Family, c.families[r.Judge]):
-			r.Status, r.Error = judge.RequestFailed, failure(core.ErrCodeBadModel, msgCompany)
-		case mkErr != nil:
-			r.Status, r.Error = judge.RequestFailed, failure(core.ErrCodeInternal, msgFolder)
-		default:
-			r.Model = e.Model
-			rd.add(e.Agent)
-			spawn = append(spawn, i)
-		}
-	}
-	m.aggregateLocked(c, false) // differ only; Prev keeps the other cards' keys
-	if len(spawn) > 0 {
-		m.synthResetLocked(c) // written again when this round ends
-	}
-	m.spawnLocked(c, rd, spawn)
-	c.active--
-	if len(spawn) == 0 { // else the last request ends the round, also at once (R-30)
-		m.endRoundLocked(c, rd)
-	}
-	m.touchLocked(c)
-	return m.snapshotLocked(c)
+	return m.snapshotLocked(c), nil
 }
 
-// mustGet is Get for a comparison Retry holds, which prune cannot remove
-// while it waits.
 func (m *Manager) mustGet(c *comparison) Comparison {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.snapshotLocked(c)
 }
 
-// retryable reports whether Retry runs request r again: it failed, and a
-// judge was planned for it (a no_judge record has none).
-func retryable(r judge.Request) bool { return r.Status == judge.RequestFailed && r.Judge != "" }
-
 // reopenLocked makes an ended comparison run again.
 func (m *Manager) reopenLocked(c *comparison) {
 	c.status, c.err, c.finishedAt = Running, nil, time.Time{}
-	c.cancelled, c.cancelCh, c.broken = false, make(chan struct{}), false
+	c.cancelled, c.cancelCh = false, make(chan struct{})
 }
 
 // restartLocked starts a comparison that was never planned over again. It
@@ -607,12 +484,11 @@ func (m *Manager) restartLocked(c *comparison) (recheck bool) {
 }
 
 // Cancel stops a comparison: one that waits for its run ends failed with
-// cancelled and never starts; a running one drops its queued requests
-// (failed, cancelled) and asks no judge again, while the requests that run
-// finish. Its combined answer fails with cancelled when it waits, and when
-// it runs drops its wait for a slot and is not asked again, also when the
-// comparison has ended. An ended comparison is otherwise left as it is.
-// It returns ErrNotFound.
+// cancelled and never starts; one that is taking its answers ends failed
+// with cancelled. Its combined answer fails with cancelled when it waits,
+// and when it runs drops its wait for a slot and is not asked again, also
+// when the comparison has ended. An ended comparison is otherwise left as
+// it is. It returns ErrNotFound.
 func (m *Manager) Cancel(owner, id string) (Comparison, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -635,7 +511,7 @@ func (m *Manager) Cancel(owner, id string) (Comparison, error) {
 	return m.snapshotLocked(c), nil
 }
 
-// cancelLocked marks c cancelled and wakes its queued requests.
+// cancelLocked marks c cancelled and wakes what waits on its cancel.
 func (m *Manager) cancelLocked(c *comparison) {
 	if !c.cancelled {
 		c.cancelled = true
@@ -671,8 +547,8 @@ func (m *Manager) WaitIdle(ctx context.Context, owner, id string) (Comparison, b
 	}
 }
 
-// Engines are the AIs that judge now, in the adapters' order. An adapter
-// whose Info or Family panics does not judge.
+// Engines are the AIs that pass the gate now (Gate.Engine), in the
+// adapters' order. An adapter whose Info panics does not pass.
 func (m *Manager) Engines(ctx context.Context) []Engine {
 	var out []Engine
 	for _, a := range m.o.Adapters {
@@ -686,9 +562,9 @@ func (m *Manager) Engines(ctx context.Context) []Engine {
 	return out
 }
 
-// Close stops every judge (their processes are ended), starts nothing
-// more but the cleanups of the judges that ran, and waits up to 5 seconds
-// for what still runs; it is for agent shutdown.
+// Close stops every one-off call (their processes are ended), starts
+// nothing more but the cleanups of the calls that ran, and waits up to 5
+// seconds for what still runs; it is for agent shutdown.
 func (m *Manager) Close() {
 	m.locked(func() { m.closed = true })
 	m.cancel()
@@ -733,8 +609,7 @@ func (m *Manager) newLocked(owner, key, source, runID string) *comparison {
 func (m *Manager) endUnstartedLocked(c *comparison, err *judge.Error) {
 	c.status, c.err, c.finishedAt = Failed, err, m.now()
 	c.active--
-	m.log.Info("comparison ended", "comparison", c.id, "status", c.status, "code", err.Code,
-		"differ", 0, "check", 0, "agree", 0, "onlyOne", 0, "notCompared", 0, "notJudged", 0, "ms", 0)
+	m.log.Info("comparison ended", "comparison", c.id, "status", c.status, "code", err.Code, "ms", 0)
 	m.synthAfterLocked(c)
 	m.touchLocked(c)
 }
@@ -796,31 +671,13 @@ func (m *Manager) snapshotLocked(c *comparison) Comparison {
 	out := Comparison{
 		ID: c.id, Status: c.status, Source: c.source, RunID: c.runID, Engine: EngineName,
 		Answers:   make([]judge.Answer, 0, len(c.spec.Answers)),
-		Requests:  make([]judge.Request, 0, len(c.requests)),
-		Judgments: slices.Clone(c.summary.Judgments),
-		Items:     slices.Clone(c.summary.Items),
-		Counts:    c.summary.Counts,
+		Requests:  []struct{}{},
+		Judgments: []struct{}{},
+		Items:     []struct{}{},
 	}
 	for _, a := range c.spec.Answers {
-		a.Units = slices.Clone(a.Units)
-		if a.Units == nil {
-			a.Units = []judge.Unit{}
-		}
-		a.Text, a.Tail = "", nil // the phone has the text; it stays in the agent
+		a.Units, a.Text = []struct{}{}, "" // the phone has the text; it stays in the agent
 		out.Answers = append(out.Answers, a)
-	}
-	for _, r := range c.requests {
-		if r.Error != nil {
-			e := *r.Error
-			r.Error = &e
-		}
-		out.Requests = append(out.Requests, r)
-	}
-	if out.Judgments == nil {
-		out.Judgments = []judge.Judgment{}
-	}
-	if out.Items == nil {
-		out.Items = []judge.Item{}
 	}
 	if c.err != nil {
 		e := *c.err

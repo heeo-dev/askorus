@@ -131,6 +131,6 @@ func TestLT09Refine(t *testing.T) {
 	if got := logs.String(); strings.Contains(got, mark) || strings.Contains(got, "HTTP와 HTTPS") {
 		t.Error("a log holds the question")
 	}
-	lt06aMarkers(t, claudeDir, start.Add(-2*time.Second), []byte(mark), []byte("LT09NONE"+randomHex()))
+	liveMarkers(t, claudeDir, start.Add(-2*time.Second), []byte(mark), []byte("LT09NONE"+randomHex()))
 	t.Logf("LT-09 took %s", time.Since(start).Round(100*time.Millisecond))
 }

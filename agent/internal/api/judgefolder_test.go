@@ -16,9 +16,10 @@ import (
 	"github.com/asksemble/asksemble/agent/internal/hidden"
 )
 
-// Judges run in <ask folder>\judge (P2-3). Their sessions never reach the
-// phone's list, whatever the filter, and the folder is never offered for
-// new sessions; a sibling whose name only starts the same stays.
+// The one-off calls (combined answers, refining) run in <ask folder>\judge
+// (P2-3). Their sessions never reach the phone's list, whatever the
+// filter, and the folder is never offered for new sessions; a sibling
+// whose name only starts the same stays.
 func TestJudgeFolderHiddenFromSessions(t *testing.T) {
 	cl := &askAdapter{name: "claude", available: true}
 	secret := filepath.Join(t.TempDir(), "secret")
@@ -120,7 +121,8 @@ const (
 	evalSid  = "claude:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" // ran in a folder inside it
 )
 
-// judgeFolderEnv serves a launcher whose sessions include judges' ones.
+// judgeFolderEnv serves a launcher whose sessions include ones of the
+// judge folder.
 func judgeFolderEnv(t *testing.T, listErr error, askFolder bool) (e env, calls, previews *[]string, hid *hidden.Store) {
 	t.Helper()
 	calls, previews = &[]string{}, &[]string{}
@@ -154,9 +156,10 @@ func judgeFolderEnv(t *testing.T, listErr error, askFolder bool) (e env, calls, 
 	return e, calls, previews, hid
 }
 
-// A judge's session is never the person's: open, stop, remove and preview
-// answer 404 session_not_found as for a session that does not exist, and
-// the adapter is never asked to act on it (P2-3, S3 decision 9).
+// A session of the judge folder (a combined answer's or a refining's) is
+// never the person's: open, stop, remove and preview answer 404
+// session_not_found as for a session that does not exist, and the adapter
+// is never asked to act on it (P2-3, S3 decision 9).
 func TestJudgeFolderSessionsRefused(t *testing.T) {
 	e, calls, previews, hid := judgeFolderEnv(t, nil, true)
 	for _, id := range []string{judgeSid, evalSid, strings.ToUpper(judgeSid[:7]) + judgeSid[7:], "claude:" + strings.ToUpper(judgeSid[7:])} {
@@ -179,7 +182,7 @@ func TestJudgeFolderSessionsRefused(t *testing.T) {
 		}
 	}
 	if len(*calls) != 0 || len(*previews) != 0 {
-		t.Fatalf("the adapter acted on a judge's session: calls %v, previews %v", *calls, *previews)
+		t.Fatalf("the adapter acted on a judge folder session: calls %v, previews %v", *calls, *previews)
 	}
 	// The person's own ask session still works.
 	if st := e.startAndWait(t, "POST", "/v1/sessions/"+sid+"/open", ""); st.Status != "done" {

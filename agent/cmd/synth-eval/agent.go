@@ -27,7 +27,7 @@ import (
 // comparison and a combined answer: the PC's AIs answer in the ask folder
 // (as for the phone, so their conversations stay in each AI's history like
 // the phone's), the comparison is attached to the run, and the writer
-// writes once the judges are done. The running agent is not used.
+// writes once the answers are in. The running agent is not used.
 type agentPipeline struct {
 	folder   string
 	adapters []core.Adapter
@@ -35,15 +35,16 @@ type agentPipeline struct {
 	order    []string
 	runs     *runs.Manager
 	cmp      *compares.Manager
-	// judgeFolder is where judges and writers run; names are the AIs'
-	// names as the writer gets them (Claude, Codex, OpenCode).
+	// judgeFolder is where the writers run (the agent's judge folder);
+	// names are the AIs' names as the writer gets them (Claude, Codex,
+	// OpenCode).
 	judgeFolder string
 	names       map[string]string
 }
 
 const owner = "synth-eval"
 
-// questionLimit bounds one question: answers, judges and the combined answer.
+// questionLimit bounds one question: the answers and the combined answer.
 var questionLimit = 15 * time.Minute
 
 func newAgentPipeline(ctx context.Context) (*agentPipeline, error) {
@@ -72,7 +73,7 @@ func newAgentPipeline(ctx context.Context) (*agentPipeline, error) {
 }
 
 // pipelineFrom makes the pipeline on these adapters, asking in folder and
-// judging as settings say (tests give fakes).
+// writing as settings say (tests give fakes).
 func pipelineFrom(ctx context.Context, adapters []core.Adapter, folder string, settings config.JudgeConfig) (*agentPipeline, error) {
 	p := &agentPipeline{folder: folder, adapters: adapters, askers: map[string]core.Asker{}, runs: runs.NewManager(), names: map[string]string{}}
 	for _, a := range adapters {
@@ -89,7 +90,7 @@ func pipelineFrom(ctx context.Context, adapters []core.Adapter, folder string, s
 		return nil, errors.New("fewer than two AIs can answer on this PC (asksemble-agent info)")
 	}
 	if settings.Off {
-		return nil, errors.New("comparison judging is off (agent.json judge.off)")
+		return nil, errors.New("combined answers are off (agent.json judge.off)")
 	}
 	gate := compares.Gate{
 		Settings:    settings,
@@ -220,38 +221,31 @@ func (p *agentPipeline) Ask(ctx context.Context, q Question, run RunInfo) (Recor
 		}
 		rec.Answers = append(rec.Answers, a)
 	}
-	// The judges, then the combined answer.
+	// The comparison, which ends once it has the answers, then the
+	// combined answer.
 	var c compares.Comparison
-	var judgedAt time.Time
+	var endedAt time.Time
 	for {
 		c, _ = p.cmp.Get(owner, cid)
-		if judgedAt.IsZero() && c.Status != compares.Waiting && c.Status != compares.Running {
-			judgedAt = time.Now()
+		if endedAt.IsZero() && c.Status != compares.Waiting && c.Status != compares.Running {
+			endedAt = time.Now()
 		}
 		s := c.Synthesis
-		if !judgedAt.IsZero() && (s == nil || s.Status == compares.SynthOff || (s.Status != compares.SynthWaiting && s.Status != compares.SynthRunning)) {
+		if !endedAt.IsZero() && (s == nil || s.Status == compares.SynthOff || (s.Status != compares.SynthWaiting && s.Status != compares.SynthRunning)) {
 			break
 		}
 		if err := sleep(ctx, 250*time.Millisecond); err != nil {
 			return rec, err
 		}
 	}
-	cr := &CompareRec{Status: c.Status, Ms: judgedAt.Sub(answersAt).Milliseconds(), Counts: c.Counts, Requests: len(c.Requests)}
-	for _, req := range c.Requests {
-		if req.Status == judge.RequestFailed {
-			cr.Failed++
-			if req.Error != nil && cr.Detail == "" {
-				cr.Detail = clip(req.Error.Message, 300)
-			}
-		}
-	}
+	cr := &CompareRec{Status: c.Status, Ms: endedAt.Sub(answersAt).Milliseconds()}
 	if c.Error != nil {
 		cr.Error, cr.Detail = c.Error.Code, clip(c.Error.Message, 300)
 	}
 	rec.Compare = cr
 	rec.Task = p.synthTask(q.Text, c, rec.Answers, r.Refine)
 	if s := c.Synthesis; s != nil && s.Status != compares.SynthOff {
-		sr := &SynthRec{Status: s.Status, Agent: s.Agent, Model: s.Model, Ms: s.Ms, In: s.InputTokens, Out: s.OutputTokens, Judged: s.Judged, Unnamed: s.UnnamedSides, Text: s.Text}
+		sr := &SynthRec{Status: s.Status, Agent: s.Agent, Model: s.Model, Ms: s.Ms, In: s.InputTokens, Out: s.OutputTokens, Text: s.Text}
 		if s.Error != nil {
 			sr.Error, sr.Detail = s.Error.Code, clip(s.Error.Message, 300)
 		}
@@ -275,9 +269,9 @@ func specOf(r *RefineRec) judge.QuestionSpec {
 }
 
 // synthTask is the task the writer got, made again from the comparison's
-// snapshot (its answers' units and its items) and the answers' texts the
+// snapshot (its answers, in the turn's order) and the answers' texts the
 // way compares makes it, so resynth can write once more from the same
-// answers and judgments (C4, E0). It is nil without a comparison.
+// answers (C4, E0). It is nil without a comparison.
 func (p *agentPipeline) synthTask(question string, c compares.Comparison, answers []AnswerRec, rf *runs.Refine) *judge.SynthTask {
 	if len(c.Answers) == 0 {
 		return nil
@@ -293,8 +287,7 @@ func (p *agentPipeline) synthTask(question string, c compares.Comparison, answer
 		agentOf[a.ID] = a.Agent
 		spec.Answers = append(spec.Answers, a)
 	}
-	judged := slices.ContainsFunc(c.Requests, func(r judge.Request) bool { return r.Status == judge.RequestDone })
-	t := judge.BuildSynthTask(spec, c.Items, judged, func(id string) string {
+	t := judge.BuildSynthTask(spec, func(id string) string {
 		if n := p.names[agentOf[id]]; n != "" {
 			return n
 		}

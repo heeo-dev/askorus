@@ -333,21 +333,18 @@ describe('settings', () => {
     expect(await screen.findByRole('button', { name: 'New session defaults' })).toHaveAccessibilityValue({ text: 'haiku · max' });
   });
 
-  test('the default tier, comparison, combined answer and its writer are saved in the ask prefs', async () => {
+  test('the default tier, the combined answer and its writer are saved in the ask prefs', async () => {
     const user = userEvent.setup();
     await renderRouter(routes, { initialUrl: '/settings' });
     await user.press(await screen.findByRole('radio', { name: 'Deep' }));
     await waitFor(async () => expect((await loadAskPrefs()).tier).toBe('deep'));
     expect(screen.getByRole('radio', { name: 'Deep' })).toBeChecked();
 
-    const compare = screen.getByRole('switch', { name: 'Compare answers automatically' });
-    const was = (await loadAskPrefs()).compare;
-    expect(compare.props.accessibilityState.checked).toBe(was);
-    await user.press(compare);
-    await waitFor(async () => expect((await loadAskPrefs()).compare).toBe(!was));
-
-    const synth = screen.getByRole('switch', { name: 'Write a combined answer once compared' });
+    // Since C6 the one switch: no comparing of its own to turn off.
+    expect(screen.queryByRole('switch', { name: 'Compare answers automatically' })).toBeNull();
+    const synth = screen.getByRole('switch', { name: 'Write a combined answer once the answers are in' });
     const synthWas = (await loadAskPrefs()).synth;
+    expect(synth.props.accessibilityState.checked).toBe(synthWas);
     await user.press(synth);
     await waitFor(async () => expect((await loadAskPrefs()).synth).toBe(!synthWas));
 
@@ -368,7 +365,7 @@ describe('settings', () => {
     await user.press(screen.getByRole('button', { name: 'About the moderator' }));
     const info = within(await screen.findByTestId('compare-info'));
     expect(info.queryByText(/answers start about 5 seconds later/)).toBeNull();
-    expect(info.getByText(/each AI judges twice more/)).toBeTruthy();
+    expect(info.queryByText(/judg/)).toBeNull();
     expect(info.getByText(/That AI's company receives the question and every answer/)).toBeTruthy();
   });
 

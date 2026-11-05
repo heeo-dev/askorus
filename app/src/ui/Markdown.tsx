@@ -147,8 +147,8 @@ const footnoteRef: TokenizerExtension = {
 };
 
 // Math: formulas on lines of their own are read here (blockMathAt); math
-// inside a line follows the rules in inlineMath.ts (mathAt), which the
-// agent's units share (docs/judge/testdata/inline-math.json).
+// inside a line follows the rules in inlineMath.ts (mathAt), tested by the
+// cases in inline-math-cases.json.
 
 const mathInline: TokenizerExtension = {
   name: 'mathInline',

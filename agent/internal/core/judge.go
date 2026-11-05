@@ -7,100 +7,46 @@ import (
 	"time"
 )
 
-// Comparison judging (비교 판정, P2-3): when two or more AIs answer one
-// question, an AI that wrote neither of two answers, and does not work for
-// either answer's company, judges unit by unit whether the other answer
-// says the same, the opposite or nothing about it. The design is "P2-3 비교
-// 판정 설계" in docs/phase2-plan.md. internal/judge holds the logic that
-// knows no AI; each adapter owns its own judge command (principle 2).
+// What is left of comparison judging (비교 판정, P2-3). Until 2026-11-05
+// the AIs judged each other's answers unit by unit; since C6 (#19) the
+// moderator alone writes the combined answer, and C6d (#24) removed the
+// judging. Its one-off command (no tools, no MCP, no saved conversation,
+// the prompt on stdin) stays: the combined answer (Synthesizer) and
+// refining run it, in the judge folder, with the judge's error codes as
+// wire values. The names are the judging days'.
 
-// Judger is implemented by engines that can judge: adapters, through
-// their AI's CLI, and later API engines. It is apart from Asker, whose
-// checkers require the web tools: a judge gets no tools, keeps no
-// conversation and never carries one on.
+// Judger is implemented by adapters that can name the company of a model
+// they run. The gate lets only such an AI write combined answers, and a
+// comparison's answers carry it. The name is the judging days'.
 type Judger interface {
-	// Judge runs one judge request to its end and returns the judge's
-	// output unchecked; internal/judge validates it. CLI engines send
-	// req.Prompt on stdin, API engines build their call from req.Task.
-	//
-	// Judge applies JudgeTimeout itself (context.WithTimeout on ctx), timed
-	// from the call, which the caller makes once the request has its slot;
-	// a shorter deadline of ctx still wins. It returns the JudgeResult it
-	// has, Model, tokens and Cleanup, together with any error, and the
-	// caller collects Cleanup whatever the error: an OpenCode conversation
-	// of a judge that failed or reached for a tool is still deleted. An
-	// error is an *ActionError with code judge_failed (Detail is the AI's
-	// own words, at most JudgeMessageChars characters, never the judge's
-	// JSON), judge_timeout, judge_bad_output, judge_used_tool (Output is
-	// then empty), bad_model, agent_unavailable or internal. Adapters never
-	// log: the caller logs the code only.
-	Judge(ctx context.Context, req JudgeRequest) (JudgeResult, error)
-	// JudgeDefault is the model and effort the AI judges with when the
-	// settings name none. Stage 1 of 판정 검증 sets it.
-	JudgeDefault() AskModel
 	// Family names the company of a model this AI program runs, in lower
 	// case: anthropic, openai, google, deepseek, moonshot, zhipu, alibaba.
-	// A judge never judges an answer of its own company. It returns ""
-	// when it cannot tell the company, never a provider's or a placeholder
-	// name ("openrouter", "unknown"): internal/judge trusts any name it
-	// gets as a company other than the rest, and gives a judge or an
-	// answer of family "" no pair (fail closed).
+	// It returns "" when it cannot tell the company, never a provider's or
+	// a placeholder name ("openrouter", "unknown"): a writer of family ""
+	// does not write (fail closed).
 	Family(model string) string
 }
 
-// JudgeCleaner is implemented by engines whose judging leaves something
-// behind that can be removed: OpenCode keeps every run as a conversation.
-// The caller collects JudgeResult.Cleanup of one AI's requests and calls
-// CleanupJudge once, after that AI's last request of a comparison ended.
+// JudgeCleaner is implemented by engines whose one-off calls leave
+// something behind that can be removed: OpenCode keeps every run as a
+// conversation. The caller collects the Cleanup refs of one AI's calls
+// and calls CleanupJudge once, after that AI's last call of a comparison
+// ended.
 type JudgeCleaner interface {
-	// CleanupJudge removes what the judge calls with these refs left in
+	// CleanupJudge removes what the one-off calls with these refs left in
 	// folder, and nothing it did not make itself.
 	CleanupJudge(ctx context.Context, folder string, refs []string) error
 }
 
-// JudgeTask is one judge request as data: the question, the units of the
-// answer to judge and the other answer, whose units the judge cites as
-// evidence. internal/judge renders it as the prompt and checks the output
-// against it, so the product, the verification tool and API engines all
-// work from the same task.
-type JudgeTask struct {
-	Question string      // the question as the person wrote it
-	Earlier  []string    // earlier questions of a follow-up, oldest first; context only
-	Units    []JudgeUnit // ANSWER A, the units to judge: a1, a2, …
-	Other    []JudgeUnit // ANSWER B, the other answer: b1, b2, …
-	Shape    string      // "directed"; "pair" (both directions in one request) only in judge-eval
-	Labels   string      // "v1": same, opposite or absent, plus unsure (JudgeSchemaV1); "v1four" only in judge-eval
-}
-
-// JudgeUnit is one line of an answer as a judge sees it. A unit has an id
-// and its text, and Context holds its table header (Kind "row") or the
-// start of its parent list item (Kind "item"). A context line, such as a
-// heading or code that is not judged, has no id and only Context.
-type JudgeUnit struct {
-	ID      string // "a3" or "b3", for unit 3 of its answer; empty for a context line
-	Kind    string // sentence, item, row or quote; empty for a context line
-	Text    string
-	Context string
-}
-
-// JudgeRequest is one judge call.
-type JudgeRequest struct {
-	Folder string    // the judge folder, <ask folder>\judge: absolute, exists, outside any project
-	Task   JudgeTask // the task as data, for API engines
-	Prompt string    // the task as the judge-v1 prompt, for CLI engines; sent on stdin, never as an argument
-	Model  string    // empty: JudgeDefault's
-	Effort string    // empty: JudgeDefault's
-}
-
-// JudgeResult is one judge's output. Output is untrusted and never logged.
-// Judge returns it with its error too (see Judger.Judge): Model, the tokens
-// and Cleanup as far as the run got.
+// JudgeResult is what an adapter's output parser reads from one run of
+// the one-off command; Synthesize turns it into a SynthResult. Output is
+// untrusted and never logged.
 type JudgeResult struct {
-	// Output is the judge's JSON as the AI gave it: Claude's
-	// structured_output, Codex's last agent_message, or OpenCode's last
-	// text, which may sit in a code fence or among other words.
+	// Output is the JSON as the AI gave it: Claude's structured_output,
+	// Codex's last agent_message, or OpenCode's last text, which may sit
+	// in a code fence or among other words.
 	Output json.RawMessage
-	Model  string // the model that judged, as the AI names it
+	Model  string // the model that answered, as the AI names it
 	// Tokens the AI reports, for counting use; zero when it reports none.
 	InputTokens  int
 	OutputTokens int
@@ -109,67 +55,53 @@ type JudgeResult struct {
 	Cleanup string
 }
 
-// Judge error codes, on one request (requests[].error) or on a whole
-// comparison (error). Adapters return judge_failed, judge_timeout,
-// judge_bad_output and judge_used_tool as ActionError codes, and
-// ErrCodeBadModel, ErrCodeAgentUnavailable and ErrCodeInternal as asks
-// and the API do; internal/judge and the comparisons give the rest. An ActionError's Error() carries its
-// Detail, and judge_failed's Detail is the judging AI's own words, which
-// may quote the answers: the comparison turns an adapter's Judge error
-// into a judge.Error (Code, and Detail as Message) at once, and logs only
-// the code, never the error value (spec part 6, 로그).
+// Error codes of the one-off calls and of comparisons, on a combined
+// answer (synthesis.error), a comparison (error) or an API reply. They
+// are wire values from the judging days and keep their names. Adapters
+// return judge_failed, judge_timeout, judge_bad_output and judge_used_tool
+// as ActionError codes, and ErrCodeBadModel, ErrCodeAgentUnavailable and
+// ErrCodeInternal as asks and the API do; internal/judge and the
+// comparisons give the rest. An ActionError's Error() carries its Detail,
+// and judge_failed's Detail is the AI's own words, which may quote the
+// answers: the comparison turns an adapter's error into a judge.Error
+// (Code, and Detail as Message) at once, and logs only the code, never the
+// error value.
 const (
 	ErrCodeJudgeFailed        = "judge_failed"         // the AI ran and reported an error; Detail is its message, at most 300 characters
-	ErrCodeJudgeTimeout       = "judge_timeout"        // no output within 2 minutes, or 5 minutes in the queue
-	ErrCodeJudgeBadOutput     = "judge_bad_output"     // the output is not the judge JSON, also when asked again
-	ErrCodeJudgeUsedTool      = "judge_used_tool"      // the judge reached for a tool; its output is thrown away
-	ErrCodeNoJudge            = "no_judge"             // no AI may judge the pair: the others wrote an answer, work for an answer's company or cannot judge
+	ErrCodeJudgeTimeout       = "judge_timeout"        // no output within the time limit, or 5 minutes in the queue
+	ErrCodeJudgeBadOutput     = "judge_bad_output"     // the output is not the JSON asked for, also when asked again
+	ErrCodeJudgeUsedTool      = "judge_used_tool"      // the AI reached for a tool; its output is thrown away
+	ErrCodeNoJudge            = "no_judge"             // no AI on this PC may write the combined answer
 	ErrCodeNeedTwoAnswers     = "need_two_answers"     // fewer than two answers to compare
 	ErrCodeTooManyComparisons = "too_many_comparisons" // 8 comparisons are still unfinished
-	// ErrCodeCancelled is a request the comparison's cancel dropped while it
+	// ErrCodeCancelled is a call the comparison's cancel dropped while it
 	// waited in the queue, and a waiting comparison that was cancelled
-	// before its run ended (POST /v1/comparisons/{id}/cancel). A request
-	// that already runs finishes, but is not asked again.
+	// before its run ended (POST /v1/comparisons/{id}/cancel). A call that
+	// already runs finishes, but is not asked again.
 	ErrCodeCancelled = "cancelled"
 	// ErrCodeInternal is the agent's own fault, never the AI's: an empty
-	// prompt, or a judge schema file that changed after the agent wrote
-	// it. It is api.CodeInternal.
+	// prompt, or a schema file that changed after the agent wrote it. It
+	// is api.CodeInternal.
 	ErrCodeInternal = "internal"
 )
 
-// Judge limits and the judge folder (spec part 8).
+// Limits of the one-off calls and the judge folder.
 const (
-	// JudgeTimeout bounds one judge run, timed from when it got its slot.
-	// Every adapter's Judge applies it itself.
-	JudgeTimeout = 2 * time.Minute
 	// JudgeCleanupTimeout bounds one OpenCode session list or delete.
 	JudgeCleanupTimeout = 30 * time.Second
 	// JudgeMessageChars bounds judge_failed's Detail, in characters.
 	JudgeMessageChars = 300
 	// JudgeFolderName is the judge folder inside the ask folder.
 	JudgeFolderName = "judge"
-	// JudgeSchemaFile names the judge schema file (JudgeSchemaV1) in the
-	// agent folder: codex reads --output-schema from a file only, and
-	// uninstall removes it.
-	JudgeSchemaFile = "judge-schema-v1.json"
 )
 
-// JudgeFolder is where judges run: <ask folder>\judge, an empty folder
-// outside every project like the ask folder. Its sessions are hidden from
-// GET /v1/sessions and the CLI sessions command, and an ask never carries
-// a conversation of it on. It is "" when askFolder is "".
+// JudgeFolder is where the one-off calls run: <ask folder>\judge, an empty
+// folder outside every project like the ask folder. Its sessions are
+// hidden from GET /v1/sessions and the CLI sessions command, and an ask
+// never carries a conversation of it on. It is "" when askFolder is "".
 func JudgeFolder(askFolder string) string {
 	if askFolder == "" {
 		return ""
 	}
 	return filepath.Join(filepath.Clean(askFolder), JudgeFolderName)
 }
-
-// JudgeSchemaV1 is the JSON schema of a judge's output with labels v1.
-// It is written by hand: Go sorts map keys, which would put label before
-// reason, and the order id, core, evidence, reason, label, unsure makes
-// the judge pick and explain before it concludes. Claude gets it with
-// --json-schema and Codex reads the same bytes from a file. Every object
-// requires all its properties and allows no others, as Codex's strict
-// mode wants.
-const JudgeSchemaV1 = `{"type":"object","properties":{"judgments":{"type":"array","items":{"type":"object","properties":{"id":{"type":"string"},"core":{"type":"boolean"},"evidence":{"type":"array","items":{"type":"string"}},"reason":{"type":"string"},"label":{"type":"string","enum":["same","opposite","absent"]},"unsure":{"type":"boolean"}},"required":["id","core","evidence","reason","label","unsure"],"additionalProperties":false}}},"required":["judgments"],"additionalProperties":false}`

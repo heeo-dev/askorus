@@ -15,21 +15,16 @@ import (
 	"github.com/asksemble/asksemble/agent/internal/judge"
 )
 
-// resynth writes a run's combined answers again from the same answers and
-// judgments (the task each record keeps), with another tier's model or
-// another prompt, into a new run (C4, E2). Only the writer changes, so two
-// such runs compare the combined answer alone, without the answers' luck.
+// resynth writes a run's combined answers again from the same answers (the
+// task each record keeps), with another tier's model or another prompt,
+// into a new run (C4, E2). Only the writer changes, so two such runs
+// compare the combined answer alone, without the answers' luck.
 
 // synthVariants are the combined-answer prompts resynth writes with, by
-// name: product is the agent's own (synth-v4). A draft to try goes here,
+// name: product is the agent's own (synth-v5). A draft to try goes here,
 // its text in variants.go.
 var synthVariants = map[string]func(judge.SynthTask, string) string{
 	"product": judge.SynthPrompt,
-	"c5-b":    synthC5B,
-	"c5-nj":   synthC5NoJudge,
-	"c5-m":    synthC5M,
-	"c5-one":  synthC5One,
-	"c5-one2": synthC5One2,
 	"c5-solo": synthC5Solo,
 	"c5-sel":  c5SoloWith("c5-sel", "sel"),
 	"c5-nat":  c5SoloWith("c5-nat", "nat"),
@@ -38,13 +33,6 @@ var synthVariants = map[string]func(judge.SynthTask, string) string{
 	"c5-sfd":  c5SoloWith("c5-sfd", "sel", "few", "nodup"),
 	"c5-si":   c5SoloWith("c5-si", "sel", "inline"),
 	"c5-sq":   c5SoloWith("c5-sq", "sel", "quiet"),
-}
-
-// synthSplits take a variant's reply apart when it holds more than the
-// combined answer: the answer, and the list of differences it carries.
-var synthSplits = map[string]func(string, []judge.SynthAnswer) (string, *DiffRec){
-	"c5-one":  splitC5One,
-	"c5-one2": splitC5One,
 }
 
 func variantNames() []string {
@@ -59,7 +47,7 @@ func variantNames() []string {
 func resynthCmd(ctx context.Context, args []string, out, errOut io.Writer) int {
 	fs := flag.NewFlagSet("resynth", flag.ContinueOnError)
 	fs.SetOutput(errOut)
-	from := fs.String("from", "", "the run whose answers and judgments to write from")
+	from := fs.String("from", "", "the run whose answers to write from")
 	name := fs.String("run", "", "the new run's name (a-z, 0-9, -)")
 	only := fs.String("only", "", "question IDs to keep, comma-separated")
 	tier := fs.String("tier", core.TierQuick, "the tier whose model writes: quick, standard or deep")
@@ -178,12 +166,6 @@ func resynthRecords(ctx context.Context, w writer, src []Record, from string, ru
 		rec.Seq, rec.Stop = i+1, ""
 		rec.At = now().UTC().Format(time.RFC3339)
 		rec.Synth = writeSynth(ctx, w, *r.Task, run.Writer, run.SynthTier, prompt)
-		rec.Differs = nil
-		if split := synthSplits[run.Synth]; split != nil && rec.Synth.Status == "done" {
-			sr := rec.Synth
-			sr.Text, rec.Differs = split(sr.Text, r.Task.Answers)
-			rec.Differs.Agent, rec.Differs.Model, rec.Differs.Ms, rec.Differs.In, rec.Differs.Out = sr.Agent, sr.Model, sr.Ms, sr.In, sr.Out
-		}
 		if ctx.Err() != nil {
 			fmt.Fprintf(out, "%-12s interrupted; run again with -resume\n", r.Question.ID)
 			return exitInterrupted
@@ -196,18 +178,6 @@ func resynthRecords(ctx context.Context, w writer, src []Record, from string, ru
 			return exitError
 		}
 		fmt.Fprintln(out, progressLine(rec))
-		if d := rec.Differs; d != nil {
-			quotes, found := 0, 0
-			for _, p := range d.Places {
-				for _, sd := range p.Sides {
-					quotes++
-					if sd.Found {
-						found++
-					}
-				}
-			}
-			fmt.Fprintf(out, "%-12s list %s: %d places, quotes found %d/%d %s\n", "", d.Status, len(d.Places), found, quotes, d.Error)
-		}
 		if rec.Stop == "usage_limit" {
 			fmt.Fprintln(out, "stopped on a usage limit; run again with -resume when it resets")
 			return exitUsageLimit
@@ -219,7 +189,7 @@ func resynthRecords(ctx context.Context, w writer, src []Record, from string, ru
 // writeSynth asks the writer for task's combined answer, once more with a
 // new nonce when the reply is not one, as compares does.
 func writeSynth(ctx context.Context, w writer, task judge.SynthTask, agent, tier string, prompt func(judge.SynthTask, string) string) *SynthRec {
-	sr := &SynthRec{Status: "failed", Agent: agent, Judged: task.Compared}
+	sr := &SynthRec{Status: "failed", Agent: agent}
 	for attempt := 1; attempt <= 2; attempt++ {
 		p := prompt(task, judge.SynthNonce(task))
 		if p == "" {
@@ -250,7 +220,6 @@ func writeSynth(ctx context.Context, w writer, task judge.SynthTask, agent, tier
 			return sr
 		}
 		sr.Status, sr.Error, sr.Detail, sr.Text = "done", "", "", text
-		sr.Unnamed = judge.UnnamedSides(task, text)
 		return sr
 	}
 	return sr

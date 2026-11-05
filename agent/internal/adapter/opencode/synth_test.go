@@ -21,10 +21,6 @@ func synthTask() judge.SynthTask {
 	return judge.SynthTask{
 		Question: "첫 배는 몇 시인가요?",
 		Answers:  []judge.SynthAnswer{{AI: "Claude", Text: "7시입니다."}, {AI: "OpenCode", Text: "8시입니다."}},
-		Differ: []judge.SynthDiffer{{Sides: []judge.SynthSide{
-			{AIs: []string{"Claude"}, Says: []string{"7시입니다."}}, {AIs: []string{"OpenCode"}, Says: []string{"8시입니다."}},
-		}}},
-		Compared: true,
 	}
 }
 
@@ -81,18 +77,18 @@ func TestSynthArgsEnvAndStdin(t *testing.T) {
 		prompt != "You write the combined answer for the Asksemble app. Reply only with the JSON the message asks for, and use no tools." {
 		t.Errorf("synth agent = %v", ag)
 	}
-	if synthConfig == judgeConfig || synthConfig == askConfig {
+	if synthConfig == askConfig {
 		t.Error("the synth agent is not its own")
 	}
 	if !bytes.HasPrefix(res.Output, []byte("```json\n")) || res.Model != testSynthModel+"#max" || res.InputTokens != 120 || res.OutputTokens != 5 {
 		t.Errorf("result = %+v", res)
 	}
 	text, err := judge.ValidateSynth(res.Output)
-	if err != nil || judge.UnnamedSides(synthTask(), text) != 0 {
+	if err != nil || !strings.HasPrefix(text, fakecli.SynthLead) {
 		t.Errorf("ValidateSynth = %q, %v", text, err)
 	}
 	// The conversation it left has the judge title in the judge folder,
-	// and its id is the cleanup ref: CleanupJudge deletes it as a judge's.
+	// and its id is the cleanup ref: CleanupJudge deletes it.
 	ss := fakecli.Sessions(t)
 	if len(ss) != 1 || res.Cleanup != ss[0].ID || ss[0].Title != judgeTitle || !sameFolder(ss[0].Directory, jf) {
 		t.Fatalf("cleanup %q, sessions %+v", res.Cleanup, ss)
@@ -128,22 +124,18 @@ func TestCheckSynthArgs(t *testing.T) {
 	}
 	set := func(i int, v string) []string { s := slices.Clone(good); s[i] = v; return s }
 	for name, args := range map[string][]string{
-		"judge agent":     set(5, judgeAgent),
+		"old judge agent": set(5, "asksemble-judge"),
 		"ask agent":       set(5, askAgent),
 		"other title":     set(9, "asksemble-synth"),
 		"no title":        good[:8],
 		"model as a flag": synthArgs("--port"),
 		"prompt argument": append(slices.Clone(good), "첫 배"),
 		"session":         append(slices.Clone(good), "--session", "ses_abcdefghijklmnopqrstuvwxyz"),
-		"judge args":      judgeArgs(testSynthModel),
 		"ask args":        askArgs(testSynthModel, ""),
 	} {
 		if err := checkSynthArgs(args); err == nil {
 			t.Errorf("%s: %q accepted", name, args)
 		}
-	}
-	if err := checkJudgeArgs(good); err == nil {
-		t.Error("the judge check accepted synth arguments")
 	}
 	if err := checkArgs(good); err == nil {
 		t.Error("the ask check accepted synth arguments")

@@ -8,16 +8,21 @@ import (
 )
 
 // codexMain plays codex: exec with --output-schema is a combined-answer
-// writer when the schema file holds the synth schema and a judge
-// otherwise, any other exec (also after --search) an ask.
+// writer (or a moderator refining a question) when the schema file holds
+// the synth or refine schema, any other exec (also after --search) an
+// ask. A schema file that cannot be read ends the run first, as codex
+// does; any other schema is unexpected.
 func codexMain(c *Call, schemaErr error) int {
 	exec := len(c.Args) > 0 && c.Args[0] == "exec" ||
 		len(c.Args) > 1 && c.Args[0] == "--search" && c.Args[1] == "exec"
 	switch {
-	case exec && slices.Contains(c.Args, "--output-schema") && schemaErr == nil && isSynthSchema(c.Schema):
+	case exec && slices.Contains(c.Args, "--output-schema") && schemaErr != nil:
+		fmt.Fprintf(os.Stderr, "Error: failed to read output schema file %s: %v\n", flagValue(c.Args, "--output-schema"), schemaErr)
+		return 1
+	case exec && slices.Contains(c.Args, "--output-schema") && isSynthSchema(c.Schema):
 		return codexSynth(c)
 	case exec && slices.Contains(c.Args, "--output-schema"):
-		return codexJudge(c, schemaErr)
+		return unexpected(RoleCodex)
 	case exec:
 		return codexAsk(c)
 	}
@@ -44,52 +49,6 @@ func codexFail(msg string) int {
 	codexEvent(map[string]any{"type": "error", "message": msg})
 	codexEvent(map[string]any{"type": "turn.failed", "error": map[string]string{"message": msg}})
 	return 1
-}
-
-// codexJudge prints the events of a judge: thread.started, turn.started,
-// a reasoning item, the judge JSON as the agent_message and
-// turn.completed. A schema file that cannot be read ends it first, as
-// codex does.
-func codexJudge(c *Call, schemaErr error) int {
-	if schemaErr != nil {
-		fmt.Fprintf(os.Stderr, "Error: failed to read output schema file %s: %v\n", flagValue(c.Args, "--output-schema"), schemaErr)
-		return 1
-	}
-	mode, err := judgeMode(RoleCodex)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "fakecli:", err)
-		return 2
-	}
-	codexEvent(map[string]any{"type": "thread.started", "thread_id": newUUID()})
-	codexEvent(map[string]any{"type": "turn.started"})
-	if mode == ModeSlow {
-		sleepSlow()
-	}
-	text := judgeText(mode, c.Stdin)
-	switch mode {
-	case ModeUsageLimit:
-		return codexFail(UsageLimitCodex)
-	case ModeBadModel:
-		model := flagValue(c.Args, "-m")
-		inner, _ := json.Marshal(map[string]any{"type": "error", "status": 400, "error": map[string]string{
-			"type": "invalid_request_error", "code": "model_not_found",
-			"message": "The '" + model + "' model is not supported when using Codex with a ChatGPT account.",
-		}})
-		codexEvent(map[string]any{"type": "item.completed", "item": codexItem("error", "item_0", map[string]any{"message": "Model metadata for " + model + " not found."})})
-		return codexFail(string(inner))
-	case ModeToolUse:
-		cmd := map[string]any{"command": ToolCommand, "aggregated_output": "", "exit_code": nil, "status": "in_progress"}
-		codexEvent(map[string]any{"type": "item.started", "item": codexItem("command_execution", "item_0", cmd)})
-		cmd["status"], cmd["exit_code"], cmd["aggregated_output"] = "declined", 1, "rejected by sandbox"
-		codexEvent(map[string]any{"type": "item.completed", "item": codexItem("command_execution", "item_0", cmd)})
-	}
-	codexEvent(map[string]any{"type": "item.completed", "item": codexItem("reasoning", "item_1", map[string]any{"text": "**Comparing the two answers**"})})
-	codexEvent(map[string]any{"type": "item.completed", "item": codexItem("agent_message", "item_2", map[string]any{"text": text})})
-	if mode == ModeFailedWithOutput {
-		return codexFail("stream disconnected before completion")
-	}
-	codexEvent(map[string]any{"type": "turn.completed", "usage": map[string]int{"input_tokens": 100, "cached_input_tokens": 80, "output_tokens": 9}})
-	return 0
 }
 
 // codexAsk answers like the codex fake of the adapter's own tests: a

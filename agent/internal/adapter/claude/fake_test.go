@@ -32,7 +32,8 @@ import (
 //	ASKSEMBLE_FAKE_EXIT       exit code
 //	ASKSEMBLE_FAKE_SLEEP      duration to sleep first
 //
-// Judges (judge_test.go) use the shared fake of internal/fakecli instead,
+// Combined answers and refining (synth_test.go, refine_test.go) use the
+// shared fake of internal/fakecli instead,
 // which takes over when ASKSEMBLE_FAKECLI is set (fakecli.Use).
 func TestMain(m *testing.M) {
 	if fakecli.Active() {

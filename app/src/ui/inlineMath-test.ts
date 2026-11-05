@@ -1,8 +1,8 @@
-// The phone and the agent find math in a line by the same rules: both run
-// the cases in docs/judge/testdata/inline-math.json (the agent's is
-// TestInlineMathSharedCases in agent/internal/judge/math_test.go).
+// The phone finds math in a line by the rules of inlineMath.ts: every case
+// in inline-math-cases.json (shared with the agent's judged units until
+// C6d, #24, when it moved here from docs/judge/testdata).
 
-import fixture from '../../../docs/judge/testdata/inline-math.json';
+import fixture from './inline-math-cases.json';
 
 import { inlineMathSpans, mathAt, texOfSpan } from './inlineMath';
 

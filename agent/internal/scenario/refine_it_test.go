@@ -2,8 +2,8 @@ package scenario
 
 // IT-16 (docs/testing.md): question refining (질문 정제, milestone C)
 // through the whole agent: the moderator fills in the question's spec,
-// every AI is asked the question with its answer template, the judges get
-// the question as written, and the combined answer is synth-v4. Refining is
+// every AI is asked the question with its answer template, the writer gets
+// the question as written, and the combined answer is synth-v5. Refining is
 // off in the agent since 2026-11-04 (C4); these tests turn it on.
 
 import (
@@ -35,7 +35,7 @@ func callsOfKind(t *testing.T, kind string) []fakecli.Call {
 // 2026-11-04 (C4), and these tests keep its code working.
 func refineOn(o *rigOptions) { o.refine = true }
 
-func TestRefineAsksWithTheTemplateAndWritesV4(t *testing.T) {
+func TestRefineAsksWithTheTemplateAndWritesV5(t *testing.T) {
 	r := newRig(t, refineOn)
 	r.addDevice()
 	st := r.ask(nil, map[string]any{
@@ -70,20 +70,16 @@ func TestRefineAsksWithTheTemplateAndWritesV4(t *testing.T) {
 			t.Errorf("%s ask stdin lacks the template (or came before refining): %q", a.Role, a.Stdin)
 		}
 	}
-	// The judges get the question as written, never the template.
-	for _, j := range callsOfKind(t, kindJudge) {
-		if strings.Contains(j.Stdin, templateMark) {
-			t.Errorf("%s judge got the template", j.Role)
-		}
-	}
-	// The combined answer is synth-v4, which reads the question itself: no SPEC line, no FORM.
+	// The combined answer is synth-v5, which reads the question itself as
+	// written, never the template: no SPEC line, no FORM.
 	s := synthOf(t, c)
 	writers := callsOfKind(t, kindSynth)
 	if s.Status != compares.SynthDone || len(writers) != 1 {
 		t.Fatalf("synth %+v, %d writer calls", s, len(writers))
 	}
-	if w := writers[0].Stdin; !strings.HasPrefix(w, "[Asksemble synthesis v4]") || strings.Contains(w, "\nSPEC: ") || strings.Contains(w, "\nFORM. ") {
-		t.Errorf("writer prompt is not synth-v4: %q", w[:min(len(w), 200)])
+	if w := writers[0].Stdin; !strings.HasPrefix(w, "[Asksemble synthesis v5]") || strings.Contains(w, "\nSPEC: ") || strings.Contains(w, "\nFORM. ") ||
+		strings.Contains(w, templateMark) {
+		t.Errorf("writer prompt is not synth-v5 with the question as written: %q", w[:min(len(w), 200)])
 	}
 }
 
@@ -113,7 +109,7 @@ func TestRefineThatFailsAsksTheQuestionAsWritten(t *testing.T) {
 
 // The agent's default since 2026-11-04: a run that asks for refining (an
 // older app does by default) is asked as written, with no moderator call,
-// no refine in its snapshot and synth-v4 for the combined answer.
+// no refine in its snapshot and synth-v5 for the combined answer.
 func TestRefineIsOffInTheAgent(t *testing.T) {
 	r := newRig(t, nil)
 	r.addDevice()
@@ -140,7 +136,7 @@ func TestRefineIsOffInTheAgent(t *testing.T) {
 	c, _ := r.waitComparison(st.ComparisonID)
 	s := synthOf(t, c)
 	writers := callsOfKind(t, kindSynth)
-	if s.Status != compares.SynthDone || len(writers) != 1 || !strings.HasPrefix(writers[0].Stdin, "[Asksemble synthesis v4]") {
+	if s.Status != compares.SynthDone || len(writers) != 1 || !strings.HasPrefix(writers[0].Stdin, "[Asksemble synthesis v5]") {
 		t.Fatalf("synth %+v, %d writer calls", s, len(writers))
 	}
 	// A moderator name that is no AI's is not refused either: the field is ignored.

@@ -1,8 +1,8 @@
 // 한 번에 / All at once ('/', S5c): the app opens here. One question goes to
 // the current PC's AIs at once (POST /v1/runs); while they answer, who is
-// at it; once the answers are in, the AIs judge each other's answers and
-// one writes a combined answer, shown with where the AIs differ, the AIs'
-// own answers as cards, and the evidence (F-Ask-Empty … F-Result-Light).
+// at it; once the answers are in, the moderator AI writes a combined answer
+// from them (C6, #19), shown with the AIs' own answers as cards
+// (F-Ask-Empty … F-Result-Light).
 // Follow-ups go to everyone or one AI, each carrying its own conversation
 // on; Claude's answer can be carried on in the Claude app.
 //
@@ -22,10 +22,10 @@ import { AppState, Keyboard, Linking, Pressable, ScrollView, type ScrollViewInst
 import { agentName } from '@/api/agents';
 import type { AgentClient } from '@/api/client';
 import { type Info, type RunPart, type Tier, tiers } from '@/api/types';
-import { type CardKind, canSynthesize, judgedBy, polling, writerFor } from '@/ask/compare';
+import { canSynthesize, polling, writerFor } from '@/ask/compare';
 import { conversations, recentQuestions, useConversations } from '@/ask/conversations';
 import { features } from '@/ask/features';
-import { aiStatus, askErrorText, displayModel, metaLine, onlyTarget, partViews, rowValue, snapshotOf } from '@/ask/present';
+import { aiStatus, askErrorText, displayModel, metaLine, onlyTarget, partViews, rowValue } from '@/ask/present';
 import { type AskPrefs, defaultAskPrefs, loadAskPrefs, saveAskPrefs } from '@/ask/prefs';
 import { askers, type FollowDeps, followCompare, followRun, newTurn, running, stopAll, type Target, type Turn } from '@/ask/thread';
 import { connect } from '@/connections/open';
@@ -39,15 +39,13 @@ import { Composer, FollowBar } from '@/ui/Composer';
 import { Spinner } from '@/ui/controls';
 import { Header } from '@/ui/Header';
 import { Icon, IconButton } from '@/ui/Icon';
-import { JudgesSheet } from '@/ui/JudgesSheet';
 import { ModelSheet } from '@/ui/ModelSheet';
-import { PairSheet } from '@/ui/PairSheet';
 import { RefineSheet } from '@/ui/Refine';
 import { ReachError } from '@/ui/ReachError';
 import { usePCs } from '@/ui/shell/pcs';
 import { themed, type Theme, useTheme } from '@/ui/theme';
 import { TierSheet } from '@/ui/TierSheet';
-import { type Note, type TurnActions, type TurnUI, TurnView } from '@/ui/TurnView';
+import { type Note, type TurnActions, TurnView } from '@/ui/TurnView';
 
 const store = new ConnectionStore();
 
@@ -61,20 +59,14 @@ type SheetState =
   | { kind: 'tier' }
   | { kind: 'ais'; turn: string }
   | { kind: 'answer'; turn: string; agent: string }
-  | { kind: 'pair'; turn: string; key: string }
-  | { kind: 'judges'; turn: string }
   | { kind: 'refine'; turn: string }
   | null;
-
-const noUI: TurnUI = { more: [], expanded: [] };
 
 // An agent from before asks (P2-1) reports Claude alone and no tiers; a
 // newer one always lists the AIs that only answer questions too.
 function oldAgent(info: Info): boolean {
   return info.agents.every((a) => a.agent === 'claude' && !a.ask);
 }
-
-const judgeOn = (info: Info) => info.agents.some((a) => a.available && a.capabilities.includes('judge'));
 
 export default function Ask() {
   const th = useTheme();
@@ -89,7 +81,6 @@ export default function Ask() {
   const [text, setText] = useState('');
   const [to, setTo] = useState<Target>('all');
   const [notes, setNotes] = useState<Record<string, Note>>({});
-  const [ui, setUI] = useState<Record<string, TurnUI>>({});
   const [sheet, setSheet] = useState<SheetState>(null);
   const follows = useRef(new Map<string, AbortController>());
   const pcRef = useRef<PC | null>(null);
@@ -111,8 +102,8 @@ export default function Ask() {
     queue(async () => saveAskPrefs({ ...(await loadAskPrefs()), ...patch }));
   };
 
-  // Back on this screen: Settings may have changed the tier, the
-  // comparison or the combined answer, and the PCs may have changed.
+  // Back on this screen: Settings may have changed the tier, the combined
+  // answer or its writer, and the PCs may have changed.
   const reloadPCs = pcs.reload;
   useFocusEffect(
     useCallback(() => {
@@ -180,7 +171,6 @@ export default function Ask() {
     turnsRef.current = [];
     setTurns([]);
     setNotes({});
-    setUI({});
     setSheet(null);
     setTo('all');
   }, [keepNow]);
@@ -282,7 +272,6 @@ export default function Ask() {
       turns,
       models: prefs.models,
       info,
-      auto: prefs.compare,
       synth: { on: prefs.synth, agent: prefs.synthAgent },
       refine: features.refine ? { on: prefs.refine, agent: prefs.synthAgent } : undefined,
       at: Date.now(),
@@ -340,8 +329,6 @@ export default function Ask() {
   const carryOn = (key: string, p: RunPart) =>
     p.agent === 'claude' && p.session && canOpen ? () => continueInClaude(key, p.session ?? '') : undefined;
 
-  const setTurnUI = (id: string, f: (u: TurnUI) => TurnUI) => setUI((m) => ({ ...m, [id]: f(m[id] ?? noUI) }));
-
   const actsFor = (turn: Turn): TurnActions => ({
     compare: (how) => {
       const p = pcRef.current;
@@ -354,17 +341,11 @@ export default function Ask() {
       if (p) followRun(p.client, turn, deps, turn.run?.runId);
     },
     openAnswer: (agent) => setSheet({ kind: 'answer', turn: turn.id, agent }),
-    openPair: (key) => setSheet({ kind: 'pair', turn: turn.id, key }),
-    openJudges: () => setSheet({ kind: 'judges', turn: turn.id }),
     openAIs: () => setSheet({ kind: 'ais', turn: turn.id }),
     openRefine: () => setSheet({ kind: 'refine', turn: turn.id }),
     copy,
     only: (agent) => onlyOf(agent),
     carryOn,
-    setEvidence: (open) => setTurnUI(turn.id, (u) => ({ ...u, evidence: open })),
-    more: (kind: CardKind) => setTurnUI(turn.id, (u) => ({ ...u, more: [...u.more, kind] })),
-    toggleDiffer: (key) =>
-      setTurnUI(turn.id, (u) => ({ ...u, expanded: u.expanded.includes(key) ? u.expanded.filter((k) => k !== key) : [...u.expanded, key] })),
   });
 
   // The last AI that is on stays on (UX-10): a question always has an AI to go to.
@@ -376,7 +357,6 @@ export default function Ask() {
   // ---- The sheets ----
 
   const sheetTurn = sheet && 'turn' in sheet ? (turns.find((x) => x.id === sheet.turn) ?? null) : null;
-  const sheetSnap = sheetTurn ? snapshotOf(sheetTurn) : undefined;
   const modelOf = (agent: string) => prefs.models[agent] || list.find((a) => a.agent === agent)?.tiers[prefs.tier]?.model || '';
   // Per tier, the models of the AIs that are on and follow the tier (#16).
   const tierModels = Object.fromEntries(
@@ -474,20 +454,12 @@ export default function Ask() {
       />
       <AnswerSheet
         p={answerView}
-        judgedBy={answerView ? judgedBy(sheetSnap, answerView.agent) : []}
         onClose={() => setSheet(null)}
         onCopy={answerView ? () => copy(answerKey, answerView.part.answer ?? '') : undefined}
         onOnly={answerView ? onlyOf(answerView.agent, () => setSheet(null)) : undefined}
         onContinue={answerView ? carryOn(answerKey, answerView.part) : undefined}
         note={answerKey ? notes[answerKey] : undefined}
       />
-      <PairSheet
-        snap={sheetSnap}
-        itemKey={sheet?.kind === 'pair' ? sheet.key : null}
-        onClose={() => setSheet(null)}
-        onShowAnswer={(agent) => sheetTurn && setSheet({ kind: 'answer', turn: sheetTurn.id, agent })}
-      />
-      <JudgesSheet turn={sheet?.kind === 'judges' ? sheetTurn : null} snap={sheetSnap} info={info} onClose={() => setSheet(null)} />
       <RefineSheet refine={sheet?.kind === 'refine' ? (sheetTurn?.run?.refine ?? null) : null} onClose={() => setSheet(null)} />
     </>
   );
@@ -532,8 +504,8 @@ export default function Ask() {
                   {t('ask.emptyTitle')}
                 </Text>
                 {/* Before the first question: where the answers go (R-34). */}
-                <Text style={s.caption}>{features.judging && judgeOn(info) && prefs.compare ? t('ask.introCompare') : t('ask.intro')}</Text>
-                {canSynthesize(info) && prefs.synth ? <Text style={s.caption}>{t(features.judging ? 'ask.introSynth' : 'ask.introModerator')}</Text> : null}
+                <Text style={s.caption}>{t('ask.intro')}</Text>
+                {canSynthesize(info) && prefs.synth ? <Text style={s.caption}>{t('ask.introModerator')}</Text> : null}
               </View>
               {recent.length ? (
                 <View>
@@ -604,7 +576,6 @@ export default function Ask() {
             now={now}
             only={i === turns.length - 1 ? one : null}
             notes={notes}
-            ui={ui[turn.id] ?? noUI}
             act={actsFor(turn)}
           />
         ))}

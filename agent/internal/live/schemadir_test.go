@@ -11,7 +11,7 @@ import (
 	"testing"
 )
 
-// Every codex adapter of the live tests writes its judge schema into a
+// Every codex adapter of the live tests writes its schema files into a
 // folder of the test (SchemaDir: t.TempDir()), never into the agent folder
 // %APPDATA%\Asksemble of the agent the person runs, where codex.Options{}
 // would put it (R-30).
@@ -34,7 +34,7 @@ func TestLiveCodexSchemaDirIsTheTests(t *testing.T) {
 			}
 			found++
 			if !hasTempSchemaDir(call) {
-				t.Errorf("%s: codex.New without SchemaDir: t.TempDir(); its judge schema would go to the real agent folder", fset.Position(call.Pos()))
+				t.Errorf("%s: codex.New without SchemaDir: t.TempDir(); its schema files would go to the real agent folder", fset.Position(call.Pos()))
 			}
 			return true
 		})

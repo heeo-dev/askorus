@@ -41,8 +41,8 @@ const (
 	// more, escaped the same way.
 	maxRunBody  = 2*maxPrompt + 8<<10 + 32<<10
 	maxClientID = 64
-	// compare's limits: the earlier questions every judge gets (judge
-	// limits) and the judges a phone may name.
+	// compare's limits: the earlier questions every listed AI gets
+	// (internal/judge's limits) and the judges a phone may name.
 	maxCompareEarlier      = judge.MaxEarlier
 	maxCompareEarlierBytes = judge.MaxEarlierBytes
 	maxCompareJudges       = compares.MaxJudges
@@ -87,11 +87,12 @@ type RunRefine struct {
 }
 
 // RunCompare is RunRequest.compare. Earlier are the earlier questions of a
-// follow-up, oldest first, at most 3 of 4 KiB; judges are the AIs that may
-// judge, in order of preference, at most 8: the agent keeps those that
-// were asked (결정 5), and every asked AI when none of them was. Synthesis
-// asks for the combined answer once the judges are done (S5b); absent is
-// off. Unknown fields are ignored (principle 4).
+// follow-up, oldest first, at most 3 of 4 KiB; judges (a name kept from
+// the judging days) are the AIs the phone sent the earlier questions to,
+// in order of preference, at most 8: the agent keeps those that were asked
+// (결정 5), and every asked AI when none of them was; a writer among them
+// gets the earlier questions. Synthesis asks for the combined answer once
+// the answers are in (S5b); absent is off. Unknown fields are ignored (principle 4).
 type RunCompare struct {
 	Earlier   []string      `json:"earlier,omitempty"`
 	Judges    []string      `json:"judges,omitempty"`
@@ -177,7 +178,7 @@ func (s *Server) attachCompare(owner, question string, run runs.Run, targets []R
 	var judges []string
 	for _, j := range c.Judges {
 		if slices.Contains(asked, j) {
-			judges = append(judges, j) // only AIs that were asked judge (결정 5)
+			judges = append(judges, j) // only AIs that were asked count (결정 5)
 		}
 	}
 	if len(judges) == 0 {

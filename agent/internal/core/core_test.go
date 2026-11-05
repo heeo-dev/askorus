@@ -145,23 +145,24 @@ func TestVersionAtLeast(t *testing.T) {
 	}
 }
 
-func TestJudgeCapabilityAndInfo(t *testing.T) {
-	if !slices.Contains(AllCapabilities, CapJudge) || CapJudge != "judge" {
-		t.Errorf("AllCapabilities = %v, want judge in it", AllCapabilities)
+// Since C6d (#24) no AI judges: the capability judge and the judge info
+// are gone, and the judging days' error codes stay as wire values.
+func TestNoJudgeCapability(t *testing.T) {
+	if slices.Contains(AllCapabilities, Capability("judge")) {
+		t.Errorf("AllCapabilities = %v, want no judge in it", AllCapabilities)
 	}
-	b, _ := json.Marshal(AdapterInfo{Agent: "codex", Capabilities: []Capability{}})
+	b, _ := json.Marshal(AdapterInfo{Agent: "claude", Capabilities: []Capability{CapAsk, CapSynthesize}})
 	if strings.Contains(string(b), "judge") {
-		t.Errorf("an AI that does not judge shows judge: %s", b)
+		t.Errorf("an AI's info shows judge: %s", b)
 	}
-	b, _ = json.Marshal(AdapterInfo{Agent: "claude", Capabilities: []Capability{CapJudge}, Judge: &JudgeInfo{Model: "sonnet", Family: "anthropic"}})
-	if want := `"judge":{"model":"sonnet","family":"anthropic"}`; !strings.Contains(string(b), want) {
-		t.Errorf("judge info = %s, want %s (effort left out when empty)", b, want)
+	codes := map[string]string{
+		ErrCodeJudgeFailed: "judge_failed", ErrCodeJudgeTimeout: "judge_timeout", ErrCodeJudgeBadOutput: "judge_bad_output",
+		ErrCodeJudgeUsedTool: "judge_used_tool", ErrCodeNoJudge: "no_judge", ErrCodeNeedTwoAnswers: "need_two_answers",
+		ErrCodeTooManyComparisons: "too_many_comparisons", ErrCodeCancelled: "cancelled", ErrCodeInternal: "internal",
 	}
-	b, _ = json.Marshal(JudgeInfo{Model: "haiku", Effort: "medium", Family: "anthropic"})
-	if string(b) != `{"model":"haiku","effort":"medium","family":"anthropic"}` {
-		t.Errorf("JudgeInfo = %s", b)
-	}
-	if JudgeSchemaFile != "judge-schema-v1.json" || ErrCodeCancelled != "cancelled" {
-		t.Errorf("JudgeSchemaFile %q, ErrCodeCancelled %q", JudgeSchemaFile, ErrCodeCancelled)
+	for got, want := range codes {
+		if got != want {
+			t.Errorf("code %q, want %q", got, want)
+		}
 	}
 }

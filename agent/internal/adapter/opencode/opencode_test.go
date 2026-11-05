@@ -21,7 +21,8 @@ import (
 // prints what `opencode run --format json` prints. Sessions it makes are
 // kept in ASKSEMBLE_FAKE_SESSIONS for `session list`.
 // ASKSEMBLE_FAKE_MODE: "badmodel", "exit" (exit 1, nothing printed).
-// The judge tests use internal/fakecli instead.
+// The combined-answer, refine and cleanup tests use internal/fakecli
+// instead.
 func TestMain(m *testing.M) {
 	if fakecli.Active() {
 		os.Exit(fakecli.Main(os.Args[1:]))

@@ -114,8 +114,8 @@ func (s *Server) launcherFor(w http.ResponseWriter, r *http.Request) (core.Launc
 }
 
 // judgeSession reports whether session id of adapter a ran in the judge
-// folder (P2-3). Such a session is a judge's, never the person's: the
-// phone never lists it, and open, stop, remove and preview answer 404 as
+// folder (P2-3). Such a session is a one-off call's, never the person's:
+// the phone never lists it, and open, stop, remove and preview answer 404 as
 // for a session that does not exist. A failing list lets the action go on:
 // this is a second line of defence, after the list's hiding, and the
 // adapter still checks the id itself (S3 decision 9).

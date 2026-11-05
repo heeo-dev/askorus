@@ -1,7 +1,7 @@
 // Package opencode is the OpenCode adapter. Phase 2 uses it for asks,
 // `opencode run --standalone` with a one-run agent that may only search
-// and read the web (P0-2, P0-7), and for comparison judging (P2-3,
-// judge.go), with a one-run agent that may use no tool. It is the only
+// and read the web (P0-2, P0-7), and for combined answers (P2-3, synth.go
+// and judge.go), with a one-run agent that may use no tool. It is the only
 // package that runs opencode or knows its formats (principle 2), and it
 // never reads OpenCode login files (N10). Session listing comes in Phase 3.
 package opencode
@@ -300,7 +300,7 @@ func runError(err error) error {
 }
 
 // checkSession looks for id among the ask folder's sessions (read only,
-// no AI call, about 2-3 s). A judge conversation, in the judge folder
+// no AI call, about 2-3 s). A one-off conversation, in the judge folder
 // inside the ask folder, is never carried on as an ask.
 func (a *Adapter) checkSession(ctx context.Context, folder, id string) error {
 	list, err := a.listSessions(ctx, folder, env(folder))

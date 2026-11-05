@@ -12,13 +12,14 @@ import (
 	"github.com/asksemble/asksemble/agent/internal/core"
 )
 
-// What check says about comparison judging (P2-3, spec part 8: check).
+// What check says about combined answers (종합 답변): which AIs write them,
+// the CLIs too old to, and where the question and the answers go. The
+// comparison judging it spoke of until C6 went with C6d (#24).
 
-// judgeTestedOn is the day the judge commands were tested with each CLI's
-// JudgeMinVersion. Since stage 1 of 판정 검증 (S6) check names the
-// verification instead (compares.JudgingVerified); the tested-version line
-// stays only for an AI the verification did not cover.
-const judgeTestedOn = "2026-10-31"
+// oneOffTestedOn is the day the locked-down one-off commands (judging
+// then, the combined answer and refining now) were tested with each CLI's
+// JudgeMinVersion.
+const oneOffTestedOn = "2026-10-31"
 
 // displayNames are the AI programs' names on the PC's terminal.
 var displayNames = map[string]string{
@@ -36,21 +37,17 @@ func displayName(agent string) string {
 	return agent
 }
 
-// judgeStatus is how one available AI stands with judging.
-type judgeStatus struct {
+// writerStatus is how one available AI stands with combined answers.
+type writerStatus struct {
 	agent   string
 	name    string // displayName(agent)
 	version string // the CLI's version, as Info read it
-	min     string // its adapter's JudgeMinVersion; "" when none is listed
-	// verified is the CLI version the judging was verified with
-	// (compares.JudgingVerified); "" for an AI the verification did not cover.
-	verified string
-	why      string // "" when it judges, else a compares.Why* reason
-	// info is the model it judges with: set when it judges, and for
-	// unknown_company the model whose company is unknown.
-	info *core.JudgeInfo
-	// writes is true when it writes combined answers (synthesize, S5b).
-	writes bool
+	min     string // the oldest version its one-off command was tested with; "" when none is listed
+	// why is "" when it writes combined answers, else a compares.Why*
+	// reason (at the standard tier).
+	why string
+	// model is its standard tier's model, for unknown_company.
+	model string
 }
 
 // checkLine is one line check prints: its level (ok, warn, bad or info)
@@ -60,125 +57,68 @@ type checkLine struct {
 	text  msg
 }
 
-// judgeStatuses asks the gate about every adapter. AIs that are not
-// available are left out: check has warned about them already.
-func judgeStatuses(ctx context.Context, adapters []core.Adapter, g compares.Gate) []judgeStatus {
+// writerStatuses asks the gate about every adapter, at the standard tier.
+// AIs that are not available are left out: check has warned about them
+// already.
+func writerStatuses(ctx context.Context, adapters []core.Adapter, g compares.Gate) []writerStatus {
 	infos, _ := compares.Announce(ctx, adapters, g)
-	var out []judgeStatus
+	var out []writerStatus
 	for i, a := range adapters {
 		info := infos[i]
 		if !info.Available {
 			continue
 		}
-		st := judgeStatus{agent: a.Agent(), name: displayName(a.Agent()), version: info.Version, min: g.MinVersions[a.Agent()],
-			verified: compares.JudgingVerified.Versions[a.Agent()], writes: slices.Contains(info.Capabilities, core.CapSynthesize)}
-		e, why := g.Engine(a, info)
-		st.why = why
-		switch {
-		case why == "" && info.Judge != nil:
-			ji := *info.Judge
-			st.info = &ji
-		case why == compares.WhyNoFamily:
-			st.info = &core.JudgeInfo{Model: e.Model, Effort: e.Effort}
+		w, why := g.Writer(a, info, core.TierStandard)
+		st := writerStatus{agent: a.Agent(), name: displayName(a.Agent()), version: info.Version, min: g.MinVersions[a.Agent()], why: why, model: w.Model}
+		if why == "" && !slices.Contains(info.Capabilities, core.CapSynthesize) {
+			st.why = compares.WhyCannotWrite
 		}
 		out = append(out, st)
 	}
 	return out
 }
 
-// judgeLines are check's lines about comparison judging, in English and
-// Korean: off; or which AI judges with which model, the CLIs too old to
-// judge, judge models of a company the agent cannot tell, the day and the
-// version the judging was verified with when this PC's version differs (for
-// an AI the verification did not cover, the version its judge command was
-// tested with), which AIs write combined answers, and where the question
-// and the answers go. The last line, that the agent itself sends nothing
-// outside this PC, is always there.
-//
-// With judging false (judgingOn, off since C6) nothing is said of judging:
-// the AIs only write combined answers, so the off line, the too-old and
-// unknown-company warnings speak of those, the verification lines go, and
-// the company of the writing AI receives the question and the answers.
-func judgeLines(st []judgeStatus, off, judging bool) []checkLine {
+// writerLines are check's lines about combined answers, in English and
+// Korean: off (agent.json judge.off); or which AIs write them, the CLIs too
+// old to, tier models of a company the agent cannot tell, the version the
+// one-off command was tested with when this PC's version differs, and
+// where the question and the answers go. The last line, that the agent
+// itself sends nothing outside this PC, is always there.
+func writerLines(st []writerStatus, off bool) []checkLine {
 	var lines []checkLine
 	add := func(level string, x msg) { lines = append(lines, checkLine{level, x}) }
-	if off && !judging {
+	if off {
 		add("info", m("combined answers are off (agent.json judge.off)", "종합 답변이 꺼져 있습니다 (agent.json judge.off)"))
-	} else if off {
-		add("info", m("comparison judging is off (agent.json judge.off)", "비교 판정이 꺼져 있습니다 (agent.json judge.off)"))
 	} else {
-		var judges []string
-		for _, s := range st {
-			if s.why == "" && s.info != nil {
-				judges = append(judges, s.name+" "+s.info.Model)
-			}
-		}
-		if len(judges) > 0 && judging {
-			list := strings.Join(judges, " · ")
-			add("ok", m("comparison judging: %s", "비교 판정: %s", list))
-		}
 		var writing []string
 		for _, s := range st {
-			if s.why == "" && s.writes {
+			if s.why == "" {
 				writing = append(writing, s.name)
 			}
 		}
 		if len(writing) > 0 {
-			list := strings.Join(writing, " · ")
 			add("ok", m("combined answers: %s can write them (the question's tier model)",
-				"종합 답변을 쓸 수 있는 AI: %s (질문 단계의 모델)", list))
+				"종합 답변을 쓸 수 있는 AI: %s (질문 단계의 모델)", strings.Join(writing, " · ")))
 		}
 		for _, s := range st {
-			switch {
-			case s.why == compares.WhyOld && !judging:
-				have, min := orUnknown(s.version), orUnknown(s.min)
+			switch s.why {
+			case compares.WhyOld:
 				add("warn", m("%s %s is older than %s, the oldest version its one-off command was tested with; it does not write combined answers until it is updated",
-					"%s %s 판은 일회성 명령을 시험한 가장 오래된 판(%s)보다 오래되어 업데이트할 때까지 종합 답변을 쓰지 않습니다", s.name, have, min))
-			case s.why == compares.WhyNoFamily && !judging:
-				model := ""
-				if s.info != nil {
-					model = s.info.Model
-				}
-				add("warn", m("the judge model %[2]s set for %[1]s is of a company the agent cannot tell, so it does not write combined answers",
-					"%[1]s에 설정한 판정 모델 %[2]s의 회사를 알 수 없어 종합 답변을 쓰지 않습니다", s.name, model))
-			case s.why == compares.WhyOld:
-				have, min := orUnknown(s.version), orUnknown(s.min)
-				add("warn", m("%s %s is older than %s, the oldest version the judge was tested with; it does not judge until it is updated",
-					"%s %s 판은 판정을 시험한 가장 오래된 판(%s)보다 오래되어 업데이트할 때까지 판정하지 않습니다", s.name, have, min))
-			case s.why == compares.WhyNoFamily:
-				model := ""
-				if s.info != nil {
-					model = s.info.Model
-				}
-				add("warn", m("the judge model %[2]s set for %[1]s is of a company the agent cannot tell, so it does not judge",
-					"%[1]s에 설정한 판정 모델 %[2]s의 회사를 알 수 없어 판정하지 않습니다", s.name, model))
+					"%s %s 판은 일회성 명령을 시험한 가장 오래된 판(%s)보다 오래되어 업데이트할 때까지 종합 답변을 쓰지 않습니다", s.name, orUnknown(s.version), orUnknown(s.min)))
+			case compares.WhyNoFamily:
+				add("warn", m("the model %[2]s of %[1]s is of a company the agent cannot tell, so it does not write combined answers",
+					"%[1]s의 모델 %[2]s의 회사를 알 수 없어 종합 답변을 쓰지 않습니다", s.name, s.model))
 			}
 		}
 		for _, s := range st {
-			switch {
-			case !judging || s.why != "" || s.info == nil:
-			case s.verified != "":
-				if !sameVersion(s.version, s.verified) {
-					add("info", m("the judging was verified on %s with %s %s; this PC has %s",
-						"%[1]s에 %[2]s %[3]s 판으로 판정을 검증했습니다. 이 PC는 %[4]s입니다", compares.JudgingVerified.Date, s.name, s.verified, s.version))
-				}
-			case s.min != "" && !sameVersion(s.version, s.min):
-				add("info", m("the judge command was tested on %s with %s %s; this PC has %s",
-					"%[1]s에 %[2]s %[3]s 판으로 판정 명령을 시험했습니다. 이 PC는 %[4]s입니다", judgeTestedOn, s.name, s.min, s.version))
+			if s.why == "" && s.min != "" && !sameVersion(s.version, s.min) {
+				add("info", m("the one-off command was tested on %s with %s %s; this PC has %s",
+					"%[1]s에 %[2]s %[3]s 판으로 일회성 명령을 시험했습니다. 이 PC는 %[4]s입니다", oneOffTestedOn, s.name, s.min, s.version))
 			}
-		}
-		if len(judges) > 0 && judging {
-			add("info", m("when answers are compared, the judging AI's company receives the question and the other AIs' answers",
-				"비교할 때는 판정하는 AI의 회사가 질문과 다른 AI들의 답을 받습니다"))
-		}
-		if len(writing) > 0 && !judging {
-			add("info", m("when a combined answer is written, the writing AI's company receives the question and every answer with the AIs' names",
-				"종합 답변을 쓸 때는 쓰는 AI의 회사가 질문과 AI 이름이 붙은 모든 답을 받습니다"))
-		} else if len(writing) > 0 {
-			add("info", m("when a combined answer is written, the writing AI's company receives the question, every answer with the AIs' names and the comparison's results",
-				"종합 답변을 쓸 때는 쓰는 AI의 회사가 질문, AI 이름이 붙은 모든 답, 비교 결과를 받습니다"))
 		}
 		if len(writing) > 0 {
+			add("info", m("when a combined answer is written, the writing AI's company receives the question and every answer with the AIs' names",
+				"종합 답변을 쓸 때는 쓰는 AI의 회사가 질문과 AI 이름이 붙은 모든 답을 받습니다"))
 			if refineOn {
 				add("info", m("when a question is refined, the moderator's company (one of the AIs asked) receives the question once more, with up to 3 earlier questions",
 					"질문을 정제할 때는 사회자 AI의 회사(질문을 받는 AI 중 하나)가 질문을 한 번 더, 앞 질문 3개까지와 함께 받습니다"))

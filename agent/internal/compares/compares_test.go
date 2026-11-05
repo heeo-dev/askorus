@@ -10,13 +10,11 @@ import (
 	"os"
 	"regexp"
 	"slices"
-	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
-	"unicode/utf8"
 
 	"github.com/asksemble/asksemble/agent/internal/core"
 	"github.com/asksemble/asksemble/agent/internal/fakecli"
@@ -27,37 +25,25 @@ import (
 
 // ---- fakes ----------------------------------------------------------------
 
-// fakeAI is an AI program that judges in process: by default the rule
-// judge of fakecli.Answer, as the fake CLIs answer.
+// fakeAI is an AI program in process that names its models' companies
+// (core.Judger), so it passes the gate. It neither asks nor writes:
+// writerAI (synth_test.go) does.
 type fakeAI struct {
 	name   string
 	family string            // the company of every model it runs
 	fams   map[string]string // models of another company, or "" for one it cannot tell
-	def    core.AskModel
 
-	mu      sync.Mutex
-	version string
-	avail   bool
-	caps    []core.Capability
-	// judge replaces the rule judge; n counts this AI's calls from 1.
-	judge    func(ctx context.Context, req core.JudgeRequest, n int) (core.JudgeResult, error)
-	calls    []core.JudgeRequest
-	running  int
-	peak     int
-	load     *loadStats // shared by the AIs of a test, for the peak of all
+	mu       sync.Mutex
+	version  string
+	avail    bool
+	caps     []core.Capability
 	cleanups [][]string
 	// cleanup replaces CleanupJudge's result.
 	cleanup func(ctx context.Context, folder string, refs []string) error
 }
 
-type loadStats struct {
-	mu            sync.Mutex
-	running, peak int
-}
-
 func newFake(name, family string) *fakeAI {
-	return &fakeAI{name: name, family: family, def: core.AskModel{Model: name + "-judge", Effort: "medium"},
-		version: "1.0.0", avail: true, caps: []core.Capability{}}
+	return &fakeAI{name: name, family: family, version: "1.0.0", avail: true, caps: []core.Capability{}}
 }
 
 func (f *fakeAI) Agent() string { return f.name }
@@ -71,7 +57,6 @@ func (f *fakeAI) Info(context.Context) core.AdapterInfo {
 func (f *fakeAI) ListSessions(context.Context) (core.ListResult, error) {
 	return core.ListResult{}, nil
 }
-func (f *fakeAI) JudgeDefault() core.AskModel { return f.def }
 
 func (f *fakeAI) Family(model string) string {
 	if fam, ok := f.fams[model]; ok {
@@ -89,60 +74,8 @@ func (f *fakeAI) setAvailable(ok bool) {
 	f.mu.Unlock()
 }
 
-func (f *fakeAI) setJudge(j func(ctx context.Context, req core.JudgeRequest, n int) (core.JudgeResult, error)) {
-	f.mu.Lock()
-	f.judge = j
-	f.mu.Unlock()
-}
-
-func (f *fakeAI) Judge(ctx context.Context, req core.JudgeRequest) (core.JudgeResult, error) {
-	f.mu.Lock()
-	f.calls = append(f.calls, req)
-	n, j := len(f.calls), f.judge
-	f.running++
-	f.peak = max(f.peak, f.running)
-	f.mu.Unlock()
-	if f.load != nil {
-		f.load.mu.Lock()
-		f.load.running++
-		f.load.peak = max(f.load.peak, f.load.running)
-		f.load.mu.Unlock()
-	}
-	defer func() {
-		f.mu.Lock()
-		f.running--
-		f.mu.Unlock()
-		if f.load != nil {
-			f.load.mu.Lock()
-			f.load.running--
-			f.load.mu.Unlock()
-		}
-	}()
-	if j != nil {
-		return j(ctx, req, n)
-	}
-	return ruleJudge(req), nil
-}
-
-// ruleJudge is fakecli's rule judge with the model asked for.
-func ruleJudge(req core.JudgeRequest) core.JudgeResult {
-	return core.JudgeResult{Output: json.RawMessage(fakecli.Answer(req.Prompt, false)), Model: req.Model, InputTokens: 10, OutputTokens: 2}
-}
-
-func (f *fakeAI) judgeCalls() []core.JudgeRequest {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return slices.Clone(f.calls)
-}
-
-func (f *fakeAI) peakRunning() int {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return f.peak
-}
-
-// cleanerAI is a fakeAI whose judging leaves something behind, as
-// OpenCode's does.
+// cleanerAI is a fakeAI whose one-off calls leave something behind, as
+// OpenCode's do.
 type cleanerAI struct{ *fakeAI }
 
 func (c cleanerAI) CleanupJudge(ctx context.Context, folder string, refs []string) error {
@@ -173,7 +106,8 @@ func (a askerAI) Ask(context.Context, core.AskRequest) (core.AskResult, error) {
 }
 func (a askerAI) AskTiers() map[string]core.AskModel { return a.tiers }
 
-// plainAI cannot judge.
+// plainAI is no core.Judger: it cannot name its models' companies, so it
+// never passes the gate.
 type plainAI struct{ name, version string }
 
 func (p *plainAI) Agent() string { return p.name }
@@ -264,8 +198,7 @@ func newTestManager(t *testing.T, ais []core.Adapter, opt func(*Options)) (*Mana
 
 const testQuestion = "What is the number of the day?"
 
-// threeAnswers: claude and codex say 1, opencode 2. With the rule judge
-// that is claude:1 and codex:1 against opencode:1 on 다른 말.
+// threeAnswers: claude and codex say 1, opencode 2.
 func threeAnswers(owner, key string) DirectSpec {
 	return DirectSpec{Owner: owner, Key: key, Question: testQuestion, Answers: []DirectAnswer{
 		{ID: "claude", Agent: "claude", Via: judge.ViaPC, Model: "claude-m", Text: "The number is NUM 1."},
@@ -329,30 +262,11 @@ func runSpec(owner, id string) RunSpec {
 	return RunSpec{Owner: owner, RunID: id, Question: testQuestion, Judges: []string{"claude", "codex", "opencode"}, Asked: []string{"claude", "codex", "opencode"}}
 }
 
-func totalCalls(ais []core.Adapter) int {
-	n := 0
-	for _, a := range ais {
-		if _, ok := a.(*plainAI); !ok {
-			n += len(fakeOf(a).judgeCalls())
-		}
-	}
-	return n
-}
-
-func requestsOf(c Comparison, judgeAI string) []judge.Request {
-	var out []judge.Request
-	for _, r := range c.Requests {
-		if r.Judge == judgeAI {
-			out = append(out, r)
-		}
-	}
-	return out
-}
-
-func internalOf(m *Manager, id string) *comparison {
+// listedOf is comparison id's AIs the earlier questions may go to.
+func listedOf(m *Manager, id string) []string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.byID[id]
+	return slices.Clone(m.byID[id].spec.Listed)
 }
 
 var nonceRe = regexp.MustCompile(`<data-([0-9a-f]{16})>`)
@@ -367,8 +281,7 @@ func nonceOf(prompt string) string {
 // ---- tests ----------------------------------------------------------------
 
 func TestDirectComparison(t *testing.T) {
-	ais := threeAIs()
-	m, buf := newTestManager(t, ais, nil)
+	m, buf := newTestManager(t, threeAIs(), nil)
 	c := startDirect(t, m, threeAnswers("phone", ""))
 	if c.Status != Running || c.Source != SourceDirect || c.Engine != "pc" || c.RunID != "" || len(c.ID) != 32 {
 		t.Errorf("first snapshot = %+v", c)
@@ -377,82 +290,68 @@ func TestDirectComparison(t *testing.T) {
 	if c.Status != Done || c.Error != nil {
 		t.Fatalf("status %s %+v", c.Status, c.Error)
 	}
-	if len(c.Requests) != 6 {
-		t.Fatalf("%d requests", len(c.Requests))
+	// Nothing is judged since C6d (#24): the judging's lists stay empty.
+	if len(c.Requests) != 0 || len(c.Judgments) != 0 || len(c.Items) != 0 || c.Counts != (judge.Counts{}) {
+		t.Errorf("requests %d, judgments %d, items %d, counts %+v", len(c.Requests), len(c.Judgments), len(c.Items), c.Counts)
 	}
-	for _, r := range c.Requests {
-		if r.Status != judge.RequestDone || r.Attempt != 1 || r.Judge == r.From || r.Judge == r.Against || r.Error != nil || r.InputTokens != 10 || r.OutputTokens != 2 {
-			t.Errorf("request %+v", r)
-		}
+	families := []string{"anthropic", "openai", "deepseek"}
+	if len(c.Answers) != 3 {
+		t.Fatalf("%d answers", len(c.Answers))
 	}
-	for _, a := range ais {
-		if n := len(fakeOf(a).judgeCalls()); n != 2 {
-			t.Errorf("%s judged %d times, want 2", a.Agent(), n)
-		}
-	}
-	if c.Counts.Differ != 1 || len(c.Items) == 0 || c.Items[0].Kind != judge.CardDiffer {
-		t.Errorf("counts %+v items %+v", c.Counts, c.Items)
-	}
-	for _, a := range c.Answers {
-		if a.Text != "" || a.Tail != nil || a.Status != judge.AnswerReady || len(a.Units) != 1 || a.Family == "" {
+	for i, a := range c.Answers {
+		if a.Text != "" || a.Status != judge.AnswerReady || a.Units == nil || len(a.Units) != 0 || a.NotJudged != 0 || a.Family != families[i] || a.Via != judge.ViaPC {
 			t.Errorf("answer %+v", a)
 		}
 	}
-	// Every judge call got the prompt, the folder and its own nonce.
-	nonces := map[string]bool{}
-	for _, a := range ais {
-		for _, r := range fakeOf(a).judgeCalls() {
-			n := nonceOf(r.Prompt)
-			if n == "" || nonces[n] || !strings.Contains(r.Prompt, testQuestion) || r.Folder != m.o.Gate.Folder || len(r.Task.Units) == 0 {
-				t.Errorf("judge call: nonce %q, folder %q", n, r.Folder)
-			}
-			nonces[n] = true
-		}
+	if s := synthOf(t, c); s.Status != SynthOff {
+		t.Errorf("synthesis %+v, want off", s)
+	}
+	// With no AIs named, every AI that passes the gate is listed.
+	if listed := listedOf(m, c.ID); !slices.Equal(listed, []string{"claude", "codex", "opencode"}) {
+		t.Errorf("listed %v", listed)
 	}
 	logs := buf.String()
-	for _, want := range []string{`"msg":"comparison started"`, `"source":"direct"`, `"ais":3`, `"requests":6`, `"judges":3`, `"noJudge":0`, `"msg":"judge request"`, `"msg":"comparison ended"`, `"differ":1`} {
+	for _, want := range []string{`"msg":"comparison started"`, `"source":"direct"`, `"ais":3`, `"msg":"comparison ended"`, `"status":"done"`} {
 		if !strings.Contains(logs, want) {
 			t.Errorf("logs lack %s:\n%s", want, logs)
 		}
 	}
+	if strings.Contains(logs, "judge request") {
+		t.Errorf("logs hold a judge request:\n%s", logs)
+	}
 }
 
 func TestSnapshotJSON(t *testing.T) {
-	ais := threeAIs()
-	fakeOf(ais[0]).setJudge(func(ctx context.Context, req core.JudgeRequest, n int) (core.JudgeResult, error) {
-		return core.JudgeResult{Model: req.Model}, core.Fail(core.ErrCodeJudgeTimeout, `C:\Users\someone\secret-path`)
-	})
-	m, _ := newTestManager(t, ais, nil)
+	m, _ := newTestManager(t, threeAIs(), nil)
 	c := waitIdle(t, m, "phone", startDirect(t, m, threeAnswers("phone", "")).ID)
 	b, err := json.Marshal(c)
 	if err != nil {
 		t.Fatal(err)
 	}
 	s := string(b)
-	for _, want := range []string{`"comparisonId":"`, `"status":"done"`, `"source":"direct"`, `"engine":"pc"`, `"answers":[`, `"requests":[`, `"judgments":[`, `"items":[`, `"counts":{`, `"units":[`} {
+	for _, want := range []string{
+		`"comparisonId":"`, `"status":"done"`, `"source":"direct"`, `"engine":"pc"`, `"answers":[`, `"units":[]`, `"notJudged":0`,
+		`"requests":[]`, `"judgments":[]`, `"items":[]`, `"counts":{"differ":0,"check":0,"agree":0,"onlyOne":0,"notCompared":0,"notJudged":0}`,
+		`"synthesis":{"status":"off","judged":false}`,
+	} {
 		if !strings.Contains(s, want) {
 			t.Errorf("JSON lacks %s: %s", want, s)
 		}
 	}
-	for _, leak := range []string{`"reason"`, "fake", "secret-path", `"runId"`, `"Text"`, `"Tail"`, `"Before"`} {
+	// The answers' text stays in the agent; a done comparison has no error.
+	for _, leak := range []string{"The number is", `"reason"`, `"runId"`, `"error"`, `"Text"`, `"Tail"`, `"Before"`} {
 		if strings.Contains(s, leak) {
 			t.Errorf("JSON holds %s: %s", leak, s)
 		}
 	}
-	if want := `"error":{"code":"judge_timeout","message":"` + messages[core.ErrCodeJudgeTimeout] + `"}`; !strings.Contains(s, want) {
-		t.Errorf("JSON lacks the fixed message %s: %s", want, s)
-	}
-	for _, a := range ais {
-		for _, r := range fakeOf(a).judgeCalls() {
-			if n := nonceOf(r.Prompt); strings.Contains(s, n) {
-				t.Errorf("JSON holds a nonce")
-			}
-		}
-	}
-	// An empty comparison's slices are [] too.
-	empty := (&Manager{}).snapshotLocked(&comparison{id: "x", status: Failed})
+	// An empty comparison's slices are [] too, and its error has the fixed
+	// message.
+	empty := (&Manager{}).snapshotLocked(&comparison{id: "x", status: Failed, err: failure(core.ErrCodeNeedTwoAnswers, "")})
 	b, _ = json.Marshal(empty)
-	for _, want := range []string{`"answers":[]`, `"requests":[]`, `"judgments":[]`, `"items":[]`} {
+	for _, want := range []string{
+		`"answers":[]`, `"requests":[]`, `"judgments":[]`, `"items":[]`,
+		`"error":{"code":"need_two_answers","message":"` + messages[core.ErrCodeNeedTwoAnswers] + `"}`,
+	} {
 		if !strings.Contains(string(b), want) {
 			t.Errorf("empty JSON lacks %s: %s", want, b)
 		}
@@ -462,12 +361,14 @@ func TestSnapshotJSON(t *testing.T) {
 func TestAttachExactlyOnce(t *testing.T) {
 	for _, when := range []string{"before", "during", "after"} {
 		t.Run(when, func(t *testing.T) {
-			ais := threeAIs()
+			_, _, _, ais := threeWriters()
 			fr := &fakeRuns{}
 			m, buf := newTestManager(t, ais, func(o *Options) { o.Runs = fr })
 			run := endedRun("run-1", threeParts()...)
 			running := run
 			running.Status = runs.Running
+			spec := runSpec("phone", run.ID)
+			spec.Synth = &SynthSpec{Agent: "claude"}
 			switch when {
 			case "before": // OnEnd fired before Attach registered: the post-check starts it
 				fr.set(run)
@@ -491,7 +392,7 @@ func TestAttachExactlyOnce(t *testing.T) {
 					defer wg.Done()
 					<-start
 					if i%2 == 0 {
-						ids[i], errs[i] = m.Attach(runSpec("phone", run.ID))
+						ids[i], errs[i] = m.Attach(spec)
 					} else {
 						m.RunEnded(run)
 					}
@@ -510,11 +411,12 @@ func TestAttachExactlyOnce(t *testing.T) {
 			if c.Status != Done || c.Source != SourceRun || c.RunID != run.ID {
 				t.Fatalf("comparison %+v", c)
 			}
-			if n := totalCalls(ais); n != 6 {
-				t.Errorf("%d judge calls, want 6 (the plan once)", n)
+			if s := synthOf(t, c); s.Status != SynthDone || synthTotal(ais) != 1 {
+				t.Errorf("synthesis %+v, %d writer calls, want done and 1", s, synthTotal(ais))
 			}
-			if n := strings.Count(buf.String(), `"msg":"comparison started"`); n != 1 {
-				t.Errorf("planned %d times", n)
+			logs := buf.String()
+			if strings.Count(logs, `"msg":"comparison started"`) != 1 || strings.Count(logs, `"msg":"comparison ended"`) != 1 {
+				t.Errorf("started or ended more than once:\n%s", logs)
 			}
 			if again, err := m.Attach(runSpec("phone", run.ID)); again != id || err != nil {
 				t.Errorf("Attach again = %q %v", again, err)
@@ -533,8 +435,7 @@ func TestAttachExactlyOnce(t *testing.T) {
 }
 
 func TestDirectKey(t *testing.T) {
-	ais := threeAIs()
-	m, _ := newTestManager(t, ais, nil)
+	m, buf := newTestManager(t, threeAIs(), nil)
 	a := startDirect(t, m, threeAnswers("phone", "k1"))
 	b := startDirect(t, m, threeAnswers("phone", "k1"))
 	if a.ID != b.ID {
@@ -549,8 +450,8 @@ func TestDirectKey(t *testing.T) {
 	for _, c := range []struct{ owner, id string }{{"phone", a.ID}, {"tablet", other.ID}, {"phone", noKey1.ID}, {"phone", noKey2.ID}} {
 		waitIdle(t, m, c.owner, c.id)
 	}
-	if n := totalCalls(ais); n != 4*6 {
-		t.Errorf("%d judge calls, want 24", n)
+	if n := strings.Count(buf.String(), `"msg":"comparison started"`); n != 4 {
+		t.Errorf("%d comparisons started, want 4", n)
 	}
 	// The same key after the first ended still gives it, even with a
 	// different body.
@@ -562,95 +463,81 @@ func TestDirectKey(t *testing.T) {
 }
 
 func TestPlanInputs(t *testing.T) {
-	t.Run("missing answer and judge only", func(t *testing.T) {
-		ais := threeAIs()
+	t.Run("missing answer", func(t *testing.T) {
 		fr := &fakeRuns{}
-		m, _ := newTestManager(t, ais, func(o *Options) { o.Runs = fr })
+		m, _ := newTestManager(t, threeAIs(), func(o *Options) { o.Runs = fr })
 		parts := threeParts()
 		parts[2] = runs.Part{Agent: "opencode", Status: runs.Failed, Error: &runs.Error{Code: core.ErrCodeAskFailed, Message: "usage limit"}}
-		parts[1].Answer = "The number is NUM 2."
 		fr.set(endedRun("run-2", parts...))
 		id, err := m.Attach(runSpec("phone", "run-2"))
 		if err != nil {
 			t.Fatal(err)
 		}
 		c := waitIdle(t, m, "phone", id)
-		if c.Status != Done || len(c.Requests) != 2 {
-			t.Fatalf("status %s, %d requests", c.Status, len(c.Requests))
-		}
-		for _, r := range c.Requests {
-			if r.Judge != "opencode" || !r.JudgeOnly {
-				t.Errorf("request %+v, want opencode judge only", r)
-			}
+		if c.Status != Done || c.Error != nil || len(c.Answers) != 3 {
+			t.Fatalf("comparison %s %+v, %d answers", c.Status, c.Error, len(c.Answers))
 		}
 		// A failed part names no model, so its company is unknown.
-		if a := c.Answers[2]; a.Status != judge.AnswerMissing || a.Units == nil || len(a.Units) != 0 || a.Family != "" {
+		if a := c.Answers[2]; a.ID != "opencode" || a.Status != judge.AnswerMissing || a.Units == nil || len(a.Units) != 0 || a.Family != "" {
 			t.Errorf("missing answer %+v", a)
 		}
-		in := internalOf(m, id)
-		m.mu.Lock()
-		judges := slices.Clone(in.spec.Judges)
-		m.mu.Unlock()
-		if len(judges) != 3 || judges[2].AskCode != core.ErrCodeAskFailed || judges[0].AskCode != "" || judges[2].Family != "deepseek" {
-			t.Errorf("judges %+v", judges)
+		if a := c.Answers[0]; a.ID != "claude" || a.Status != judge.AnswerReady || a.Family != "anthropic" || a.Model != "claude-m" {
+			t.Errorf("ready answer %+v", a)
 		}
-		if c.Counts.Differ != 1 {
-			t.Errorf("counts %+v", c.Counts)
+		// An AI whose answer is missing is still listed.
+		if listed := listedOf(m, id); !slices.Equal(listed, []string{"claude", "codex", "opencode"}) {
+			t.Errorf("listed %v", listed)
 		}
 	})
-	t.Run("judges cut and families of AIs that do not judge", func(t *testing.T) {
+	t.Run("listed and families of AIs that fail the gate", func(t *testing.T) {
 		ais := threeAIs()
 		ais = append(ais, newFake("gemini", "google"))
-		fakeOf(ais[3]).setAvailable(false) // listed as a judge, but does not judge now
-		fakeOf(ais[1]).version = "0.9.0"   // codex answered but does not judge
+		fakeOf(ais[3]).setAvailable(false) // listed, but fails the gate now
+		fakeOf(ais[1]).version = "0.9.0"   // codex answered but fails the gate
 		fr := &fakeRuns{}
 		m, _ := newTestManager(t, ais, func(o *Options) { o.Runs = fr })
 		fr.set(endedRun("run-3", threeParts()...))
 		s := runSpec("phone", "run-3")
-		s.Judges = []string{"gemini", "opencode", "codex"} // claude was not chosen
+		s.Judges = []string{"gemini", "opencode", "codex"} // claude was not listed
 		id, _ := m.Attach(s)
 		c := waitIdle(t, m, "phone", id)
 		if c.Status != Done {
 			t.Fatalf("status %s %+v", c.Status, c.Error)
 		}
 		if c.Answers[1].Family != "openai" {
-			t.Errorf("codex answer family %q: it comes from its adapter even when codex does not judge", c.Answers[1].Family)
+			t.Errorf("codex answer family %q: it comes from its adapter even when codex fails the gate", c.Answers[1].Family)
 		}
-		// claude↔codex: opencode. claude↔opencode: only codex, which does
-		// not judge. codex↔opencode: only claude, not chosen.
-		judged, noJudge := 0, 0
-		for _, r := range c.Requests {
-			switch {
-			case r.Judge == "opencode" && r.Status == judge.RequestDone:
-				judged++
-			case r.Judge == "" && r.Error != nil && r.Error.Code == core.ErrCodeNoJudge && r.Status == judge.RequestFailed:
-				noJudge++
-			default:
-				t.Errorf("request %+v", r)
-			}
+		if listed := listedOf(m, id); !slices.Equal(listed, []string{"opencode"}) {
+			t.Errorf("listed %v, want only opencode: no AI that fails the gate or was not listed", listed)
 		}
-		if judged != 2 || noJudge != 4 {
-			t.Errorf("%d judged, %d no_judge records", judged, noJudge)
-		}
-		if n := len(fakeOf(ais[0]).judgeCalls()) + len(fakeOf(ais[1]).judgeCalls()) + len(fakeOf(ais[3]).judgeCalls()); n != 0 {
-			t.Errorf("%d calls of AIs that may not judge", n)
+		// Without AIs listed, the asked AIs that pass the gate are.
+		fr.set(endedRun("run-3b", threeParts()...))
+		s = runSpec("phone", "run-3b")
+		s.Judges = nil
+		id, _ = m.Attach(s)
+		waitIdle(t, m, "phone", id)
+		if listed := listedOf(m, id); !slices.Equal(listed, []string{"claude", "opencode"}) {
+			t.Errorf("listed %v, want the asked AIs that pass the gate", listed)
 		}
 	})
-	t.Run("no judge at all", func(t *testing.T) {
-		ais := threeAIs()
+	t.Run("off", func(t *testing.T) {
+		_, _, _, ais := threeWriters()
 		fr := &fakeRuns{}
 		m, buf := newTestManager(t, ais, func(o *Options) { o.Runs = fr; o.Gate.Settings.Off = true })
 		fr.set(endedRun("run-4", threeParts()...))
-		id, err := m.Attach(runSpec("phone", "run-4"))
+		rs := runSpec("phone", "run-4")
+		rs.Synth = &SynthSpec{Agent: "claude"}
+		id, err := m.Attach(rs)
 		if err != nil {
 			t.Fatal(err)
 		}
 		c := waitIdle(t, m, "phone", id)
-		if c.Status != Failed || c.Error == nil || c.Error.Code != core.ErrCodeNoJudge || len(c.Requests) != 6 {
-			t.Fatalf("comparison %+v", c)
+		// The comparison has its answers; no AI may write the combined answer.
+		if s := synthOf(t, c); c.Status != Done || c.Error != nil || s.Status != SynthFailed || s.Error == nil || s.Error.Code != core.ErrCodeNoJudge || synthTotal(ais) != 0 {
+			t.Fatalf("comparison %s %+v, synthesis %+v", c.Status, c.Error, s)
 		}
-		if c.Counts.NotCompared != 3 {
-			t.Errorf("counts %+v", c.Counts)
+		if listed := listedOf(m, id); len(listed) != 0 {
+			t.Errorf("listed %v", listed)
 		}
 		if !strings.Contains(buf.String(), `"code":"no_judge"`) {
 			t.Errorf("logs: %s", buf.String())
@@ -661,16 +548,15 @@ func TestPlanInputs(t *testing.T) {
 		}
 	})
 	t.Run("two answers missing", func(t *testing.T) {
-		ais := threeAIs()
 		fr := &fakeRuns{}
-		m, _ := newTestManager(t, ais, func(o *Options) { o.Runs = fr })
+		m, _ := newTestManager(t, threeAIs(), func(o *Options) { o.Runs = fr })
 		parts := threeParts()
 		parts[0] = runs.Part{Agent: "claude", Status: runs.Failed, Error: &runs.Error{Code: core.ErrCodeAskTimeout}}
 		parts[1] = runs.Part{Agent: "codex", Status: runs.Done, Answer: "  \n "}
 		fr.set(endedRun("run-5", parts...))
 		id, _ := m.Attach(runSpec("phone", "run-5"))
 		c := waitIdle(t, m, "phone", id)
-		if c.Status != Failed || c.Error == nil || c.Error.Code != core.ErrCodeNeedTwoAnswers || len(c.Requests) != 0 || c.Requests == nil {
+		if c.Status != Failed || c.Error == nil || c.Error.Code != core.ErrCodeNeedTwoAnswers || c.Error.Message != messages[core.ErrCodeNeedTwoAnswers] || len(c.Answers) != 3 {
 			t.Fatalf("comparison %+v", c)
 		}
 		if c.Answers[1].Status != judge.AnswerMissing {
@@ -679,406 +565,23 @@ func TestPlanInputs(t *testing.T) {
 	})
 }
 
-func TestMaxUnits(t *testing.T) {
-	ais := threeAIs()
-	m, _ := newTestManager(t, ais, func(o *Options) { o.Gate.Settings.MaxUnits = 1 })
-	s := threeAnswers("phone", "")
-	// The units after the first have no number, so no rule judge cites
-	// them as evidence, which would show them.
-	s.Answers[0].Text = "The number is NUM 1. It is a fine number. It is the one."
-	c := waitIdle(t, m, "phone", startDirect(t, m, s).ID)
-	if a := c.Answers[0]; a.NotJudged != 2 || len(a.Units) != 3 || !a.Units[0].Judged || a.Units[1].Judged {
-		t.Errorf("answer %+v", a)
-	}
-	if c.Counts.NotJudged != 2 {
-		t.Errorf("counts %+v", c.Counts)
-	}
-}
-
-func TestSemaphores(t *testing.T) {
-	for _, perAI := range []int{2, 1} {
-		t.Run(fmt.Sprint("perAI ", perAI), func(t *testing.T) {
-			load := &loadStats{}
-			var ais []core.Adapter
-			for i, fam := range []string{"anthropic", "openai", "deepseek", "google"} {
-				f := newFake(fmt.Sprintf("ai%d", i+1), fam)
-				f.load = load
-				f.judge = func(ctx context.Context, req core.JudgeRequest, n int) (core.JudgeResult, error) {
-					// Hold the slot until every slot that can be taken is.
-					deadline := time.Now().Add(300 * time.Millisecond)
-					for time.Now().Before(deadline) {
-						load.mu.Lock()
-						full := load.running >= min(MaxProcesses, 4*perAI)
-						load.mu.Unlock()
-						if full {
-							break
-						}
-						time.Sleep(time.Millisecond)
-					}
-					time.Sleep(5 * time.Millisecond)
-					return ruleJudge(req), nil
-				}
-				ais = append(ais, f)
-			}
-			m, _ := newTestManager(t, ais, func(o *Options) { o.Gate.Settings.PerAI = perAI })
-			var ids []string
-			for k := range 2 {
-				s := DirectSpec{Owner: "phone", Question: testQuestion}
-				for i, a := range ais {
-					s.Answers = append(s.Answers, DirectAnswer{ID: a.Agent(), Agent: a.Agent(), Via: judge.ViaPC, Model: "m", Text: fmt.Sprintf("Value NUM %d.", i+k)})
-				}
-				ids = append(ids, startDirect(t, m, s).ID)
-			}
-			for _, id := range ids {
-				if c := waitIdle(t, m, "phone", id); c.Status != Done || len(c.Requests) != 12 {
-					t.Fatalf("comparison %s, %d requests", c.Status, len(c.Requests))
-				}
-			}
-			for _, a := range ais {
-				f := fakeOf(a)
-				if p := f.peakRunning(); p > perAI || p < 1 {
-					t.Errorf("%s ran %d at once, want at most %d", f.name, p, perAI)
-				}
-			}
-			if n := totalCalls(ais); n != 24 {
-				t.Errorf("%d judge calls, want 24", n)
-			}
-			if want := min(MaxProcesses, 4*perAI); load.peak != want {
-				t.Errorf("%d judges ran at once, want %d", load.peak, want)
-			}
-		})
-	}
-}
-
-func TestQueueLimit(t *testing.T) {
-	ais := threeAIs()
-	release := make(chan struct{})
-	for _, a := range ais {
-		fakeOf(a).judge = func(ctx context.Context, req core.JudgeRequest, n int) (core.JudgeResult, error) {
-			select {
-			case <-release:
-			case <-time.After(5 * time.Second):
-			}
-			return ruleJudge(req), nil
-		}
-	}
-	m, _ := newTestManager(t, ais, func(o *Options) { o.Gate.Settings.PerAI = 1; o.QueueLimit = 100 * time.Millisecond })
-	c := startDirect(t, m, threeAnswers("phone", ""))
-	waitFor(t, "the second requests to time out", func() bool {
-		got, _ := m.Get("phone", c.ID)
-		n := 0
-		for _, r := range got.Requests {
-			if r.Status == judge.RequestFailed {
-				n++
-			}
-		}
-		return n == 3
-	})
-	close(release)
-	c = waitIdle(t, m, "phone", c.ID)
-	for _, a := range ais {
-		rs := requestsOf(c, a.Agent())
-		done, timedOut := 0, 0
-		for _, r := range rs {
-			switch {
-			case r.Status == judge.RequestDone:
-				done++
-			case r.Error != nil && r.Error.Code == core.ErrCodeJudgeTimeout && r.Error.Message == msgQueue && r.Attempt == 0:
-				timedOut++
-			default:
-				t.Errorf("request %+v", r)
-			}
-		}
-		if done != 1 || timedOut != 1 {
-			t.Errorf("%s: %d done, %d timed out in the queue", a.Agent(), done, timedOut)
-		}
-	}
-	if c.Status != Done {
-		t.Errorf("status %s", c.Status)
-	}
-	for _, it := range c.Items {
-		if it.Missing == nil || it.Check == nil {
-			t.Errorf("item %+v", it)
-		}
-	}
-}
-
-func TestJudgeLimit(t *testing.T) {
-	old := abandonAfter
-	abandonAfter = 50 * time.Millisecond
-	t.Cleanup(func() { abandonAfter = old })
-	ais := threeAIs()
-	stuck := make(chan struct{})
-	defer close(stuck)
-	// claude ends with the context; codex never looks at it.
-	fakeOf(ais[0]).judge = func(ctx context.Context, req core.JudgeRequest, n int) (core.JudgeResult, error) {
-		<-ctx.Done()
-		return core.JudgeResult{Cleanup: ""}, ctx.Err()
-	}
-	fakeOf(ais[1]).judge = func(ctx context.Context, req core.JudgeRequest, n int) (core.JudgeResult, error) {
-		<-stuck
-		return ruleJudge(req), nil
-	}
-	m, _ := newTestManager(t, ais, func(o *Options) { o.JudgeLimit = 80 * time.Millisecond })
-	c := waitIdle(t, m, "phone", startDirect(t, m, threeAnswers("phone", "")).ID)
-	for _, ai := range []string{"claude", "codex"} {
-		for _, r := range requestsOf(c, ai) {
-			if r.Status != judge.RequestFailed || r.Error.Code != core.ErrCodeJudgeTimeout || r.Attempt != 1 || r.Error.Message != messages[core.ErrCodeJudgeTimeout] {
-				t.Errorf("%s request %+v %+v", ai, r, r.Error)
-			}
-		}
-	}
-	if c.Status != Done {
-		t.Errorf("status %s", c.Status)
-	}
-}
-
-func TestBadOutput(t *testing.T) {
-	prose := func(ctx context.Context, req core.JudgeRequest, n int) (core.JudgeResult, error) {
-		return core.JudgeResult{Output: json.RawMessage(fakecli.ProseText), Model: req.Model}, nil
-	}
-	t.Run("prose then rule", func(t *testing.T) {
-		ais := threeAIs()
-		fakeOf(ais[0]).judge = func(ctx context.Context, req core.JudgeRequest, n int) (core.JudgeResult, error) {
-			if n%2 == 1 {
-				return prose(ctx, req, n)
-			}
-			return ruleJudge(req), nil
-		}
-		m, _ := newTestManager(t, ais, func(o *Options) { o.Gate.Settings.PerAI = 1 })
-		c := waitIdle(t, m, "phone", startDirect(t, m, threeAnswers("phone", "")).ID)
-		for _, r := range requestsOf(c, "claude") {
-			if r.Status != judge.RequestDone || r.Attempt != 2 || r.InputTokens != 10 {
-				t.Errorf("request %+v", r)
-			}
-		}
-		calls := fakeOf(ais[0]).judgeCalls()
-		if len(calls) != 4 {
-			t.Fatalf("%d claude calls", len(calls))
-		}
-		for i := 0; i < 4; i += 2 {
-			a, b := nonceOf(calls[i].Prompt), nonceOf(calls[i+1].Prompt)
-			if a == "" || a == b || calls[i].Task.Units[0].Text != calls[i+1].Task.Units[0].Text {
-				t.Errorf("attempts %d and %d: nonces %q %q", i+1, i+2, a, b)
-			}
-		}
-	})
-	t.Run("prose twice", func(t *testing.T) {
-		ais := threeAIs()
-		fakeOf(ais[0]).judge = prose
-		m, _ := newTestManager(t, ais, nil)
-		c := waitIdle(t, m, "phone", startDirect(t, m, threeAnswers("phone", "")).ID)
-		for _, r := range requestsOf(c, "claude") {
-			if r.Status != judge.RequestFailed || r.Attempt != 2 || r.Error.Code != core.ErrCodeJudgeBadOutput || r.Error.Message != messages[core.ErrCodeJudgeBadOutput] {
-				t.Errorf("request %+v %+v", r, r.Error)
-			}
-		}
-		if n := len(fakeOf(ais[0]).judgeCalls()); n != 4 {
-			t.Errorf("%d calls", n)
-		}
-	})
-	t.Run("adapter bad output twice", func(t *testing.T) {
-		ais := threeAIs()
-		fakeOf(ais[0]).judge = func(ctx context.Context, req core.JudgeRequest, n int) (core.JudgeResult, error) {
-			return core.JudgeResult{Model: req.Model}, core.Fail(core.ErrCodeJudgeBadOutput, "")
-		}
-		m, _ := newTestManager(t, ais, nil)
-		c := waitIdle(t, m, "phone", startDirect(t, m, threeAnswers("phone", "")).ID)
-		for _, r := range requestsOf(c, "claude") {
-			if r.Status != judge.RequestFailed || r.Attempt != 2 || r.Error.Code != core.ErrCodeJudgeBadOutput {
-				t.Errorf("request %+v", r)
-			}
-		}
-	})
-	// Answers of two units, so a judge can miss one.
-	twoUnits := func() DirectSpec {
-		s := threeAnswers("phone", "")
-		s.Answers[1].Text = "The number is NUM 1. The size is NUM 3."
-		s.Answers[2].Text = "The number is NUM 2. The size is NUM 3."
-		return s
-	}
-	drop := func(id string) func(ctx context.Context, req core.JudgeRequest) (core.JudgeResult, error) {
-		return func(ctx context.Context, req core.JudgeRequest) (core.JudgeResult, error) {
-			var out struct {
-				Judgments []map[string]any `json:"judgments"`
-			}
-			json.Unmarshal([]byte(fakecli.Answer(req.Prompt, false)), &out)
-			out.Judgments = slices.DeleteFunc(out.Judgments, func(j map[string]any) bool { return j["id"] == id })
-			b, _ := json.Marshal(out)
-			return core.JudgeResult{Output: b, Model: req.Model}, nil
-		}
-	}
-	t.Run("missing ids merge", func(t *testing.T) {
-		ais := threeAIs()
-		fakeOf(ais[0]).judge = func(ctx context.Context, req core.JudgeRequest, n int) (core.JudgeResult, error) {
-			if n%2 == 1 {
-				return drop("a1")(ctx, req)
-			}
-			return drop("a2")(ctx, req)
-		}
-		m, _ := newTestManager(t, ais, func(o *Options) { o.Gate.Settings.PerAI = 1 })
-		c := waitIdle(t, m, "phone", startDirect(t, m, twoUnits()).ID)
-		for _, r := range requestsOf(c, "claude") {
-			if r.Status != judge.RequestDone || r.Attempt != 2 {
-				t.Errorf("request %+v", r)
-			}
-			var units []string
-			for _, j := range c.Judgments {
-				if j.Request == r.ID {
-					units = append(units, j.Unit)
-				}
-			}
-			sort.Strings(units)
-			if want := []string{r.From + ":1", r.From + ":2"}; !slices.Equal(units, want) {
-				t.Errorf("%s judged %v, want %v", r.ID, units, want)
-			}
-		}
-	})
-	t.Run("the same id missing twice", func(t *testing.T) {
-		ais := threeAIs()
-		fakeOf(ais[0]).judge = func(ctx context.Context, req core.JudgeRequest, n int) (core.JudgeResult, error) {
-			return drop("a1")(ctx, req)
-		}
-		m, _ := newTestManager(t, ais, nil)
-		c := waitIdle(t, m, "phone", startDirect(t, m, twoUnits()).ID)
-		for _, r := range requestsOf(c, "claude") {
-			var units []string
-			for _, j := range c.Judgments {
-				if j.Request == r.ID {
-					units = append(units, j.Unit)
-				}
-			}
-			if r.Status != judge.RequestDone || r.Attempt != 2 || !slices.Equal(units, []string{r.From + ":2"}) {
-				t.Errorf("request %+v judged %v", r, units)
-			}
-		}
-	})
-	t.Run("missing ids, then the retry fails", func(t *testing.T) {
-		ais := threeAIs()
-		fakeOf(ais[0]).judge = func(ctx context.Context, req core.JudgeRequest, n int) (core.JudgeResult, error) {
-			if n%2 == 1 {
-				return drop("a1")(ctx, req)
-			}
-			return core.JudgeResult{}, core.Fail(core.ErrCodeJudgeFailed, "overloaded")
-		}
-		m, _ := newTestManager(t, ais, func(o *Options) { o.Gate.Settings.PerAI = 1 })
-		c := waitIdle(t, m, "phone", startDirect(t, m, twoUnits()).ID)
-		for _, r := range requestsOf(c, "claude") {
-			if r.Status != judge.RequestDone || r.Attempt != 2 || r.Error != nil {
-				t.Errorf("attempt 1's verdicts stand: %+v", r)
-			}
-		}
-	})
-}
-
-func TestErrorCodes(t *testing.T) {
-	long := strings.Repeat("가", 400)
-	cases := []struct {
-		name     string
-		err      error
-		code     string
-		message  string
-		attempts int
-	}{
-		{"judge_failed keeps the AI's words", core.Fail(core.ErrCodeJudgeFailed, "  "+fakecli.UsageLimitCodex+"\n"), core.ErrCodeJudgeFailed, fakecli.UsageLimitCodex, 1},
-		{"judge_failed is cut", core.Fail(core.ErrCodeJudgeFailed, long), core.ErrCodeJudgeFailed, strings.Repeat("가", 299) + "…", 1},
-		{"judge_failed without words", core.Fail(core.ErrCodeJudgeFailed, ""), core.ErrCodeJudgeFailed, messages[core.ErrCodeJudgeFailed], 1},
-		{"judge_used_tool", core.Fail(core.ErrCodeJudgeUsedTool, fakecli.ToolCommand), core.ErrCodeJudgeUsedTool, messages[core.ErrCodeJudgeUsedTool], 1},
-		{"bad_model hides the model", core.Fail(core.ErrCodeBadModel, "claude-secret-model"), core.ErrCodeBadModel, messages[core.ErrCodeBadModel], 1},
-		{"agent_unavailable", core.Fail(core.ErrCodeAgentUnavailable, "claude was not found"), core.ErrCodeAgentUnavailable, messages[core.ErrCodeAgentUnavailable], 1},
-		{"not an ActionError", errors.New("boom"), core.ErrCodeInternal, messages[core.ErrCodeInternal], 1},
-		{"an unknown code", core.Fail("rate_limited", "detail"), "rate_limited", msgOther, 1},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			ais := threeAIs()
-			fakeOf(ais[1]).judge = func(ctx context.Context, req core.JudgeRequest, n int) (core.JudgeResult, error) {
-				return core.JudgeResult{Model: "codex-x", InputTokens: 5}, tc.err
-			}
-			m, buf := newTestManager(t, ais, nil)
-			c := waitIdle(t, m, "phone", startDirect(t, m, threeAnswers("phone", "")).ID)
-			rs := requestsOf(c, "codex")
-			for _, r := range rs {
-				if r.Status != judge.RequestFailed || r.Error.Code != tc.code || r.Error.Message != tc.message || r.Attempt != tc.attempts || r.Model != "codex-x" || r.InputTokens != 5 {
-					t.Errorf("request %+v %+v", r, r.Error)
-				}
-				if utf8.RuneCountInString(r.Error.Message) > core.JudgeMessageChars {
-					t.Errorf("message of %d characters", utf8.RuneCountInString(r.Error.Message))
-				}
-			}
-			if n := len(fakeOf(ais[1]).judgeCalls()); n != 2*tc.attempts {
-				t.Errorf("%d calls", n)
-			}
-			if c.Status != Done {
-				t.Errorf("a partial failure is done: %s", c.Status)
-			}
-			if logs := buf.String(); strings.Contains(logs, "usage limit") || strings.Contains(logs, "가가") || strings.Contains(logs, "detail") || strings.Contains(logs, "secret") || strings.Contains(logs, "curl") {
-				t.Errorf("logs carry the AI's words: %s", logs)
-			}
-		})
-	}
-}
-
-func TestWrongCompany(t *testing.T) {
-	for _, model := range []string{"gpt-x", ""} {
-		t.Run(fmt.Sprintf("model %q", model), func(t *testing.T) {
-			ais := threeAIs()
-			claude := fakeOf(ais[0])
-			claude.fams = map[string]string{"gpt-x": "openai"}
-			claude.judge = func(ctx context.Context, req core.JudgeRequest, n int) (core.JudgeResult, error) {
-				res := ruleJudge(req)
-				res.Model = model
-				return res, nil
-			}
-			m, _ := newTestManager(t, ais, nil)
-			c := waitIdle(t, m, "phone", startDirect(t, m, threeAnswers("phone", "")).ID)
-			for _, r := range requestsOf(c, "claude") {
-				if r.Status != judge.RequestFailed || r.Error.Code != core.ErrCodeBadModel || r.Error.Message != msgCompany || r.Attempt != 1 {
-					t.Errorf("request %+v %+v", r, r.Error)
-				}
-				for _, j := range c.Judgments {
-					if j.Request == r.ID {
-						t.Errorf("a judgment of %s stayed: %+v", r.ID, j)
-					}
-				}
-			}
-			if n := len(claude.judgeCalls()); n != 2 {
-				t.Errorf("%d calls: bad_model is not asked again", n)
-			}
-		})
-	}
-}
-
 func TestPanics(t *testing.T) {
-	t.Run("judge", func(t *testing.T) {
-		ais := threeAIs()
-		fakeOf(ais[0]).judge = func(ctx context.Context, req core.JudgeRequest, n int) (core.JudgeResult, error) {
-			panic("judge bug")
-		}
-		m, _ := newTestManager(t, ais, nil)
-		c := waitIdle(t, m, "phone", startDirect(t, m, threeAnswers("phone", "")).ID)
-		for _, r := range requestsOf(c, "claude") {
-			if r.Status != judge.RequestFailed || r.Error.Code != core.ErrCodeInternal || r.Attempt != 1 {
-				t.Errorf("request %+v", r)
-			}
-		}
-		if c.Status != Done {
-			t.Errorf("status %s", c.Status)
-		}
-	})
 	t.Run("family", func(t *testing.T) {
-		// A Family that panics while the answers are split fails the
-		// comparison; the gate asks it only of the judge model.
+		// A Family that panics while the answers are taken fails the
+		// comparison internal; the panic value reaches no log.
 		ais := threeAIs()
 		ais[0] = &panicFamily{fakeAI: newFake("claude", "anthropic")}
-		m, _ := newTestManager(t, ais, nil)
+		m, buf := newTestManager(t, ais, nil)
 		c := waitIdle(t, m, "phone", startDirect(t, m, threeAnswers("phone", "")).ID)
-		if c.Status != Failed || c.Error == nil || c.Error.Code != core.ErrCodeInternal {
+		if c.Status != Failed || c.Error == nil || c.Error.Code != core.ErrCodeInternal || c.Error.Message != messages[core.ErrCodeInternal] {
 			t.Errorf("comparison %+v", c)
+		}
+		if strings.Contains(buf.String(), "family bug") {
+			t.Error("a panic value reached the log")
 		}
 	})
 	t.Run("info", func(t *testing.T) {
-		// An adapter whose Info panics does not judge; the others do.
+		// An adapter whose Info panics does not pass the gate; the others do.
 		ais := threeAIs()
 		ais = append(ais, &panicInfo{name: "gemini"})
 		m, _ := newTestManager(t, ais, nil)
@@ -1090,54 +593,21 @@ func TestPanics(t *testing.T) {
 		}
 	})
 	t.Run("cleanup", func(t *testing.T) {
-		ais := threeAIs()
-		oc := ais[2].(cleanerAI)
+		// A writer's cleanup that panics is logged with its code only.
+		_, _, oc, ais := threeWriters()
 		oc.cleanup = func(ctx context.Context, folder string, refs []string) error { panic("cleanup bug") }
 		m, buf := newTestManager(t, ais, nil)
-		c := waitIdle(t, m, "phone", startDirect(t, m, threeAnswers("phone", "")).ID)
-		if c.Status != Done || len(oc.cleanupCalls()) != 1 {
-			t.Errorf("status %s, %d cleanups", c.Status, len(oc.cleanupCalls()))
+		c := waitIdle(t, m, "phone", startDirect(t, m, withSynth(threeAnswers("phone", ""), &SynthSpec{Agent: "opencode"})).ID)
+		if s := synthOf(t, c); c.Status != Done || s.Status != SynthDone || len(cleanerAI{oc.fakeAI}.cleanupCalls()) != 1 {
+			t.Errorf("status %s, synthesis %+v, %d cleanups", c.Status, s, len(cleanerAI{oc.fakeAI}.cleanupCalls()))
 		}
-		if !strings.Contains(buf.String(), `"msg":"judge cleanup failed","judge":"opencode","code":"internal"`) {
-			t.Errorf("logs: %s", buf.String())
-		}
-	})
-	t.Run("aggregate", func(t *testing.T) {
-		ais := threeAIs()
-		m, buf := newTestManager(t, ais, nil)
-		m.mu.Lock()
-		m.aggregate = func(in judge.AggregateInput) judge.Summary {
-			if len(in.Judgments) > 0 {
-				panic("aggregate bug")
-			}
-			return judge.Aggregate(in)
-		}
-		m.mu.Unlock()
-		c := waitIdle(t, m, "phone", startDirect(t, m, threeAnswers("phone", "")).ID)
-		if c.Status != Failed || c.Error == nil || c.Error.Code != core.ErrCodeInternal || c.Error.Message != msgCards {
-			t.Errorf("comparison %+v %+v", c, c.Error)
-		}
-		if strings.Contains(buf.String(), "aggregate bug") {
-			t.Error("a panic value reached the log")
-		}
-		// The Manager keeps working.
-		m.mu.Lock()
-		m.aggregate = judge.Aggregate
-		m.mu.Unlock()
-		if c := waitIdle(t, m, "phone", startDirect(t, m, threeAnswers("phone", "")).ID); c.Status != Done {
-			t.Errorf("next comparison %s", c.Status)
-		}
-		// And Retry makes the cards of the broken one again.
-		if _, err := m.Retry("phone", c.ID); err != nil {
-			t.Fatal(err)
-		}
-		if c = waitIdle(t, m, "phone", c.ID); c.Status != Done || c.Error != nil || c.Counts.Differ != 1 {
-			t.Errorf("after retry: %s %+v %+v", c.Status, c.Error, c.Counts)
+		if logs := buf.String(); !strings.Contains(logs, `"msg":"writer cleanup failed","writer":"opencode","code":"internal"`) || strings.Contains(logs, "cleanup bug") {
+			t.Errorf("logs: %s", logs)
 		}
 	})
 }
 
-// panicInfo is a judging AI whose Info panics.
+// panicInfo is an AI whose Info panics.
 type panicInfo struct{ name string }
 
 func (p *panicInfo) Agent() string                         { return p.name }
@@ -1145,147 +615,74 @@ func (p *panicInfo) Info(context.Context) core.AdapterInfo { panic("info bug") }
 func (p *panicInfo) ListSessions(context.Context) (core.ListResult, error) {
 	return core.ListResult{}, nil
 }
-func (p *panicInfo) Judge(context.Context, core.JudgeRequest) (core.JudgeResult, error) {
-	return core.JudgeResult{}, nil
-}
-func (p *panicInfo) JudgeDefault() core.AskModel { return core.AskModel{Model: "g"} }
-func (p *panicInfo) Family(string) string        { return "google" }
+func (p *panicInfo) Family(string) string { return "google" }
 
-// panicFamily panics when asked for the company of an answer's model.
-type panicFamily struct{ *fakeAI }
+// panicFamily panics when asked for the company of the answer model
+// claude-m, until it is fixed.
+type panicFamily struct {
+	*fakeAI
+	fixed atomic.Bool
+}
 
 func (p *panicFamily) Family(model string) string {
-	if model == "claude-m" {
+	if model == "claude-m" && !p.fixed.Load() {
 		panic("family bug")
 	}
 	return p.fakeAI.Family(model)
 }
 
-func TestCleanup(t *testing.T) {
-	ais := threeAIs()
-	oc := ais[2].(cleanerAI)
-	m, buf := newTestManager(t, ais, func(o *Options) { o.Gate.Settings.PerAI = 1 })
-	var id atomic.Value
-	ready := make(chan struct{}) // the test has the id
-	oc.judge = func(ctx context.Context, req core.JudgeRequest, n int) (core.JudgeResult, error) {
-		<-ready
-		if n == 1 {
-			res := ruleJudge(req)
-			res.Cleanup = "ses_1"
-			return res, nil
-		}
-		return core.JudgeResult{Model: req.Model, Cleanup: "ses_2"}, core.Fail(core.ErrCodeJudgeTimeout, "")
-	}
-	var deadline time.Duration
-	oc.cleanup = func(ctx context.Context, folder string, refs []string) error {
-		// Both of opencode's requests have ended by now.
-		c, _ := m.Get("phone", id.Load().(string))
-		for _, r := range requestsOf(c, "opencode") {
-			if r.Status != judge.RequestDone && r.Status != judge.RequestFailed {
-				t.Errorf("cleanup before request %s ended: %s", r.ID, r.Status)
-			}
-		}
-		if folder != m.o.Gate.Folder {
-			t.Errorf("cleanup folder %q", folder)
-		}
-		d, _ := ctx.Deadline()
-		deadline = time.Until(d)
-		return core.Fail(core.ErrCodeJudgeFailed, "opencode could not delete ses_1")
-	}
-	c := startDirect(t, m, threeAnswers("phone", ""))
-	id.Store(c.ID)
-	close(ready)
-	c = waitIdle(t, m, "phone", c.ID)
-	calls := oc.cleanupCalls()
-	if len(calls) != 1 {
-		t.Fatalf("%d cleanups, want 1", len(calls))
-	}
-	refs := slices.Clone(calls[0])
-	sort.Strings(refs)
-	if !slices.Equal(refs, []string{"ses_1", "ses_2"}) {
-		t.Errorf("refs %v", refs)
-	}
-	if deadline <= 3*core.JudgeCleanupTimeout || deadline > 4*core.JudgeCleanupTimeout {
-		t.Errorf("cleanup deadline %v, want (2+2)×%v", deadline, core.JudgeCleanupTimeout)
-	}
-	logs := buf.String()
-	if !strings.Contains(logs, `"msg":"judge cleanup failed","judge":"opencode","code":"judge_failed"`) || strings.Contains(logs, "ses_1") {
-		t.Errorf("logs: %s", logs)
-	}
-	if c.Status != Done {
-		t.Errorf("status %s", c.Status)
-	}
-	// A round in which opencode never ran a judge cleans nothing.
-	m2, _ := newTestManager(t, threeAIs(), func(o *Options) { o.Gate.Settings.Models = map[string]core.AskModel{"opencode": {Model: "unknown-x"}} })
-	oc2 := m2.o.Adapters[2].(cleanerAI)
-	oc2.fams = map[string]string{"unknown-x": ""}
-	waitIdle(t, m2, "phone", startDirect(t, m2, threeAnswers("phone", "")).ID)
-	if n := len(oc2.cleanupCalls()); n != 0 {
-		t.Errorf("%d cleanups of an AI that never judged", n)
-	}
-}
-
+// Retry has nothing to retry in a comparison that took its answers: done,
+// failed with need_two_answers, or with its combined answer failed, it
+// comes back as it is and no AI is called. One whose run was gone looks
+// the run up again.
 func TestRetry(t *testing.T) {
-	ais := threeAIs()
-	codex := fakeOf(ais[1])
-	limited := atomic.Bool{}
-	limited.Store(true)
-	codex.judge = func(ctx context.Context, req core.JudgeRequest, n int) (core.JudgeResult, error) {
-		if limited.Load() {
-			return core.JudgeResult{Model: req.Model}, core.Fail(core.ErrCodeJudgeFailed, fakecli.UsageLimitCodex)
-		}
-		return ruleJudge(req), nil
+	cl, _, _, ais := threeWriters()
+	cl.setSynth(func(ctx context.Context, req core.SynthRequest, n int) (core.SynthResult, error) {
+		return core.SynthResult{Model: req.Model}, core.Fail(core.ErrCodeJudgeFailed, fakecli.UsageLimitClaude)
+	})
+	fr := &fakeRuns{}
+	m, buf := newTestManager(t, ais, func(o *Options) { o.Runs = fr })
+	started := func() int { return strings.Count(buf.String(), `"msg":"comparison started"`) }
+
+	c := waitIdle(t, m, "phone", startDirect(t, m, withSynth(threeAnswers("phone", ""), &SynthSpec{Agent: "claude"})).ID)
+	if s := synthOf(t, c); c.Status != Done || s.Status != SynthFailed || len(cl.synthCalls()) != 1 {
+		t.Fatalf("first: %s %+v", c.Status, s)
 	}
-	m, _ := newTestManager(t, ais, nil)
-	c := waitIdle(t, m, "phone", startDirect(t, m, threeAnswers("phone", "")).ID)
-	if c.Status != Done || len(requestsOf(c, "codex")) != 2 {
-		t.Fatalf("status %s", c.Status)
-	}
-	for _, r := range requestsOf(c, "codex") {
-		if r.Status != judge.RequestFailed || r.Error.Message != fakecli.UsageLimitCodex {
-			t.Fatalf("request %+v", r)
-		}
-	}
-	keys := map[string]string{}
-	for _, it := range c.Items {
-		keys[it.Kind] = it.Key
-	}
-	before := map[string]int{}
-	for _, a := range ais {
-		before[a.Agent()] = len(fakeOf(a).judgeCalls())
+	r, err := m.Retry("phone", c.ID)
+	if err != nil || r.Status != Done || r.Error != nil || synthOf(t, r).Status != SynthFailed || synthOf(t, r).Error.Message != fakecli.UsageLimitClaude {
+		t.Errorf("Retry of a done comparison = %s %v %+v", r.Status, err, r.Synthesis)
 	}
 
-	limited.Store(false)
-	r, err := m.Retry("phone", c.ID)
-	if err != nil || r.Status != Running {
-		t.Fatalf("Retry = %s %v", r.Status, err)
+	parts := threeParts()
+	parts[0] = runs.Part{Agent: "claude", Status: runs.Failed, Error: &runs.Error{Code: core.ErrCodeAskTimeout}}
+	parts[1] = runs.Part{Agent: "codex", Status: runs.Failed, Error: &runs.Error{Code: core.ErrCodeAskFailed}}
+	fr.set(endedRun("run-1", parts...))
+	one, _ := m.Attach(runSpec("phone", "run-1"))
+	if got := waitIdle(t, m, "phone", one); got.Status != Failed || got.Error == nil || got.Error.Code != core.ErrCodeNeedTwoAnswers {
+		t.Fatalf("one answer: %s %+v", got.Status, got.Error)
 	}
-	c = waitIdle(t, m, "phone", c.ID)
-	if c.Status != Done || c.Error != nil {
-		t.Fatalf("after retry: %s %+v", c.Status, c.Error)
+	if r, err := m.Retry("phone", one); err != nil || r.Status != Failed || r.Error == nil || r.Error.Code != core.ErrCodeNeedTwoAnswers {
+		t.Errorf("Retry of need_two_answers = %+v %v", r, err)
 	}
-	for _, a := range ais {
-		want := before[a.Agent()]
-		if a.Agent() == "codex" {
-			want += 2
-		}
-		if n := len(fakeOf(a).judgeCalls()); n != want {
-			t.Errorf("%s: %d calls, want %d (only the failed requests run again)", a.Agent(), n, want)
-		}
+	waitIdle(t, m, "phone", c.ID)
+	waitIdle(t, m, "phone", one)
+	if n := started(); n != 2 || len(cl.synthCalls()) != 1 {
+		t.Errorf("%d rounds, %d writer calls: a Retry with nothing to retry started something", n, len(cl.synthCalls()))
 	}
-	for _, rq := range c.Requests {
-		if rq.Status != judge.RequestDone || rq.Attempt != 1 || rq.Error != nil {
-			t.Errorf("request %+v", rq)
-		}
+
+	// The run is gone (fr holds run-1 only), then it is found.
+	gone, _ := m.Attach(runSpec("phone", "run-2"))
+	if got := waitIdle(t, m, "phone", gone); got.Status != Failed || got.Error == nil || got.Error.Code != core.ErrCodeInternal || got.Error.Message != msgRunGone {
+		t.Fatalf("run gone: %s %+v", got.Status, got.Error)
 	}
-	if k := keys[judge.CardDiffer]; k == "" || c.Items[0].Key != k {
-		t.Errorf("differ key %q before, %q after", k, c.Items[0].Key)
+	fr.set(endedRun("run-2", threeParts()...))
+	if _, err := m.Retry("phone", gone); err != nil {
+		t.Fatal(err)
 	}
-	// Nothing left to retry: the same snapshot, no call.
-	again, err := m.Retry("phone", c.ID)
-	if err != nil || again.Status != Done || totalCalls(ais) != before["claude"]+before["codex"]+before["opencode"]+2 {
-		t.Errorf("Retry of a done comparison: %s %v", again.Status, err)
+	if got := waitIdle(t, m, "phone", gone); got.Status != Done || got.Error != nil || started() != 3 {
+		t.Errorf("after the run was found: %s %+v", got.Status, got.Error)
 	}
+
 	if _, err := m.Retry("tablet", c.ID); !errors.Is(err, ErrNotFound) {
 		t.Errorf("another device: %v", err)
 	}
@@ -1294,174 +691,67 @@ func TestRetry(t *testing.T) {
 	}
 }
 
+// Retry is ErrRunning while the comparison waits for its run or takes its
+// answers.
 func TestRetryWhileRunning(t *testing.T) {
 	ais := threeAIs()
-	release := make(chan struct{})
-	fakeOf(ais[0]).judge = func(ctx context.Context, req core.JudgeRequest, n int) (core.JudgeResult, error) {
-		<-release
-		return ruleJudge(req), nil
+	pb := &planBlock{fakeAI: newFake("claude", "anthropic"), entered: make(chan struct{}), release: make(chan struct{})}
+	ais[0] = pb
+	fr := &fakeRuns{}
+	m, _ := newTestManager(t, ais, func(o *Options) { o.Runs = fr })
+	fr.set(runs.Run{ID: "run-w", Status: runs.Running})
+	waiting, _ := m.Attach(runSpec("phone", "run-w"))
+	if _, err := m.Retry("phone", waiting); !errors.Is(err, ErrRunning) {
+		t.Errorf("Retry while waiting: %v", err)
 	}
-	m, _ := newTestManager(t, ais, nil)
 	c := startDirect(t, m, threeAnswers("phone", ""))
+	select {
+	case <-pb.entered:
+	case <-time.After(10 * time.Second):
+		close(pb.release)
+		t.Fatal("the round did not take the answers")
+	}
 	if _, err := m.Retry("phone", c.ID); !errors.Is(err, ErrRunning) {
 		t.Errorf("Retry while running: %v", err)
 	}
-	close(release)
+	close(pb.release)
 	waitIdle(t, m, "phone", c.ID)
-}
-
-func TestRetryRegates(t *testing.T) {
-	ais := threeAIs()
-	codex := fakeOf(ais[1])
-	codex.judge = func(ctx context.Context, req core.JudgeRequest, n int) (core.JudgeResult, error) {
-		return core.JudgeResult{}, core.Fail(core.ErrCodeJudgeFailed, "limit")
-	}
-	m, _ := newTestManager(t, ais, nil)
-	c := waitIdle(t, m, "phone", startDirect(t, m, threeAnswers("phone", "")).ID)
-	codex.setAvailable(false)
-	if _, err := m.Retry("phone", c.ID); err != nil {
-		t.Fatal(err)
-	}
-	c = waitIdle(t, m, "phone", c.ID)
-	for _, r := range requestsOf(c, "codex") {
-		if r.Status != judge.RequestFailed || r.Error.Code != core.ErrCodeAgentUnavailable || r.Attempt != 0 {
-			t.Errorf("request %+v", r)
-		}
-	}
-	if n := len(codex.judgeCalls()); n != 2 {
-		t.Errorf("%d codex calls", n)
-	}
-	if c.Status != Done {
-		t.Errorf("status %s", c.Status)
-	}
-}
-
-func TestRetryReplans(t *testing.T) {
-	ais := threeAIs()
-	for _, a := range ais {
-		fakeOf(a).setAvailable(false)
-	}
-	fr := &fakeRuns{}
-	m, _ := newTestManager(t, ais, func(o *Options) { o.Runs = fr })
-	fr.set(endedRun("run-r", threeParts()...))
-	id, _ := m.Attach(runSpec("phone", "run-r"))
-	c := waitIdle(t, m, "phone", id)
-	if c.Status != Failed || c.Error.Code != core.ErrCodeNoJudge {
-		t.Fatalf("comparison %+v", c)
-	}
-	for _, a := range ais {
-		fakeOf(a).setAvailable(true)
-	}
-	if _, err := m.Retry("phone", id); err != nil {
-		t.Fatal(err)
-	}
-	c = waitIdle(t, m, "phone", id)
-	if c.Status != Done || len(c.Requests) != 6 || totalCalls(ais) != 6 {
-		t.Errorf("after retry: %s, %d requests, %d calls", c.Status, len(c.Requests), totalCalls(ais))
-	}
 }
 
 func TestCancel(t *testing.T) {
 	t.Run("waiting never starts", func(t *testing.T) {
-		ais := threeAIs()
 		fr := &fakeRuns{}
-		m, _ := newTestManager(t, ais, func(o *Options) { o.Runs = fr })
+		m, buf := newTestManager(t, threeAIs(), func(o *Options) { o.Runs = fr })
+		started := func() int { return strings.Count(buf.String(), `"msg":"comparison started"`) }
 		run := endedRun("run-c", threeParts()...)
 		running := run
 		running.Status = runs.Running
 		fr.set(running)
 		id, _ := m.Attach(runSpec("phone", run.ID))
 		m.RunEnded(running) // a run that has not ended starts nothing
-		if c, _ := m.Get("phone", id); c.Status != Waiting || totalCalls(ais) != 0 {
+		if c, _ := m.Get("phone", id); c.Status != Waiting || started() != 0 {
 			t.Fatalf("status %s", c.Status)
 		}
 		c, err := m.Cancel("phone", id)
-		if err != nil || c.Status != Failed || c.Error.Code != core.ErrCodeCancelled {
+		if err != nil || c.Status != Failed || c.Error.Code != core.ErrCodeCancelled || c.Error.Message != msgCancelledWaiting {
 			t.Fatalf("Cancel = %+v %v", c, err)
 		}
 		fr.set(run)
 		m.RunEnded(run)
 		c = waitIdle(t, m, "phone", id)
-		if c.Status != Failed || totalCalls(ais) != 0 {
-			t.Errorf("a cancelled comparison started: %s, %d calls", c.Status, totalCalls(ais))
+		if c.Status != Failed || started() != 0 {
+			t.Errorf("a cancelled comparison started: %s", c.Status)
 		}
 		// Retry waits for the run again, and starts as it has ended.
 		if _, err := m.Retry("phone", id); err != nil {
 			t.Fatal(err)
 		}
-		if c = waitIdle(t, m, "phone", id); c.Status != Done || totalCalls(ais) != 6 {
-			t.Errorf("after retry: %s, %d calls", c.Status, totalCalls(ais))
-		}
-	})
-	t.Run("queued are dropped, running finish", func(t *testing.T) {
-		ais := threeAIs()
-		release := make(chan struct{})
-		var running atomic.Int32
-		for _, a := range ais {
-			fakeOf(a).judge = func(ctx context.Context, req core.JudgeRequest, n int) (core.JudgeResult, error) {
-				running.Add(1)
-				<-release
-				return ruleJudge(req), nil
-			}
-		}
-		m, _ := newTestManager(t, ais, func(o *Options) { o.Gate.Settings.PerAI = 1 })
-		c := startDirect(t, m, threeAnswers("phone", ""))
-		waitFor(t, "one judge per AI", func() bool { return running.Load() == 3 })
-		if got, err := m.Cancel("phone", c.ID); err != nil || got.Status != Running {
-			t.Fatalf("Cancel = %s %v", got.Status, err)
-		}
-		waitFor(t, "the queued requests to drop", func() bool {
-			got, _ := m.Get("phone", c.ID)
-			n := 0
-			for _, r := range got.Requests {
-				if r.Error != nil && r.Error.Code == core.ErrCodeCancelled {
-					n++
-				}
-			}
-			return n == 3
-		})
-		close(release)
-		c = waitIdle(t, m, "phone", c.ID)
-		done, cancelled := 0, 0
-		for _, r := range c.Requests {
-			switch {
-			case r.Status == judge.RequestDone:
-				done++
-			case r.Error != nil && r.Error.Code == core.ErrCodeCancelled && r.Attempt == 0:
-				cancelled++
-			}
-		}
-		if done != 3 || cancelled != 3 || totalCalls(ais) != 3 || c.Status != Done {
-			t.Errorf("%d done, %d cancelled, %d calls, status %s", done, cancelled, totalCalls(ais), c.Status)
+		if c = waitIdle(t, m, "phone", id); c.Status != Done || c.Error != nil || len(c.Answers) != 3 || started() != 1 {
+			t.Errorf("after retry: %s %+v, %d answers", c.Status, c.Error, len(c.Answers))
 		}
 		// Cancel of an ended comparison changes nothing.
-		if again, err := m.Cancel("phone", c.ID); err != nil || again.Status != Done {
+		if again, err := m.Cancel("phone", id); err != nil || again.Status != Done || again.Error != nil {
 			t.Errorf("Cancel again = %s %v", again.Status, err)
-		}
-	})
-	t.Run("no retry after cancel", func(t *testing.T) {
-		ais := threeAIs()
-		release := make(chan struct{})
-		started := make(chan struct{}, 2)
-		fakeOf(ais[0]).judge = func(ctx context.Context, req core.JudgeRequest, n int) (core.JudgeResult, error) {
-			started <- struct{}{}
-			<-release
-			return core.JudgeResult{Output: json.RawMessage(fakecli.ProseText), Model: req.Model}, nil
-		}
-		m, _ := newTestManager(t, ais, nil)
-		c := startDirect(t, m, threeAnswers("phone", ""))
-		<-started
-		<-started
-		m.Cancel("phone", c.ID)
-		close(release)
-		c = waitIdle(t, m, "phone", c.ID)
-		for _, r := range requestsOf(c, "claude") {
-			if r.Status != judge.RequestFailed || r.Error.Code != core.ErrCodeJudgeBadOutput || r.Attempt != 1 {
-				t.Errorf("request %+v", r)
-			}
-		}
-		if n := len(fakeOf(ais[0]).judgeCalls()); n != 2 {
-			t.Errorf("%d claude calls after cancel", n)
 		}
 	})
 	t.Run("unknown", func(t *testing.T) {
@@ -1648,30 +938,26 @@ func TestValidateDirect(t *testing.T) {
 		t.Fatalf("limits refused: %v", err)
 	}
 	c = waitIdle(t, m, "phone", c.ID)
-	if c.Answers[3].Family != "google" || c.Status != Done {
-		t.Errorf("pasted answer %+v, status %s", c.Answers[3], c.Status)
+	if a := c.Answers[3]; a.Family != "google" || a.Via != judge.ViaHandoff || a.Status != judge.AnswerReady || c.Status != Done {
+		t.Errorf("pasted answer %+v, status %s", a, c.Status)
 	}
-	for _, r := range c.Requests {
-		if r.Judge == "codex" {
-			t.Errorf("codex was not among the judges: %+v", r)
-		}
+	if listed := listedOf(m, c.ID); !slices.Equal(listed, []string{"opencode", "claude"}) {
+		t.Errorf("listed %v, want the AIs as listed", listed)
 	}
 	// A pc answer without a model is of no known company (fail closed).
 	s = threeAnswers("phone", "")
 	s.Answers[2].Model = ""
 	c = waitIdle(t, m, "phone", startDirect(t, m, s).ID)
-	if c.Answers[2].Family != "" {
-		t.Errorf("family %q", c.Answers[2].Family)
-	}
-	for _, r := range c.Requests {
-		if (r.From == "opencode" || r.Against == "opencode") && (r.Judge != "" || r.Error.Code != core.ErrCodeNoJudge) {
-			t.Errorf("request with the unknown answer: %+v", r)
-		}
+	if c.Answers[2].Family != "" || c.Status != Done {
+		t.Errorf("answer %+v, status %s", c.Answers[2], c.Status)
 	}
 }
 
+// A judge folder that cannot be made fails what runs in it, the combined
+// answer and refining, internal and without a call; the comparison itself
+// has its answers and is done.
 func TestFolderFails(t *testing.T) {
-	ais := threeAIs()
+	cl, _, _, ais := threeWriters()
 	m, _ := newTestManager(t, ais, nil)
 	// A file where the judge folder must be.
 	if err := makeFolder(m.o.Gate.Folder[:len(m.o.Gate.Folder)-len(core.JudgeFolderName)-1]); err != nil {
@@ -1680,21 +966,28 @@ func TestFolderFails(t *testing.T) {
 	if err := os.WriteFile(m.o.Gate.Folder, nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	c := waitIdle(t, m, "phone", startDirect(t, m, threeAnswers("phone", "")).ID)
-	if c.Status != Failed || c.Error.Code != core.ErrCodeInternal || totalCalls(ais) != 0 {
-		t.Errorf("comparison %+v, %d calls", c, totalCalls(ais))
+	c := waitIdle(t, m, "phone", startDirect(t, m, withSynth(threeAnswers("phone", ""), &SynthSpec{Agent: "claude"})).ID)
+	if s := synthOf(t, c); c.Status != Done || s.Status != SynthFailed || s.Error.Code != core.ErrCodeInternal || synthTotal(ais) != 0 {
+		t.Errorf("comparison %s, synthesis %+v, %d calls", c.Status, s, synthTotal(ais))
+	}
+	if r := m.Refine(context.Background(), RefineSpec{Question: "q", Asked: []string{"claude"}}); r.Status != RefineFailed || r.Error == nil || r.Error.Code != core.ErrCodeInternal || len(cl.synthCalls()) != 0 {
+		t.Errorf("refine %+v, %d calls", r, len(cl.synthCalls()))
 	}
 }
 
+// Close ends a writer that runs and waits for it a short while; a Start
+// after it ends at once, cancelled.
 func TestClose(t *testing.T) {
-	ais := threeAIs()
-	fakeOf(ais[0]).judge = func(ctx context.Context, req core.JudgeRequest, n int) (core.JudgeResult, error) {
+	cl, _, _, ais := threeWriters()
+	entered := make(chan struct{})
+	cl.setSynth(func(ctx context.Context, req core.SynthRequest, n int) (core.SynthResult, error) {
+		close(entered)
 		<-ctx.Done()
-		return core.JudgeResult{}, core.Fail(core.ErrCodeJudgeTimeout, "")
-	}
+		return core.SynthResult{}, core.Fail(core.ErrCodeJudgeTimeout, "")
+	})
 	m, _ := newTestManager(t, ais, nil)
-	c := startDirect(t, m, threeAnswers("phone", ""))
-	waitFor(t, "claude to judge", func() bool { return len(fakeOf(ais[0]).judgeCalls()) == 2 })
+	c := startDirect(t, m, withSynth(threeAnswers("phone", ""), &SynthSpec{Agent: "claude"}))
+	<-entered
 	start := time.Now()
 	m.Close()
 	if d := time.Since(start); d > 2*time.Second {
@@ -1707,47 +1000,49 @@ func TestClose(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if after.Status != Failed || after.Error.Code != core.ErrCodeCancelled {
+	if after.Status != Failed || after.Error.Code != core.ErrCodeCancelled || after.Error.Message != msgClosed {
 		t.Errorf("Start after Close: %+v", after)
 	}
 }
 
 func TestLogsCarryNoContent(t *testing.T) {
-	ais := threeAIs()
+	cl, _, _, ais := threeWriters()
 	secret := "SECRET-ANSWER-7781"
-	fakeOf(ais[1]).judge = func(ctx context.Context, req core.JudgeRequest, n int) (core.JudgeResult, error) {
-		return core.JudgeResult{}, core.Fail(core.ErrCodeJudgeFailed, "AI-MESSAGE-4410 quoting "+secret)
-	}
+	cl.setSynth(func(ctx context.Context, req core.SynthRequest, n int) (core.SynthResult, error) {
+		return core.SynthResult{Model: req.Model}, core.Fail(core.ErrCodeJudgeFailed, "AI-MESSAGE-4410 quoting "+secret)
+	})
 	fr := &fakeRuns{}
 	m, buf := newTestManager(t, ais, func(o *Options) { o.Runs = fr })
 	s := threeAnswers("phone", "k")
 	s.Question = "QUESTION-MARKER-5512 what is it?"
 	s.Earlier = []string{"EARLIER-MARKER-9921"}
 	s.Answers[0].Text = "It is NUM 1 says " + secret + "."
+	s.Synth = &SynthSpec{Agent: "claude"}
 	c := waitIdle(t, m, "phone", startDirect(t, m, s).ID)
 	parts := threeParts()
 	parts[0].Answer = "Run answer RUN-MARKER-3141 NUM 1."
 	fr.set(endedRun("run-l", parts...))
 	rs := runSpec("phone", "run-l")
 	rs.Question = "QUESTION-MARKER-5512"
+	rs.Earlier = []string{"EARLIER-MARKER-9921"}
+	rs.Synth = &SynthSpec{Agent: "claude"}
 	id, _ := m.Attach(rs)
 	waitIdle(t, m, "phone", id)
-	if c.Status != Done {
-		t.Fatalf("status %s", c.Status)
+	if s := synthOf(t, c); c.Status != Done || s.Error == nil || s.Error.Code != core.ErrCodeJudgeFailed || len(cl.synthCalls()) != 2 {
+		t.Fatalf("status %s, synthesis %+v, %d writer calls", c.Status, s, len(cl.synthCalls()))
 	}
 	logs := buf.String()
 	leaks := []string{secret, "AI-MESSAGE-4410", "QUESTION-MARKER-5512", "EARLIER-MARKER-9921", "RUN-MARKER-3141", "NUM 1", `"fake"`, "reason", logx.Redacted}
-	for _, a := range ais {
-		for _, r := range fakeOf(a).judgeCalls() {
-			leaks = append(leaks, nonceOf(r.Prompt))
-		}
+	for _, call := range cl.synthCalls() {
+		leaks = append(leaks, nonceOf(call.Prompt))
 	}
 	for _, leak := range leaks {
 		if strings.Contains(logs, leak) {
 			t.Errorf("logs hold %q:\n%s", leak, logs)
 		}
 	}
-	if strings.Count(logs, `"msg":"comparison started"`) != 2 || strings.Count(logs, `"msg":"comparison ended"`) != 2 || strings.Count(logs, `"msg":"judge request"`) != 12 {
+	if strings.Count(logs, `"msg":"comparison started"`) != 2 || strings.Count(logs, `"msg":"comparison ended"`) != 2 ||
+		strings.Count(logs, `"msg":"synthesis ended"`) != 2 || strings.Contains(logs, "judge request") {
 		t.Errorf("logs:\n%s", logs)
 	}
 }

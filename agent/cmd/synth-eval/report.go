@@ -23,7 +23,7 @@ type Summary struct {
 	Refined     int     `json:"refined"`
 	MedianRef   float64 `json:"medianRefineS"`
 	MedianAsk   float64 `json:"medianAskS"`
-	MedianJudge float64 `json:"medianCompareS"`
+	MedianCmp   float64 `json:"medianCompareS"`
 	MedianSynth float64 `json:"medianSynthS"`
 	MedianTotal float64 `json:"medianTotalS"`
 	MedianChars int     `json:"medianChars"`
@@ -34,9 +34,6 @@ type Summary struct {
 	MeanLatin   float64 `json:"meanLatinShare"` // over the Korean questions with a combined answer
 	Extras      int     `json:"extras"`
 	AnsExtras   int     `json:"answerExtras"`
-	Unnamed     int     `json:"unnamedSides"`
-	Differ      int     `json:"differ"`
-	Check       int     `json:"check"`
 }
 
 func summarize(name string, rs []Record) (Summary, []Metrics) {
@@ -62,8 +59,6 @@ func summarize(name string, rs []Record) (Summary, []Metrics) {
 			ref = append(ref, float64(m.RefineMs)/1000)
 		}
 		cmp = append(cmp, float64(m.CompareMs)/1000)
-		s.Differ += m.Differ
-		s.Check += m.Check
 		s.AnsExtras += m.AnswerExtras
 		if !m.SynthOK {
 			continue
@@ -82,13 +77,12 @@ func summarize(name string, rs []Record) (Summary, []Metrics) {
 		if m.Extras {
 			s.Extras++
 		}
-		s.Unnamed += m.Unnamed
 		if m.Korean {
 			s.Korean++
 			latin = append(latin, m.LatinShare)
 		}
 	}
-	s.MedianAsk, s.MedianJudge, s.MedianSynth, s.MedianTotal = median(ask), median(cmp), median(syn), median(tot)
+	s.MedianAsk, s.MedianCmp, s.MedianSynth, s.MedianTotal = median(ask), median(cmp), median(syn), median(tot)
 	s.MedianRef = median(ref)
 	s.MedianChars, s.MedianFirst = int(medianInt(chars)), int(medianInt(first))
 	for _, l := range latin {
@@ -127,7 +121,7 @@ var summaryRows = []struct {
 	{"combined answers written", func(s Summary) string { return fmt.Sprintf("%d", s.SynthOK) }},
 	{"refined (median s)", func(s Summary) string { return fmt.Sprintf("%d (%.1f)", s.Refined, s.MedianRef) }},
 	{"median answers s", func(s Summary) string { return fmt.Sprintf("%.1f", s.MedianAsk) }},
-	{"median judging s", func(s Summary) string { return fmt.Sprintf("%.1f", s.MedianJudge) }},
+	{"median compare s", func(s Summary) string { return fmt.Sprintf("%.1f", s.MedianCmp) }},
 	{"median combined s", func(s Summary) string { return fmt.Sprintf("%.1f", s.MedianSynth) }},
 	{"median total s", func(s Summary) string { return fmt.Sprintf("%.1f", s.MedianTotal) }},
 	{"median length (chars)", func(s Summary) string { return fmt.Sprintf("%d", s.MedianChars) }},
@@ -137,8 +131,6 @@ var summaryRows = []struct {
 	{"Latin share (Korean qs)", func(s Summary) string { return fmt.Sprintf("%.1f%% of %d", 100*s.MeanLatin, s.Korean) }},
 	{"extras in combined", func(s Summary) string { return fmt.Sprintf("%d", s.Extras) }},
 	{"extras in answers", func(s Summary) string { return fmt.Sprintf("%d", s.AnsExtras) }},
-	{"unnamed differ sides", func(s Summary) string { return fmt.Sprintf("%d", s.Unnamed) }},
-	{"differ / check items", func(s Summary) string { return fmt.Sprintf("%d / %d", s.Differ, s.Check) }},
 }
 
 // writeReport prints the runs' summaries side by side, then each run's
@@ -175,7 +167,7 @@ func writeReport(out io.Writer, names []string, runs [][]Record) {
 	}
 	for i, ms := range all {
 		fmt.Fprintf(out, "\n== %s\n", names[i])
-		fmt.Fprintf(out, "%-12s %-12s %5s %6s %6s %6s %6s %5s %5s %6s %4s %4s %s\n", "question", "kind", "ans", "ask s", "judge", "synth", "chars", "table", "first", "latin", "ext", "unn", "differ/check")
+		fmt.Fprintf(out, "%-12s %-12s %5s %6s %6s %6s %6s %5s %5s %6s %s\n", "question", "kind", "ans", "ask s", "cmp s", "synth", "chars", "table", "first", "latin", "ext")
 		for _, m := range ms {
 			if m.Stop != "" {
 				fmt.Fprintf(out, "%-12s stopped: %s\n", m.ID, m.Stop)
@@ -193,9 +185,9 @@ func writeReport(out io.Writer, names []string, runs [][]Record) {
 			if m.Kind != "" {
 				kind = m.Kind + "/" + m.Depth
 			}
-			fmt.Fprintf(out, "%-12s %-12s %2d/%-2d %6.1f %6.1f %6s %6d %5s %5d %6s %4s %4d %d/%d\n",
+			fmt.Fprintf(out, "%-12s %-12s %2d/%-2d %6.1f %6.1f %6s %6d %5s %5d %6s %s\n",
 				m.ID, kind, m.Answered, m.Asked, float64(m.AskMs)/1000, float64(m.CompareMs)/1000, synth, m.Chars,
-				yes(m.Table), m.FirstSentence, latin, yes(m.Extras), m.Unnamed, m.Differ, m.Check)
+				yes(m.Table), m.FirstSentence, latin, yes(m.Extras))
 		}
 	}
 }

@@ -29,6 +29,6 @@ func TestRefineArgsAndOutput(t *testing.T) {
 		t.Fatalf("spec %+v %v", spec, err)
 	}
 	if checkSynthArgs(refineArgs(testSynthModel)) != nil || checkSynthArgs(writerArgs("asksemble-judge", testSynthModel)) == nil {
-		t.Fatal("the check took the judge agent or refused the refine agent")
+		t.Fatal("the check took the old judge agent or refused the refine agent")
 	}
 }

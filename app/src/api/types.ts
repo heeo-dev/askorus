@@ -56,26 +56,10 @@ export type AdapterInfo = {
   notices?: string[];
   /** Set for AIs that can ask (Phase 2): the model of each tier. */
   ask?: { tiers: Record<string, { model: string; effort?: string }> };
-  /** Set only with the capability 'judge' (P2-3): the model this AI judges with. */
-  judge?: JudgeInfo;
 };
 
 /** A stable error code from the agent; message is English detail (or an AI's own words). */
 export type CodeError = { code: string; message?: string };
-
-/** The quick model an AI judges other AIs' answers with, and its company. */
-export type JudgeInfo = { model: string; effort?: string; family: string };
-
-/** How this PC compares answers (P2-3). verified and typicalMs come once the judging is measured. */
-export type JudgingInfo = {
-  engine: string;
-  shape: string;
-  labels: string;
-  rules: string;
-  checks: string[];
-  verified?: { date: string; versions?: Record<string, string> };
-  typicalMs?: number;
-};
 
 /** A place answers may go besides this PC's AIs (always [] for now). */
 export type Integration = { id: string; kind: string; destination: string };
@@ -89,8 +73,6 @@ export type Info = {
   agents: AdapterInfo[];
   capabilities: string[];
   reserved: string[];
-  /** Set when some AI on the PC can judge (P2-3). */
-  judging?: JudgingInfo;
   integrations?: Integration[];
 };
 
@@ -220,9 +202,12 @@ export type Refine = {
 };
 
 /**
- * earlier: questions the judges' companies already got (oldest first);
- * judges: who may judge; synthesis: whether one AI then writes the answers
- * into one (S5b). Without synthesis the PC writes none (an S5 app).
+ * The comparison a run asks for once its answers are in (P2-3; since C6
+ * only the moderator's combined answer). judges: the asked AIs that may
+ * write it, by the name of P2-3's judges (a writer among them gets
+ * earlier, the questions its company already got, oldest first);
+ * synthesis: whether the moderator then writes the answers into one (S5b).
+ * Without synthesis the PC writes none (an S5 app).
  */
 export type RunCompare = { earlier?: string[]; judges?: string[]; synthesis?: SynthesisRequest };
 
@@ -263,88 +248,19 @@ export type Run = {
   refine?: Refine;
 };
 
-// Answer comparison (P2-3): GET /v1/comparisons/{id}. Every offset is in
-// UTF-16 code units (JavaScript string indexes).
-
-/** Math in a unit's text, marks included: the only places the phone draws math. */
-export type UnitMath = { start: number; end: number; display: boolean };
-
-/** One sentence, list item, table row or quote of an answer. start/end are offsets in the answer. */
-export type Unit = {
-  id: string; // "claude:3"
-  n: number;
-  kind: 'sentence' | 'item' | 'row' | 'quote' | (string & {});
-  text: string;
-  context?: string;
-  start: number;
-  end: number;
-  judged: boolean;
-  math?: UnitMath[];
-};
-
-export type CompareAnswer = {
-  id: string;
-  agent: string;
-  via: 'pc' | 'handoff' | (string & {});
-  family: string;
-  model?: string;
-  status: 'ready' | 'missing' | (string & {});
-  notJudged: number;
-  units: Unit[];
-};
-
-/** One judge reading the units of answer `from` against answer `against`. judge '' is a no_judge record. */
-export type JudgeRequest = {
-  id: string;
-  from: string;
-  against: string;
-  judge: string;
-  judgeOnly: boolean;
-  model?: string;
-  status: 'queued' | 'running' | 'done' | 'failed' | (string & {});
-  attempt: number;
-  ms?: number;
-  inputTokens?: number;
-  outputTokens?: number;
-  error?: CodeError;
-};
-
-export type Judgment = {
-  unit: string;
-  against: string;
-  request: string;
-  judge: string;
-  core: boolean;
-  label: 'same' | 'opposite' | 'absent' | (string & {});
-  evidence: string[];
-  unsure: boolean;
-  flags: string[];
-};
-
-/** Digits to show bold: offsets into the unit's text. */
-export type NumberSpan = { unit: string; start: number; end: number };
-
-/** One side of a card item: the answers (ids) that say it, and their units (the first is shown). */
-export type Position = { agents: string[]; units: string[]; numberSpans?: NumberSpan[] };
-
-export type CardItem = {
-  key: string; // stays the same while the comparison runs
-  kind: 'differ' | 'check' | 'agree' | 'onlyOne' | (string & {});
-  positions: Position[];
-  numbersDiffer?: boolean;
-  check: string[];
-  missing: string[];
-};
-
-export type CardCounts = { differ: number; check: number; agree: number; onlyOne: number; notCompared: number; notJudged: number };
+// Answer comparison (P2-3): GET /v1/comparisons/{id}. Since C6 (#19,
+// 2026-11-05) a comparison is only the moderator's combined answer: the PC
+// judges no more. Older agents and conversations kept before C6 also carry
+// the judging's answers, requests, judgments, items and counts, and a
+// synthesis with judged, unnamedSides and topics: the phone reads none of
+// them, so they are left out here (JSON keeps them; nothing breaks).
 
 /**
- * A comparison's combined answer (S5b), written by one AI once the judging
- * ended. Its status is its own: the comparison's status stays the judges'.
- * agent is the AI asked for until one is picked, then the writer; ms and
- * tokens add up over the attempts; text (Markdown) comes only when done;
- * judged: the writer had the comparison's results; unnamedSides: Differ
- * sides whose AI names the text never mentions.
+ * A comparison's combined answer (S5b), written by the moderator once the
+ * answers are in. Its status is its own: pollAfterMs stays while it waits
+ * or writes. agent is the AI asked for until one is picked, then the
+ * writer; ms and tokens add up over the attempts; text (Markdown) comes
+ * only when done.
  */
 export type Synthesis = {
   status: 'waiting' | 'running' | 'done' | 'failed' | 'off' | (string & {});
@@ -355,46 +271,17 @@ export type Synthesis = {
   inputTokens?: number;
   outputTokens?: number;
   text?: string;
-  judged: boolean;
-  unnamedSides?: number;
-  error?: CodeError;
-  /** The Differ items named beside it (C5): none from an older agent or without Differ items. */
-  topics?: Topics;
-};
-
-/** One Differ item named for the 'AI 답이 다른 곳' line: gists are one per position of the item, '' for a whole answer. */
-export type DifferTopic = { key: string; topic: string; gists: string[] };
-
-/**
- * The Differ items' topics (C5, #11): the writer of the combined answer
- * names them at the quick tier, beside it. items come only when done; a
- * failed one leaves the combined answer as it is.
- */
-export type Topics = {
-  status: 'running' | 'done' | 'failed' | (string & {});
-  agent?: string;
-  model?: string;
-  attempt?: number;
-  ms?: number;
-  inputTokens?: number;
-  outputTokens?: number;
-  items?: DifferTopic[];
   error?: CodeError;
 };
 
 export type Comparison = {
   comparisonId: string;
-  /** The judges' status; pollAfterMs also stays while the synthesis waits or writes. */
+  /** The comparison's own status (done at once since C6); pollAfterMs also stays while the synthesis waits or writes. */
   status: 'waiting' | 'running' | 'done' | 'failed' | (string & {});
   pollAfterMs?: number;
   source: 'run' | 'direct' | (string & {});
   runId?: string;
   engine: string;
-  answers: CompareAnswer[];
-  requests: JudgeRequest[];
-  judgments: Judgment[];
-  items: CardItem[];
-  counts: CardCounts;
   error?: CodeError;
   /** Set by agents that write combined answers (S5b); an older agent leaves it out. */
   synthesis?: Synthesis;
@@ -409,6 +296,7 @@ export type ComparisonRequest = {
   question: string;
   earlier?: string[];
   answers: ComparisonAnswer[];
+  /** The asked AIs that may write the combined answer (RunCompare.judges). */
   judges?: string[];
   /** The combined answer (S5b), with the question's tier ('' or left out: standard). */
   synthesis?: SynthesisRequest & { tier?: Tier };

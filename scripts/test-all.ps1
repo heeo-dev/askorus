@@ -50,14 +50,7 @@ Step 'agent: go vet (windows)' $agent 'go' @('vet', './...')
 $env:GOOS = 'linux'
 Step 'agent: go vet (linux)' $agent 'go' @('vet', './...')
 Remove-Item Env:GOOS
-# judge-eval (agent/cmd/judge-eval) is built only with -tags judgeeval, so
-# the steps above never see it.
-Step 'agent: go vet judgeeval (windows)' $agent 'go' @('vet', '-tags', 'judgeeval', './...')
-$env:GOOS = 'linux'
-Step 'agent: go vet judgeeval (linux)' $agent 'go' @('vet', '-tags', 'judgeeval', './...')
-Remove-Item Env:GOOS
 Step 'agent: unit + scenario tests' $agent 'go' @('test', '-count=1', './...') '^(ok|FAIL)'
-Step 'agent: judge-eval tests' $agent 'go' @('test', '-tags', 'judgeeval', '-count=1', './cmd/judge-eval/...') '^(ok|FAIL)'
 # synth-eval (agent/cmd/synth-eval, milestone C) is built only with -tags
 # syntheval: vetted on both systems and tested with the fake AI programs.
 Step 'agent: go vet syntheval (windows)' $agent 'go' @('vet', '-tags', 'syntheval', './cmd/synth-eval/...')

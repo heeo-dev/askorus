@@ -212,7 +212,8 @@ test('an ask without a clientRunId is not sent twice, and agent errors keep thei
   expect(g.calls).toHaveLength(1);
 });
 
-// P2-3: answer comparisons.
+// P2-3: answer comparisons. The judging's fields (answers … counts), as an
+// agent from before C6 sent them, pass through untouched; the phone reads none.
 const cmp = (status: string, over: Record<string, unknown> = {}) => ({
   comparisonId: 'c1',
   status,

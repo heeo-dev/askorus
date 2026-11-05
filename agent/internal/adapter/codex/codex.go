@@ -1,9 +1,10 @@
 // Package codex is the Codex CLI adapter. Phase 2 uses it for asks and
-// comparison judging: `codex exec` in the ask folder, read-only, with the
+// combined answers: `codex exec` in the ask folder, read-only, with the
 // person's config.toml left out (P0-2: its approvals_reviewer =
 // "auto_review" approved a write under read-only) and live web search on
-// (P0-7); a judge (judge.go) runs in the judge folder with web search off
-// and keeps no session file. Both turn off the features in featuresOff
+// (P0-7); the one-off command of a combined answer or a question spec
+// (judge.go, synth.go) runs in the judge folder with web search off and
+// keeps no session file. Both turn off the features in featuresOff
 // (features.go): even with the person's config left out, an exec saw their
 // ChatGPT app tools such as Gmail, plugins and hooks (P2-3 S2 decision 4).
 // It is the only package that runs codex or knows its formats (principle
@@ -60,14 +61,15 @@ var threadRe = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]
 type Options struct {
 	Path  string                   // empty: codex.exe on PATH
 	Tiers map[string]core.AskModel // settings ask.tiers.codex
-	// SchemaDir holds the judge schema file judge-schema-v1.json and the
-	// combined-answer schema file synth-schema-v1.json, which codex reads
+	// SchemaDir holds the combined-answer schema file synth-schema-v1.json
+	// and the refine schema file refine-schema-v1.json, which codex reads
 	// for --output-schema. Empty: the agent folder,
 	// config.Dir() (%APPDATA%\Asksemble). Tests give a temporary folder.
 	SchemaDir string
 }
 
-// Adapter implements core.Adapter, core.Asker and core.Judger for Codex CLI.
+// Adapter implements core.Adapter, core.Asker, core.Judger and
+// core.Synthesizer for Codex CLI.
 type Adapter struct {
 	exe    string
 	exeErr error
@@ -78,18 +80,14 @@ type Adapter struct {
 	verErr  error
 	verAt   time.Time
 
-	// The judge schema file (judge.go): schemaDir is absolute, or "" when
-	// there is no agent folder. schemaMu guards schemaReady, set once this
-	// process wrote the file or found it right so later judges only read
-	// and compare, and schemaWrites, the writes (for tests).
-	schemaDir    string
-	schemaMu     sync.Mutex
-	schemaReady  bool
-	schemaWrites int
+	// schemaDir holds the schema files: absolute, or "" when there is no
+	// agent folder.
+	schemaDir string
 
-	// The combined-answer schema file (synth.go), next to the judge's in
-	// schemaDir, with its own lock and the same write-once rule: synthMu
-	// guards synthReady and synthWrites.
+	// The combined-answer schema file (synth.go) in schemaDir, written once:
+	// synthMu guards synthReady, set once this process wrote the file or
+	// found it right so later calls only read and compare, and
+	// synthWrites, the writes (for tests).
 	synthMu     sync.Mutex
 	synthReady  bool
 	synthWrites int
@@ -103,7 +101,7 @@ func New(o Options) *Adapter {
 	a := &Adapter{tiers: o.Tiers, schemaDir: o.SchemaDir}
 	a.exe, a.exeErr = findExe(o.Path)
 	if a.schemaDir == "" {
-		a.schemaDir, _ = config.Dir() // none: a judge fails as internal
+		a.schemaDir, _ = config.Dir() // none: a combined answer fails as internal
 	}
 	if a.schemaDir != "" {
 		if abs, err := filepath.Abs(a.schemaDir); err == nil {
@@ -250,7 +248,7 @@ func askArgs(model, effort, resume string) []string {
 
 // checkArgs accepts exactly what askArgs makes from valid values, so no
 // other option (a sandbox or approval change, a profile, a config key, a
-// feature left on or turned on with --enable, the judge's
+// feature left on or turned on with --enable, the one-off command's
 // web_search="disabled" or --ephemeral) reaches codex through an ask. It
 // reads the model, the effort and the thread (second to last after
 // resume) and compares the whole list with askArgs of those values, so

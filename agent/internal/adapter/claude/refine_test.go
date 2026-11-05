@@ -39,8 +39,8 @@ func TestRefineArgsAndOutput(t *testing.T) {
 		t.Fatal(err)
 	}
 	mixed := refineArgs("haiku", "low")
-	mixed[13] = core.JudgeSchemaV1
+	mixed[13] = `{"type":"object"}`
 	if checkSynthArgs(mixed) == nil {
-		t.Fatal("the judge schema passed as a writer's")
+		t.Fatal("another schema passed as a writer's")
 	}
 }

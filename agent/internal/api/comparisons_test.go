@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/asksemble/asksemble/agent/internal/compares"
-	"github.com/asksemble/asksemble/agent/internal/config"
 	"github.com/asksemble/asksemble/agent/internal/core"
 	"github.com/asksemble/asksemble/agent/internal/fakecli"
 	"github.com/asksemble/asksemble/agent/internal/judge"
@@ -25,25 +24,22 @@ import (
 // judgeFamilies are the companies of the fake AIs' models.
 var judgeFamilies = map[string]string{"claude": "anthropic", "codex": "openai", "opencode": "deepseek"}
 
-// judgeMins are the oldest versions the fake judges were "tested" with.
+// judgeMins are the oldest versions the fake AIs' one-off command was
+// "tested" with.
 var judgeMins = map[string]string{"claude": "1.0.0", "codex": "1.0.0", "opencode": "1.0.0"}
 
-// judgeAdapter is an AI that asks like askAdapter and judges in process
-// with fakecli's rule judge (numbers "NUM n" decide same and opposite).
+// judgeAdapter is an AI that asks like askAdapter and names its models'
+// company (core.Judger), so it passes the gate. It writes no combined
+// answers (writerAdapter does). The name is the judging days'.
 type judgeAdapter struct {
 	askAdapter
 	family  string
 	version string        // "" keeps askAdapter's 1.0.0
 	answer  string        // the answer to every ask; "" keeps askAdapter's
 	askGate chan struct{} // when set, an ask waits for it to close
-	leaves  bool          // Judge returns a cleanup ref (cleaningAdapter)
 
-	jmu     sync.Mutex
-	judges  []core.JudgeRequest
-	fail    string        // while set, Judge fails with judge_failed and this message
-	block   chan struct{} // while set, Judge waits for it to close (or for ctx)
-	cleaned []string      // the folders CleanupJudge was called with
-	refs    [][]string
+	jmu  sync.Mutex
+	hold chan struct{} // while set, Family waits for it to close
 }
 
 func newJudge(name string) *judgeAdapter {
@@ -73,87 +69,37 @@ func (a *judgeAdapter) Ask(ctx context.Context, req core.AskRequest) (core.AskRe
 	return res, err
 }
 
-func (a *judgeAdapter) JudgeDefault() core.AskModel {
-	return core.AskModel{Model: a.name + "-judge", Effort: "low"}
-}
-
+// Family names the company of a model. A comparison asks it for each PC
+// answer while it takes its answers, so a hold keeps the comparison
+// unfinished.
 func (a *judgeAdapter) Family(model string) string {
+	a.jmu.Lock()
+	hold := a.hold
+	a.jmu.Unlock()
+	if hold != nil {
+		<-hold
+	}
 	if model == "" {
 		return ""
 	}
 	return a.family
 }
 
-func (a *judgeAdapter) Judge(ctx context.Context, req core.JudgeRequest) (core.JudgeResult, error) {
+// holdFamily makes a's Family wait until release, which the test's end
+// calls too, so that nothing is left waiting.
+func holdFamily(t *testing.T, a *judgeAdapter) (release func()) {
+	t.Helper()
+	ch := make(chan struct{})
 	a.jmu.Lock()
-	a.judges = append(a.judges, req)
-	n, block := len(a.judges), a.block
+	a.hold = ch
 	a.jmu.Unlock()
-	res := core.JudgeResult{Model: req.Model, InputTokens: 7, OutputTokens: 3}
-	if a.leaves {
-		res.Cleanup = fmt.Sprintf("%s-ref-%d", a.name, n)
-	}
-	if block != nil {
-		select {
-		case <-block:
-		case <-ctx.Done():
-			return res, ctx.Err()
-		}
-	}
-	a.jmu.Lock()
-	fail := a.fail
-	a.jmu.Unlock()
-	if fail != "" {
-		return res, core.Fail(core.ErrCodeJudgeFailed, fail)
-	}
-	res.Output = json.RawMessage(fakecli.Answer(req.Prompt, false))
-	return res, nil
+	release = sync.OnceFunc(func() { close(ch) })
+	t.Cleanup(release)
+	return release
 }
 
-func (a *judgeAdapter) setFail(msg string) {
-	a.jmu.Lock()
-	a.fail = msg
-	a.jmu.Unlock()
-}
-
-func (a *judgeAdapter) setBlock(ch chan struct{}) {
-	a.jmu.Lock()
-	a.block = ch
-	a.jmu.Unlock()
-}
-
-func (a *judgeAdapter) judgeCalls() []core.JudgeRequest {
-	a.jmu.Lock()
-	defer a.jmu.Unlock()
-	return slices.Clone(a.judges)
-}
-
-func (a *judgeAdapter) cleanups() []string {
-	a.jmu.Lock()
-	defer a.jmu.Unlock()
-	return slices.Clone(a.cleaned)
-}
-
-// cleaningAdapter is a judgeAdapter whose judging leaves something behind,
-// as OpenCode's does.
-type cleaningAdapter struct{ *judgeAdapter }
-
-func newCleaning(name string) cleaningAdapter {
-	j := newJudge(name)
-	j.leaves = true
-	return cleaningAdapter{j}
-}
-
-func (c cleaningAdapter) CleanupJudge(_ context.Context, folder string, refs []string) error {
-	c.jmu.Lock()
-	defer c.jmu.Unlock()
-	c.cleaned = append(c.cleaned, folder)
-	c.refs = append(c.refs, slices.Clone(refs))
-	return nil
-}
-
-// judgeEnv serves the adapters with an ask folder and the fake judges'
-// minimum versions.
+// judgeEnv serves the adapters with an ask folder and the fake AIs'
+// minimum versions, so they pass the gate.
 func judgeEnv(t *testing.T, mutate func(*Options), adapters ...core.Adapter) (env, string) {
 	t.Helper()
 	ask := filepath.Join(t.TempDir(), "ask")
@@ -168,9 +114,10 @@ func judgeEnv(t *testing.T, mutate func(*Options), adapters ...core.Adapter) (en
 	return e, ask
 }
 
-// threeJudges are claude, codex and opencode (which leaves conversations).
-func threeJudges() (*judgeAdapter, *judgeAdapter, cleaningAdapter) {
-	return newJudge("claude"), newJudge("codex"), newCleaning("opencode")
+// threeAIs are claude, codex and opencode, which pass the gate and write
+// no combined answers.
+func threeAIs() (*judgeAdapter, *judgeAdapter, *judgeAdapter) {
+	return newJudge("claude"), newJudge("codex"), newJudge("opencode")
 }
 
 func decodeBody[T any](t *testing.T, w *httptest.ResponseRecorder) T {
@@ -208,7 +155,7 @@ func (e env) waitComparison(t *testing.T, id string) ComparisonStatus {
 			t.Fatalf("%s comparison with pollAfterMs %d", st.Status, st.PollAfterMs)
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("comparison still %s: %+v", st.Status, st.Requests)
+			t.Fatalf("comparison still %s", st.Status)
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
@@ -230,143 +177,117 @@ var comparisonIDRe = regexp.MustCompile(`^[0-9a-f]{32}$`)
 
 // ---- info -------------------------------------------------------------------
 
-func TestInfoAnnouncesJudge(t *testing.T) {
-	cl, cx, oc := threeJudges()
-	e, _ := judgeEnv(t, func(o *Options) {
-		o.Judge = config.JudgeConfig{Models: map[string]core.AskModel{"codex": {Model: "gpt-x", Effort: "high"}}}
-	}, cl, cx, oc)
+// infoOf is GET /v1/info and its body.
+func infoOf(t *testing.T, e env) (InfoResponse, string) {
+	t.Helper()
 	w := e.do("GET", "/v1/info", nil)
 	if w.Code != 200 {
 		t.Fatalf("info = %d %s", w.Code, w.Body)
 	}
-	resp := decodeBody[InfoResponse](t, w)
-	want := map[string]core.JudgeInfo{
-		"claude":   {Model: "claude-judge", Effort: "low", Family: "anthropic"},
-		"codex":    {Model: "gpt-x", Effort: "high", Family: "openai"}, // judge.models of agent.json
-		"opencode": {Model: "opencode-judge", Effort: "low", Family: "deepseek"},
-	}
-	for _, a := range resp.Agents {
-		if a.Judge == nil || *a.Judge != want[a.Agent] {
-			t.Errorf("%s judge = %+v, want %+v", a.Agent, a.Judge, want[a.Agent])
-		}
-		if !contains(a.Capabilities, core.CapJudge) || !contains(a.Capabilities, core.CapAsk) || a.Ask == nil {
-			t.Errorf("%s = %+v", a.Agent, a)
-		}
-	}
-	if !contains(resp.Capabilities, core.CapJudge) || contains(resp.Reserved, core.CapJudge) {
-		t.Errorf("capabilities %v, reserved %v", resp.Capabilities, resp.Reserved)
-	}
-	if resp.Judging == nil {
-		t.Fatal("no judging")
-	}
-	// judge.models of agent.json names a model S6 did not measure, so
-	// judging carries no verified and no typicalMs (S6R-3).
-	if j := *resp.Judging; j.Engine != "pc" || j.Shape != judge.ShapeDirected || j.Labels != judge.LabelsV1 || j.Rules != judge.Rules ||
-		!slices.Equal(j.Checks, []string{judge.CheckUnsure, judge.CheckNumberMismatch, judge.CheckNumbersAbsent}) || j.Verified != nil || j.TypicalMs != 0 {
-		t.Errorf("judging = %+v %+v", j, j.Verified)
-	}
-	judgingKeys := func(w *httptest.ResponseRecorder) []string {
-		var raw struct {
-			Judging      map[string]json.RawMessage `json:"judging"`
-			Integrations json.RawMessage            `json:"integrations"`
-		}
-		json.Unmarshal(w.Body.Bytes(), &raw)
-		if string(raw.Integrations) != "[]" {
-			t.Errorf("integrations = %s, want [] (N1)", raw.Integrations)
-		}
-		var keys []string
-		for k := range raw.Judging {
-			keys = append(keys, k)
-		}
-		slices.Sort(keys)
-		return keys
-	}
-	if keys := judgingKeys(w); !slices.Equal(keys, []string{"checks", "engine", "labels", "rules", "shape"}) {
-		t.Errorf("judging keys with judge.models = %v", keys)
-	}
+	return decodeBody[InfoResponse](t, w), w.Body.String()
+}
 
-	// The adapters' own judge models and the default checks are what S6
-	// measured: judging carries the verification and typicalMs.
-	cl, cx, oc = threeJudges()
-	e, _ = judgeEnv(t, nil, cl, cx, oc)
-	w = e.do("GET", "/v1/info", nil)
-	if w.Code != 200 {
-		t.Fatalf("info = %d %s", w.Code, w.Body)
+// noJudging fails when an info body has judging, the capability judge or
+// an AI's judge (all gone since C6d, #24), or integrations other than []
+// (N1).
+func noJudging(t *testing.T, body string) {
+	t.Helper()
+	if strings.Contains(body, `"judging"`) || strings.Contains(body, `"judge"`) {
+		t.Errorf("info has judging: %s", body)
 	}
-	resp = decodeBody[InfoResponse](t, w)
-	if j := resp.Judging; j == nil || !slices.Equal(j.Checks, judge.DefaultChecks) || j.Verified == nil || j.Verified.Date != "2026-11-01" ||
-		j.Verified.Versions["codex"] != "0.164.0" || j.TypicalMs != compares.TypicalMs {
-		t.Errorf("judging = %+v", resp.Judging)
-	}
-	if keys := judgingKeys(w); !slices.Equal(keys, []string{"checks", "engine", "labels", "rules", "shape", "typicalMs", "verified"}) {
-		t.Errorf("judging keys = %v (verified and typicalMs since S6)", keys)
+	if !strings.Contains(body, `"integrations":[]`) {
+		t.Errorf("integrations missing: %s", body)
 	}
 }
 
-// An AI judges only when the gate lets it: judge.off, an old or unknown
-// CLI version, no ask folder, or an adapter that cannot judge leave judge
-// reserved and info without judging.
-func TestInfoJudgeGated(t *testing.T) {
-	info := func(t *testing.T, e env) (InfoResponse, string) {
-		t.Helper()
-		w := e.do("GET", "/v1/info", nil)
-		if w.Code != 200 {
-			t.Fatalf("info = %d %s", w.Code, w.Body)
+// An AI that passes the gate and writes announces synthesize; one that
+// passes it but does not write leaves it reserved. No AI announces judge.
+func TestInfoAnnouncesSynthesize(t *testing.T) {
+	cl, cx, oc := threeWriterAdapters()
+	e, _ := judgeEnv(t, nil, cl, cx, oc)
+	resp, body := infoOf(t, e)
+	for _, a := range resp.Agents {
+		if !contains(a.Capabilities, core.CapSynthesize) || !contains(a.Capabilities, core.CapAsk) || a.Ask == nil {
+			t.Errorf("%s = %+v", a.Agent, a)
 		}
-		return decodeBody[InfoResponse](t, w), w.Body.String()
 	}
+	if !contains(resp.Capabilities, core.CapSynthesize) || contains(resp.Reserved, core.CapSynthesize) {
+		t.Errorf("capabilities %v, reserved %v", resp.Capabilities, resp.Reserved)
+	}
+	noJudging(t, body)
+	// AIs that pass the gate but do not write: reserved.
+	jc, jx, jo := threeAIs()
+	e2, _ := judgeEnv(t, nil, jc, jx, jo)
+	resp, body = infoOf(t, e2)
+	if contains(resp.Capabilities, core.CapSynthesize) || !contains(resp.Reserved, core.CapSynthesize) {
+		t.Errorf("no writers: capabilities %v, reserved %v", resp.Capabilities, resp.Reserved)
+	}
+	noJudging(t, body)
+}
+
+// familylessWriter writes combined answers and asks, but cannot name its
+// models' companies (no core.Judger), so it never passes the gate.
+type familylessWriter struct{ *askAdapter }
+
+func (familylessWriter) Synthesize(context.Context, core.SynthRequest) (core.SynthResult, error) {
+	return core.SynthResult{}, core.Fail(core.ErrCodeInternal, "")
+}
+
+// An AI writes only when the gate lets it: judge.off, an old or unknown
+// CLI version, no ask folder, or an adapter that cannot name its models'
+// companies leave synthesize reserved.
+func TestInfoSynthesizeGated(t *testing.T) {
 	none := func(t *testing.T, e env) {
 		t.Helper()
-		resp, body := info(t, e)
+		resp, body := infoOf(t, e)
 		for _, a := range resp.Agents {
-			if a.Judge != nil || contains(a.Capabilities, core.CapJudge) {
-				t.Errorf("%s judges: %+v", a.Agent, a)
+			if contains(a.Capabilities, core.CapSynthesize) {
+				t.Errorf("%s writes: %+v", a.Agent, a)
 			}
 		}
-		if resp.Judging != nil || strings.Contains(body, `"judging"`) || !contains(resp.Reserved, core.CapJudge) || contains(resp.Capabilities, core.CapJudge) {
+		if !contains(resp.Reserved, core.CapSynthesize) || contains(resp.Capabilities, core.CapSynthesize) {
 			t.Errorf("info = %s", body)
 		}
-		if !strings.Contains(body, `"integrations":[]`) {
-			t.Errorf("integrations missing: %s", body)
-		}
+		noJudging(t, body)
 	}
 	t.Run("old version", func(t *testing.T) {
-		cl, cx, oc := threeJudges()
+		cl, cx, oc := threeWriterAdapters()
 		cl.version = "0.9.9"
 		e, _ := judgeEnv(t, nil, cl, cx, oc)
-		resp, _ := info(t, e)
-		if resp.Agents[0].Judge != nil || contains(resp.Agents[0].Capabilities, core.CapJudge) || resp.Agents[1].Judge == nil || resp.Judging == nil {
+		resp, _ := infoOf(t, e)
+		if contains(resp.Agents[0].Capabilities, core.CapSynthesize) || !contains(resp.Agents[1].Capabilities, core.CapSynthesize) ||
+			!contains(resp.Capabilities, core.CapSynthesize) {
 			t.Errorf("agents = %+v", resp.Agents)
 		}
 	})
 	t.Run("all old", func(t *testing.T) {
-		cl, cx, oc := threeJudges()
+		cl, cx, oc := threeWriterAdapters()
 		cl.version, cx.version, oc.version = "0.1.0", "0.1.0", "garbled"
 		e, _ := judgeEnv(t, nil, cl, cx, oc)
 		none(t, e)
 	})
 	t.Run("off", func(t *testing.T) {
-		cl, cx, oc := threeJudges()
+		cl, cx, oc := threeWriterAdapters()
 		e, _ := judgeEnv(t, func(o *Options) { o.Judge.Off = true }, cl, cx, oc)
 		none(t, e)
 	})
 	t.Run("no minimum versions", func(t *testing.T) {
-		cl, cx, oc := threeJudges()
+		cl, cx, oc := threeWriterAdapters()
 		e, _ := judgeEnv(t, func(o *Options) { o.JudgeMinVersions = nil }, cl, cx, oc)
 		none(t, e)
 	})
 	t.Run("no ask folder", func(t *testing.T) {
-		cl, cx, oc := threeJudges()
+		cl, cx, oc := threeWriterAdapters()
 		e, _ := judgeEnv(t, func(o *Options) { o.AskFolder = "" }, cl, cx, oc)
 		none(t, e)
 	})
 	t.Run("relative ask folder", func(t *testing.T) {
-		cl, cx, oc := threeJudges()
+		cl, cx, oc := threeWriterAdapters()
 		e, _ := judgeEnv(t, func(o *Options) { o.AskFolder = "ask" }, cl, cx, oc)
 		none(t, e)
 	})
-	t.Run("cannot judge", func(t *testing.T) {
-		e, _ := judgeEnv(t, nil, &askAdapter{name: "claude", available: true}, &askAdapter{name: "codex", available: true})
+	t.Run("cannot name companies", func(t *testing.T) {
+		e, _ := judgeEnv(t, nil, familylessWriter{&askAdapter{name: "claude", available: true}}, familylessWriter{&askAdapter{name: "codex", available: true}})
 		none(t, e)
 	})
 }
@@ -382,13 +303,16 @@ func startRun(t *testing.T, e env, body map[string]any) RunStatus {
 	return decodeBody[RunStatus](t, w)
 }
 
+// A run's comparison waits for the run's last answer, then takes the
+// answers and is done at once. Its combined answer is off unless
+// compare.synthesis asks for it.
 func TestRunWithCompare(t *testing.T) {
-	cl, cx, oc := threeJudges()
+	cl, cx, oc := threeAIs()
 	cl.answer = "ANSWER-SECRET 값은 NUM 1입니다."
 	cx.answer = "ANSWER-SECRET 값은 NUM 2입니다."
 	oc.answer = "ANSWER-SECRET 값은 NUM 1입니다."
 	cx.askGate = make(chan struct{}) // codex answers after the 202
-	e, ask := judgeEnv(t, nil, cl, cx, oc)
+	e, _ := judgeEnv(t, nil, cl, cx, oc)
 	st := startRun(t, e, map[string]any{
 		"mode": "ask", "prompt": "  QUESTION-SECRET 값은?  ",
 		"compare": map[string]any{"earlier": []string{"EARLIER-SECRET 처음 질문"}, "judges": []string{"opencode", "claude", "codex"}, "later": true},
@@ -413,42 +337,36 @@ func TestRunWithCompare(t *testing.T) {
 	if c.Status != compares.Done || c.Source != compares.SourceRun || c.RunID != st.ID || c.Engine != "pc" || c.Error != nil {
 		t.Fatalf("comparison = %+v", c.Comparison)
 	}
-	if len(c.Answers) != 3 || len(c.Requests) != 6 {
-		t.Fatalf("answers %d, requests %+v", len(c.Answers), c.Requests)
+	// The answers in the turn's order, each with its model's company.
+	var got []string
+	for _, a := range c.Answers {
+		if a.ID != a.Agent || a.Via != judge.ViaPC || a.Status != judge.AnswerReady || a.Model != a.Agent+"-std" {
+			t.Errorf("answer = %+v", a)
+		}
+		got = append(got, a.Agent+" "+a.Family)
 	}
-	for _, r := range c.Requests {
-		if r.Status != judge.RequestDone || r.Judge == r.From || r.Judge == r.Against || r.Judge == "" {
-			t.Errorf("request = %+v", r)
+	if want := []string{"claude anthropic", "codex openai", "opencode deepseek"}; !slices.Equal(got, want) {
+		t.Errorf("answers %v, want %v", got, want)
+	}
+	// The judging's lists stay, empty (principle 4); no text leaves the
+	// agent, and no combined answer was asked for.
+	body := e.do("GET", "/v1/comparisons/"+st.ComparisonID, nil).Body.String()
+	for _, part := range []string{`"requests":[]`, `"judgments":[]`, `"items":[]`, `"units":[]`, `"synthesis":{"status":"off","judged":false}`} {
+		if !strings.Contains(body, part) {
+			t.Errorf("comparison lacks %s: %s", part, body)
 		}
 	}
-	if c.Counts.Differ < 1 || !slices.ContainsFunc(c.Items, func(it judge.Item) bool { return it.Kind == judge.CardDiffer }) {
-		t.Errorf("no differ card: %+v", c.Items)
-	}
-	// The judges get the question as the person wrote it, without the ask
-	// preamble, and the earlier questions; they run in the judge folder.
-	for _, j := range []*judgeAdapter{cl, cx, oc.judgeAdapter} {
-		calls := j.judgeCalls()
-		if len(calls) != 2 {
-			t.Errorf("%s judged %d times", j.name, len(calls))
-		}
-		for _, call := range calls {
-			if call.Task.Question != "QUESTION-SECRET 값은?" || !slices.Equal(call.Task.Earlier, []string{"EARLIER-SECRET 처음 질문"}) ||
-				call.Folder != core.JudgeFolder(ask) || call.Model != j.name+"-judge" || strings.Contains(call.Prompt, core.AskPreamble) {
-				t.Errorf("%s judge request = %+v", j.name, call.Task)
-			}
-		}
+	if strings.Contains(body, "SECRET") {
+		t.Errorf("comparison has the texts: %s", body)
 	}
 	e.idle(t, st.ComparisonID)
-	if got := oc.cleanups(); !slices.Equal(got, []string{core.JudgeFolder(ask)}) {
-		t.Errorf("opencode cleanups = %v", got)
-	}
 	logs := e.logs.String()
 	for _, leak := range []string{"QUESTION-SECRET", "ANSWER-SECRET", "EARLIER-SECRET", "값은"} {
 		if strings.Contains(logs, leak) {
 			t.Errorf("log contains %q: %s", leak, logs)
 		}
 	}
-	for _, line := range []string{`"comparison started"`, `"comparison ended"`, `"judge request"`, `"compare":true`} {
+	for _, line := range []string{`"comparison started"`, `"comparison ended"`, `"compare":true`} {
 		if !strings.Contains(logs, line) {
 			t.Errorf("log lacks %s: %s", line, logs)
 		}
@@ -458,7 +376,7 @@ func TestRunWithCompare(t *testing.T) {
 // A compare the agent cannot read gives compareError bad_compare in the
 // 202, and the ask runs all the same: never a 400 or 413 for compare.
 func TestRunBadCompareStillAsks(t *testing.T) {
-	cl, cx, oc := threeJudges()
+	cl, cx, oc := threeAIs()
 	e, _ := judgeEnv(t, nil, cl, cx, oc)
 	cases := map[string]any{
 		"number":         5,
@@ -504,18 +422,18 @@ func TestRunBadCompareStillAsks(t *testing.T) {
 		t.Errorf("at the limits: %+v", st)
 	}
 	e.waitRun(t, st.ID)
-	e.waitComparison(t, st.ComparisonID)
-	for _, j := range []*judgeAdapter{cl, cx, oc.judgeAdapter} {
-		if n := len(j.judgeCalls()); n != 2 {
-			t.Errorf("%s judged %d times: only the last run is compared", j.name, n)
-		}
+	if c := e.waitComparison(t, st.ComparisonID); c.Status != compares.Done || len(c.Answers) != 3 {
+		t.Errorf("at the limits: %+v", c.Comparison)
 	}
 }
 
 // One asked AI has nothing to compare with: compareError need_two_answers.
-// Judges are cut to the asked AIs; none of them left means every asked AI.
+// judges, the AIs the earlier questions went to, are cut to the asked AIs,
+// and none of them left means every asked AI: a writer gets the earlier
+// questions only when it is one of them. An AI that was not asked never
+// writes (결정 5).
 func TestRunCompareJudgesAndOneAI(t *testing.T) {
-	cl, cx, oc := threeJudges()
+	cl, cx, oc := threeWriterAdapters()
 	e, _ := judgeEnv(t, nil, cl, cx, oc)
 	st := startRun(t, e, map[string]any{"mode": "ask", "prompt": "q", "agents": []map[string]string{{"agent": "claude"}}, "compare": map[string]any{}})
 	if st.CompareError == nil || st.CompareError.Code != core.ErrCodeNeedTwoAnswers || st.ComparisonID != "" {
@@ -524,26 +442,48 @@ func TestRunCompareJudgesAndOneAI(t *testing.T) {
 	if done := e.waitRun(t, st.ID); done.Status != "done" {
 		t.Fatalf("run = %+v", done)
 	}
-	// opencode was not asked, so it does not judge (결정 5); claude and
-	// codex cannot judge each other, so every pair has no judge.
-	st = startRun(t, e, map[string]any{"mode": "ask", "prompt": "q",
-		"agents": []map[string]string{{"agent": "claude"}, {"agent": "codex"}}, "compare": map[string]any{"judges": []string{"opencode"}}})
-	if st.CompareError != nil || st.ComparisonID == "" {
-		t.Fatalf("two AIs: %+v", st)
+	writers := map[string]*writerAdapter{"claude": cl, "codex": cx, "opencode": oc.writerAdapter}
+	two := []map[string]string{{"agent": "claude"}, {"agent": "codex"}}
+	for _, c := range []struct {
+		name    string
+		judges  []string
+		agent   string // compare.synthesis.agent
+		writer  string
+		earlier bool
+	}{
+		{"no judge asked", []string{"opencode"}, "codex", "codex", true},
+		{"writer no judge", []string{"claude"}, "codex", "codex", false},
+		{"writer not asked", []string{"opencode", "claude"}, "opencode", "claude", true},
+	} {
+		st := startRun(t, e, map[string]any{"mode": "ask", "prompt": "q", "agents": two, "compare": map[string]any{
+			"earlier": []string{"EARLIER-Q"}, "judges": c.judges, "synthesis": map[string]any{"agent": c.agent},
+		}})
+		if st.CompareError != nil || st.ComparisonID == "" {
+			t.Fatalf("%s: %+v", c.name, st)
+		}
+		got := e.waitSynthesis(t, st.ComparisonID)
+		if got.Status != compares.Done || got.Synthesis.Status != compares.SynthDone || got.Synthesis.Agent != c.writer {
+			t.Errorf("%s: %s, synthesis %+v", c.name, got.Status, got.Synthesis)
+		}
+		calls := writers[c.writer].synthCalls()
+		if len(calls) == 0 {
+			t.Fatalf("%s: %s never wrote", c.name, c.writer)
+		}
+		sent := strings.Contains(calls[len(calls)-1].Prompt, `EARLIER QUESTIONS (context only, do not answer them): ["EARLIER-Q"]`)
+		if sent != c.earlier {
+			t.Errorf("%s: earlier questions sent %v, want %v", c.name, sent, c.earlier)
+		}
+		e.idle(t, st.ComparisonID)
 	}
-	c := e.waitComparison(t, st.ComparisonID)
-	if c.Status != compares.Failed || c.Error == nil || c.Error.Code != core.ErrCodeNoJudge {
-		t.Errorf("comparison = %+v", c.Comparison)
-	}
-	if n := len(oc.judgeCalls()) + len(cl.judgeCalls()) + len(cx.judgeCalls()); n != 0 {
-		t.Errorf("%d judge calls", n)
+	if n := len(oc.synthCalls()); n != 0 {
+		t.Errorf("opencode, never asked, wrote %d times", n)
 	}
 }
 
 // The longest body: a 32 KiB question and three 4 KiB earlier questions,
 // all quotes, which JSON doubles. It is over the old limit and accepted.
 func TestRunCompareLongestBody(t *testing.T) {
-	cl, cx, oc := threeJudges()
+	cl, cx, oc := threeAIs()
 	e, _ := judgeEnv(t, nil, cl, cx, oc)
 	q := strings.Repeat(`"`, maxPrompt)
 	earlier := strings.Repeat(`"`, maxCompareEarlierBytes)
@@ -557,18 +497,17 @@ func TestRunCompareLongestBody(t *testing.T) {
 		t.Fatalf("202 = %+v", st)
 	}
 	e.waitRun(t, st.ID)
-	e.waitComparison(t, st.ComparisonID)
+	if c := e.waitComparison(t, st.ComparisonID); c.Status != compares.Done {
+		t.Errorf("comparison = %+v", c.Comparison)
+	}
 }
 
 // At 8 unfinished comparisons the 9th run gets too_many_comparisons, and
 // its ask runs all the same. A re-sent run still finds its comparison.
 func TestRunCompareTooMany(t *testing.T) {
-	cl, cx, oc := threeJudges()
-	block := make(chan struct{})
-	for _, j := range []*judgeAdapter{cl, cx, oc.judgeAdapter} {
-		j.setBlock(block)
-	}
+	cl, cx, oc := threeAIs()
 	e, _ := judgeEnv(t, nil, cl, cx, oc)
+	release := holdFamily(t, cl) // every comparison stays unfinished, taking its answers
 	var ids []string
 	first := ""
 	for i := 0; i < compares.MaxUnfinished; i++ {
@@ -597,7 +536,7 @@ func TestRunCompareTooMany(t *testing.T) {
 	if again.ComparisonID != first || again.CompareError != nil {
 		t.Fatalf("re-sent run = %+v, want comparison %s", again, first)
 	}
-	close(block)
+	release()
 	for _, id := range ids {
 		if c := e.waitComparison(t, id); c.Status != compares.Done {
 			t.Errorf("%s = %s", id, c.Status)
@@ -608,7 +547,7 @@ func TestRunCompareTooMany(t *testing.T) {
 // ---- the comparison routes ---------------------------------------------
 
 func TestComparisonBelongsToItsDevice(t *testing.T) {
-	cl, cx, oc := threeJudges()
+	cl, cx, oc := threeAIs()
 	e, _ := judgeEnv(t, nil, cl, cx, oc)
 	st := startRun(t, e, map[string]any{"mode": "ask", "prompt": "q", "compare": map[string]any{}})
 	e.waitComparison(t, st.ComparisonID)
@@ -668,8 +607,8 @@ func directBody(key string) map[string]any {
 }
 
 func TestDirectComparison(t *testing.T) {
-	cl, cx, oc := threeJudges()
-	e, ask := judgeEnv(t, nil, cl, cx, oc)
+	cl, cx, oc := threeAIs()
+	e, _ := judgeEnv(t, nil, cl, cx, oc)
 	w := e.post("/v1/comparisons", directBody("c-1"))
 	if w.Code != 202 {
 		t.Fatalf("POST = %d %s", w.Code, w.Body)
@@ -682,28 +621,16 @@ func TestDirectComparison(t *testing.T) {
 		t.Fatalf("same clientComparisonId gave %s, want %s", again.ID, st.ID)
 	}
 	c := e.waitComparison(t, st.ID)
-	if c.Status != compares.Done || len(c.Answers) != 3 || len(c.Requests) == 0 {
+	if c.Status != compares.Done || len(c.Answers) != 3 || c.Error != nil {
 		t.Fatalf("comparison = %+v", c.Comparison)
 	}
-	if c.Answers[2].Family != "openai" || c.Answers[2].Via != judge.ViaHandoff || c.Answers[0].Family != "anthropic" {
+	// A PC answer's company is its adapter's, a pasted one's its app's.
+	if c.Answers[0].Family != "anthropic" || c.Answers[1].Family != "openai" || c.Answers[2].Family != "openai" ||
+		c.Answers[2].ID != "gpt" || c.Answers[2].Via != judge.ViaHandoff {
 		t.Errorf("answers = %+v", c.Answers)
 	}
-	for _, r := range c.Requests {
-		if r.Status != judge.RequestDone {
-			t.Errorf("request = %+v", r)
-		}
-	}
-	if c.Counts.Differ < 1 {
-		t.Errorf("counts = %+v", c.Counts)
-	}
-	calls := slices.Concat(cl.judgeCalls(), cx.judgeCalls(), oc.judgeCalls())
-	if len(calls) != len(c.Requests) {
-		t.Errorf("%d judge calls for %d requests: the second POST asked again", len(calls), len(c.Requests))
-	}
-	for _, call := range calls {
-		if call.Task.Question != "QUESTION-SECRET 몇 개인가요?" || call.Folder != core.JudgeFolder(ask) {
-			t.Errorf("judge request = %+v in %s", call.Task, call.Folder)
-		}
+	if c.Synthesis == nil || c.Synthesis.Status != compares.SynthOff {
+		t.Errorf("synthesis = %+v", c.Synthesis)
 	}
 	// A new key is a new comparison.
 	if other := decodeBody[ComparisonStatus](t, e.post("/v1/comparisons", directBody("c-2"))); other.ID == st.ID {
@@ -720,7 +647,7 @@ func TestDirectComparison(t *testing.T) {
 }
 
 func TestDirectComparisonRefused(t *testing.T) {
-	cl, cx, oc := threeJudges()
+	cl, cx, oc := threeAIs()
 	e, _ := judgeEnv(t, nil, cl, cx, oc)
 	with := func(f func(b map[string]any)) map[string]any {
 		b := directBody("")
@@ -766,19 +693,29 @@ func TestDirectComparisonRefused(t *testing.T) {
 	if w := e.doBody("POST", "/v1/comparisons", "{"); w.Code != 400 || errCode(t, w) != CodeBadRequest {
 		t.Errorf("bad JSON = %d %s", w.Code, w.Body)
 	}
-	if n := len(cl.judgeCalls()) + len(cx.judgeCalls()) + len(oc.judgeCalls()); n != 0 {
-		t.Errorf("refused requests made %d judge calls", n)
+	logs := e.logs.String()
+	if strings.Contains(logs, `"comparison started"`) {
+		t.Errorf("a refused request made a comparison: %s", logs)
 	}
-	if strings.Contains(e.logs.String(), "SECRET") {
-		t.Errorf("log has content: %s", e.logs)
+	if strings.Contains(logs, "SECRET") {
+		t.Errorf("log has content: %s", logs)
 	}
 }
 
-func TestDirectComparisonNeedsJudgeAndFolder(t *testing.T) {
-	cl, cx, oc := threeJudges()
+// No AI may write combined answers on the PC (judge.off, or every AI older
+// than its one-off command): 503 no_judge. Without an ask folder there is
+// no judge folder to write in: 503 ask_folder_unavailable.
+func TestDirectComparisonNeedsWriterAndFolder(t *testing.T) {
+	cl, cx, oc := threeWriterAdapters()
 	e, _ := judgeEnv(t, func(o *Options) { o.Judge.Off = true }, cl, cx, oc)
 	if w := e.post("/v1/comparisons", directBody("")); w.Code != 503 || errCode(t, w) != core.ErrCodeNoJudge {
-		t.Errorf("judging off = %d %s", w.Code, w.Body)
+		t.Errorf("judge.off = %d %s", w.Code, w.Body)
+	}
+	e, _ = judgeEnv(t, func(o *Options) {
+		o.JudgeMinVersions = map[string]string{"claude": "9.0.0", "codex": "9.0.0", "opencode": "9.0.0"}
+	}, cl, cx, oc)
+	if w := e.post("/v1/comparisons", directBody("")); w.Code != 503 || errCode(t, w) != core.ErrCodeNoJudge {
+		t.Errorf("every AI too old = %d %s", w.Code, w.Body)
 	}
 	e, _ = judgeEnv(t, func(o *Options) { o.AskFolder = "" }, cl, cx, oc)
 	if w := e.post("/v1/comparisons", directBody("")); w.Code != 503 || errCode(t, w) != CodeAskFolder {
@@ -787,13 +724,9 @@ func TestDirectComparisonNeedsJudgeAndFolder(t *testing.T) {
 }
 
 func TestDirectComparisonTooMany(t *testing.T) {
-	cl, cx, oc := threeJudges()
-	block := make(chan struct{})
-	defer close(block)
-	for _, j := range []*judgeAdapter{cl, cx, oc.judgeAdapter} {
-		j.setBlock(block)
-	}
+	cl, cx, oc := threeAIs()
 	e, _ := judgeEnv(t, nil, cl, cx, oc)
+	holdFamily(t, cl) // every comparison stays running, taking its answers
 	for i := 0; i < compares.MaxUnfinished; i++ {
 		if w := e.post("/v1/comparisons", directBody("")); w.Code != 202 {
 			t.Fatalf("%d: %d %s", i, w.Code, w.Body)
@@ -804,136 +737,127 @@ func TestDirectComparisonTooMany(t *testing.T) {
 	}
 }
 
-// Retry runs only the failed requests again, and not while the comparison
-// runs. The judge's own message reaches the phone, never the log.
+// Retry starts over a comparison that never took its answers, here one
+// cancelled while it waited for its run, with its combined answer; not
+// while it waits or runs. One that took its answers, done or failed, has
+// nothing to retry and comes back as it is.
 func TestRetryComparison(t *testing.T) {
-	cl, cx, oc := threeJudges()
-	block := make(chan struct{})
-	for _, j := range []*judgeAdapter{cl, cx, oc.judgeAdapter} {
-		j.setBlock(block)
-	}
+	cl, cx, oc := threeWriterAdapters()
+	cx.askGate = make(chan struct{})
 	e, _ := judgeEnv(t, nil, cl, cx, oc)
-	st := startRun(t, e, map[string]any{"mode": "ask", "prompt": "q", "compare": map[string]any{}})
+	st := startRun(t, e, map[string]any{"mode": "ask", "prompt": "q", "compare": map[string]any{"synthesis": map[string]any{"agent": "codex"}}})
+	target := "/v1/comparisons/" + st.ComparisonID
+	if w := e.post(target+"/retry", nil); w.Code != 409 || errCode(t, w) != CodeComparisonRunning {
+		t.Fatalf("retry while waiting = %d %s", w.Code, w.Body)
+	}
+	if w := e.post(target+"/cancel", nil); w.Code != 200 || decodeBody[ComparisonStatus](t, w).Status != compares.Failed {
+		t.Fatalf("cancel = %d %s", w.Code, w.Body)
+	}
+	close(cx.askGate)
 	e.waitRun(t, st.ID)
-	if w := e.post("/v1/comparisons/"+st.ComparisonID+"/retry", nil); w.Code != 409 || errCode(t, w) != CodeComparisonRunning {
-		t.Fatalf("retry while running = %d %s", w.Code, w.Body)
-	}
-	oc.setFail("usage limit AI-MESSAGE-SECRET")
-	close(block)
-	c := e.waitComparison(t, st.ComparisonID)
-	if c.Status != compares.Done {
-		t.Fatalf("partly failed comparison = %+v", c.Comparison)
-	}
-	failed := 0
-	for _, r := range c.Requests {
-		if r.Judge != "opencode" {
-			continue
-		}
-		failed++
-		if r.Status != judge.RequestFailed || r.Error == nil || r.Error.Code != core.ErrCodeJudgeFailed || r.Error.Message != "usage limit AI-MESSAGE-SECRET" {
-			t.Errorf("opencode request = %+v", r)
-		}
-	}
-	if failed != 2 {
-		t.Fatalf("opencode requests = %d", failed)
-	}
-	oc.setFail("")
-	w := e.post("/v1/comparisons/"+st.ComparisonID+"/retry", nil)
+	w := e.post(target+"/retry", nil)
 	if w.Code != 202 {
 		t.Fatalf("retry = %d %s", w.Code, w.Body)
 	}
-	if r := decodeBody[ComparisonStatus](t, w); r.Status != compares.Running || r.PollAfterMs != compares.PollMs {
-		t.Errorf("retry 202 = %+v", r)
+	// It finds its run ended and takes the answers at once.
+	if r := decodeBody[ComparisonStatus](t, w); r.Status == compares.Failed || r.Error != nil || r.Synthesis.Error != nil {
+		t.Errorf("retry 202 = %+v %+v", r.Comparison, r.Synthesis)
 	}
-	c = e.waitComparison(t, st.ComparisonID)
-	if c.Status != compares.Done {
-		t.Fatalf("after retry = %+v", c.Comparison)
+	c := e.waitSynthesis(t, st.ComparisonID)
+	if c.Status != compares.Done || len(c.Answers) != 3 || c.Synthesis.Status != compares.SynthDone || c.Synthesis.Agent != "codex" || len(cx.synthCalls()) != 1 {
+		t.Fatalf("after retry = %+v %+v", c.Comparison, c.Synthesis)
 	}
-	for _, r := range c.Requests {
-		if r.Status != judge.RequestDone {
-			t.Errorf("request after retry = %+v", r)
-		}
-	}
-	if a, b, o := len(cl.judgeCalls()), len(cx.judgeCalls()), len(oc.judgeCalls()); a != 2 || b != 2 || o != 4 {
-		t.Errorf("judge calls claude %d, codex %d, opencode %d: only the failed requests run again", a, b, o)
-	}
-	// Nothing left to retry: the comparison comes back as it is.
-	if w := e.post("/v1/comparisons/"+st.ComparisonID+"/retry", nil); w.Code != 202 || decodeBody[ComparisonStatus](t, w).Status != compares.Done {
+	e.idle(t, st.ComparisonID)
+	// Nothing left to retry: the comparison comes back as it is, and no AI
+	// writes again.
+	w = e.post(target+"/retry", nil)
+	if r := decodeBody[ComparisonStatus](t, w); w.Code != 202 || r.Status != compares.Done || r.PollAfterMs != 0 ||
+		r.Synthesis.Text != c.Synthesis.Text || len(cx.synthCalls()) != 1 {
 		t.Errorf("retry of a done comparison = %d %s", w.Code, w.Body)
 	}
 	// Cancel of an ended comparison changes nothing.
-	if w := e.post("/v1/comparisons/"+st.ComparisonID+"/cancel", nil); w.Code != 200 || decodeBody[ComparisonStatus](t, w).Status != compares.Done {
+	if w := e.post(target+"/cancel", nil); w.Code != 200 || decodeBody[ComparisonStatus](t, w).Status != compares.Done {
 		t.Errorf("cancel of a done comparison = %d %s", w.Code, w.Body)
 	}
-	if logs := e.logs.String(); strings.Contains(logs, "AI-MESSAGE-SECRET") || strings.Contains(logs, "SECRET-ANSWER") {
-		t.Errorf("log has the AI's words: %s", logs)
+	// Every AI failed: the comparison took its answers, fewer than two, and
+	// stays failed.
+	st = startRun(t, e, map[string]any{"mode": "ask", "prompt": "FAIL q", "compare": map[string]any{}})
+	c = e.waitComparison(t, st.ComparisonID)
+	if c.Status != compares.Failed || c.Error == nil || c.Error.Code != core.ErrCodeNeedTwoAnswers || len(c.Answers) != 3 {
+		t.Fatalf("no answers = %+v", c.Comparison)
+	}
+	w = e.post("/v1/comparisons/"+st.ComparisonID+"/retry", nil)
+	if r := decodeBody[ComparisonStatus](t, w); w.Code != 202 || r.Status != compares.Failed || r.Error == nil || r.Error.Code != core.ErrCodeNeedTwoAnswers {
+		t.Errorf("retry of a failed comparison = %d %s", w.Code, w.Body)
 	}
 }
 
-// Cancel drops the queued requests (failed, cancelled) and asks no judge
-// again; the requests that run finish.
+// Cancel ends a comparison that waits for its run at once, failed with
+// cancelled, and it never starts, also once the run has ended. One that
+// takes its answers ends failed with cancelled too. Either way its
+// combined answer fails with cancelled and no AI writes.
 func TestCancelComparison(t *testing.T) {
-	cl, cx, oc := threeJudges()
-	block := make(chan struct{})
-	judges := []*judgeAdapter{cl, cx, oc.judgeAdapter}
-	for _, j := range judges {
-		j.setBlock(block)
-	}
-	e, _ := judgeEnv(t, func(o *Options) { o.Judge.PerAI = 1 }, cl, cx, oc)
-	st := startRun(t, e, map[string]any{"mode": "ask", "prompt": "q", "compare": map[string]any{}})
-	e.waitRun(t, st.ID)
-	calls := func() int {
-		n := 0
-		for _, j := range judges {
-			n += len(j.judgeCalls())
+	cl, cx, oc := threeWriterAdapters()
+	cx.askGate = make(chan struct{})
+	e, _ := judgeEnv(t, nil, cl, cx, oc)
+	cancelled := func(name string, c ComparisonStatus) {
+		t.Helper()
+		if c.Status != compares.Failed || c.Error == nil || c.Error.Code != core.ErrCodeCancelled || c.PollAfterMs != 0 ||
+			c.Synthesis.Status != compares.SynthFailed || c.Synthesis.Error == nil || c.Synthesis.Error.Code != core.ErrCodeCancelled {
+			t.Errorf("%s = %+v %+v", name, c.Comparison, c.Synthesis)
 		}
-		return n
 	}
-	deadline := time.Now().Add(5 * time.Second)
-	for calls() < 3 { // one judge process per AI: three run, three wait
-		if time.Now().After(deadline) {
-			t.Fatalf("judge calls = %d", calls())
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
+	st := startRun(t, e, map[string]any{"mode": "ask", "prompt": "q", "compare": map[string]any{"synthesis": map[string]any{}}})
 	w := e.post("/v1/comparisons/"+st.ComparisonID+"/cancel", nil)
 	if w.Code != 200 {
 		t.Fatalf("cancel = %d %s", w.Code, w.Body)
 	}
-	close(block)
-	c := e.waitComparison(t, st.ComparisonID)
-	done, cancelled := 0, 0
-	for _, r := range c.Requests {
-		switch {
-		case r.Status == judge.RequestDone:
-			done++
-		case r.Error != nil && r.Error.Code == core.ErrCodeCancelled:
-			cancelled++
-		default:
-			t.Errorf("request = %+v", r)
-		}
+	cancelled("cancel while waiting", decodeBody[ComparisonStatus](t, w))
+	close(cx.askGate)
+	e.waitRun(t, st.ID)
+	e.idle(t, st.ComparisonID)
+	c := e.comparison(t, st.ComparisonID)
+	cancelled("after the run", c)
+	if len(c.Answers) != 0 {
+		t.Errorf("answers taken after the cancel: %+v", c.Answers)
 	}
-	if done != 3 || cancelled != 3 || calls() != 3 || c.Status != compares.Done {
-		t.Errorf("done %d, cancelled %d, judge calls %d, status %s", done, cancelled, calls(), c.Status)
+
+	// A comparison that takes its answers: the 200 shows it still running.
+	release := holdFamily(t, cl.judgeAdapter)
+	body := directBody("")
+	body["synthesis"] = map[string]any{}
+	st2 := decodeBody[ComparisonStatus](t, e.post("/v1/comparisons", body))
+	w = e.post("/v1/comparisons/"+st2.ID+"/cancel", nil)
+	if got := decodeBody[ComparisonStatus](t, w); w.Code != 200 || got.Status != compares.Running || got.PollAfterMs != compares.PollMs ||
+		got.Synthesis.Status != compares.SynthFailed {
+		t.Errorf("cancel while running = %d %s", w.Code, w.Body)
+	}
+	release()
+	cancelled("after taking its answers", e.waitComparison(t, st2.ID))
+	e.idle(t, st2.ID)
+	if n := synthCallsOf(cl, cx, oc.writerAdapter); n != 0 {
+		t.Errorf("%d synth calls after cancels", n)
 	}
 }
 
 // ---- combined answers (S5b) ---------------------------------------------------
 
 // writerAdapter is a judgeAdapter that also writes combined answers, with
-// fakecli's ok text that names every DIFFER side.
+// fakecli's ok text, fakecli.SynthLead.
 type writerAdapter struct {
 	*judgeAdapter
-	smu    sync.Mutex
-	synths []core.SynthRequest
-	sfail  string        // while set, Synthesize fails with judge_failed and this message
-	sblock chan struct{} // while set, Synthesize waits for it to close (or for ctx)
+	leaves bool // Synthesize returns a cleanup ref (cleaningWriter)
+
+	smu     sync.Mutex
+	synths  []core.SynthRequest
+	sfail   string        // while set, Synthesize fails with judge_failed and this message
+	sblock  chan struct{} // while set, Synthesize waits for it to close (or for ctx)
+	cleaned []string      // the folders CleanupJudge was called with
+	refs    [][]string    // and the refs
 }
 
 func newWriterAdapter(name string, leaves bool) *writerAdapter {
-	j := newJudge(name)
-	j.leaves = leaves
-	return &writerAdapter{judgeAdapter: j}
+	return &writerAdapter{judgeAdapter: newJudge(name), leaves: leaves}
 }
 
 func (w *writerAdapter) AskTiers() map[string]core.AskModel {
@@ -968,7 +892,7 @@ func (w *writerAdapter) Synthesize(ctx context.Context, req core.SynthRequest) (
 	if fail != "" {
 		return res, core.Fail(core.ErrCodeJudgeFailed, fail)
 	}
-	res.Output, _ = json.Marshal(map[string]string{"answer": fakecli.SynthText(req.Prompt)})
+	res.Output, _ = json.Marshal(map[string]string{"answer": fakecli.SynthLead})
 	return res, nil
 }
 
@@ -984,11 +908,22 @@ func (w *writerAdapter) set(fail string, block chan struct{}) {
 	w.smu.Unlock()
 }
 
+// cleanups are the folders and the refs CleanupJudge was called with.
+func (w *writerAdapter) cleanups() ([]string, [][]string) {
+	w.smu.Lock()
+	defer w.smu.Unlock()
+	return slices.Clone(w.cleaned), slices.Clone(w.refs)
+}
+
 // cleaningWriter leaves conversations behind, as OpenCode does.
 type cleaningWriter struct{ *writerAdapter }
 
-func (c cleaningWriter) CleanupJudge(ctx context.Context, folder string, refs []string) error {
-	return cleaningAdapter{c.judgeAdapter}.CleanupJudge(ctx, folder, refs)
+func (c cleaningWriter) CleanupJudge(_ context.Context, folder string, refs []string) error {
+	c.smu.Lock()
+	defer c.smu.Unlock()
+	c.cleaned = append(c.cleaned, folder)
+	c.refs = append(c.refs, slices.Clone(refs))
+	return nil
 }
 
 func threeWriterAdapters() (*writerAdapter, *writerAdapter, cleaningWriter) {
@@ -1041,49 +976,26 @@ func (e env) postRaw(token, target, body string) *httptest.ResponseRecorder {
 	return w
 }
 
-func TestInfoAnnouncesSynthesize(t *testing.T) {
-	cl, cx, oc := threeWriterAdapters()
-	e, _ := judgeEnv(t, nil, cl, cx, oc)
-	resp := decodeBody[InfoResponse](t, e.do("GET", "/v1/info", nil))
-	for _, a := range resp.Agents {
-		if !contains(a.Capabilities, core.CapSynthesize) || !contains(a.Capabilities, core.CapJudge) {
-			t.Errorf("%s = %v", a.Agent, a.Capabilities)
-		}
-	}
-	if !contains(resp.Capabilities, core.CapSynthesize) || contains(resp.Reserved, core.CapSynthesize) {
-		t.Errorf("capabilities %v, reserved %v", resp.Capabilities, resp.Reserved)
-	}
-	// AIs that judge but do not write, and judging off: reserved.
-	jc, jx, jo := threeJudges()
-	e2, _ := judgeEnv(t, nil, jc, jx, jo)
-	resp = decodeBody[InfoResponse](t, e2.do("GET", "/v1/info", nil))
-	if contains(resp.Capabilities, core.CapSynthesize) || !contains(resp.Reserved, core.CapSynthesize) {
-		t.Errorf("judges only: capabilities %v, reserved %v", resp.Capabilities, resp.Reserved)
-	}
-	cl2, cx2, oc2 := threeWriterAdapters()
-	e3, _ := judgeEnv(t, func(o *Options) { o.Judge = config.JudgeConfig{Off: true} }, cl2, cx2, oc2)
-	resp = decodeBody[InfoResponse](t, e3.do("GET", "/v1/info", nil))
-	if contains(resp.Capabilities, core.CapSynthesize) || !contains(resp.Reserved, core.CapSynthesize) {
-		t.Errorf("off: capabilities %v, reserved %v", resp.Capabilities, resp.Reserved)
-	}
-}
-
 func TestRunWithSynthesis(t *testing.T) {
 	cl, cx, oc := threeWriterAdapters()
 	cl.answer = "ANSWER-SECRET 값은 NUM 1입니다."
 	cx.answer = "ANSWER-SECRET 값은 NUM 2입니다."
-	oc.answer = "ANSWER-SECRET 값은 NUM 1입니다."
+	oc.answer = "ANSWER-SECRET 값은 NUM 3입니다."
 	block := make(chan struct{})
 	cx.set("", block)
 	e, ask := judgeEnv(t, nil, cl, cx, oc)
 	st := startRun(t, e, map[string]any{
 		"mode": "ask", "prompt": "QUESTION-SECRET 값은?", "tier": "deep",
-		"compare": map[string]any{"judges": []string{"claude", "codex", "opencode"}, "synthesis": map[string]any{"agent": "codex", "later": 1}},
+		"compare": map[string]any{
+			"earlier": []string{"EARLIER-SECRET 처음 질문"}, "judges": []string{"claude", "codex", "opencode"},
+			"synthesis": map[string]any{"agent": "codex", "later": 1},
+		},
 	})
 	if st.CompareError != nil || st.ComparisonID == "" {
 		t.Fatalf("202 = %+v", st)
 	}
-	// The judges are done while codex writes: status done, pollAfterMs on.
+	// The comparison is done while codex writes: status done, pollAfterMs
+	// on.
 	deadline := time.Now().Add(10 * time.Second)
 	for {
 		c := e.comparison(t, st.ComparisonID)
@@ -1103,22 +1015,46 @@ func TestRunWithSynthesis(t *testing.T) {
 	}
 	close(block)
 	c := e.waitSynthesis(t, st.ComparisonID)
-	s := c.Synthesis
-	named := strings.Contains(s.Text, "Claude, Opencode vs Codex") || strings.Contains(s.Text, "Codex vs Claude, Opencode")
-	if s.Status != compares.SynthDone || s.Agent != "codex" || s.Model != "codex-deep" || !s.Judged || s.UnnamedSides != 0 || !named {
+	if s := c.Synthesis; s.Status != compares.SynthDone || s.Agent != "codex" || s.Model != "codex-deep" || s.Text != fakecli.SynthLead || s.Judged {
 		t.Fatalf("synthesis = %+v", s)
+	}
+	// Judged is always false; unnamedSides and topics went with the judging.
+	if body := e.do("GET", "/v1/comparisons/"+st.ComparisonID, nil).Body.String(); !strings.Contains(body, `"judged":false`) ||
+		strings.Contains(body, "unnamedSides") || strings.Contains(body, `"topics"`) {
+		t.Errorf("comparison = %s", body)
 	}
 	calls := cx.synthCalls()
 	if len(calls) != 1 || synthCallsOf(cl, oc.writerAdapter) != 0 {
 		t.Fatalf("synth calls %d", len(calls))
 	}
-	if req := calls[0]; req.Folder != core.JudgeFolder(ask) || req.Model != "codex-deep" || req.Effort != "high" ||
-		strings.Contains(req.Prompt, core.AskPreamble) || !strings.Contains(req.Prompt, `QUESTION: "QUESTION-SECRET 값은?"`) {
+	req := calls[0]
+	if req.Folder != core.JudgeFolder(ask) || req.Model != "codex-deep" || req.Effort != "high" || strings.Contains(req.Prompt, core.AskPreamble) {
 		t.Errorf("request = %+v", req)
+	}
+	// synth-v5: the question as the person wrote it, the earlier questions
+	// and each answer with its AI's name, and nothing of the judging.
+	if !strings.HasPrefix(req.Prompt, "[Asksemble synthesis v5] ") {
+		t.Errorf("prompt is not synth-v5:\n%s", req.Prompt)
+	}
+	for _, line := range []string{
+		`QUESTION: "QUESTION-SECRET 값은?"`,
+		`EARLIER QUESTIONS (context only, do not answer them): ["EARLIER-SECRET 처음 질문"]`,
+		`ANSWER: {"ai":"Claude","text":"ANSWER-SECRET 값은 NUM 1입니다."}`,
+		`ANSWER: {"ai":"Codex","text":"ANSWER-SECRET 값은 NUM 2입니다."}`,
+		`ANSWER: {"ai":"Opencode","text":"ANSWER-SECRET 값은 NUM 3입니다."}`,
+	} {
+		if !strings.Contains(req.Prompt, "\n"+line+"\n") {
+			t.Errorf("prompt lacks %s:\n%s", line, req.Prompt)
+		}
+	}
+	for _, gone := range []string{"\nDIFFER: ", "\nCHECK: ", "\nCOMPARED.", "\nNOT COMPARED."} {
+		if strings.Contains(req.Prompt, gone) {
+			t.Errorf("prompt has %q:\n%s", gone, req.Prompt)
+		}
 	}
 	e.idle(t, st.ComparisonID)
 	logs := e.logs.String()
-	for _, leak := range []string{"QUESTION-SECRET", "ANSWER-SECRET", "Fake combined", "값은"} {
+	for _, leak := range []string{"QUESTION-SECRET", "ANSWER-SECRET", "EARLIER-SECRET", "Fake combined", "값은"} {
 		if strings.Contains(logs, leak) {
 			t.Errorf("log contains %q", leak)
 		}
@@ -1204,11 +1140,24 @@ func TestDirectComparisonSynthesis(t *testing.T) {
 		t.Errorf("202 synthesis = %+v", st.Synthesis)
 	}
 	c := e.waitSynthesis(t, st.ID)
-	if s := c.Synthesis; s.Status != compares.SynthDone || s.Agent != "codex" || s.Model != "codex-quick" || !strings.Contains(s.Text, "ChatGPT") {
+	if s := c.Synthesis; s.Status != compares.SynthDone || s.Agent != "codex" || s.Model != "codex-quick" || s.Text != fakecli.SynthLead {
 		t.Errorf("synthesis = %+v", s)
 	}
-	if req := cx.synthCalls()[0]; !strings.Contains(req.Prompt, `"ai":"ChatGPT"`) || req.Effort != "" {
-		t.Errorf("effort %q, prompt:\n%s", req.Effort, req.Prompt)
+	// The question trimmed, the earlier questions (codex is one of the AIs
+	// that may write, as no judges were named) and the pasted answer under
+	// its app's name.
+	req := cx.synthCalls()[0]
+	for _, part := range []string{
+		"\n" + `QUESTION: "QUESTION-SECRET 몇 개인가요?"` + "\n",
+		"\n" + `EARLIER QUESTIONS (context only, do not answer them): ["EARLIER-SECRET"]` + "\n",
+		`"ai":"ChatGPT"`,
+	} {
+		if !strings.Contains(req.Prompt, part) {
+			t.Errorf("prompt lacks %s:\n%s", part, req.Prompt)
+		}
+	}
+	if req.Effort != "" {
+		t.Errorf("effort %q", req.Effort)
 	}
 }
 
@@ -1218,19 +1167,17 @@ func TestWriteSynthesis(t *testing.T) {
 	if w := e.postRaw(e.token, "/v1/comparisons/0123456789abcdef0123456789abcdef/synthesis", ""); w.Code != 404 || errCode(t, w) != CodeComparisonNotFound {
 		t.Errorf("unknown = %d %s", w.Code, w.Body)
 	}
-	// While the judges run: 409.
-	block := make(chan struct{})
-	cl.setBlock(block)
+	// While the comparison takes its answers: 409.
+	release := holdFamily(t, cl.judgeAdapter)
 	st := decodeBody[ComparisonStatus](t, e.post("/v1/comparisons", directBody("w-1")))
 	if st.Synthesis == nil || st.Synthesis.Status != compares.SynthOff {
 		t.Fatalf("absent synthesis = %+v", st.Synthesis)
 	}
 	target := "/v1/comparisons/" + st.ID + "/synthesis"
 	if w := e.postRaw(e.token, target, ""); w.Code != 409 || errCode(t, w) != CodeComparisonRunning {
-		t.Errorf("while judging = %d %s", w.Code, w.Body)
+		t.Errorf("while taking its answers = %d %s", w.Code, w.Body)
 	}
-	cl.setBlock(nil)
-	close(block)
+	release()
 	c := e.waitSynthesis(t, st.ID)
 	if c.Synthesis.Status != compares.SynthOff || synthCallsOf(cl, cx, oc.writerAdapter) != 0 {
 		t.Fatalf("off: %+v", c.Synthesis)
@@ -1269,17 +1216,16 @@ func TestWriteSynthesis(t *testing.T) {
 		t.Fatalf("written = %+v", c.Synthesis)
 	}
 	idle := e.idle(t, st.ID)
-	oc.jmu.Lock()
-	refs := slices.Clone(oc.refs)
-	oc.jmu.Unlock()
-	if !slices.ContainsFunc(refs, func(r []string) bool { return slices.Equal(r, []string{"opencode-synth-1"}) }) || !slices.Contains(oc.cleanups(), core.JudgeFolder(ask)) {
-		t.Errorf("cleanups %v", refs)
+	folders, refs := oc.cleanups()
+	if !slices.ContainsFunc(refs, func(r []string) bool { return slices.Equal(r, []string{"opencode-synth-1"}) }) || !slices.Contains(folders, core.JudgeFolder(ask)) {
+		t.Errorf("cleanups %v in %v", refs, folders)
 	}
 	// Done: the same snapshot again, no call.
 	if w := e.postRaw(e.token, target, ""); w.Code != 202 || decodeBody[ComparisonStatus](t, w).Synthesis.Text != idle.Synthesis.Text || len(oc.synthCalls()) != 1 {
 		t.Errorf("again = %d %s", w.Code, w.Body)
 	}
-	// A failed one is written again, with the AI asked for before.
+	// A failed one is written again, with the AI asked for before. The
+	// writer's own words reach the phone, never the log.
 	cx.set(fakecli.UsageLimitCodex, nil)
 	body := directBody("w-2")
 	body["synthesis"] = map[string]any{"agent": "codex"}
@@ -1287,6 +1233,9 @@ func TestWriteSynthesis(t *testing.T) {
 	c = e.waitSynthesis(t, st2.ID)
 	if s := c.Synthesis; s.Status != compares.SynthFailed || s.Error == nil || s.Error.Code != core.ErrCodeJudgeFailed || s.Error.Message != fakecli.UsageLimitCodex {
 		t.Fatalf("usage limit = %+v", s)
+	}
+	if strings.Contains(e.logs.String(), fakecli.UsageLimitCodex) {
+		t.Errorf("log has the writer's words: %s", e.logs)
 	}
 	cx.set("", nil)
 	if w := e.postRaw(e.token, "/v1/comparisons/"+st2.ID+"/synthesis", ""); w.Code != 202 {

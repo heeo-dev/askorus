@@ -19,10 +19,6 @@ func synthTask() judge.SynthTask {
 	return judge.SynthTask{
 		Question: "첫 배는 몇 시인가요? \"정확히\" & 100%",
 		Answers:  []judge.SynthAnswer{{AI: "Claude", Text: "7시입니다."}, {AI: "Codex", Text: "8시입니다."}},
-		Differ: []judge.SynthDiffer{{Sides: []judge.SynthSide{
-			{AIs: []string{"Claude"}, Says: []string{"7시입니다."}}, {AIs: []string{"Codex"}, Says: []string{"8시입니다."}},
-		}}},
-		Compared: true,
 	}
 }
 
@@ -70,7 +66,7 @@ func TestSynthArgsAndStdin(t *testing.T) {
 		t.Errorf("result = %+v", res)
 	}
 	text, err := judge.ValidateSynth(res.Output)
-	if err != nil || judge.UnnamedSides(synthTask(), text) != 0 {
+	if err != nil || !strings.HasPrefix(text, fakecli.SynthLead) {
 		t.Fatalf("ValidateSynth: %q %v", text, err)
 	}
 	// An empty effort becomes medium.
@@ -80,32 +76,24 @@ func TestSynthArgsAndStdin(t *testing.T) {
 	if got := fakecli.Calls(t)[1].Args; !slices.Equal(got, wantJudgeArgs("gpt-6-luna", "medium", schema)) {
 		t.Errorf("empty effort args = %q", got)
 	}
-	// The ask, judge and synth checks each refuse the others' shapes.
+	// The ask and synth checks each refuse the other's shape.
 	if err := checkArgs(c.Args); err == nil {
 		t.Error("the ask check accepted synth arguments")
 	}
-	if err := a.checkJudgeArgs(c.Args); err == nil {
-		t.Error("the judge check accepted synth arguments")
-	}
-	if err := a.checkSynthArgs(judgeArgs("gpt-6-luna", "medium", a.schemaPath())); err == nil {
-		t.Error("the synth check accepted judge arguments")
+	if err := a.checkSynthArgs(c.Args); err != nil {
+		t.Errorf("the synth check refused its own arguments: %v", err)
 	}
 	if err := a.checkSynthArgs(askArgs("gpt-6-luna", "medium", "")); err == nil {
 		t.Error("the synth check accepted ask arguments")
 	}
 }
 
-// The synth schema file is its own: written once next to the judge's,
-// which it leaves as it is, and each kind of call reads its own file.
+// The synth schema file is written once, also when the first calls come
+// at once, and every call reads it; a changed file is refused, never
+// repaired.
 func TestSynthSchemaFile(t *testing.T) {
 	a, schemaDir, folder := judgeAdapter(t)
-	jp := judgePrompt(t, judgeTask())
 	sp := synthPrompt(t)
-	if _, err := a.Judge(context.Background(), core.JudgeRequest{Folder: folder, Prompt: jp}); err != nil {
-		t.Fatal(err)
-	}
-	judgeFile := filepath.Join(schemaDir, core.JudgeSchemaFile)
-	before, _ := os.Stat(judgeFile)
 	var wg sync.WaitGroup
 	errs := make([]error, 6)
 	for i := range errs {
@@ -121,31 +109,23 @@ func TestSynthSchemaFile(t *testing.T) {
 			t.Errorf("synth %d: %v", i, err)
 		}
 	}
-	if _, err := a.Judge(context.Background(), core.JudgeRequest{Folder: folder, Prompt: jp}); err != nil {
-		t.Fatal(err)
-	}
-	if synthWrites(a) != 1 || writes(a) != 1 {
-		t.Errorf("synth schema written %d times, judge schema %d", synthWrites(a), writes(a))
+	if synthWrites(a) != 1 {
+		t.Errorf("synth schema written %d times", synthWrites(a))
 	}
 	if b, err := os.ReadFile(filepath.Join(schemaDir, core.SynthSchemaFile)); err != nil || string(b) != core.SynthSchemaV1 {
 		t.Errorf("synth schema file = %q, %v", b, err)
 	}
-	after, _ := os.Stat(judgeFile)
-	if b, _ := os.ReadFile(judgeFile); string(b) != core.JudgeSchemaV1 || !after.ModTime().Equal(before.ModTime()) {
-		t.Errorf("the judge schema file changed: %q", b)
-	}
 	for _, c := range fakecli.Calls(t) {
-		file := filepath.Base(c.Args[14])
-		if (file == core.SynthSchemaFile) != (c.Schema == core.SynthSchemaV1) || (file == core.JudgeSchemaFile) != (c.Schema == core.JudgeSchemaV1) {
-			t.Errorf("call with %s read %q", file, c.Schema)
+		if filepath.Base(c.Args[14]) != core.SynthSchemaFile || c.Schema != core.SynthSchemaV1 {
+			t.Errorf("call with %s read %q", c.Args[14], c.Schema)
 		}
 	}
-	if entries, _ := os.ReadDir(schemaDir); len(entries) != 2 {
+	// Only the schema file is left in the folder (no temporary files).
+	if entries, _ := os.ReadDir(schemaDir); len(entries) != 1 {
 		t.Errorf("schema folder holds %d entries", len(entries))
 	}
 
-	// Changed after this process wrote it: refused, never repaired, and
-	// the judge still runs.
+	// Changed after this process wrote it: refused, never repaired.
 	synthFile := filepath.Join(schemaDir, core.SynthSchemaFile)
 	tampered := strings.Replace(core.SynthSchemaV1, `"additionalProperties":false`, `"additionalProperties":true`, 1)
 	if err := os.WriteFile(synthFile, []byte(tampered), 0o600); err != nil {
@@ -159,13 +139,15 @@ func TestSynthSchemaFile(t *testing.T) {
 	if b, _ := os.ReadFile(synthFile); string(b) != tampered || len(fakecli.Calls(t)) != n {
 		t.Error("the tampered file was rewritten or codex ran")
 	}
-	if _, err := a.Judge(context.Background(), core.JudgeRequest{Folder: folder, Prompt: jp}); err != nil {
-		t.Errorf("judge after the synth file changed: %v", err)
-	}
 	// A new process writes over it once.
 	b := New(Options{Path: a.exe, SchemaDir: schemaDir})
 	if _, err := b.Synthesize(context.Background(), core.SynthRequest{Folder: folder, Prompt: sp, Model: "gpt-6-luna"}); err != nil || synthWrites(b) != 1 {
 		t.Errorf("new process: %v, writes %d", err, synthWrites(b))
+	}
+	// A new process that finds the right bytes does not write at all.
+	c := New(Options{Path: a.exe, SchemaDir: schemaDir})
+	if _, err := c.Synthesize(context.Background(), core.SynthRequest{Folder: folder, Prompt: sp, Model: "gpt-6-luna"}); err != nil || synthWrites(c) != 0 {
+		t.Errorf("right file: %v, writes %d", err, synthWrites(c))
 	}
 	// No agent folder: internal, nothing runs.
 	d := New(Options{Path: a.exe, SchemaDir: schemaDir})
@@ -185,7 +167,7 @@ func TestCheckSynthArgsRefuses(t *testing.T) {
 	}
 	set := func(i int, v string) []string { s := slices.Clone(good); s[i] = v; return s }
 	bad := map[string][]string{
-		"judge schema":     synthArgs("gpt-6-luna", "medium", a.schemaPath()),
+		"old judge schema": synthArgs("gpt-6-luna", "medium", filepath.Join(a.schemaDir, "judge-schema-v1.json")),
 		"other schema":     synthArgs("gpt-6-luna", "medium", filepath.Join(t.TempDir(), core.SynthSchemaFile)),
 		"relative schema":  synthArgs("gpt-6-luna", "medium", core.SynthSchemaFile),
 		"search":           append([]string{"--search"}, good...),

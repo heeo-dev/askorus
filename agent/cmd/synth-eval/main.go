@@ -6,10 +6,9 @@
 // this process), keeps each question's answers, comparison and combined
 // answer under %LOCALAPPDATA%\Asksemble\synth-eval\<run>, and reports what
 // can be counted: times, the combined answer's shape, English mixed into a
-// Korean answer, extras left in, 다른 말 sides it does not name. It uses the
-// person's AI subscriptions, so a run is started only when agreed, through
-// scripts\synth-eval.ps1. It is built only with -tags syntheval and is no
-// part of the agent.
+// Korean answer, extras left in. It uses the person's AI subscriptions, so
+// a run is started only when agreed, through scripts\synth-eval.ps1. It is
+// built only with -tags syntheval and is no part of the agent.
 //
 //	synth-eval questions -q FILE[,FILE] [-only ID,ID]
 //	synth-eval run       -q FILE[,FILE] [-only ID,ID] -run NAME [-tier quick] [-writer claude] [-refine off|on|light|live] [-mod-tier standard] [-synth product|off] [-resume] -expect N
@@ -20,8 +19,6 @@
 //	synth-eval scores    -name NAME
 //	synth-eval pairs     -a RUN -b RUN -name NAME [-only ID,ID]
 //	synth-eval picks     -name NAME -in FILE [-score NAME]
-//	synth-eval label     -from RUN -run NAME [-only ID,ID] [-tier quick] [-writer claude] [-resume] -expect N
-//	synth-eval topics    -from RUN -run NAME [-only ID,ID] [-tier quick] [-writer claude] [-resume] -expect N
 //
 // resynth and the commands after it are the quality experiments (C4, E0 in
 // "마일스톤 C" of docs/phase2-plan.md): they make their own writer calls.
@@ -74,8 +71,8 @@ const usage = `synth-eval measures the combined answer (milestone C). A run uses
             -synth off writes no combined answer (resynth writes it later)
   report    -run NAME[,NAME] [-json] [-texts]
   resynth   -from RUN -run NAME [-only ID,ID] [-tier quick|standard|deep] [-writer claude|codex|opencode]
-            [-synth product|c5-b|c5-nj|c5-m|c5-one|c5-one2|c5-solo|c5-sel|c5-nat|c5-sn|c5-sf|c5-sfd|c5-si|c5-sq] [-resume] -expect N
-            writes RUN's combined answers again from the same answers and judgments (up to 2 calls each)
+            [-synth product|c5-solo|c5-sel|c5-nat|c5-sn|c5-sf|c5-sfd|c5-si|c5-sq] [-resume] -expect N
+            writes RUN's combined answers again from the same answers (up to 2 calls each)
   refine    -q FILE[,FILE] [-only ID,ID] -run NAME [-tier quick|standard|deep] [-writer claude|codex|opencode]
             [-form fixed|live] [-resume] -expect N
             asks the moderator only (up to 2 calls a question); report shows refine runs side by side
@@ -87,15 +84,8 @@ const usage = `synth-eval measures the combined answer (milestone C). A run uses
             the blind A/B page's data: sides drawn at random, kept apart in key.json (no AI call)
   picks     -name NAME -in FILE [-score NAME]
             the person's picks from the page, mapped back to the runs; with -score, how far the judges agree
-  label     -from RUN -run NAME [-only ID,ID] [-tier quick|standard|deep] [-writer claude|codex|opencode] [-resume] -expect N
-            C5 draft B2: labels the parts of RUN's combined answers main, differ, only or extra
-  topics    -from RUN -run NAME [-only ID,ID] [-tier quick|standard|deep] [-writer claude|codex|opencode] [-resume] -expect N
-            C5 differ draft: names RUN's 다른 말 items (a topic, and a gist per side)
-  differs   -from RUN -run NAME [-only ID,ID] [-tier quick|standard|deep] [-writer claude|codex|opencode] [-resume] -expect N
-            C5 moderator draft (#19): lists where RUN's answers differ, without judgments
-            (1 call an answer with headings, up to 2; -expect is the number of such answers)
 A question file has one question per line; blank lines and lines starting with # are skipped.
--expect is the number of questions the run will ask (each uses the PC's AIs up to 10 times, 12 with -refine on).
+-expect is the number of questions the run will ask (each uses the PC's AIs up to 4 times, 6 with -refine on, light or live).
 `
 
 func main() {
@@ -129,12 +119,6 @@ func runMain(ctx context.Context, args []string, out, errOut io.Writer) int {
 		return pairsCmd(args[1:], out, errOut)
 	case "picks":
 		return picksCmd(args[1:], out, errOut)
-	case "label":
-		return labelCmd(ctx, args[1:], out, errOut)
-	case "topics":
-		return topicsCmd(ctx, args[1:], out, errOut)
-	case "differs":
-		return differsCmd(ctx, args[1:], out, errOut)
 	}
 	fmt.Fprint(errOut, usage)
 	return exitFlags
