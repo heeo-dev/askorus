@@ -131,8 +131,9 @@ type Options struct {
 	Logger   *slog.Logger
 	Now      func() time.Time // time.Now when nil; tests move it for expiry
 	// QueueLimit and SynthLimit replace the constants when not zero, for
-	// tests.
+	// tests; so do TurnLimit and DebateLimit (debate.go).
 	QueueLimit, SynthLimit time.Duration
+	TurnLimit, DebateLimit time.Duration
 }
 
 // RunSpec attaches a comparison to a run of POST /v1/runs.
@@ -190,6 +191,9 @@ type Manager struct {
 	byRun  map[string]*comparison // by run id
 	byKey  map[string]*comparison // direct ones by owner and key
 	perAI  map[string]chan struct{}
+
+	debates    map[string]*debate // by id (debate.go)
+	debateKeys map[string]*debate // by owner and key
 }
 
 // comparison is one comparison. Every field but the immutable ones (id,
@@ -228,7 +232,8 @@ func New(o Options) *Manager {
 		perAICap: o.Gate.Settings.PerAIOrDefault(),
 		base:     ctx, cancel: cancel, global: make(chan struct{}, MaxProcesses),
 		byID: map[string]*comparison{}, byRun: map[string]*comparison{}, byKey: map[string]*comparison{},
-		perAI: map[string]chan struct{}{},
+		perAI:   map[string]chan struct{}{},
+		debates: map[string]*debate{}, debateKeys: map[string]*debate{},
 	}
 	if m.log == nil {
 		m.log = slog.New(slog.DiscardHandler)

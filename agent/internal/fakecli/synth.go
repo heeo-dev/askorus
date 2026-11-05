@@ -121,6 +121,9 @@ func synthReply(mode, prompt string) string {
 	case SynthEmpty:
 		return SynthEmptyText
 	}
+	if reply, ok := debateReply(prompt); ok {
+		return reply
+	}
 	text := SynthLead
 	if mode == SynthMissingNames {
 		text = SynthMissingNamesText

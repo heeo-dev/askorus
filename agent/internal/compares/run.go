@@ -262,6 +262,16 @@ func (m *Manager) acquire(rd *round, agent string) (release func(), failed *judg
 // Manager's and ends only with its own time limit. It logs a failure's
 // code only.
 func (m *Manager) cleanup(c *comparison, e Engine, refs []string) {
+	m.cleanupRefs(e, refs)
+	m.locked(func() {
+		c.active--
+		m.touchLocked(c)
+	})
+}
+
+// cleanupRefs removes what writer e's calls left behind (refs) and logs a
+// failure's code only.
+func (m *Manager) cleanupRefs(e Engine, refs []string) {
 	code := ""
 	func() {
 		defer func() {
@@ -280,10 +290,6 @@ func (m *Manager) cleanup(c *comparison, e Engine, refs []string) {
 	if code != "" {
 		m.log.Warn("writer cleanup failed", "writer", e.Agent, "code", code)
 	}
-	m.locked(func() {
-		c.active--
-		m.touchLocked(c)
-	})
 }
 
 // locked runs f holding mu, and lets mu go even when f panics.

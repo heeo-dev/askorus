@@ -35,6 +35,11 @@ type writerAI struct {
 	synths []core.SynthRequest
 	panicT bool // AskTiers panics
 	panicN bool // DisplayName panics
+
+	// ask answers a debater's turn (debate_test.go); nil gives an empty
+	// answer.
+	ask  func(ctx context.Context, req core.AskRequest, n int) (core.AskResult, error)
+	asks []core.AskRequest
 }
 
 func newWriter(name, family, display string) *writerAI {
@@ -45,7 +50,14 @@ func newWriter(name, family, display string) *writerAI {
 	}}
 }
 
-func (w *writerAI) Ask(context.Context, core.AskRequest) (core.AskResult, error) {
+func (w *writerAI) Ask(ctx context.Context, req core.AskRequest) (core.AskResult, error) {
+	w.smu.Lock()
+	w.asks = append(w.asks, req)
+	n, f := len(w.asks), w.ask
+	w.smu.Unlock()
+	if f != nil {
+		return f(ctx, req, n)
+	}
 	return core.AskResult{}, nil
 }
 

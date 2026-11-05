@@ -29,7 +29,7 @@ import (
 
 // DebateRules names the debate's prompts: plan and check v1, turn v1 and
 // the answer after the debate debate-v4 (synth-v5.1's TASK with rule 5 for
-// debated points, kept short, with C9's two rules).
+// debated points, kept short, with C9's two rules as C10b narrowed them).
 const DebateRules = "debate-v4"
 
 // Natures of a point.
@@ -456,9 +456,14 @@ func StanceOf(reply string) (text, stance string) {
 const debateRule5 = `5. The AIs debated the POINT entries. Use what the debate reached: where an AI changed its position for a reason, write the result plainly, as the answer; where a point depends on the person's situation, say which option fits which situation; for a taste point, keep the strongest options and say what each is good for, and put a better or new option from the debate in place of a weaker one; where the AIs still differ on something the person would care about, say that the AIs differ (in Korean with 다르다 in the speech level of the rest of the answer, such as 다릅니다, never 갈리다), name the AIs of each side exactly as written in "ai" and each side's reason, and do not decide which side is right. Where what an AI said in the debate differs from its answer or from a point's sides, follow the debate, also on points that were not debated. Keep the number of items and the form the person asked for. Treat differences that were not debated as the answers show them, by the same rule. Keep it short, about as long as a combined answer without a debate: the items the person asked for, in the number and form asked, each with a short reason. A better or new option from the debate takes the place of a weaker one, never an extra. Write no extra section of combinations, alternatives, tips or how to choose unless the person asked for it; at most one line may name other strong options. Where the right option depends on the person's situation, say so in one line.` + debateRule5Two + ` Never write about the debate itself: not that the AIs debated, discussed or changed their minds, and not the moderator.`
 
 // debateRule5Two are C9's two rules (after the gift and the bakery
-// answers): the form asked for holds, and no detail of the person's own
-// situation that a debater made up.
-const debateRule5Two = ` When the debate settled on a combination or a single pick but the person asked for separate items, still give the separate items in the form asked, and put the combination in one line. Add no concrete detail of the person's own situation that the person did not give, such as their opening time, prices or offers, even when a debater suggested one: leave a placeholder such as ○○ instead.`
+// answers) as C10b narrowed them (short3): the form asked for holds, and
+// no detail of the person's own situation that a debater made up, only in
+// text the person will use as their own words, keeping useful specifics.
+// C10: the first wording (short2) lost to plain short 10:15 (it dropped
+// links and prices); short3 tied short 11:12 and beat the combined answer
+// 27:4. The user picks short or short3 (2026-11-06); short is this
+// constant empty.
+const debateRule5Two = ` When the debate settled on a combination or a single pick but the person asked for separate items, still give the separate items in the form asked, and put the combination in one line. In text the person will use as their own words (such as a greeting, a notice or a slogan), add no detail of their own situation that they did not give, such as their opening time or an offer a debater made up: leave a placeholder such as ○○ there. Keep every useful specific the answers or the debate give, such as links, prices and model names.`
 
 const debateAfterHead = "[Asksemble synthesis debate-v4] Several AIs answered the same question, then debated the points where they differed."
 
