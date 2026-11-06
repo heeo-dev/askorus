@@ -245,6 +245,28 @@ test('a comparison the PC lost (404) is made again from the answers, with the co
   expect(screen.queryByText(notFound)).toBeNull();
 });
 
+test('a run the PC no longer has (404 run_not_found) keeps what came; its comparison is made again from those answers (R-80)', async () => {
+  agent.runLimit = 2; // OpenCode is still answering when the phone stops asking
+  const user = await open();
+  await ask(user, 'q');
+  await waitFor(() => expect(agent.calls.filter((c) => c.method === 'GET' && c.path.startsWith('/v1/runs/')).length).toBeGreaterThan(0));
+  await later();
+  await later();
+  // The phone slept past the PC's keeping (a day): the run and its comparison are gone.
+  agent.forgetRuns();
+  agent.forgetComparisons();
+  expect(await screen.findByText(notFound, {}, { timeout: 5000 })).toBeTruthy();
+  // No dead Try again, no error code; what came stays.
+  expect(screen.queryByText(/run_not_found/)).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
+  await user.press(screen.getByRole('button', { name: 'Compare again' }));
+  expect(await written()).toBeTruthy();
+  const [post] = agent.callsTo('POST', '/v1/comparisons');
+  expect(post.body.answers.map((a: { agent: string }) => a.agent)).toEqual(['claude', 'codex']);
+  // OpenCode's answer says why it is missing.
+  expect(screen.getAllByText(/^The PC no longer has this answer/).length).toBeGreaterThan(0);
+});
+
 test('a refused Compare again says why and offers Compare with a new request', async () => {
   agent.synthReply = 'hold';
   const user = await open();

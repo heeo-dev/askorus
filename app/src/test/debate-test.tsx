@@ -160,6 +160,12 @@ test('stop the debate: what was said stays, no answer after it', async () => {
   expect(screen.getByText('No reply')).toBeTruthy();
   expect(screen.queryByText(DEBATE_AFTER)).toBeNull();
   expect(screen.queryByRole('button', { name: 'Stop the debate' })).toBeNull();
+  // A stopped debate may be started again (11-07, the user's request).
+  agent.debateReply = 'ok';
+  await user.press(screen.getByRole('button', { name: 'Debate again' }));
+  await waitFor(() => expect(agent.debateRequests()).toHaveLength(2));
+  expect(await after()).toBeTruthy();
+  expect(screen.queryByText('The debate was stopped. No answer after it was written.')).toBeNull();
 });
 
 test('no point worth a debate, a failed plan, and a PC busy with another debate', async () => {

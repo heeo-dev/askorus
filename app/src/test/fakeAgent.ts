@@ -325,6 +325,11 @@ export class FakeAgent {
     return this.compareCalls('POST', '/synthesis').map((c) => c.body);
   }
 
+  /** Like a run kept past a day, or an agent restart: every run is gone (404 run_not_found). */
+  forgetRuns() {
+    this.runs.clear();
+  }
+
   /** Like an agent restart: every comparison is gone (404 comparison_not_found). */
   forgetComparisons() {
     this.comparisons.clear();

@@ -1250,10 +1250,10 @@ func TestSynthMovesFinishedAt(t *testing.T) {
 	})
 	c := startDirect(t, m, withSynth(threeAnswers("phone", ""), &SynthSpec{Agent: "claude"}))
 	<-entered // the comparison ended at t0
-	now.Store(t0.Add(29 * time.Minute).UnixNano())
+	now.Store(t0.Add(KeepFor - time.Minute).UnixNano())
 	close(release)
 	waitIdle(t, m, "phone", c.ID)
-	now.Store(t0.Add(31 * time.Minute).UnixNano())
+	now.Store(t0.Add(KeepFor + time.Minute).UnixNano())
 	if got, ok := m.Get("phone", c.ID); !ok || synthOf(t, got).Status != SynthDone {
 		t.Errorf("pruned 2 minutes after its combined answer was written: %v %+v", ok, got.Synthesis)
 	}

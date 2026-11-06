@@ -804,14 +804,17 @@ func TestLimits(t *testing.T) {
 	}
 	c := waitIdle(t, m, "phone", startDirect(t, m, threeAnswers("phone", "")).ID)
 
-	// 30 minutes after the end it is gone, and so are the cancelled ones.
-	now.Add(int64(29 * time.Minute))
+	// KeepFor (a day, R-80) after the end it is gone, and so are the cancelled ones.
+	if KeepFor != 24*time.Hour {
+		t.Fatalf("KeepFor = %v", KeepFor)
+	}
+	now.Add(int64(KeepFor - time.Minute))
 	if _, ok := m.Get("phone", c.ID); !ok {
-		t.Fatal("gone before 30 minutes")
+		t.Fatal("gone before KeepFor")
 	}
 	now.Add(int64(2 * time.Minute))
 	if _, ok := m.Get("phone", c.ID); ok {
-		t.Error("kept after 30 minutes")
+		t.Error("kept after KeepFor")
 	}
 	if _, ok := m.ForRun("phone", "run-0"); ok {
 		t.Error("ForRun after expiry")

@@ -245,7 +245,7 @@ export class AgentClient {
     return cur;
   }
 
-  /** One answer comparison (P2-3). 404 comparison_not_found: gone from the PC (30 min, restart). */
+  /** One answer comparison (P2-3). 404 comparison_not_found: gone from the PC (a day, restart). */
   comparison(id: string, signal?: AbortSignal) {
     return this.request<Comparison>('GET', `comparisons/${encodeURIComponent(id)}`, undefined, signal);
   }
@@ -306,7 +306,7 @@ export class AgentClient {
     return this.request<Comparison>('POST', `comparisons/${encodeURIComponent(id)}/synthesis`, agent ? { agent } : {}, signal);
   }
 
-  /** One debate (P2-5). 404 debate_not_found: gone from the PC (30 min, restart). */
+  /** One debate (P2-5). 404 debate_not_found: gone from the PC (a day, restart). */
   debate(id: string, signal?: AbortSignal) {
     return this.request<Debate>('GET', `debates/${encodeURIComponent(id)}`, undefined, signal);
   }
