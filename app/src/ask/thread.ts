@@ -26,6 +26,7 @@ import {
   writersOf,
 } from './compare';
 import { debateRequest, type TurnDebate } from './debate';
+import type { ModelPick } from './models';
 
 /**
  * A turn's comparison. start, judges, earlier and synth are fixed at send
@@ -141,7 +142,8 @@ export function newTurn(o: {
   models: Record<string, string>;
   efforts?: Record<string, string>;
   info: Info;
-  synth: { on: boolean; agent: string };
+  /** The combined-answer setting: on, the writer and the moderator model set per AI (11-06). */
+  synth: { on: boolean; agent: string; models?: Record<string, ModelPick> };
   /** Refine the question first (milestone C): the setting and the moderator; left out is off. */
   refine?: { on: boolean; agent: string };
   at: number;

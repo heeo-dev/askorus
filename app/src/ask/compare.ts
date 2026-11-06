@@ -28,6 +28,7 @@ import type {
   RunPart,
   SynthesisRequest,
 } from '@/api/types';
+import type { ModelPick } from '@/ask/models';
 import type { Target, Turn, TurnCompare } from '@/ask/thread';
 import { has, t } from '@/i18n';
 
@@ -140,11 +141,17 @@ export function writerFor(info: Info | null | undefined, agent: string): string 
   return agent && (info?.agents ?? []).some((a) => a.agent === agent) ? agent : undefined;
 }
 
-/** synthRequest is what a turn asks for: the writer (or the PC's pick), or off. */
-export function synthRequest(info: Info, o: { on: boolean; agent: string }): SynthesisRequest {
+/**
+ * synthRequest is what a turn asks for: the writer (or the PC's pick), or
+ * off; with the writer, the moderator model set for it in Settings (11-06).
+ */
+export function synthRequest(info: Info, o: { on: boolean; agent: string; models?: Record<string, ModelPick> }): SynthesisRequest {
   if (!o.on) return { off: true };
   const agent = writerFor(info, o.agent);
-  return agent ? { agent } : {};
+  if (!agent) return {};
+  const pick = o.models?.[agent];
+  if (!pick?.model) return { agent };
+  return pick.effort ? { agent, model: pick.model, effort: pick.effort } : { agent, model: pick.model };
 }
 
 /**

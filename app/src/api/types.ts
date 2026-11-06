@@ -222,9 +222,12 @@ export type RunCompare = { earlier?: string[]; judges?: string[]; synthesis?: Sy
 /**
  * The combined answer a comparison asks for (P2-3 S5b): agent is the AI the
  * person picked (the PC falls back to the first asked AI that may write;
- * left out, the PC picks), or off. The tier is the run's.
+ * left out, the PC picks), or off. The tier is the run's. model and effort
+ * (11-06) are the moderator model set for agent in Settings; the PC uses
+ * them when that AI writes and they are one of its tier models, else the
+ * tier's.
  */
-export type SynthesisRequest = { agent?: string; off?: boolean };
+export type SynthesisRequest = { agent?: string; off?: boolean; model?: string; effort?: string };
 
 /** One AI's share of a run; it shows as soon as that AI is done. */
 export type RunPart = {
@@ -372,4 +375,7 @@ export type DebateRequest = {
   synthesis: string;
   moderator?: string;
   tier?: Tier;
+  /** The moderator model set for moderator (11-06), as SynthesisRequest's model and effort. */
+  moderatorModel?: string;
+  moderatorEffort?: string;
 };

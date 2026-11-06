@@ -89,6 +89,12 @@ test('the request carries the answers, the combined answer, its writer, the tier
   const long = turn();
   long.run!.parts[0].answer = '가'.repeat(30000);
   expect(new TextEncoder().encode(debateRequest(long, info(), 'k')!.answers[0].text).length).toBeLessThanOrEqual(65536);
+  // 11-06: the moderator model the turn asked for its writer, when that AI wrote.
+  const own = turn();
+  own.compare!.synth = { agent: 'codex', model: 'gpt-6.1-sol', effort: 'high' };
+  expect(debateRequest(own, info(), 'k')).toMatchObject({ moderator: 'codex', moderatorModel: 'gpt-6.1-sol', moderatorEffort: 'high' });
+  own.compare!.synth = { agent: 'claude', model: 'opus' }; // asked for Claude, Codex wrote
+  expect(debateRequest(own, info(), 'k')).not.toHaveProperty('moderatorModel');
 });
 
 test('the view follows the PC', () => {

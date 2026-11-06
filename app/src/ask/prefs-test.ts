@@ -6,13 +6,13 @@ const memory = () => {
   return { mem, kv };
 };
 
-const defaults = { tier: 'standard', off: [], models: {}, efforts: {}, pc: '', synth: true, synthAgent: 'claude', refine: false, debateNoticed: false };
+const defaults = { tier: 'standard', off: [], models: {}, efforts: {}, pc: '', synth: true, synthAgent: 'claude', synthModels: {}, refine: false, debateNoticed: false };
 
 test('ask prefs survive a round trip, the combined answer off included', async () => {
   const { kv } = memory();
   expect(await loadAskPrefs(kv)).toEqual(defaults);
-  const saved = { tier: 'deep', off: ['codex'], models: { claude: 'opus' }, efforts: { claude: 'high' }, pc: 'pc-1', synth: false, synthAgent: 'codex', refine: true, debateNoticed: true } as const;
-  await saveAskPrefs({ ...saved, off: [...saved.off], models: { ...saved.models }, efforts: { ...saved.efforts } }, kv);
+  const saved = { tier: 'deep', off: ['codex'], models: { claude: 'opus' }, efforts: { claude: 'high' }, pc: 'pc-1', synth: false, synthAgent: 'codex', synthModels: { codex: { model: 'gpt-6.1-sol', effort: 'high' } }, refine: true, debateNoticed: true } as const;
+  await saveAskPrefs({ ...saved, off: [...saved.off], models: { ...saved.models }, efforts: { ...saved.efforts }, synthModels: { codex: { ...saved.synthModels.codex } } }, kv);
   expect(await loadAskPrefs(kv)).toEqual(saved);
   for (const synthAgent of synthWriters) {
     await saveAskPrefs({ ...defaultAskPrefs, synthAgent }, kv);
@@ -88,4 +88,14 @@ test('an effort is kept only with its model', async () => {
   expect(await loadAskPrefs(kv)).toMatchObject({ models: { opencode: 'opencode-go/deepseek-v4.1-flash' }, efforts: {} });
   mem.set('ask.v1', JSON.stringify({ models: { opencode: 'flash', claude: 'opus' }, efforts: { opencode: 'low', codex: 'high', claude: 3 } }));
   expect((await loadAskPrefs(kv)).efforts).toEqual({ opencode: 'low' });
+});
+
+// 11-06: the moderator model set per AI; a pick without a model is dropped.
+test('moderator models keep only picks with a model', async () => {
+  const { mem, kv } = memory();
+  mem.set(
+    'ask.v1',
+    JSON.stringify({ synthModels: { claude: { model: 'opus', effort: 'high' }, codex: { model: 'gpt-6-luna' }, opencode: { effort: 'max' }, x: 'opus', y: { model: 3 } } }),
+  );
+  expect((await loadAskPrefs(kv)).synthModels).toEqual({ claude: { model: 'opus', effort: 'high' }, codex: { model: 'gpt-6-luna' } });
 });

@@ -17,7 +17,9 @@ import { agentName } from '@/api/agents';
 import { tiers } from '@/api/types';
 import { conversations, useConversations } from '@/ask/conversations';
 import { features } from '@/ask/features';
+import { modelLabel } from '@/ask/models';
 import { type AskPrefs, defaultAskPrefs, loadAskPrefs, saveAskPrefs, synthWriters } from '@/ask/prefs';
+import { type Asker, askers } from '@/ask/thread';
 import { loadPrefs, type Prefs, savePrefs } from '@/connections/prefs';
 import type { Connection } from '@/connections/store';
 import { t } from '@/i18n';
@@ -29,8 +31,9 @@ import { useSafeInsets } from '@/ui/keyboard';
 import { Group, Row, SectionLabel } from '@/ui/List';
 import { PCRow, useReach } from '@/ui/PCPickerSheet';
 import { PCSheet } from '@/ui/PCSheet';
+import { ModelSheet } from '@/ui/ModelSheet';
 import { Sheet } from '@/ui/Sheet';
-import { usePCs } from '@/ui/shell/pcs';
+import { currentPC, usePCs } from '@/ui/shell/pcs';
 import { themeChoices, themed, useAIColours, useTheme, useThemeChoice } from '@/ui/theme';
 
 export default function Settings() {
@@ -48,12 +51,19 @@ export default function Settings() {
   const [pcOpen, setPCOpen] = useState<Connection | null>(null);
   const [defaultsOpen, setDefaultsOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
+  // The current PC's AIs, for the moderator model's list (11-06); null while loading or without a PC.
+  const [pcAIs, setPCAIs] = useState<Asker[] | null>(null);
+  const [modelOpen, setModelOpen] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
       reload().catch(() => undefined);
       loadPrefs().then(setPrefs);
       loadAskPrefs().then(setAsk);
+      currentPC()
+        .then((p) => (p ? p.client.info() : null))
+        .then((info) => setPCAIs(info ? askers(info) : null))
+        .catch(() => setPCAIs(null));
     }, [reload]),
   );
 
@@ -74,6 +84,10 @@ export default function Settings() {
   };
 
   const defaults = settingsLine(prefs.model, prefs.effort);
+  // The moderator model (11-06): set per AI; the list is the moderator AI's on the current PC.
+  const moderator = pcAIs?.find((a) => a.agent === ask.synthAgent && a.canAsk) ?? null;
+  const moderatorPick = ask.synthModels[ask.synthAgent] ?? null;
+  const moderatorValue = moderatorPick ? modelLabel(moderatorPick) : t('ask.byTier');
   const version = Constants.expoConfig?.version ?? '';
 
   return (
@@ -139,6 +153,15 @@ export default function Settings() {
                 label={t('settings.synthAgentLong')}
               />
             </View>
+            {/* 11-06: the moderator AI's model and effort for the combined answer and debates; its list is the current PC's. */}
+            <Row
+              title={t('settings.moderatorModel')}
+              subtitle={moderator ? undefined : t('settings.moderatorModelNoPC')}
+              right={<Text style={s.value}>{moderatorValue}</Text>}
+              chevron={!!moderator}
+              onPress={moderator ? () => setModelOpen(true) : undefined}
+              accessibilityValue={{ text: moderatorValue }}
+            />
           </Group>
         </Section>
 
@@ -198,6 +221,23 @@ export default function Settings() {
 
       <PCSheet conn={pcOpen} onClose={() => setPCOpen(null)} onUnpaired={unpaired} />
       <DefaultsSheet open={defaultsOpen} onClose={() => setDefaultsOpen(false)} prefs={prefs} onChange={change} />
+      <ModelSheet
+        agent={modelOpen && moderator ? moderator.agent : null}
+        tierModels={moderator?.tiers ?? {}}
+        efforts={moderator?.efforts ?? {}}
+        tier={ask.tier}
+        value={moderatorPick}
+        title={t('settings.moderatorModelTitle', { name: agentName(ask.synthAgent) })}
+        ownHint={t('settings.moderatorModelHint')}
+        onClose={() => setModelOpen(false)}
+        onPick={(pick, close) => {
+          const synthModels = { ...ask.synthModels };
+          if (pick) synthModels[ask.synthAgent] = pick;
+          else delete synthModels[ask.synthAgent];
+          changeAsk({ ...ask, synthModels });
+          if (close) setModelOpen(false);
+        }}
+      />
       <Sheet open={infoOpen} onClose={() => setInfoOpen(false)} title={t('settings.compareSynth')} testID="compare-info">
         <View style={s.infoBody}>
           {features.refine && <Text style={s.infoText}>{t('settings.refineHint')}</Text>}

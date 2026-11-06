@@ -9,9 +9,11 @@
 // with judging (C6d): a value saved for it is no longer read.
 // debateNoticed (P2-5): the person has seen, once, what a debate sends
 // where. efforts (11-06): the effort picked with an AI's model; only used
-// with that model.
+// with that model. synthModels (11-06): the moderator model set per AI in
+// Settings, for the combined answer and debates when that AI moderates.
 
 import { tiers, type Tier } from '@/api/types';
+import type { ModelPick } from '@/ask/models';
 import { type KeyValue, secureKeyValue } from '@/connections/store';
 
 /**
@@ -30,6 +32,8 @@ export type AskPrefs = {
   pc: string;
   synth: boolean;
   synthAgent: string;
+  /** The moderator model set per AI ('' or absent: the tier's). */
+  synthModels: Record<string, ModelPick>;
   refine: boolean;
   /** The person has seen, once, what a debate sends where (P2-5). */
   debateNoticed: boolean;
@@ -44,9 +48,23 @@ export const defaultAskPrefs: AskPrefs = {
   pc: '',
   synth: true,
   synthAgent: 'claude',
+  synthModels: {},
   refine: false,
   debateNoticed: false,
 };
+
+/** picks keeps the saved model picks that have a model. */
+function picks(v: unknown): Record<string, ModelPick> {
+  const out: Record<string, ModelPick> = {};
+  if (v && typeof v === 'object') {
+    for (const [a, p] of Object.entries(v as Record<string, unknown>)) {
+      const model = p && typeof p === 'object' ? (p as ModelPick).model : undefined;
+      const effort = p && typeof p === 'object' ? (p as ModelPick).effort : undefined;
+      if (typeof model === 'string' && model) out[a] = typeof effort === 'string' && effort ? { model, effort } : { model };
+    }
+  }
+  return out;
+}
 
 /** strings keeps the non-empty string values of a saved map. */
 function strings(v: unknown): Record<string, string> {
@@ -69,6 +87,7 @@ export async function loadAskPrefs(kv: KeyValue = secureKeyValue): Promise<AskPr
       pc: typeof v.pc === 'string' ? v.pc : '',
       synth: typeof v.synth === 'boolean' ? v.synth : true,
       synthAgent: (synthWriters as readonly unknown[]).includes(v.synthAgent) ? v.synthAgent : 'claude',
+      synthModels: picks(v.synthModels),
       refine: typeof v.refine === 'boolean' ? v.refine : false,
       debateNoticed: v.debateNoticed === true,
     };

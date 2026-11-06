@@ -84,6 +84,12 @@ export function debateRequest(turn: Turn, info: Info | null, key: string): Debat
   };
   if (c.agent) req.moderator = c.agent;
   if (turn.req.tier) req.tier = turn.req.tier;
+  // The moderator model the turn asked for its writer (11-06), when that AI wrote.
+  const synth = turn.compare?.synth;
+  if (c.agent && synth?.agent === c.agent && synth.model) {
+    req.moderatorModel = synth.model;
+    if (synth.effort) req.moderatorEffort = synth.effort;
+  }
   return req;
 }
 
