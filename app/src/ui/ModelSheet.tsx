@@ -7,7 +7,8 @@
 // - an own pick: one of the tiers' models and any effort the PC lists for
 //   it, as pills that apply at once (the sheet stays open for the other).
 // Models show without their variant or provider (R-39). What to list comes
-// from ask/models.ts.
+// from ask/models.ts. Settings' moderator model (11-06) uses it too, with its
+// own title and words.
 
 import { StyleSheet, Text, View } from 'react-native';
 
@@ -45,6 +46,8 @@ export function ModelSheet({
   value,
   onPick,
   onClose,
+  title,
+  ownHint,
 }: {
   agent: string | null;
   tierModels: TierModels;
@@ -56,6 +59,10 @@ export function ModelSheet({
   /** close: a row was picked (back to the picker); the own pick's pills keep the sheet open. */
   onPick: (pick: ModelPick | null, close: boolean) => void;
   onClose: () => void;
+  /** The sheet's title ('{AI} model' by default; Settings' moderator model has its own). */
+  title?: string;
+  /** What an own pick does ('answers with…' by default). */
+  ownHint?: string;
 }) {
   const th = useTheme();
   const s = styles(th);
@@ -96,7 +103,7 @@ export function ModelSheet({
   };
 
   return (
-    <Sheet open onClose={onClose} title={t('ask.modelTitle', { name: agentName(agent) })} testID="model-sheet">
+    <Sheet open onClose={onClose} title={title ?? t('ask.modelTitle', { name: agentName(agent) })} testID="model-sheet">
       <View style={s.body}>
         <Group>
           {row('-', null, t('ask.byTier'), byTier, t('ask.byTier'))}
@@ -115,7 +122,7 @@ export function ModelSheet({
             <Text style={[s.ownTitle, own && s.on]} accessibilityRole="header">
               {t('ask.ownPick')}
             </Text>
-            <Text style={s.caption}>{t('ask.ownPickHint')}</Text>
+            <Text style={s.caption}>{ownHint ?? t('ask.ownPickHint')}</Text>
           </View>
           <Text style={s.label}>{t('ask.ownModel')}</Text>
           <PillChoice

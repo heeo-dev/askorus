@@ -167,6 +167,10 @@ type DebateSpec struct {
 	// an AI that answered on this PC moderates.
 	Moderator string
 	Tier      string // the ask tier of the moderator and the debaters; "" is standard
+	// ModeratorModel and ModeratorEffort are the moderator model the person
+	// set for Moderator (Settings, 11-06), used as SynthSpec's (withPick).
+	// The debaters keep the tier's.
+	ModeratorModel, ModeratorEffort string
 }
 
 // debate is one debate. Every field but the immutable ones (id, owner,
@@ -624,6 +628,7 @@ func (m *Manager) debateRun(d *debate) {
 		fail(debateFailure(core.ErrCodeNoJudge, ""))
 		return
 	}
+	w = m.withPick(w, spec.Moderator, spec.ModeratorModel, spec.ModeratorEffort)
 	if !slices.Contains(spec.Judges, w.Agent) {
 		task.Earlier = nil // part 20's rule: only an AI that got them
 	}

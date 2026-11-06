@@ -354,6 +354,40 @@ describe('settings', () => {
     expect(screen.getByRole('radio', { name: 'Codex' })).toBeChecked();
   });
 
+  // 11-06: the moderator model, per moderator AI, from the current PC's
+  // tier models; without that PC, it says so and does not open.
+  test('without a PC, the moderator model follows the tier and says when it can be picked', async () => {
+    await renderRouter(routes, { initialUrl: '/settings' });
+    expect(await screen.findByText('You can pick it once the PC with this AI is connected.')).toBeTruthy();
+    expect(screen.getByText('Moderator model')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Moderator model' })).toBeNull();
+    expect(screen.getByText('By tier')).toBeTruthy();
+  });
+
+  test('with the PC connected, the moderator model opens its sheet and is saved for that AI', async () => {
+    agent.enableAsk();
+    agent.enableSynth();
+    agent.askModels('codex', { quick: { model: 'gpt-6-luna', effort: 'medium' }, standard: { model: 'gpt-6.1-terra', effort: 'medium' } }, { 'gpt-6.1-terra': ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'] });
+    await pairedPC();
+    const user = userEvent.setup();
+    await renderRouter(routes, { initialUrl: '/settings' });
+    await user.press(await screen.findByRole('radio', { name: 'Codex' }));
+    const row = await screen.findByRole('button', { name: 'Moderator model' });
+    expect(row).toHaveAccessibilityValue({ text: 'By tier' });
+    await user.press(row);
+    expect(await screen.findByRole('header', { name: 'Moderator model: Codex' })).toBeTruthy();
+    expect(screen.getByText('Writes the combined answer and leads debates with this model and effort at every tier.')).toBeTruthy();
+    // Its own pick: terra at high; the sheet stays open.
+    await user.press(within(screen.getByLabelText('Pick your own: Model')).getByRole('radio', { name: 'gpt-6.1-terra' }));
+    await user.press(within(screen.getByLabelText('Pick your own: Effort')).getByRole('radio', { name: 'high' }));
+    await waitFor(async () => expect((await loadAskPrefs()).synthModels).toEqual({ codex: { model: 'gpt-6.1-terra', effort: 'high' } }));
+    await user.press(screen.getByRole('button', { name: 'Close' }));
+    expect(await screen.findByRole('button', { name: 'Moderator model' })).toHaveAccessibilityValue({ text: 'gpt-6.1-terra · high' });
+    // Kept per AI: Claude still follows the tier.
+    await user.press(screen.getByRole('radio', { name: 'Claude' }));
+    expect(await screen.findByRole('button', { name: 'Moderator model' })).toHaveAccessibilityValue({ text: 'By tier' });
+  });
+
   // Milestone C: refining is off since 2026-11-04 (features.ts), and
   // Settings shows nothing of it: the moderator only writes the combined answer.
   test('milestone C: with the refining feature off, Settings has no refine switch or hint', async () => {

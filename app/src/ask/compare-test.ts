@@ -383,6 +383,12 @@ test('canSynthesize, writerFor and synthRequest', () => {
   expect(synthRequest(three, { on: true, agent: 'opencode' })).toEqual({ agent: 'opencode' });
   expect(synthRequest(three, { on: true, agent: 'gemini' })).toEqual({});
   expect(synthRequest(three, { on: false, agent: 'opencode' })).toEqual({ off: true });
+  // 11-06: the moderator model set for the writer goes with it; set for another AI, it does not.
+  const models = { opencode: { model: 'opencode-go/deepseek-v4-pro', effort: 'max' }, claude: { model: 'opus' } };
+  expect(synthRequest(three, { on: true, agent: 'opencode', models })).toEqual({ agent: 'opencode', model: 'opencode-go/deepseek-v4-pro', effort: 'max' });
+  expect(synthRequest(three, { on: true, agent: 'claude', models })).toEqual({ agent: 'claude', model: 'opus' });
+  expect(synthRequest(three, { on: true, agent: 'gemini', models })).toEqual({});
+  expect(synthRequest(three, { on: true, agent: 'codex', models })).toEqual({ agent: 'codex' });
 });
 
 test('comparing: the comparison runs; a done or failed one whose answer is being written is not comparing', () => {

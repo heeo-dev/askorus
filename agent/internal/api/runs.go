@@ -101,10 +101,20 @@ type RunCompare struct {
 
 // RunSynthesis is RunCompare.synthesis: {"agent": "claude"}, the AI that
 // should write the combined answer ("" lets the agent pick among the
-// asked AIs), or {"off": true}. The tier is the run's.
+// asked AIs), or {"off": true}. The tier is the run's. Model and effort
+// (11-06) are the moderator model set for agent: used when that AI writes
+// and the model is one of its tier models, else the tier's.
 type RunSynthesis struct {
-	Agent string `json:"agent,omitempty"`
-	Off   bool   `json:"off,omitempty"`
+	Agent  string `json:"agent,omitempty"`
+	Off    bool   `json:"off,omitempty"`
+	Model  string `json:"model,omitempty"`
+	Effort string `json:"effort,omitempty"`
+}
+
+// badSynthModel: a moderator model or effort that is not a model name or
+// an effort level, or one without the AI it was set for.
+func badSynthModel(agent, model, effort string) bool {
+	return (model != "" && (agent == "" || !core.ValidAskModel(model))) || (effort != "" && (model == "" || !core.ValidAskEffort(effort)))
 }
 
 // RunStatus is the answer to POST /v1/runs (202) and GET /v1/runs/{runId}.
@@ -161,6 +171,9 @@ func (s *Server) parseCompare(raw json.RawMessage) (*RunCompare, *judge.Error) {
 	if sy := c.Synthesis; sy != nil && sy.Agent != "" && (!agentNameRe.MatchString(sy.Agent) || s.adapterFor(sy.Agent) == nil) {
 		return nil, bad
 	}
+	if sy := c.Synthesis; sy != nil && badSynthModel(sy.Agent, sy.Model, sy.Effort) {
+		return nil, bad
+	}
 	return &c, nil
 }
 
@@ -189,7 +202,7 @@ func (s *Server) attachCompare(owner, question string, run runs.Run, targets []R
 		Earlier: c.Earlier, Judges: judges, Asked: asked,
 	}
 	if sy := c.Synthesis; sy != nil {
-		spec.Synth = &compares.SynthSpec{Off: sy.Off, Agent: sy.Agent, Tier: run.Tier}
+		spec.Synth = &compares.SynthSpec{Off: sy.Off, Agent: sy.Agent, Tier: run.Tier, Model: sy.Model, Effort: sy.Effort}
 	}
 	_, err := s.compares.Attach(spec)
 	switch {

@@ -1077,6 +1077,10 @@ func TestRunSynthesisParse(t *testing.T) {
 		"agent number":  map[string]any{"agent": 5},
 		"off string":    map[string]any{"off": "yes"},
 		"agent as flag": map[string]any{"agent": "--claude"},
+		// 11-06: a moderator model goes with the AI it was set for.
+		"model without its AI": map[string]any{"model": "claude-deep"},
+		"model as flag":        map[string]any{"agent": "claude", "model": "--x"},
+		"effort without model": map[string]any{"agent": "claude", "effort": "high"},
 	} {
 		st := startRun(t, e, map[string]any{"mode": "ask", "prompt": "q " + name, "compare": map[string]any{"synthesis": synth}})
 		if st.CompareError == nil || st.CompareError.Code != CodeBadCompare || st.ComparisonID != "" || st.CompareError.Message != msgBadCompare {
@@ -1116,6 +1120,11 @@ func TestDirectComparisonSynthesis(t *testing.T) {
 	for name, synth := range map[string]any{
 		"unknown AI": map[string]any{"agent": "gemini"},
 		"bad tier":   map[string]any{"tier": "fast"},
+		// 11-06: a moderator model goes with the AI it was set for.
+		"model without its AI": map[string]any{"model": "claude-deep"},
+		"not a model name":     map[string]any{"agent": "claude", "model": "-x"},
+		"effort without model": map[string]any{"agent": "claude", "effort": "high"},
+		"not an effort level":  map[string]any{"agent": "claude", "model": "claude-deep", "effort": "HIGH"},
 	} {
 		body := directBody("")
 		body["synthesis"] = synth

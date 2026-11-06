@@ -374,7 +374,7 @@ export default function Ask() {
       models: prefs.models,
       efforts: prefs.efforts,
       info,
-      synth: { on: prefs.synth, agent: prefs.synthAgent },
+      synth: { on: prefs.synth, agent: prefs.synthAgent, models: prefs.synthModels },
       refine: features.refine ? { on: prefs.refine, agent: prefs.synthAgent } : undefined,
       at: Date.now(),
     });

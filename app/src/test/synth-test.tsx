@@ -121,6 +121,14 @@ test('the writing AI picked in Settings is asked for and writes', async () => {
   expect(agent.synthCalls).toBe(1);
 });
 
+// 11-06: the moderator model set in Settings for the writer goes with the question.
+test('the moderator model set for the writing AI goes with the question', async () => {
+  const user = await open({ synthAgent: 'codex', synthModels: { codex: { model: 'codex-deep', effort: 'high' }, claude: { model: 'opus' } } });
+  await ask(user, 'q');
+  await written();
+  expect(agent.runRequests()[0].compare.synthesis).toEqual({ agent: 'codex', model: 'codex-deep', effort: 'high' });
+});
+
 test('with the combined answer off: no request for one, and Write one sends it', async () => {
   const user = await open({ synth: false, synthAgent: 'opencode' });
   // The intro does not promise one.
