@@ -107,6 +107,9 @@ type Task struct {
 	Agent   string
 	Session string
 	Ask     func(ctx context.Context) (core.AskResult, error)
+	// OneOff: the ask keeps no conversation (a question to the moderator,
+	// #25), so its part never names a session to carry on.
+	OneOff bool
 }
 
 // Manager keeps runs in memory. Runs do not survive an agent restart.
@@ -228,7 +231,7 @@ func (m *Manager) runPart(r *Run, i int, t Task) {
 	default:
 		p.Status, p.Error = Failed, partError(err)
 	}
-	if res.SessionID != "" {
+	if res.SessionID != "" && !t.OneOff {
 		// Kept on failure too: the conversation may hold a partial answer.
 		p.Session = core.MakeID(t.Agent, res.SessionID)
 	}

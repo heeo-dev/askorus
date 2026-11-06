@@ -362,3 +362,20 @@ func TestOnEndPanicIsRecovered(t *testing.T) {
 		time.Sleep(5 * time.Millisecond)
 	}
 }
+
+// A one-off ask (a question to the moderator, #25) keeps no conversation:
+// its part names no session even when the AI reports one.
+func TestOneOffPartHasNoSession(t *testing.T) {
+	m := NewManager()
+	r, err := m.Start(Spec{Owner: "phone", Mode: core.ModeAsk, Tasks: []Task{
+		{Agent: "codex", Ask: answer("x1", "Seoul."), OneOff: true},
+		{Agent: "claude", Ask: answer("c1", "서울.")},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r = wait(t, m, "phone", r.ID)
+	if r.Parts[0].Session != "" || r.Parts[0].Answer != "Seoul." || r.Parts[1].Session != "claude:c1" {
+		t.Errorf("parts: %+v", r.Parts)
+	}
+}

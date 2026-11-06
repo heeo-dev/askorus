@@ -342,6 +342,9 @@ type InfoResponse struct {
 	// follow-up, a comparison and a debate (#29): the phone sends one only
 	// then.
 	Context *ContextInfo `json:"context,omitempty"`
+	// Moderator is there when the agent asks the moderator alone (#25):
+	// the phone offers '사회자' in the follow-up picker only then.
+	Moderator *ModeratorInfo `json:"moderator,omitempty"`
 }
 
 // IntegrationInfo is one service outside the PC the agent would send to.
@@ -361,6 +364,7 @@ func (s *Server) info(w http.ResponseWriter, r *http.Request) {
 		Integrations: []IntegrationInfo{},
 		Debate:       s.debateInfo(),
 		Context:      contextInfo(),
+		Moderator:    s.moderatorInfo(),
 	}
 	// The CLI's info calls Announce too, so the two cannot disagree on
 	// the ask tiers or on which AIs write combined answers.
