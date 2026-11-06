@@ -472,6 +472,16 @@ func TestDebateModerator(t *testing.T) {
 	if got.Status != DebateFailed || got.Moderator != "codex" || got.Error.Code != core.ErrCodeBadModel || got.Tier != core.TierDeep {
 		t.Errorf("another company: %+v", got)
 	}
+	// 11-06: the moderator model set for the moderator writes the plan; the
+	// debaters keep the tier's.
+	script = &moderatorScript{plan: []string{"NONE"}}
+	m, _, cl, _, _, _ = debateRig(t, script, nil)
+	spec = debateSpec("phone", "")
+	spec.Moderator, spec.Tier, spec.ModeratorModel, spec.ModeratorEffort = "claude", core.TierQuick, "claude-deep", ""
+	got = waitDebate(t, m, "phone", startDebate(t, m, spec).ID)
+	if calls := cl.synthCalls(); got.Moderator != "claude" || got.Model != "claude-deep" || len(calls) == 0 || calls[0].Model != "claude-deep" {
+		t.Errorf("moderator model: %+v %+v", got, calls)
+	}
 }
 
 func TestDebateCloseAndLimit(t *testing.T) {

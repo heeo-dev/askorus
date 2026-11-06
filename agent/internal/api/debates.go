@@ -58,17 +58,20 @@ type DebateAnswer struct {
 // DebateRequest is the body of POST /v1/debates. ClientDebateID is the
 // phone's own id for it: the same request again returns the first debate.
 // Synthesis is the combined answer's text the debate starts from. Judges
-// are the AIs Earlier may go to, as a comparison's. Unknown fields are
-// ignored (principle 4).
+// are the AIs Earlier may go to, as a comparison's. ModeratorModel and
+// ModeratorEffort (11-06) are the moderator model set for Moderator, as
+// RunSynthesis's model and effort. Unknown fields are ignored (principle 4).
 type DebateRequest struct {
-	ClientDebateID string         `json:"clientDebateId,omitempty"`
-	Question       string         `json:"question"`
-	Earlier        []string       `json:"earlier,omitempty"`
-	Judges         []string       `json:"judges,omitempty"`
-	Answers        []DebateAnswer `json:"answers"`
-	Synthesis      string         `json:"synthesis"`
-	Moderator      string         `json:"moderator,omitempty"`
-	Tier           string         `json:"tier,omitempty"`
+	ClientDebateID  string         `json:"clientDebateId,omitempty"`
+	Question        string         `json:"question"`
+	Earlier         []string       `json:"earlier,omitempty"`
+	Judges          []string       `json:"judges,omitempty"`
+	Answers         []DebateAnswer `json:"answers"`
+	Synthesis       string         `json:"synthesis"`
+	Moderator       string         `json:"moderator,omitempty"`
+	Tier            string         `json:"tier,omitempty"`
+	ModeratorModel  string         `json:"moderatorModel,omitempty"`
+	ModeratorEffort string         `json:"moderatorEffort,omitempty"`
 }
 
 // DebateStatus is the answer to the debate routes: the debate and, while
@@ -103,6 +106,10 @@ func (s *Server) startDebate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, CodeBadRequest, "clientDebateId is too long")
 		return
 	}
+	if badSynthModel(req.Moderator, req.ModeratorModel, req.ModeratorEffort) {
+		writeError(w, http.StatusBadRequest, CodeBadRequest, "moderatorModel and moderatorEffort must be a model name and an effort level, with the moderator they were set for")
+		return
+	}
 	if _, err := s.askFolder(); err != nil {
 		// The moderator and the debaters run in the ask folder's judge
 		// folder.
@@ -115,6 +122,7 @@ func (s *Server) startDebate(w http.ResponseWriter, r *http.Request) {
 	spec := compares.DebateSpec{
 		Owner: deviceOf(r), Key: req.ClientDebateID, Question: req.Question, Earlier: req.Earlier, Judges: req.Judges,
 		Combined: req.Synthesis, Moderator: req.Moderator, Tier: req.Tier,
+		ModeratorModel: req.ModeratorModel, ModeratorEffort: req.ModeratorEffort,
 	}
 	for _, a := range req.Answers {
 		spec.Answers = append(spec.Answers, compares.DebateAnswer{Agent: a.Agent, Via: a.Via, Model: a.Model, Text: a.Text})

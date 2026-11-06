@@ -185,6 +185,9 @@ func TestDebateAPIRefused(t *testing.T) {
 	bad("no combined", func(b map[string]any) { b["synthesis"] = "" }, 400, CodeBadRequest)
 	bad("bad tier", func(b map[string]any) { b["tier"] = "max" }, 400, CodeBadRequest)
 	bad("unknown moderator", func(b map[string]any) { b["moderator"] = "gemini" }, 400, CodeBadRequest)
+	// 11-06: the moderator model goes with the moderator it was set for.
+	bad("model without moderator", func(b map[string]any) { delete(b, "moderator"); b["moderatorModel"] = "claude-deep" }, 400, "moderatorModel")
+	bad("bad effort", func(b map[string]any) { b["moderatorModel"] = "claude-deep"; b["moderatorEffort"] = "HIGH" }, 400, "moderatorModel")
 	bad("big combined", func(b map[string]any) { b["synthesis"] = strings.Repeat("a", compares.MaxCombinedBytes+1) }, 413, CodeBadRequest)
 	bad("long id", func(b map[string]any) { b["clientDebateId"] = strings.Repeat("k", maxClientID+1) }, 400, CodeBadRequest)
 	if w := e.postRaw(e.token, "/v1/debates", "{"); w.Code != 400 {

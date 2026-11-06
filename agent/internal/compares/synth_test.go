@@ -332,6 +332,81 @@ func TestSynthWriterDirect(t *testing.T) {
 	}
 }
 
+// efforts is a writer that lists its efforts (core.EffortLister).
+type effortWriter struct {
+	*writerAI
+	efforts map[string][]string
+}
+
+func (e effortWriter) AskEfforts() map[string][]string { return e.efforts }
+
+// 11-06: the moderator model set in Settings writes when it is one of the
+// AI's tier models with an effort it takes; anything else, or another AI
+// writing, keeps the tier's model.
+func TestSynthModeratorModel(t *testing.T) {
+	cl, cx, oc := newWriter("claude", "anthropic", "Claude"), newWriter("codex", "openai", "Codex"), newWriter("opencode", "deepseek", "OpenCode")
+	ais := []core.Adapter{effortWriter{cl, map[string][]string{"claude-standard": {"low", "medium", "high"}}}, cx, oc}
+	fr := &fakeRuns{}
+	m, _ := newTestManager(t, ais, func(o *Options) { o.Runs = fr })
+	n := 0
+	write := func(spec SynthSpec) (Synthesis, core.SynthRequest) {
+		t.Helper()
+		n++
+		run := endedRun(fmt.Sprintf("run-%d", n), threeParts()...)
+		run.Tier = core.TierQuick
+		fr.set(run)
+		rs := runSpec("phone", run.ID)
+		rs.Synth = &spec
+		id, _ := m.Attach(rs)
+		s := synthOf(t, waitIdle(t, m, "phone", id))
+		var req core.SynthRequest
+		for _, w := range []*writerAI{cl, cx, oc} {
+			if calls := w.synthCalls(); len(calls) > 0 {
+				req = calls[len(calls)-1]
+			}
+		}
+		return s, req
+	}
+	cases := []struct {
+		name        string
+		spec        SynthSpec
+		model, effo string
+	}{
+		{"by tier", SynthSpec{Agent: "claude"}, "claude-quick", "low"},
+		{"a tier model with a listed effort", SynthSpec{Agent: "claude", Model: "claude-standard", Effort: "high"}, "claude-standard", "high"},
+		{"no effort: the model's tier effort", SynthSpec{Agent: "claude", Model: "claude-standard"}, "claude-standard", "medium"},
+		{"an effort it does not list", SynthSpec{Agent: "claude", Model: "claude-standard", Effort: "max"}, "claude-quick", "low"},
+		{"not a tier model", SynthSpec{Agent: "claude", Model: "claude-x", Effort: "low"}, "claude-quick", "low"},
+		// Without a list, only the efforts the tiers run the model with.
+		{"no list", SynthSpec{Agent: "codex", Model: "codex-standard", Effort: "medium"}, "codex-standard", "medium"},
+		{"no list, another effort", SynthSpec{Agent: "codex", Model: "codex-standard", Effort: "high"}, "codex-quick", "low"},
+	}
+	for _, c := range cases {
+		s, req := write(c.spec)
+		if s.Status != SynthDone || s.Agent != c.spec.Agent || s.Model != c.model || req.Model != c.model || req.Effort != c.effo {
+			t.Errorf("%s: synthesis %+v, request %s/%s", c.name, s, req.Model, req.Effort)
+		}
+	}
+	// Writing later: the same AI keeps the model set for it; another AI
+	// drops it.
+	for _, c := range []struct{ agent, model string }{{"", "claude-standard"}, {"claude", "claude-standard"}, {"codex", "codex-quick"}} {
+		n++
+		run := endedRun(fmt.Sprintf("run-%d", n), threeParts()...)
+		run.Tier = core.TierQuick
+		fr.set(run)
+		rs := runSpec("phone", run.ID)
+		rs.Synth = &SynthSpec{Off: true, Agent: "claude", Model: "claude-standard", Effort: "high"}
+		id, _ := m.Attach(rs)
+		waitIdle(t, m, "phone", id)
+		if _, err := m.Synthesize("phone", id, c.agent); err != nil {
+			t.Fatal(err)
+		}
+		if s := synthOf(t, waitIdle(t, m, "phone", id)); s.Status != SynthDone || s.Model != c.model {
+			t.Errorf("write again with %q: %+v", c.agent, s)
+		}
+	}
+}
+
 // The writer's model is its ask tier model: the run's tier, the settings'
 // override, an empty effort passed on as it is.
 func TestSynthTierModel(t *testing.T) {

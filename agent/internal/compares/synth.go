@@ -40,6 +40,10 @@ type SynthSpec struct {
 	Off   bool
 	Agent string // the AI the person picked; "" lets the agent pick
 	Tier  string // the ask tier whose model writes; "" or not valid: standard
+	// Model and Effort are the moderator model the person set for Agent
+	// (Settings, 11-06): used when Agent writes and the model is one of its
+	// tier models with an effort it takes (withPick), else the tier's.
+	Model, Effort string
 }
 
 // Synthesis is a comparison's combined answer as the snapshot shows it.
@@ -283,8 +287,9 @@ func (m *Manager) Synthesize(owner, id, agent string) (Comparison, error) {
 	}
 	spec := c.synth.spec
 	spec.Off = false
-	if agent != "" {
-		spec.Agent = agent
+	if agent != "" && agent != spec.Agent {
+		// The moderator model was set for the AI asked for before.
+		spec.Agent, spec.Model, spec.Effort = agent, "", ""
 	}
 	c.synth = newSynth(&spec)
 	// An explicit write: an earlier cancel of the comparison does not stop
@@ -356,6 +361,7 @@ func (m *Manager) synthRun(c *comparison) (string, *judge.Error) {
 	if !ok {
 		return "", synthFailure(core.ErrCodeNoJudge, "")
 	}
+	w = m.withPick(w, in.spec.Agent, in.spec.Model, in.spec.Effort)
 	// The earlier questions are the ones every listed AI already got (part
 	// 20, R-35; the request's judges, spec.Listed): a writer that is not
 	// one of them gets none.
@@ -492,6 +498,49 @@ func (m *Manager) synthInputLocked(c *comparison) synthInput {
 // first AI of in.allowed that writes, else, for a direct comparison
 // that lists no AI, the first AI that writes. An AI that was not asked
 // never writes.
+// withPick gives w the moderator model the person set for agent (Settings,
+// 11-06): only when w is that AI, the model is one of its tier models and
+// the effort one that model takes (its AskEfforts list, or its tiers'
+// efforts without one; none: its first tier's), and its company is known.
+// Anything else keeps the tier's model: the phone only offers these, so
+// a pick the PC no longer has falls back rather than fails.
+func (m *Manager) withPick(w Writer, agent, model, effort string) Writer {
+	if model == "" || w.Agent != agent || w.Judger == nil {
+		return w
+	}
+	asker, ok := m.adapter(agent).(core.Asker)
+	if !ok {
+		return w
+	}
+	var uses []string
+	known := false
+	for _, x := range core.Tiers {
+		if t := asker.AskTiers()[x]; t.Model == model {
+			known = true
+			uses = append(uses, t.Effort)
+		}
+	}
+	if !known {
+		return w
+	}
+	if effort == "" {
+		effort = uses[0]
+	}
+	allowed := uses
+	if l, ok := m.adapter(agent).(core.EffortLister); ok && len(l.AskEfforts()[model]) > 0 {
+		allowed = l.AskEfforts()[model]
+	}
+	if effort != "" && !slices.Contains(allowed, effort) {
+		return w
+	}
+	family := w.Judger.Family(model)
+	if family == "" {
+		return w
+	}
+	w.Model, w.Effort, w.Family = model, effort, family
+	return w
+}
+
 func pickWriter(writers []Writer, in synthInput) (Writer, bool) {
 	find := func(agent string) (Writer, bool) {
 		i := slices.IndexFunc(writers, func(w Writer) bool { return w.Agent == agent })

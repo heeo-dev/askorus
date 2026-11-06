@@ -66,6 +66,9 @@ type ComparisonSynthesis struct {
 	Agent string `json:"agent,omitempty"`
 	Off   bool   `json:"off,omitempty"`
 	Tier  string `json:"tier,omitempty"`
+	// Model and effort: the moderator model set for agent (11-06), as RunSynthesis's.
+	Model  string `json:"model,omitempty"`
+	Effort string `json:"effort,omitempty"`
 }
 
 // SynthesisRequest is the optional body of POST
@@ -80,7 +83,7 @@ const maxSynthesisBody = 4 << 10
 
 // Fixed messages of the combined answer's 400s.
 const (
-	msgBadComparisonSynth = "synthesis must be {agent, off, tier} with an AI of this PC and a tier"
+	msgBadComparisonSynth = "synthesis must be {agent, off, tier, model, effort} with an AI of this PC, a tier, and a model and effort only with their AI"
 	msgBadSynthesisBody   = "body must be empty or {agent} with an AI of this PC"
 )
 
@@ -117,7 +120,7 @@ func (s *Server) startComparison(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, CodeBadRequest, "clientComparisonId is too long")
 		return
 	}
-	if sy := req.Synthesis; sy != nil && ((sy.Agent != "" && s.adapterFor(sy.Agent) == nil) || (sy.Tier != "" && !core.ValidTier(sy.Tier))) {
+	if sy := req.Synthesis; sy != nil && ((sy.Agent != "" && s.adapterFor(sy.Agent) == nil) || (sy.Tier != "" && !core.ValidTier(sy.Tier)) || badSynthModel(sy.Agent, sy.Model, sy.Effort)) {
 		writeError(w, http.StatusBadRequest, CodeBadRequest, msgBadComparisonSynth)
 		return
 	}
@@ -137,7 +140,7 @@ func (s *Server) startComparison(w http.ResponseWriter, r *http.Request) {
 		spec.Answers = append(spec.Answers, compares.DirectAnswer{ID: a.ID, Agent: a.Agent, Via: a.Via, Model: a.Model, Text: a.Text})
 	}
 	if sy := req.Synthesis; sy != nil {
-		spec.Synth = &compares.SynthSpec{Off: sy.Off, Agent: sy.Agent, Tier: sy.Tier}
+		spec.Synth = &compares.SynthSpec{Off: sy.Off, Agent: sy.Agent, Tier: sy.Tier, Model: sy.Model, Effort: sy.Effort}
 	}
 	c, err := s.compares.Start(spec)
 	var bad *compares.SpecError
