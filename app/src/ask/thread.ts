@@ -10,7 +10,7 @@
 // followCompare follow the PC and patch the turn; the screen only draws.
 
 import { type AgentClient, AgentError, CancelledError } from '@/api/client';
-import type { Comparison, Debate, Info, RequestContext, Run, RunCompare, RunPart, RunRequest, RunTarget, SynthesisRequest, Tier } from '@/api/types';
+import type { Comparison, Debate, Info, RequestContext, Run, RunCompare, RunModerator, RunPart, RunRequest, RunTarget, SynthesisRequest, Tier } from '@/api/types';
 
 import {
   compares,
@@ -177,8 +177,21 @@ export function newTurn(o: {
   refine?: { on: boolean; agent: string };
   /** The conversation record to send with it (#29); null or left out sends none. */
   context?: RequestContext | null;
+  /** A question to the moderator alone (#25): that AI, no session, no comparison. */
+  moderator?: RunModerator;
   at: number;
 }): Turn {
+  if (o.moderator) {
+    const m = o.moderator;
+    const target: RunTarget = { agent: m.agent };
+    if (m.model) {
+      target.model = m.model;
+      if (m.effort) target.effort = m.effort;
+    }
+    const req: RunRequest = { mode: 'ask', prompt: o.question, tier: o.tier, agents: [target], clientRunId: o.id, moderator: m };
+    if (o.context) req.context = o.context;
+    return { id: o.id, question: o.question, req, agents: [m.agent], at: o.at, moderator: true };
+  }
   const req = request({ question: o.question, tier: o.tier, to: o.to, on: o.on, turns: o.turns, models: o.models, efforts: o.efforts, id: o.id });
   const asked = (req.agents ?? []).map((a) => a.agent);
   const turn: Turn = { id: o.id, question: o.question, req, agents: asked, at: o.at };
@@ -202,7 +215,8 @@ export function newTurn(o: {
  * left it out this time, or there is nothing to carry.
  */
 export function carry(turn: Turn, before: Turn[], info: Info | null, on: boolean): Turn {
-  const context = on && !turn.noRecord ? buildRecord(before, info) : null;
+  // A question to the moderator always reads the record (#25): its company already gets every answer.
+  const context = turn.moderator || (on && !turn.noRecord) ? buildRecord(before, info) : null;
   const { context: _, ...req } = turn.req;
   return { ...turn, req: context ? { ...req, context } : req };
 }

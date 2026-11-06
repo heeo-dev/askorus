@@ -74,6 +74,24 @@ export function finalAnswer(turn: Turn): string {
   return ready.length === 1 ? (ready[0].answer ?? '') : '';
 }
 
+/** The limits of a moderator ask's answers (also in /v1/info's moderator). */
+export const maxModeratorAnswers = 6;
+export const maxModeratorAnswerBytes = 8192;
+
+/**
+ * moderatorAnswers are the answers a question to the moderator reads (#25):
+ * those of the last question to the AIs (not one to the moderator) that
+ * came, each cut to 8 KiB, at most 6.
+ */
+export function moderatorAnswers(turns: Turn[]): { agent: string; text: string }[] {
+  const last = [...sentTurns(turns)].reverse().find((x) => !x.moderator && readyParts(x).length > 0);
+  if (!last) return [];
+  return readyParts(last)
+    .slice(0, maxModeratorAnswers)
+    .map((p) => ({ agent: p.agent, text: clean(p.answer ?? '', maxModeratorAnswerBytes) }))
+    .filter((a) => a.text);
+}
+
 /**
  * concluding: what the turn concludes is still coming, its combined answer
  * or its debate; a follow-up that carries the record waits for it (#29),

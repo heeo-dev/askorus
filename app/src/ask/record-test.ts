@@ -5,7 +5,7 @@ import type { Debate, DebatePoint, Info } from '@/api/types';
 
 import { combining, directRequest } from './compare';
 import { debateRequest } from './debate';
-import { buildRecord, concluding, finalAnswer, maxSettled, settledOf } from './record';
+import { buildRecord, concluding, finalAnswer, maxSettled, moderatorAnswers, settledOf } from './record';
 import { carry, newTurn, type Turn } from './thread';
 
 const info = (context = true) =>
@@ -179,4 +179,37 @@ test('what a turn concludes is still coming: its combined answer, then its debat
   // A running debate comes first.
   expect(concluding([writing, turn('8', { debate: { status: 'debating', pollAfterMs: 1000 } })])).toBe('debate');
   expect(concluding([turn('9')])).toBeNull();
+});
+
+// #25: a question to the moderator reads the last answers to the AIs and always the record.
+test('the moderator reads the last answers to the AIs (not its own), cut to 8 KiB, and always the record', () => {
+  const t1 = turn('1');
+  t1.run!.parts[0].answer = '가'.repeat(5000); // 15,000 bytes
+  const mod = { ...turn('2', { agents: ['claude'] }), moderator: true } as Turn;
+  const got = moderatorAnswers([t1, mod]);
+  expect(got.map((a) => a.agent)).toEqual(['claude', 'codex']);
+  expect(new TextEncoder().encode(got[0].text).length).toBeLessThanOrEqual(8192);
+  expect(got[1].text).toBe('codex answer 1');
+  expect(moderatorAnswers([])).toEqual([]);
+
+  const next = newTurn({
+    id: 't3',
+    question: 'What did they differ on?',
+    tier: 'quick',
+    to: { agents: ['claude'] },
+    on: ['claude', 'codex'],
+    turns: [t1, mod],
+    models: { claude: 'opus' },
+    info: info(),
+    synth: { on: true, agent: 'claude' },
+    moderator: { agent: 'claude', model: 'claude-sonnet', effort: 'high', answers: got },
+    at: 1,
+  });
+  expect(next.moderator).toBe(true);
+  expect(next.compare).toBeUndefined();
+  expect(next.req).toMatchObject({ agents: [{ agent: 'claude', model: 'claude-sonnet', effort: 'high' }], tier: 'quick', moderator: { agent: 'claude' } });
+  expect(next.req.agents?.[0].session).toBeUndefined();
+  // The record goes even with the setting off, or left out this time.
+  expect(carry(next, [t1, mod], info(), false).req.context).toMatchObject({ earlier: ['Question 1?', 'Question 2?'] });
+  expect(carry({ ...next, noRecord: true }, [t1, mod], info(), false).req.context).toBeTruthy();
 });

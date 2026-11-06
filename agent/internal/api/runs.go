@@ -39,7 +39,7 @@ const (
 	// maxRunBody: JSON escapes (\n, \") make the body longer than the
 	// prompt; compare's earlier questions (3 of 4 KiB) take up to 32 KiB
 	// more, escaped the same way.
-	maxRunBody  = 2*maxPrompt + 8<<10 + 32<<10 + maxContextBody
+	maxRunBody  = 2*maxPrompt + 8<<10 + 32<<10 + maxContextBody + maxModeratorBody
 	maxClientID = 64
 	// compare's limits: the earlier questions every listed AI gets
 	// (internal/judge's limits) and the judges a phone may name.
@@ -81,6 +81,9 @@ type RunRequest struct {
 	// Context is a follow-up's conversation record (#29): it goes to the
 	// answering AIs before the question, and to the combined answer.
 	Context *RequestContext `json:"context,omitempty"`
+	// Moderator sends the question to the moderator AI alone (#25): agents,
+	// compare and refine are then not read. See moderator.go.
+	Moderator *RunModerator `json:"moderator,omitempty"`
 }
 
 // RunRefine is RunRequest.refine.
@@ -326,13 +329,30 @@ func (s *Server) startRun(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, CodeBadRequest, msgBadContext)
 		return
 	}
-	targets, askers, ok := s.askersFor(w, r.Context(), req.Agents)
+	// A question to the moderator (#25) goes to that AI alone.
+	mod := req.Moderator
+	agents := req.Agents
+	if mod != nil {
+		if !checkModerator(mod) {
+			writeError(w, http.StatusBadRequest, CodeBadRequest, msgBadModerator)
+			return
+		}
+		agents = []RunTarget{{Agent: mod.Agent, Model: mod.Model, Effort: mod.Effort}}
+	}
+	targets, askers, ok := s.askersFor(w, r.Context(), agents)
 	if !ok {
 		return
 	}
 	// compare is checked before the ask starts but never stops it.
-	cmp, cmpErr := s.parseCompare(req.Compare)
+	var cmp *RunCompare
+	var cmpErr *judge.Error
+	if mod == nil {
+		cmp, cmpErr = s.parseCompare(req.Compare)
+	}
 	folder, err := s.askFolder()
+	if err == nil && mod != nil {
+		folder, err = s.moderatorFolder()
+	}
 	if err != nil {
 		if s.o.Logger != nil {
 			s.o.Logger.Error("ask folder", "err", err.Error())
@@ -351,7 +371,7 @@ func (s *Server) startRun(w http.ResponseWriter, r *http.Request) {
 	// it is never refined twice.
 	var refiner *compares.RunRefiner
 	runID := make(chan string, 1)
-	if rf := req.Refine; s.o.Refine && rf != nil && !rf.Off && s.compares != nil {
+	if rf := req.Refine; s.o.Refine && rf != nil && !rf.Off && s.compares != nil && mod == nil {
 		var asked []string
 		for _, t := range targets {
 			asked = append(asked, t.Agent)
@@ -369,16 +389,32 @@ func (s *Server) startRun(w http.ResponseWriter, r *http.Request) {
 			})
 	}
 	tasks := make([]runs.Task, len(targets))
+	var modAnswers []judge.ModeratorAnswer
+	if mod != nil {
+		modAnswers = s.moderatorAnswers(mod)
+	}
 	for i, t := range targets {
 		// A follow-up's record goes before the question (#29), with the
 		// earlier questions for an AI new to the conversation.
 		fresh := t.Session == ""
 		areq := core.AskRequest{Folder: folder, Prompt: judge.AskWithConversation(prompt, conv, fresh), Tier: tier, Model: t.Model, Effort: t.Effort}
-		if t.Session != "" {
+		if mod != nil {
+			// The moderator answers alone, from the record and the answers, as
+			// a one-off in the judge folder: no session is kept or listed.
+			areq.Prompt, areq.OneOff = judge.ModeratorAskPrompt(prompt, conv, modAnswers), true
+			if areq.Prompt == "" {
+				writeError(w, http.StatusInternalServerError, CodeInternal, "the agent could not ask the moderator")
+				return
+			}
+		} else if t.Session != "" {
 			_, areq.Resume, _ = core.ParseID(t.Session)
 		}
 		asker := askers[i]
-		tasks[i] = runs.Task{Agent: t.Agent, Session: t.Session, Ask: func(ctx context.Context) (core.AskResult, error) {
+		session := t.Session
+		if mod != nil {
+			session = ""
+		}
+		tasks[i] = runs.Task{Agent: t.Agent, Session: session, OneOff: mod != nil, Ask: func(ctx context.Context) (core.AskResult, error) {
 			if refiner != nil {
 				q, err := refiner.Question(ctx)
 				if err != nil {
@@ -419,7 +455,8 @@ func (s *Server) startRun(w http.ResponseWriter, r *http.Request) {
 		}
 		synth := cmp != nil && cmpErr == nil && cmp.Synthesis != nil && !cmp.Synthesis.Off
 		s.o.Logger.Info("run started", append([]any{"mode", req.Mode, "tier", tier, "agents", strings.Join(names, ","), "followUp", followUp,
-			"compare", cmp != nil || cmpErr != nil, "compareCode", compareCode, "synthesis", synth, "refine", refiner != nil}, conv.Log()...)...)
+			"compare", cmp != nil || cmpErr != nil, "compareCode", compareCode, "synthesis", synth, "refine", refiner != nil,
+			"moderator", mod != nil, "modItems", len(modAnswers)}, conv.Log()...)...)
 	}
 	st := s.runStatus(owner, run)
 	st.CompareError = cmpErr

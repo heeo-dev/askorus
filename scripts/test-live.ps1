@@ -48,6 +48,12 @@
 #   temperature below 100, and the combined answer must not mention a
 #   debate. 4 AI calls, 1 of them a Codex ask.
 #
+# LT-13, asking the moderator (#25, agent/internal/live/moderator_live_test.go):
+#   the real claude on the quick tier answers alone, as a one-off in the
+#   judge folder, what two given answers (100 vs 90) differed on; the
+#   answer must name both, the run part keeps no session and the judge
+#   folder lists none. 1 AI call, no Codex.
+#
 # One full run writes one combined answer with Codex (LT-08 1), refines
 # once with Codex (LT-09 1), asks Codex 4 times (LT-05 3, LT-12 1) and lets
 # Codex speak once or twice in a debate (LT-11).
@@ -57,6 +63,7 @@
 #   powershell -NoProfile -File scripts\test-live.ps1 -Run LT09    # only LT-09
 #   powershell -NoProfile -File scripts\test-live.ps1 -Run LT11    # only LT-11
 #   powershell -NoProfile -File scripts\test-live.ps1 -Run LT12    # only LT-12
+#   powershell -NoProfile -File scripts\test-live.ps1 -Run LT13    # only LT-13
 param([string]$Run)
 $go = Join-Path $env:USERPROFILE 'sdk\go1.27.3\bin'
 if (Test-Path $go) { $env:Path = "$go;" + $env:Path }
