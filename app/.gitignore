@@ -17,6 +17,9 @@ expo-env.d.ts
 *.p12
 *.key
 *.mobileprovision
+# EAS signing (`eas credentials` downloads these here; keep them outside the repo)
+credentials.json
+credentials/
 
 # Metro
 .metro-health-check*
