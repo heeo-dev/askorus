@@ -43,7 +43,7 @@ var debateAnswerAI = regexp.MustCompile(`(?m)^ANSWER: \{"ai":"([^"]+)"`)
 func debateReply(prompt string) (string, bool) {
 	var text string
 	switch {
-	case strings.HasPrefix(prompt, "[Asksemble debate-plan v1]"):
+	case strings.HasPrefix(prompt, "[Asksemble debate-plan v2]"):
 		text = debatePlan(prompt)
 	case strings.HasPrefix(prompt, "[Asksemble debate-check v1]"):
 		text = "DONE | agreed | " + DebateLine

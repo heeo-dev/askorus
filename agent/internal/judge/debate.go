@@ -27,9 +27,13 @@ import (
 // DebateTurnPrompt. Everything an AI wrote goes into a nonce data block.
 // Golden files pin the four prompts.
 
-// DebateRules names the debate's prompts: plan and check v1, turn v1 and
+// DebateRules names the debate's prompts: plan v2, check v1, turn v1 and
 // the answer after the debate debate-v4 (synth-v5.1's TASK with rule 5 for
 // debated points, kept short, with C9's two rules as C10b narrowed them).
+// Plan v2 (11-06): haiku moderating a quick-tier debate asked its
+// questions in English on a Korean question, carried over from the goals
+// written in English just before the TURN lines; the goals now take the
+// question's language too, and the TURN line says it again.
 const DebateRules = "debate-v4"
 
 // Natures of a point.
@@ -187,7 +191,7 @@ func debateAnswers(b *strings.Builder, t SynthTask) {
 
 // ---- The plan ----
 
-const debatePlanHead = `[Asksemble debate-plan v1] Several AIs answered the same question, and a moderator AI combined their answers. You are the moderator of a short debate between the AIs that answered, held so the person gets a better answer than "the AIs differ". Use only what the data says.
+const debatePlanHead = `[Asksemble debate-plan v2] Several AIs answered the same question, and a moderator AI combined their answers. You are the moderator of a short debate between the AIs that answered, held so the person gets a better answer than "the AIs differ". Use only what the data says.
 `
 
 const debatePlanTask = `TASK. Find the points where the answers differ on something the person would care about: a fact, a number, a pick or verdict, a recommendation, a step, a warning. Leave out other wording, order, numbers that differ only by rounding, and a point only one AI makes. Give at most 3 points, the most important first.
@@ -196,12 +200,12 @@ For each point decide:
 - whether a short debate would help the person: yes when it can settle a fact, correct reasoning, make clear which option fits which condition, or make creative options better; no when it would not. At most 2 points get yes;
 - for a point with yes, its goal: for fact, the fact checked with a source; for reasoning, the right result; for judgment, which option fits which situation; for taste, better options built from each other's;
 - for a point with yes, the first 2 or 3 turns: which AI speaks and what you ask it, naming the other side's claim, so that every side speaks.
-Write the topics, the sides and your questions in the language of the QUESTION, the goals in English. Name AIs exactly as written in "ai". When there is no such point, the plan is the one line NONE.
+Write everything you write, the topics, the sides, the goals and your questions, in the language of the QUESTION. Name AIs exactly as written in "ai". When there is no such point, the plan is the one line NONE.
 OUTPUT. One JSON object and nothing else: {"answer":"<the plan>"}, the plan in lines of this form, one item per line, fields split by " | ":
 POINT | p1 | <nature> | <yes or no> | <topic>
 SIDE | p1 | <AI>, <AI> | <what that side says, one sentence>
 GOAL | p1 | <goal>
-TURN | p1 | <AI> | <your question to it>
+TURN | p1 | <AI> | <your question to it, in the language of the QUESTION>
 `
 
 // DebatePlanPrompt renders the moderator's plan with nonce; "" when the

@@ -127,6 +127,25 @@ func TestDebatePromptsRefuseANonceInTheContent(t *testing.T) {
 	}
 }
 
+// R-75 (S23, 11-06): haiku moderating a quick-tier debate on a Korean
+// question asked in English. Plan v2 writes everything, the goals too, in
+// the question's language, and the TURN line says so again.
+func TestDebatePlanLanguage(t *testing.T) {
+	p := DebatePlanPrompt(debateTaskFixture(), debateNonceA)
+	for _, want := range []string{
+		"[Asksemble debate-plan v2]",
+		"Write everything you write, the topics, the sides, the goals and your questions, in the language of the QUESTION.",
+		"TURN | p1 | <AI> | <your question to it, in the language of the QUESTION>",
+	} {
+		if !strings.Contains(p, want) {
+			t.Errorf("plan lacks %q", want)
+		}
+	}
+	if strings.Contains(p, "in English") {
+		t.Error("the plan still asks for English")
+	}
+}
+
 func TestParsePlan(t *testing.T) {
 	names := []string{"Claude", "Codex", "OpenCode"}
 	text := strings.Join([]string{
