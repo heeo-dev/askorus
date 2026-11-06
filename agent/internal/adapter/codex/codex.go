@@ -53,7 +53,24 @@ var defaultTiers = map[string]core.AskModel{
 	core.TierDeep:     {Model: "gpt-6.1-sol", Effort: "medium"},
 }
 
-var efforts = map[string]bool{"minimal": true, "low": true, "medium": true, "high": true, "xhigh": true}
+// efforts are the model_reasoning_effort values an ask may pass. max and
+// ultra came with gpt-6 (11-06, Codex's models_cache.json).
+var efforts = map[string]bool{"minimal": true, "low": true, "medium": true, "high": true, "xhigh": true, "max": true, "ultra": true}
+
+// modelEfforts are the efforts each known model takes, as Codex's
+// models_cache.json lists them (supported_reasoning_levels, 11-06).
+var modelEfforts = map[string][]string{
+	"gpt-6-luna":    {"low", "medium", "high", "xhigh", "max"},
+	"gpt-6-sol":     {"low", "medium", "high", "xhigh", "max", "ultra"},
+	"gpt-6-astra":   {"low", "medium", "high", "xhigh", "max", "ultra"},
+	"gpt-6.1-terra": {"low", "medium", "high", "xhigh", "max", "ultra"},
+	"gpt-6.1-sol":   {"low", "medium", "high", "xhigh", "max", "ultra"},
+}
+
+// AskEfforts lists the efforts each tier model may take (core.EffortLister).
+func (a *Adapter) AskEfforts() map[string][]string {
+	return core.TierEfforts(a.AskTiers(), func(m string) []string { return modelEfforts[m] })
+}
 
 var threadRe = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 

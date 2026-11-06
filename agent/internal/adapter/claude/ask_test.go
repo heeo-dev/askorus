@@ -103,6 +103,12 @@ func TestAskTiersAndOverrides(t *testing.T) {
 	if !slices.Contains(a.capabilities(), core.CapAsk) {
 		t.Errorf("capabilities = %v", a.capabilities())
 	}
+	// Every model, the overridden one too, takes Claude Code's five efforts (11-06).
+	all := []string{"low", "medium", "high", "xhigh", "max"}
+	e := a.AskEfforts()
+	if len(e) != 3 || !slices.Equal(e["claude-haiku-5-5"], all) || !slices.Equal(e["sonnet"], all) || !slices.Equal(e["opus"], all) {
+		t.Errorf("AskEfforts = %v", e)
+	}
 }
 
 func TestAskErrors(t *testing.T) {

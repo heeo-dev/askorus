@@ -126,28 +126,29 @@ test('the AI picker turns AIs on and off and picks a model; they and the tier go
   expect(screen.getByText('sonnet')).toBeTruthy(); // Claude's model for the tier
   // Each row is the AI's switch, with its state (UX-9); the small switch in
   // it is not a second control with the same name, the › is its own button.
-  expect(screen.getAllByRole('switch').map((x) => x.props.accessibilityLabel)).toEqual(['Claude, sonnet', 'Codex, codex-std', 'OpenCode, opencode-std']);
-  expect(screen.queryByRole('button', { name: 'OpenCode, opencode-std' })).toBeNull();
-  await user.press(screen.getByRole('switch', { name: 'Codex, codex-std' }));
-  expect(screen.getByRole('switch', { name: 'Codex, codex-std' })).not.toBeChecked();
+  expect(screen.getAllByRole('switch').map((x) => x.props.accessibilityLabel)).toEqual(['Claude, sonnet', 'Codex, codex-std · medium', 'OpenCode, opencode-std · medium']);
+  expect(screen.queryByRole('button', { name: 'OpenCode, opencode-std · medium' })).toBeNull();
+  await user.press(screen.getByRole('switch', { name: 'Codex, codex-std · medium' }));
+  expect(screen.getByRole('switch', { name: 'Codex, codex-std · medium' })).not.toBeChecked();
   // The small switch turns it too (hidden from screen readers: the row says it).
   const small = (agent: string) => screen.getByTestId(`switch-${agent}`, { includeHiddenElements: true });
   await user.press(small('opencode'));
-  expect(screen.getByRole('switch', { name: 'OpenCode, opencode-std' })).not.toBeChecked();
+  expect(screen.getByRole('switch', { name: 'OpenCode, opencode-std · medium' })).not.toBeChecked();
   // The last AI that is on stays on (UX-10): a question always has an AI to go to.
   await user.press(screen.getByRole('switch', { name: 'Claude, sonnet' }));
   expect(screen.getByRole('switch', { name: 'Claude, sonnet' })).toBeChecked();
   await user.press(small('claude'));
   expect(screen.getByRole('switch', { name: 'Claude, sonnet' })).toBeChecked();
-  await user.press(screen.getByRole('switch', { name: 'OpenCode, opencode-std' }));
-  expect(screen.getByRole('switch', { name: 'OpenCode, opencode-std' })).toBeChecked();
+  await user.press(screen.getByRole('switch', { name: 'OpenCode, opencode-std · medium' }));
+  expect(screen.getByRole('switch', { name: 'OpenCode, opencode-std · medium' })).toBeChecked();
 
   // A model for Claude: the model sheet, then back to the picker.
   await user.press(screen.getByRole('button', { name: 'Claude model' }));
   expect(await screen.findByRole('header', { name: 'Claude model' })).toBeTruthy();
   expect(screen.getByRole('radio', { name: 'By tier' })).toBeChecked();
-  expect(screen.getByText('Quick haiku · Standard sonnet · Deep opus')).toBeTruthy();
-  await user.press(screen.getByRole('radio', { name: 'opus' }));
+  expect(screen.getByText('Quick haiku\nStandard sonnet\nDeep opus')).toBeTruthy();
+  // The row (the own pick's model pill has the same name).
+  await user.press(screen.getAllByRole('radio', { name: 'opus' })[0]);
   expect(await screen.findByRole('header', { name: 'AIs to answer' })).toBeTruthy();
   expect(screen.getByRole('switch', { name: 'Claude, opus' })).toBeChecked();
   await user.press(close());
@@ -159,8 +160,8 @@ test('the AI picker turns AIs on and off and picks a model; they and the tier go
   await user.press(screen.getByRole('button', { name: 'Tier: Standard. Pick' }));
   expect(await screen.findByRole('header', { name: 'Tier' })).toBeTruthy();
   expect(screen.getByRole('radio', { name: 'Standard' })).toBeChecked();
-  expect(screen.getByText('OpenCode opencode-deep')).toBeTruthy();
-  expect(screen.getByText('OpenCode opencode-quick')).toBeTruthy();
+  expect(screen.getByText('OpenCode opencode-deep · medium')).toBeTruthy();
+  expect(screen.getByText('OpenCode opencode-quick · medium')).toBeTruthy();
   await user.press(screen.getByRole('radio', { name: 'Deep' }));
   await waitFor(() => expect(screen.queryByTestId('tier-sheet')).toBeNull());
   expect(screen.getByRole('button', { name: 'Tier: Deep. Pick' })).toBeTruthy();
@@ -175,12 +176,62 @@ test('the AI picker turns AIs on and off and picks a model; they and the tier go
   await renderRouter(appDir, { initialUrl: '/' });
   expect(await screen.findByRole('button', { name: 'Tier: Deep. Pick' })).toBeTruthy();
   await user2.press(screen.getByRole('button', { name: 'AIs to answer: 2 (Claude, OpenCode). Pick' }));
-  expect(await screen.findByRole('switch', { name: 'Codex, codex-deep' })).not.toBeChecked();
+  expect(await screen.findByRole('switch', { name: 'Codex, codex-deep · medium' })).not.toBeChecked();
   await user2.longPress(screen.getByRole('switch', { name: 'Claude, opus' }));
-  expect(await screen.findByRole('radio', { name: 'opus' })).toBeChecked();
+  expect((await screen.findAllByRole('radio', { name: 'opus' }))[0]).toBeChecked();
   await user2.press(screen.getByRole('radio', { name: 'By tier' }));
   expect(await screen.findByRole('switch', { name: 'Claude, opus' })).toBeTruthy(); // Deep by tier is opus too
   await waitFor(async () => expect((await loadAskPrefs()).models).toEqual({}));
+});
+
+// R-74 (S23, 11-06): OpenCode's Flash at quick and at standard read as one
+// model, so its effort could not be picked; now every row says its effort,
+// and an own pick takes any of the tiers' models with an effort the PC lists.
+test("the model sheet lists each tier's model with its effort, and an own model and effort go with the question", async () => {
+  const flash = 'opencode-go/deepseek-v4.1-flash';
+  const pro = 'opencode-go/deepseek-v4-pro';
+  agent.askModels(
+    'opencode',
+    { quick: { model: flash, effort: 'low' }, standard: { model: flash, effort: 'high' }, deep: { model: pro, effort: 'high' } },
+    { [flash]: ['low', 'high', 'max'], [pro]: ['high', 'max'] },
+  );
+  const { user } = await open();
+  await user.press(await screen.findByRole('button', { name: 'AIs to answer: 3 (Claude, Codex, OpenCode). Pick' }));
+  expect(await screen.findByRole('switch', { name: 'OpenCode, deepseek-v4.1-flash · high' })).toBeChecked(); // standard
+  await user.press(screen.getByRole('button', { name: 'OpenCode model' }));
+  expect(await screen.findByRole('header', { name: 'OpenCode model' })).toBeTruthy();
+  expect(screen.getByText('Quick deepseek-v4.1-flash · low\nStandard deepseek-v4.1-flash · high\nDeep deepseek-v4-pro · high')).toBeTruthy();
+  expect(screen.getAllByRole('radio').map((x) => x.props.accessibilityLabel).slice(0, 4)).toEqual([
+    'By tier',
+    'deepseek-v4.1-flash, low',
+    'deepseek-v4.1-flash, high',
+    'deepseek-v4-pro, high',
+  ]);
+  // A pair of the tiers: back to the picker.
+  await user.press(screen.getByRole('radio', { name: 'deepseek-v4.1-flash, low' }));
+  expect(await screen.findByRole('switch', { name: 'OpenCode, deepseek-v4.1-flash · low' })).toBeTruthy();
+
+  // An own pick: Pro has no low, so it takes Pro's tier effort; then max. The sheet stays.
+  await user.press(screen.getByRole('button', { name: 'OpenCode model' }));
+  const models = await screen.findByLabelText('Pick your own: Model');
+  expect(within(models).getByRole('radio', { name: 'deepseek-v4.1-flash' })).toBeChecked();
+  expect(within(screen.getByLabelText('Pick your own: Effort')).getAllByRole('radio').map((x) => x.props.accessibilityLabel)).toEqual(['low', 'high', 'max']);
+  await user.press(within(models).getByRole('radio', { name: 'deepseek-v4-pro' }));
+  expect(await screen.findByRole('radio', { name: 'deepseek-v4-pro, high' })).toBeChecked();
+  const efforts = screen.getByLabelText('Pick your own: Effort');
+  expect(within(efforts).getAllByRole('radio').map((x) => x.props.accessibilityLabel)).toEqual(['high', 'max']);
+  await user.press(within(efforts).getByRole('radio', { name: 'max' }));
+  expect(await screen.findByRole('radio', { name: 'max' })).toBeChecked();
+  expect(screen.getByRole('radio', { name: 'deepseek-v4-pro, high' })).not.toBeChecked();
+  await user.press(close());
+  expect(await screen.findByRole('switch', { name: 'OpenCode, deepseek-v4-pro · max' })).toBeTruthy();
+  await user.press(close());
+  await waitFor(() => expect(screen.queryByTestId('ai-sheet')).toBeNull());
+
+  await ask(user, 'q1');
+  expect(await screen.findByText('opencode says: q1')).toBeTruthy();
+  expect(agent.runRequests()[0].agents[2]).toEqual({ agent: 'opencode', model: pro, effort: 'max' });
+  expect(await loadAskPrefs()).toMatchObject({ models: { opencode: pro }, efforts: { opencode: 'max' } });
 });
 
 test('with every AI turned off (kept from before), the picker says so and turning one on is enough (UX-10)', async () => {
@@ -188,8 +239,8 @@ test('with every AI turned off (kept from before), the picker says so and turnin
   await user.type(await screen.findByLabelText('Ask a question'), 'q');
   expect(screen.getByRole('button', { name: 'Ask' })).toBeDisabled();
   await user.press(screen.getByRole('button', { name: 'No AI is on to answer. Pick' }));
-  await user.press(await screen.findByRole('switch', { name: 'Codex, codex-std' }));
-  expect(screen.getByRole('switch', { name: 'Codex, codex-std' })).toBeChecked();
+  await user.press(await screen.findByRole('switch', { name: 'Codex, codex-std · medium' }));
+  expect(screen.getByRole('switch', { name: 'Codex, codex-std · medium' })).toBeChecked();
   await user.press(close());
   expect(await screen.findByRole('button', { name: 'AIs to answer: 1 (Codex). Pick' })).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Ask' })).toBeEnabled();

@@ -300,7 +300,7 @@ func TestIT15SynthesisWays(t *testing.T) {
 		r := newRig(t, nil)
 		r.addDevice()
 		run, c, _ := r.synthRun(map[string]any{"synthesis": map[string]any{"agent": "opencode"}})
-		if s := synthOf(t, c); s.Status != compares.SynthDone || s.Agent != fakecli.RoleOpenCode || s.Model != "opencode-go/deepseek-v4.1-flash#max" {
+		if s := synthOf(t, c); s.Status != compares.SynthDone || s.Agent != fakecli.RoleOpenCode || s.Model != "opencode-go/deepseek-v4.1-flash#high" {
 			t.Errorf("synthesis %+v", s)
 		}
 		synths := calls(t, 0, kindSynth, "")
@@ -308,7 +308,7 @@ func TestIT15SynthesisWays(t *testing.T) {
 			t.Fatalf("%d synth calls", len(synths))
 		}
 		sc := synths[0]
-		if want := []string{"run", "--standalone", "--format", "json", "--agent", fakecli.SynthAgent, "-m", "opencode-go/deepseek-v4.1-flash#max",
+		if want := []string{"run", "--standalone", "--format", "json", "--agent", fakecli.SynthAgent, "-m", "opencode-go/deepseek-v4.1-flash#high",
 			"--title", fakecli.JudgeTitle}; !slices.Equal(sc.Args, want) {
 			t.Errorf("opencode synth args %q", sc.Args)
 		}

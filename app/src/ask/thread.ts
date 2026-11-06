@@ -68,7 +68,13 @@ export type Turn = {
 export type Target = 'all' | { agent: string };
 
 /** An AI the PC reports, and whether it can answer now. */
-export type Asker = { agent: string; canAsk: boolean; tiers: Record<string, { model: string; effort?: string }> };
+export type Asker = {
+  agent: string;
+  canAsk: boolean;
+  tiers: Record<string, { model: string; effort?: string }>;
+  /** The efforts each tier model may take ({} from an older agent). */
+  efforts: Record<string, string[]>;
+};
 
 /** askers lists the PC's AIs in its order; those without the ask capability are shown dimmed. */
 export function askers(info: Info): Asker[] {
@@ -76,6 +82,7 @@ export function askers(info: Info): Asker[] {
     agent: a.agent,
     canAsk: a.available && a.capabilities.includes('ask'),
     tiers: a.ask?.tiers ?? {},
+    efforts: a.ask?.efforts ?? {},
   }));
 }
 
@@ -88,8 +95,8 @@ export function lastSessions(turns: Turn[]): Record<string, string> {
 
 /**
  * request builds the next run: to everyone turned on (or one AI), each
- * carrying on its own session when the thread has one, with the model the
- * person picked for that AI.
+ * carrying on its own session when the thread has one, with the model and
+ * effort the person picked for that AI (an effort only with its model).
  */
 export function request(opts: {
   question: string;
@@ -98,6 +105,7 @@ export function request(opts: {
   on: string[];
   turns: Turn[];
   models: Record<string, string>;
+  efforts?: Record<string, string>;
   id: string;
   compare?: RunCompare;
 }): RunRequest {
@@ -105,7 +113,10 @@ export function request(opts: {
   const names = opts.to === 'all' ? opts.on : [opts.to.agent];
   const agents: RunTarget[] = names.map((agent) => {
     const t: RunTarget = { agent };
-    if (opts.models[agent]) t.model = opts.models[agent];
+    if (opts.models[agent]) {
+      t.model = opts.models[agent];
+      if (opts.efforts?.[agent]) t.effort = opts.efforts[agent];
+    }
     if (sessions[agent]) t.session = sessions[agent];
     return t;
   });
@@ -128,13 +139,14 @@ export function newTurn(o: {
   on: string[];
   turns: Turn[];
   models: Record<string, string>;
+  efforts?: Record<string, string>;
   info: Info;
   synth: { on: boolean; agent: string };
   /** Refine the question first (milestone C): the setting and the moderator; left out is off. */
   refine?: { on: boolean; agent: string };
   at: number;
 }): Turn {
-  const req = request({ question: o.question, tier: o.tier, to: o.to, on: o.on, turns: o.turns, models: o.models, id: o.id });
+  const req = request({ question: o.question, tier: o.tier, to: o.to, on: o.on, turns: o.turns, models: o.models, efforts: o.efforts, id: o.id });
   const asked = (req.agents ?? []).map((a) => a.agent);
   const turn: Turn = { id: o.id, question: o.question, req, agents: asked, at: o.at };
   if (compares({ info: o.info, asked, to: o.to })) {

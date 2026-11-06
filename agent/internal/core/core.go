@@ -103,6 +103,10 @@ type AdapterInfo struct {
 // AskInfo tells the app which model each ask tier uses (P2-2).
 type AskInfo struct {
 	Tiers map[string]AskModel `json:"tiers"`
+	// Efforts lists, for each model of Tiers, the efforts the person may
+	// pick with it (11-06: the app's own pick of model and effort), least
+	// to most thinking. Absent when the adapter does not say.
+	Efforts map[string][]string `json:"efforts,omitempty"`
 }
 
 // ListResult is what an adapter returns for the session list.

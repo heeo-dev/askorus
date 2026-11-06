@@ -83,7 +83,7 @@ func TestAskAfterWriter(t *testing.T) {
 		t.Fatalf("%d calls, want 2", len(cs))
 	}
 	j, c := cs[0], cs[1]
-	if !slices.Equal(c.Args, askArgs("opencode-go/deepseek-v4.1-flash#max", "")) || c.Env["PWD"] != ask || res.Answer != "fake: q" {
+	if !slices.Equal(c.Args, askArgs("opencode-go/deepseek-v4.1-flash#high", "")) || c.Env["PWD"] != ask || res.Answer != "fake: q" {
 		t.Errorf("ask call %q in %q, answer %q", c.Args, c.Env["PWD"], res.Answer)
 	}
 	if c.Env["OPENCODE_CONFIG_CONTENT"] != askConfig || j.Env["OPENCODE_CONFIG_CONTENT"] != synthConfig || askConfig == synthConfig {

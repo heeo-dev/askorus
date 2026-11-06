@@ -146,6 +146,9 @@ func Announce(ctx context.Context, adapters []core.Adapter, g Gate) ([]core.Adap
 		info := a.Info(ctx)
 		if asker, ok := a.(core.Asker); ok && slices.Contains(info.Capabilities, core.CapAsk) {
 			info.Ask = &core.AskInfo{Tiers: asker.AskTiers()}
+			if l, ok := a.(core.EffortLister); ok {
+				info.Ask.Efforts = l.AskEfforts()
+			}
 		}
 		caps := slices.DeleteFunc(slices.Clone(info.Capabilities), func(c core.Capability) bool {
 			return c == core.CapSynthesize
