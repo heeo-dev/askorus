@@ -7,7 +7,7 @@
 // that came (on this PC, so every AI speaks), the combined answer, its
 // writer as the moderator, the earlier questions and the AIs they may go
 // to as fixed when the turn was sent, and the question's tier. The phone
-// keeps the debate with its turn (the PC forgets it 30 minutes after it
+// keeps the debate with its turn (the PC forgets it a day after it
 // ended).
 
 import { agentName } from '@/api/agents';

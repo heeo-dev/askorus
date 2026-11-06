@@ -90,7 +90,7 @@ const (
 	msgBadSynthesisBody   = "body must be empty or {agent} with an AI of this PC"
 )
 
-const msgComparisonNotFound = "no such comparison (ended more than 30 minutes ago, made by another device, or the agent restarted)"
+const msgComparisonNotFound = "no such comparison (ended more than a day ago, made by another device, or the agent restarted)"
 
 // comparisonStatus adds pollAfterMs while the comparison or its combined
 // answer waits or runs.

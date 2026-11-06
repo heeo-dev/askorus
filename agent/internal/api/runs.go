@@ -431,7 +431,7 @@ func (s *Server) getRun(w http.ResponseWriter, r *http.Request) {
 	owner := deviceOf(r)
 	run, ok := s.runs.Get(owner, r.PathValue("runId"))
 	if !ok {
-		writeError(w, http.StatusNotFound, CodeRunNotFound, "no such run (finished more than 30 minutes ago, or the agent restarted)")
+		writeError(w, http.StatusNotFound, CodeRunNotFound, "no such run (finished more than a day ago, or the agent restarted)")
 		return
 	}
 	writeJSON(w, http.StatusOK, s.runStatus(owner, run))

@@ -11,8 +11,8 @@
 // OpenCode-like engine that leaves conversations behind is a
 // core.JudgeCleaner.
 //
-// A comparison belongs to the device that made it, lives 30 minutes after
-// it ended and does not survive an agent restart. Logs carry codes and
+// A comparison belongs to the device that made it, lives KeepFor (a day)
+// after it ended and does not survive an agent restart. Logs carry codes and
 // counts only: never a question, an answer, an AI's message or a nonce.
 // Comparison errors are judge.Error values, whose Error() is the code
 // only.

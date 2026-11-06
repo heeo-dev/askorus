@@ -340,7 +340,7 @@ POST /v1/runs
 ```
 
 - `agents`를 비우면 이 PC에서 물을 수 있는 AI 모두. `session`이 있으면 그 대화를 이어 간다(후속 질문 A안). 같은 AI는 한 번만.
-- `mode`가 `work`·`code`면 501 `mode_not_available`(자리만, `/v1`은 더하기만). 질문은 32KB까지, 한 번에 4개 묻기까지(429 `too_many_runs`), AI 하나에 3분, 끝난 묻기는 30분 동안 읽을 수 있다. 같은 `clientRunId`를 다시 보내면 새로 묻지 않고 처음 것을 준다(요청이 끊겨 폰이 다시 보낼 때).
+- `mode`가 `work`·`code`면 501 `mode_not_available`(자리만, `/v1`은 더하기만). 질문은 32KB까지, 한 번에 4개 묻기까지(429 `too_many_runs`), AI 하나에 3분, 끝난 묻기는 30분 동안 읽을 수 있다(11-07부터 하루, R-80). 같은 `clientRunId`를 다시 보내면 새로 묻지 않고 처음 것을 준다(요청이 끊겨 폰이 다시 보낼 때).
 - 오류 코드: `ask_failed`(AI가 낸 오류, `message`는 그 AI의 글), `ask_timeout`, `ask_empty`, `bad_model`, `session_not_found`(이어 갈 세션이 없음), `session_busy`(그 대화가 아직 답하는 중이거나 원격 세션으로 열려 있음: 요청 전체는 409, Claude 어댑터 안에서는 그 AI의 부분 오류), `agent_unavailable`.
 - 한 세션에는 후속 질문이 하나씩만 돈다. 두 개가 동시에 이어 쓰면 대화가 갈라진다(Phase 1의 '돌고 있는 세션은 재개하지 않는다'와 같은 규칙). Claude는 폰에서 열기·멈추기 중이거나 원격·터미널 세션으로 떠 있어도 묻기 후속을 하지 않는다.
 - 질문과 답은 로그에 남기지 않는다. 로그에는 모드·단계·AI 이름과 AI별 상태·시간·오류 코드만.
@@ -520,7 +520,7 @@ OUTPUT. One JSON object and nothing else: {"judgments":[{"id":"a1","core":true,"
 - **`…/retry`** → 202(실패한 요청만, 도는 중 409 `comparison_running`). **`…/cancel`** → 200(기다리는 비교는 시작 안 함, 줄 선 요청 버림; '새 질문'에서 부름).
 - **모양.** `{comparisonId, status: waiting|running|done|failed, pollAfterMs, source, runId, engine, answers[{id, agent, via, family, model, status, notJudged, units[]}], requests[{id, from, against, judge, judgeOnly, model, status, attempt, ms, inputTokens, outputTokens, error{code, message}}], judgments[{unit, against, request, judge, core, label, evidence, unsure, flags}], items[{key, kind, positions[{agents, units, numberSpans?}], numbersDiffer?, check[], missing[]}], counts{differ, check, agree, onlyOne, notCompared, notJudged}, error}`. reason은 없다. 값은 열린 문자열이라 앱은 모르는 값을 안전하게 그린다.
 - **오류.** 400 `bad_request`·`need_two_answers`, 413, 404, 409, 429 `too_many_comparisons`, 503 `no_judge`·`ask_folder_unavailable`. 비교 안: `judge_failed`(message는 AI 글 300자), `judge_timeout`, `judge_bad_output`, `judge_used_tool`, `bad_model`, `agent_unavailable`, `internal`.
-- **수명(`internal/compares`).** 메모리만, 주인은 기기, 끝난 뒤 30분, 100개. `runs.Manager.OnEnd`와 등록 직후 확인이 함께 와도 잠금 안에서 한 번만 시작. 모든 단계를 recover로 감싸 `internal`로 끝낸다. 시험용 `WaitIdle(id)`.
+- **수명(`internal/compares`).** 메모리만, 주인은 기기, 끝난 뒤 30분(11-07부터 하루, R-80), 100개. `runs.Manager.OnEnd`와 등록 직후 확인이 함께 와도 잠금 안에서 한 번만 시작. 모든 단계를 recover로 감싸 `internal`로 끝낸다. 시험용 `WaitIdle(id)`.
 - **로그.** 코드·수만('comparison started/ended', 'judge request', 'judge cleanup failed'). logx는 키 이름을 부분 문자열로 막으므로 수를 담는 키에 막는 말을 쓰지 않는다(`answers`·`sentences` 같은 키는 값이 `[redacted]`가 됨). 판정 오류는 `judge.Error{Code, Message}`이고 `Error()`는 코드만: 지금 `ActionError.Error()`는 Detail을 붙이고 `actionError`가 500 이상에서 Detail을 로그에 남긴다(`api/actions.go:69-70`).
 - **CLI.** `asksemble-agent compare -q <파일> -answer claude=<파일> …`, `info`에 판정 모델, `sessions`도 판정 폴더를 숨김.
 
@@ -1370,7 +1370,7 @@ S5c를 worktree에서 만들었다(커밋 전, 57f9776 위). 기반(테마·아�
   - 에이전트(46a9627): `judge/conversation.go`(`Conversation`, 묻기 머리말 `AskWithConversation`: 묻기 앞 nonce 데이터 블록에 SETTLED·PREVIOUS QUESTION·PREVIOUS ANSWER, 처음 들어온 AI는 EARLIER QUESTIONS도), synth-v6·debate-plan v3(SETTLED만)·debate-v5는 지금 지시문의 데이터 블록 끝에 기록 줄, 그 뒤에 규칙을 더하고 머리 판만 바꿈(기록이 없으면 지금 지시문 그대로). 앞 질문은 쓰는 AI가 자기 앞 질문을 받지 못할 때만 기록의 것을 준다. 골든 `testdata/conversation-v1.golden`. API: `POST /v1/runs`·`/v1/comparisons`·`/v1/debates`의 `context {earlier, settled, last}`(앞 질문 3개 4 KiB, 쟁점 12개, 주제 512 B, 줄 1 KiB, 결과 agreed·conditional·differ·kept, 앞 답 8 KiB, 넘으면 400 bad_request. 쟁점도 앞 답도 없으면 기록 없음), 앞 질문은 `earlier`의 마지막, /v1/info `context {maxSettled 12, maxLastBytes 8192}`, 로그 `settled`·`lastBytes`와 `rules`(synth-v6·debate-v5). fakecli는 plan v3·debate-v5를 앎. 시험: UT, API, IT-20, LT-12.
     - **만들면서 정한 것(추천대로).** ① 설계의 모양 `{settled, last}`에 `earlier`를 더함(처음 들어온 AI에게 앞 질문을 주려면 필요). 설계 문서도 고침. ② 앞 질문만 있고 결론이 없으면 기록을 보내지 않음. ③ 로그 키 `earlier`는 로거가 가리는 이름이라 개수도 남기지 않음.
   - 앱(dfed1db): `ask/record.ts`(`buildRecord`·`settledOf`·`finalAnswer`, 순수 함수), `thread.ts`(`carry`: 보내는 순간 앞 차례들로 기록을 만듦, `Turn.noRecord`·`queuedFor`), 다시 비교·토론 요청은 그 차례가 보낸 기록을 그대로, `prefs`(`carryRecord` 기본 켬, `recordNoticed`), `ui/Record.tsx`(줄·시트·안내), 설정 스위치와 안내 시트 문구, 질문 화면(안내, 토론 중 대기와 끝나면 보내기), 한국어·영어 문구 13개. 시험: UT `ask/record-test.ts`, `prefs-test.ts`, ST `record-test.tsx`.
-  - 고침(11-07, R-80, 사용자 S23): 폰이 잠든 사이 PC가 끝난 run을 지우면(30분) 받은 답은 남기고 못 받은 답만 'PC에 더 없음'으로 끝낸다. 비교는 '다시 비교'로 받은 답들로 새로 쓴다. 같은 날 멈춘 토론에도 '다시 토론하기'를 둠(사용자 요청).
+  - 고침(11-07, R-80, 사용자 S23): 폰이 잠든 사이 PC가 끝난 run을 지우면(30분) 받은 답은 남기고 못 받은 답만 'PC에 더 없음'으로 끝낸다. 비교는 '다시 비교'로 받은 답들로 새로 쓴다. 같은 날 멈춘 토론에도 '다시 토론하기'를 둠(사용자 요청). 그리고 사용자 결정으로 에이전트가 끝난 run·비교·토론을 하루(24시간) 보관한다(30분이었음. 폰은 화면이 꺼지면 묻지 않아서). 개수 상한(run 100·비교 100·토론 20)이 메모리를 막는다.
   - 고침(11-07, R-79, 사용자 질문으로 찾음): 종합 답변을 쓰는 동안 보낸 이어서 묻기도 토론처럼 기다렸다가 종합 답변을 싣고 간다(`combining`·`concluding`, 문구 '대기 중: 종합 답변이 나오면…'). 기록을 싣지 않는 질문은 기다리지 않는다.
 
 ## 5. 단계 (초안)

@@ -31,8 +31,11 @@ const (
 	// in P0-7; deep tiers on long questions take longer.
 	PartLimit = 3 * time.Minute
 	// KeepFor is how long a finished run can still be read. Longer than
-	// jobs: a person may switch apps while three AIs answer.
-	KeepFor = 30 * time.Minute
+	// jobs: a person may switch apps or turn the screen off while the AIs
+	// answer, and the phone asks nothing until it is back (R-80, 11-07:
+	// 30 minutes lost a run the phone came back to after 65; the user
+	// chose a day). maxRuns still bounds memory.
+	KeepFor = 24 * time.Hour
 	// MaxRunning bounds the AI processes the PC runs for the phone.
 	MaxRunning = 4
 	// maxRuns bounds memory; the oldest finished runs go first.

@@ -210,11 +210,11 @@ export type FollowDeps = {
 };
 
 /**
- * lostRun is a run the PC no longer has (run_not_found: it ended more than
- * 30 minutes before the phone asked again, as when the phone slept, or the
- * agent restarted): what came is kept, an answer still coming is failed
- * with run_not_found, and the run has ended (11-07). Asking again could
- * never bring the rest back.
+ * lostRun is a run the PC no longer has (run_not_found: it ended longer
+ * ago than the PC keeps runs, a day since R-80 and 30 minutes before, as
+ * when the phone slept, or the agent restarted): what came is kept, an
+ * answer still coming is failed with run_not_found, and the run has ended
+ * (11-07). Asking again could never bring the rest back.
  */
 export function lostRun(run: Run): Run {
   const parts = run.parts.map((p) => (p.status === 'running' ? { ...p, status: 'failed', error: { code: 'run_not_found' } } : p));

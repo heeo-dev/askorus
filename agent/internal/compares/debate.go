@@ -29,8 +29,8 @@ import (
 // wrote reaches an AI only inside a nonce data block.
 //
 // The debate lives in memory like a comparison: one at a time on a PC,
-// read by its device only, 30 minutes after it ended, never past an agent
-// restart; the phone keeps it with its turn. Logs carry codes and counts
+// read by its device only, KeepFor (a day) after it ended, never past an
+// agent restart; the phone keeps it with its turn. Logs carry codes and counts
 // only, never a question, an answer, a turn or a nonce.
 
 // Debate statuses.
@@ -448,7 +448,7 @@ func (m *Manager) update(d *debate, f func()) bool {
 	return true
 }
 
-// pruneDebatesLocked drops ended debates 30 minutes after they ended, then
+// pruneDebatesLocked drops ended debates KeepFor after they ended, then
 // the oldest of them while more than MaxDebates remain. Callers hold mu.
 func (m *Manager) pruneDebatesLocked() {
 	now := m.now()

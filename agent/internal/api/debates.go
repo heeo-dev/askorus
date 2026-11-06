@@ -26,7 +26,7 @@ const (
 // with room for JSON escapes.
 const maxDebateBody = 2 << 20
 
-const msgDebateNotFound = "no such debate (ended more than 30 minutes ago, made by another device, or the agent restarted)"
+const msgDebateNotFound = "no such debate (ended more than a day ago, made by another device, or the agent restarted)"
 
 // DebateInfo is /v1/info's debate: the agent runs debates, with these
 // limits. The phone shows '토론하기' only when it is there.

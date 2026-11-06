@@ -252,7 +252,7 @@ test('a run the PC no longer has (404 run_not_found) keeps what came; its compar
   await waitFor(() => expect(agent.calls.filter((c) => c.method === 'GET' && c.path.startsWith('/v1/runs/')).length).toBeGreaterThan(0));
   await later();
   await later();
-  // The phone slept past the PC's 30 minutes: the run and its comparison are gone.
+  // The phone slept past the PC's keeping (a day): the run and its comparison are gone.
   agent.forgetRuns();
   agent.forgetComparisons();
   expect(await screen.findByText(notFound, {}, { timeout: 5000 })).toBeTruthy();

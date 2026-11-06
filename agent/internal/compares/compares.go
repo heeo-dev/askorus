@@ -20,8 +20,10 @@ import (
 
 // Limits and timings (spec parts 3 and 6).
 const (
-	// KeepFor is how long an ended comparison can still be read.
-	KeepFor = 30 * time.Minute
+	// KeepFor is how long an ended comparison (and debate) can still be
+	// read: a day, as runs.KeepFor (R-80, 11-07); MaxComparisons and
+	// MaxDebates still bound memory.
+	KeepFor = 24 * time.Hour
 	// MaxComparisons bounds memory; the oldest ended comparisons go first.
 	MaxComparisons = 100
 	// MaxUnfinished bounds the comparisons that are waiting or running.
@@ -640,7 +642,7 @@ func (m *Manager) unfinishedLocked() int {
 	return n
 }
 
-// pruneLocked drops ended comparisons with nothing running 30 minutes
+// pruneLocked drops ended comparisons with nothing running KeepFor
 // after they ended, then the oldest of them while more than
 // MaxComparisons remain. Waiting and running ones always stay. Callers
 // hold mu.
