@@ -141,9 +141,9 @@ func TestIT19Debate(t *testing.T) {
 		if p2 := st.Points[1]; p2.Nature != judge.NatureTaste || len(p2.Turns) != 1 || p2.Turns[0].AI != fakecli.RoleOpenCode || p2.Turns[0].Status != compares.TurnDone {
 			t.Errorf("p2: %+v", p2)
 		}
-		// OpenCode's turn is an ask: nothing of it is deleted. Only a
-		// writer's conversation would be.
-		if del := calls(t, 0, kindDelete, ""); len(del) != 0 {
+		// OpenCode's turn is a one-off ask (R-76, 11-06): its conversation
+		// is deleted when the turn ends, once.
+		if del := calls(t, 0, kindDelete, ""); len(del) != 1 {
 			t.Errorf("deleted %d", len(del))
 		}
 	})

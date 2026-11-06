@@ -295,15 +295,70 @@ func (a *Adapter) Ask(ctx context.Context, req core.AskRequest) (core.AskResult,
 			return core.AskResult{}, err
 		}
 	}
+	if req.OneOff && req.Resume != "" {
+		return core.AskResult{}, core.Fail(core.ErrCodeInternal, "a one-off ask never resumes")
+	}
 	args := askArgs(model, req.Resume)
 	if err := checkArgs(args); err != nil {
 		return core.AskResult{}, err
 	}
 	res, err := proc.Run(ctx, proc.Cmd{Exe: a.exe, Dir: req.Folder, Args: args, Env: env(req.Folder), Stdin: req.Prompt})
 	if err := runError(err); err != nil {
+		// A new conversation cut off (a timeout, a failure) is deleted: left
+		// half done, OpenCode's own service later tries to carry it on and
+		// fails without the ask agent (11-06, "Agent not found"). A carried
+		// on one keeps its earlier turns.
+		if req.Resume == "" {
+			a.dropSession(ctx, req.Folder, sessionOf(res.Stdout))
+		}
 		return core.AskResult{}, err
 	}
-	return parseOutput(res, model)
+	out, perr := parseOutput(res, model)
+	if req.OneOff || (perr != nil && req.Resume == "") {
+		// A debate turn keeps no conversation (11-06); a new one that
+		// failed (an error event, no answer) is cut off like a timeout.
+		a.dropSession(ctx, req.Folder, firstNonEmpty(out.SessionID, sessionOf(res.Stdout)))
+		out.SessionID = ""
+	}
+	return out, perr
+}
+
+// sessionOf is the session id the first event that names one gives, ""
+// when none does (the output may be cut off).
+func sessionOf(stdout []byte) string {
+	for _, line := range bytes.Split(stdout, []byte("\n")) {
+		var e struct {
+			SessionID string `json:"sessionID"`
+		}
+		if json.Unmarshal(bytes.TrimSpace(line), &e) == nil && sessionRe.MatchString(e.SessionID) {
+			return e.SessionID
+		}
+	}
+	return ""
+}
+
+// dropSession deletes one conversation this adapter's run made in folder,
+// best effort and bounded, also after ctx ended (a timed-out ask).
+func (a *Adapter) dropSession(ctx context.Context, folder, id string) {
+	if id == "" {
+		return
+	}
+	args := deleteArgs(id)
+	if checkSessionArgs(args) != nil {
+		return
+	}
+	dctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), core.JudgeCleanupTimeout)
+	defer cancel()
+	_, _ = proc.Run(dctx, proc.Cmd{Exe: a.exe, Dir: folder, Args: args, Env: env(folder)})
+}
+
+func firstNonEmpty(xs ...string) string {
+	for _, x := range xs {
+		if x != "" {
+			return x
+		}
+	}
+	return ""
 }
 
 func runError(err error) error {

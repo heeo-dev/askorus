@@ -244,12 +244,19 @@ func (a *Adapter) AskTiers() map[string]core.AskModel {
 //
 //	--search exec -s read-only --ignore-user-config --skip-git-repo-check --json -m M [-c effort] --disable f… -
 //	--search exec -s read-only resume --ignore-user-config --skip-git-repo-check --json -m M [-c effort] -c sandbox_mode="read-only" --disable f… <thread> -
-func askArgs(model, effort, resume string) []string {
+//
+// A one-off ask (a debate turn, 11-06) keeps no session file: --ephemeral
+// after --skip-git-repo-check, never with resume.
+func askArgs(model, effort, resume string, oneOff bool) []string {
 	args := []string{"--search", "exec", "-s", "read-only"}
 	if resume != "" {
 		args = append(args, "resume")
 	}
-	args = append(args, "--ignore-user-config", "--skip-git-repo-check", "--json", "-m", model)
+	args = append(args, "--ignore-user-config", "--skip-git-repo-check")
+	if oneOff && resume == "" {
+		args = append(args, "--ephemeral")
+	}
+	args = append(args, "--json", "-m", model)
 	if effort != "" {
 		args = append(args, "-c", `model_reasoning_effort="`+effort+`"`)
 	}
@@ -266,12 +273,13 @@ func askArgs(model, effort, resume string) []string {
 // checkArgs accepts exactly what askArgs makes from valid values, so no
 // other option (a sandbox or approval change, a profile, a config key, a
 // feature left on or turned on with --enable, the one-off command's
-// web_search="disabled" or --ephemeral) reaches codex through an ask. It
+// web_search="disabled", or --ephemeral outside a new one-off ask) reaches codex through an ask. It
 // reads the model, the effort and the thread (second to last after
 // resume) and compares the whole list with askArgs of those values, so
 // every flag, its place and the order of the disabled features must match.
 func checkArgs(args []string) error {
 	model, effort, resume := "", "", ""
+	oneOff := slices.Contains(args, "--ephemeral")
 	for i := 0; i+1 < len(args); i++ {
 		switch {
 		case args[i] == "-m":
@@ -289,7 +297,7 @@ func checkArgs(args []string) error {
 		return fmt.Errorf("codex ask: effort %q refused", effort)
 	case resume != "" && !threadRe.MatchString(resume):
 		return fmt.Errorf("codex ask: thread %q refused", resume)
-	case !slices.Equal(args, askArgs(model, effort, resume)):
+	case !slices.Equal(args, askArgs(model, effort, resume, oneOff)):
 		return fmt.Errorf("codex ask: arguments %q refused", args)
 	}
 	return nil
@@ -318,8 +326,10 @@ func (a *Adapter) Ask(ctx context.Context, req core.AskRequest) (core.AskResult,
 		return core.AskResult{}, core.Fail(core.ErrCodeBadModel, "effort "+effort)
 	case req.Resume != "" && !threadRe.MatchString(req.Resume):
 		return core.AskResult{}, core.Fail(core.ErrCodeNotFound, "")
+	case req.OneOff && req.Resume != "":
+		return core.AskResult{}, core.Fail(core.ErrCodeInternal, "a one-off ask never resumes")
 	}
-	args := askArgs(model, effort, req.Resume)
+	args := askArgs(model, effort, req.Resume, req.OneOff)
 	if err := checkArgs(args); err != nil {
 		return core.AskResult{}, err
 	}
@@ -332,7 +342,11 @@ func (a *Adapter) Ask(ctx context.Context, req core.AskRequest) (core.AskResult,
 	case err != nil:
 		return core.AskResult{}, core.Fail(core.ErrCodeAskFailed, err.Error())
 	}
-	return parseOutput(res, model, req.Resume)
+	out, err := parseOutput(res, model, req.Resume)
+	if req.OneOff {
+		out.SessionID = "" // --ephemeral kept nothing to carry on
+	}
+	return out, err
 }
 
 // event is one JSONL line of `codex exec --json`.
