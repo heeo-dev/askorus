@@ -29,7 +29,7 @@ import (
 // The new run keeps each record's answers, so score can compare it with the
 // runs the debates came from.
 
-var rewriteStyles = []string{"short", "plus", "edit"}
+var rewriteStyles = []string{"short", "short2", "short3", "plus", "edit"}
 
 func rewriteCmd(ctx context.Context, args []string, out, errOut io.Writer) int {
 	fs := flag.NewFlagSet("rewrite", flag.ContinueOnError)
@@ -37,7 +37,7 @@ func rewriteCmd(ctx context.Context, args []string, out, errOut io.Writer) int {
 	from := fs.String("from", "", "the debate runs whose answers after the debate to write again, comma-separated")
 	base := fs.String("base", "", "for each -from run, the run its debates came from (the combined answers before them), comma-separated")
 	name := fs.String("run", "", "the new run's name (a-z, 0-9, -)")
-	style := fs.String("style", "", "short, plus or edit")
+	style := fs.String("style", "", "short, short2, short3, plus or edit")
 	only := fs.String("only", "", "question IDs to keep, comma-separated")
 	tier := fs.String("tier", core.TierStandard, "the writer's tier")
 	mod := fs.String("moderator", "claude", "the AI that writes")
@@ -54,7 +54,7 @@ func rewriteCmd(ctx context.Context, args []string, out, errOut io.Writer) int {
 		fmt.Fprintln(errOut, "-moderator must be claude, codex or opencode")
 		return exitFlags
 	case !slices.Contains(rewriteStyles, *style):
-		fmt.Fprintln(errOut, "-style must be short, plus or edit")
+		fmt.Fprintln(errOut, "-style must be short, short2, short3, plus or edit")
 		return exitFlags
 	case len(froms) == 0 || len(froms) != len(bases):
 		fmt.Fprintln(errOut, "give -from and -base, one base run for each debate run")
@@ -175,6 +175,10 @@ func rewritePrompt(task judge.SynthTask, points []DebatePoint, before, style, no
 		return afterDebatePromptFor(task, points, nonce, "debate-e1", debateEditRule5, strings.TrimSpace(before))
 	case "plus":
 		return afterDebatePromptFor(task, points, nonce, "debate-v3p", debatePlusRule5, "")
+	case "short3":
+		return afterDebatePromptFor(task, points, nonce, "debate-v4b", debateShort3Rule5, "")
+	case "short2":
+		return afterDebatePromptFor(task, points, nonce, "debate-v4", debateShort2Rule5, "")
 	}
 	return afterDebatePromptFor(task, points, nonce, "debate-v3", debateShortRule5, "")
 }

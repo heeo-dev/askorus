@@ -850,6 +850,20 @@ func afterDebatePromptOf(task judge.SynthTask, points []DebatePoint, nonce strin
 // length, the person's gift pick too.
 var debateShortRule5 = strings.Replace(debateRefineRule5, " Never write about the debate itself", " Keep it short, about as long as a combined answer without a debate: the items the person asked for, in the number and form asked, each with a short reason. A better or new option from the debate takes the place of a weaker one, never an extra. Write no extra section of combinations, alternatives, tips or how to choose unless the person asked for it; at most one line may name other strong options. Where the right option depends on the person's situation, say so in one line. Never write about the debate itself", 1)
 
+// debateShort2Rule5 is the short answer with the two rules the user
+// decided after C9 (debate-v4): the form the person asked for holds even
+// when the debate settled on a combination (C9's gift answer became one
+// bundle), and no detail of the person's own situation that a debater
+// made up (C9's bakery greeting got an opening time and a giveaway).
+var debateShort2Rule5 = strings.Replace(debateShortRule5, " Never write about the debate itself", " When the debate settled on a combination or a single pick but the person asked for separate items, still give the separate items in the form asked, and put the combination in one line. Add no concrete detail of the person's own situation that the person did not give, such as their opening time, prices or offers, even when a debater suggested one: leave a placeholder such as ○○ instead. Never write about the debate itself", 1)
+
+// debateShort3Rule5 is short2 with its second rule narrowed (C10b,
+// 11-06): C10 had short2 lose to short 10:15, its placeholder rule making
+// the writer drop useful specifics (links, prices, a table); the form rule
+// kept the gift and bakery answers right. Here the placeholder rule holds
+// only for text the person will use as their own words.
+var debateShort3Rule5 = strings.Replace(debateShortRule5, " Never write about the debate itself", " When the debate settled on a combination or a single pick but the person asked for separate items, still give the separate items in the form asked, and put the combination in one line. In text the person will use as their own words (such as a greeting, a notice or a slogan), add no detail of their own situation that they did not give, such as their opening time or an offer a debater made up: leave a placeholder such as ○○ there. Keep every useful specific the answers or the debate give, such as links, prices and model names. Never write about the debate itself", 1)
+
 // debatePlusRule5 is C9's short answer with a little more (debate-v3p, the
 // user's ask: short read as too plain): the short rule, the AI's name
 // after an option one AI proposed, and one short section that helps the

@@ -32,6 +32,15 @@ func TestRewritePrompts(t *testing.T) {
 	if !strings.HasPrefix(plus, "[Asksemble synthesis debate-v3p] ") || !strings.Contains(plus, debatePlusRule5) || !strings.Contains(plus, "({{Codex}} 안)") || !strings.Contains(plus, "at most 3 lines") {
 		t.Fatalf("plus:\n%s", plus)
 	}
+	short2 := rewritePrompt(task, points, "이전 글", "short2", n)
+	if !strings.HasPrefix(short2, "[Asksemble synthesis debate-v4] ") || !strings.Contains(short2, debateShort2Rule5) || !strings.Contains(short2, "Keep it short") || !strings.Contains(short2, "placeholder such as ○○") {
+		t.Fatalf("short2:\n%s", short2)
+	}
+	// short3 (C10b) is the rule the user picked on 11-06, the product's debate-v4.
+	short3 := rewritePrompt(task, points, "이전 글", "short3", n)
+	if !strings.HasPrefix(short3, "[Asksemble synthesis debate-v4b] ") || !strings.Contains(short3, debateShort3Rule5) || !strings.Contains(short3, "their own words") || !strings.Contains(short3, "Keep every useful specific") {
+		t.Fatalf("short3:\n%s", short3)
+	}
 	// The short rule is r2's with the length sentences before its last one.
 	if !strings.HasSuffix(debateShortRule5, "and not the moderator.") || !strings.HasPrefix(debateShortRule5, "5. The AIs debated") {
 		t.Errorf("short rule: %s", debateShortRule5)
