@@ -640,6 +640,17 @@ export default function Ask() {
             model: t('ask.moderatorRowHint', { name: agentName(modAgent) }),
             onPress: () => setPick({ agents: follow.agents, tier: follow.tier, moderator: !modAsk }),
             checked: modAsk,
+            // A switch like the AIs' rows, without a model ›: its model is Settings' moderator model.
+            right: (
+              <PickControls
+                th={th}
+                agent="moderator"
+                name={t('ask.moderatorRow')}
+                on={modAsk}
+                disabled={false}
+                onToggle={() => setPick({ agents: follow.agents, tier: follow.tier, moderator: !modAsk })}
+              />
+            ),
             accessibilityValue: { text: '' },
           },
         ]
@@ -933,7 +944,8 @@ function PickControls({
   on: boolean;
   disabled: boolean;
   onToggle: () => void;
-  onModel: () => void;
+  /** The model sheet; left out (the moderator's row, #25) the row has no ›. */
+  onModel?: () => void;
 }) {
   const s = styles(th);
   return (
@@ -950,7 +962,7 @@ function PickControls({
       >
         <View style={[s.knob, { backgroundColor: on ? th.onFill : th.bg }]} />
       </Pressable>
-      {disabled ? null : (
+      {disabled || !onModel ? null : (
         <IconButton name="chevronRight" label={t('ask.modelTitle', { name })} hint={t('ask.pickModel')} onPress={onModel} size={18} color={th.caption} />
       )}
     </View>

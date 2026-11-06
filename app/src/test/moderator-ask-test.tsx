@@ -63,7 +63,11 @@ const pile = () => screen.getByRole('button', { name: 'AIs for the follow-up: 3 
 
 async function pickModerator(user: User) {
   await user.press(pile());
-  await user.press(await screen.findByRole('switch', { name: /^Moderator, Claude · reads the conversation/ }));
+  await screen.findByRole('switch', { name: /^Moderator, Claude · reads the conversation/ });
+  // A switch like the AIs' rows (S10, 11-07: it showed a › as if it opened something), and no model ›.
+  expect(screen.getByTestId('switch-moderator', { includeHiddenElements: true })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Moderator model' })).toBeNull();
+  await user.press(screen.getByRole('switch', { name: /^Moderator, Claude · reads the conversation/ }));
   await user.press(screen.getByLabelText('Close'));
 }
 
