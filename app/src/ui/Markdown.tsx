@@ -192,11 +192,47 @@ function maskMath(src: string, marks: string): string {
   return out + marks.slice(from);
 }
 
+// CommonMark lets "**" close after punctuation only before a space or
+// punctuation, and open before punctuation only after one. In Korean a
+// particle or word sits right there: "…원)**를", "값은**(괄호)**" stayed as
+// marks (R-77, 11-06). Next to a Korean, Chinese or Japanese letter, the
+// punctuation beside a "*" run counts as a letter: on the masked copy for
+// closing, and as the char before an opening run. Latin text keeps the rule.
+const cjkLetter = /[\p{Script=Hangul}\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u;
+const markPunct = /^[\p{P}\p{S}]$/u;
+const flankable = (c: string | undefined) => !!c && c !== '*' && c !== '_' && markPunct.test(c);
+const cjkAt = (s: string, i: number, back: boolean) => {
+  if (i < 0 || i >= s.length) return false;
+  const c = back && i > 0 && /[\uDC00-\uDFFF]/.test(s[i]) ? s.slice(i - 1, i + 1) : String.fromCodePoint(s.codePointAt(i) ?? 0);
+  return cjkLetter.test(c);
+};
+
+function cjkFlank(marks: string): string {
+  if (!marks.includes('*')) return marks;
+  const out = marks.split('');
+  for (let i = 0; i < marks.length; i++) {
+    if (marks[i] !== '*') continue;
+    let j = i;
+    while (j < marks.length && marks[j] === '*') j++;
+    if (flankable(marks[i - 1]) && cjkAt(marks, j, false)) out[i - 1] = 'a'; // "원)**를" closes
+    if (flankable(marks[j]) && cjkAt(marks, i - 1, true)) out[j] = 'a'; // "값은**(" opens
+    i = j - 1;
+  }
+  return out.join('');
+}
+
 function emStrong(this: Tokenizer, src: string, maskedSrc: string, prevChar?: string) {
   if (!masked || masked.from !== maskedSrc || src.length > masked.length) {
-    masked = { from: maskedSrc, length: src.length, to: maskMath(src, maskedSrc.slice(maskedSrc.length - src.length)) };
+    masked = { from: maskedSrc, length: src.length, to: cjkFlank(maskMath(src, maskedSrc.slice(maskedSrc.length - src.length))) };
   }
-  return Tokenizer.prototype.emStrong.call(this, src, masked.to, prevChar);
+  // An opening run before punctuation, right after a CJK letter (R-77).
+  let prev = prevChar;
+  if (src[0] === '*' && prev && cjkAt(prev, prev.length - 1, true)) {
+    let j = 0;
+    while (src[j] === '*') j++;
+    if (flankable(src[j])) prev = ' ';
+  }
+  return Tokenizer.prototype.emStrong.call(this, src, masked.to, prev);
 }
 
 // The inside stops at the next opening mark too ("\\" pairs skipped, as in

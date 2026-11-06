@@ -272,6 +272,32 @@ test('emphasis around math keeps the math whole', async () => {
   expect(screen.queryByText(/\$/)).toBeNull();
 });
 
+// R-77 (S23, 11-06): '…25~50만 원)**를' stayed as marks. CommonMark lets
+// "**" close after punctuation only before a space or punctuation, and
+// open before punctuation only after one; a Korean particle or word sits
+// right there. Next to Korean, Chinese or Japanese letters the marks work.
+test('bold works next to Korean letters across punctuation; elsewhere CommonMark holds (R-77)', async () => {
+  const cases: [string, string][] = [
+    ['**RAM을 늘린 Tiny PC(M75q 등, 25~50만 원)**를 1순위로 추천합니다.', 'RAM을 늘린 Tiny PC(M75q 등, 25~50만 원)'],
+    ['값은**(괄호 안)**입니다.', '(괄호 안)'],
+    ['**"맥미니 M4"**는 비쌉니다.', '"맥미니 M4"'],
+    ['가격은 **50만 원.**이라고 했다.', '50만 원.'],
+    ['先に**「確認」**してください。', '「確認」'],
+  ];
+  for (const [text, bold] of cases) {
+    const r = await render(<Markdown text={text} />);
+    expect(style(screen.getByText(bold))).toMatchObject({ fontWeight: '700' });
+    expect(screen.queryByText(/\*\*/)).toBeNull();
+    await r.unmount();
+  }
+  // Latin letters keep the CommonMark rule; a lone * between numbers is no mark.
+  for (const text of ['a**(b)**c', 'foo**"bar"**baz', '2*(3+4)*5']) {
+    const r = await render(<Markdown text={text} />);
+    expect(screen.getByText(text)).toBeTruthy();
+    await r.unmount();
+  }
+});
+
 test('escaped brackets around words stay brackets', async () => {
   await render(<Markdown text={'Usage: cmd \\[options\\] \\[file\\], \\[TODO\\] 정리, See \\[Smith 2020\\]\n\n\\[A\\]'} />);
   expect(screen.getByText('Usage: cmd [options] [file], [TODO] 정리, See [Smith 2020]')).toBeTruthy();
