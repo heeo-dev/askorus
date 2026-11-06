@@ -160,9 +160,12 @@ type DebateSpec struct {
 	Earlier    []string
 	// Judges are the AIs Earlier may go to, as a comparison's: the
 	// moderator gets Earlier only when it is listed.
-	Judges   []string
-	Answers  []DebateAnswer
-	Combined string // the combined answer before the debate
+	Judges []string
+	// Conversation is the conversation record (#29), for the plan and the
+	// answer after the debate; nil is none. It is never changed after.
+	Conversation *judge.Conversation
+	Answers      []DebateAnswer
+	Combined     string // the combined answer before the debate
 	// Moderator is the AI the person picked; "" lets the agent pick. Only
 	// an AI that answered on this PC moderates.
 	Moderator string
@@ -552,7 +555,7 @@ func (c debateCast) codes(names []string) []string {
 // combined answer's) and the AIs that may moderate, in the answers'
 // order: the PC answers' AIs.
 func (m *Manager) cast(s DebateSpec) (debateCast, judge.DebateTask, []string) {
-	spec := judge.Spec{Question: s.Question, Earlier: slices.Clone(s.Earlier)}
+	spec := judge.Spec{Question: s.Question, Earlier: slices.Clone(s.Earlier), Conversation: s.Conversation}
 	for i, a := range s.Answers {
 		spec.Answers = append(spec.Answers, judge.Answer{ID: debateAnswerID(i), Agent: a.Agent, Via: a.Via, Status: judge.AnswerReady, Text: a.Text})
 	}
@@ -635,7 +638,7 @@ func (m *Manager) debateRun(d *debate) {
 	if !m.update(d, func() { d.moderator, d.model = w.Agent, w.Model }) {
 		return
 	}
-	m.log.Info("debate started", "debate", d.id, "moderator", w.Agent, "rules", judge.DebateRules, "ais", len(cast.ais))
+	m.log.Info("debate started", append([]any{"debate", d.id, "moderator", w.Agent, "rules", judge.DebateRulesFor(task.SynthTask), "ais", len(cast.ais)}, task.Conversation.Log()...)...)
 	if err := makeFolder(m.o.Gate.Folder); err != nil {
 		fail(debateFailure(core.ErrCodeInternal, ""))
 		return

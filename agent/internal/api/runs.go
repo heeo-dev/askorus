@@ -39,7 +39,7 @@ const (
 	// maxRunBody: JSON escapes (\n, \") make the body longer than the
 	// prompt; compare's earlier questions (3 of 4 KiB) take up to 32 KiB
 	// more, escaped the same way.
-	maxRunBody  = 2*maxPrompt + 8<<10 + 32<<10
+	maxRunBody  = 2*maxPrompt + 8<<10 + 32<<10 + maxContextBody
 	maxClientID = 64
 	// compare's limits: the earlier questions every listed AI gets
 	// (internal/judge's limits) and the judges a phone may name.
@@ -78,6 +78,9 @@ type RunRequest struct {
 	// run's snapshot then carries refine. Without Options.Refine (the
 	// default since 2026-11-04) it is ignored.
 	Refine *RunRefine `json:"refine,omitempty"`
+	// Context is a follow-up's conversation record (#29): it goes to the
+	// answering AIs before the question, and to the combined answer.
+	Context *RequestContext `json:"context,omitempty"`
 }
 
 // RunRefine is RunRequest.refine.
@@ -180,7 +183,7 @@ func (s *Server) parseCompare(raw json.RawMessage) (*RunCompare, *judge.Error) {
 // attachCompare makes the comparison of a run that has just started. It
 // returns the compareError for the 202, or nil when the comparison was
 // made (or found again, for a re-sent run).
-func (s *Server) attachCompare(owner, question string, run runs.Run, targets []RunTarget, c *RunCompare) *judge.Error {
+func (s *Server) attachCompare(owner, question string, run runs.Run, targets []RunTarget, c *RunCompare, conv *judge.Conversation) *judge.Error {
 	if len(targets) < 2 {
 		return &judge.Error{Code: core.ErrCodeNeedTwoAnswers, Message: msgNeedTwo}
 	}
@@ -199,7 +202,7 @@ func (s *Server) attachCompare(owner, question string, run runs.Run, targets []R
 	}
 	spec := compares.RunSpec{
 		Owner: owner, RunID: run.ID, Question: question,
-		Earlier: c.Earlier, Judges: judges, Asked: asked,
+		Earlier: c.Earlier, Judges: judges, Asked: asked, Conversation: conv,
 	}
 	if sy := c.Synthesis; sy != nil {
 		spec.Synth = &compares.SynthSpec{Off: sy.Off, Agent: sy.Agent, Tier: run.Tier, Model: sy.Model, Effort: sy.Effort}
@@ -318,6 +321,11 @@ func (s *Server) startRun(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, CodeBadRequest, "clientRunId is too long")
 		return
 	}
+	conv, ok := conversationOf(req.Context)
+	if !ok {
+		writeError(w, http.StatusBadRequest, CodeBadRequest, msgBadContext)
+		return
+	}
 	targets, askers, ok := s.askersFor(w, r.Context(), req.Agents)
 	if !ok {
 		return
@@ -362,7 +370,10 @@ func (s *Server) startRun(w http.ResponseWriter, r *http.Request) {
 	}
 	tasks := make([]runs.Task, len(targets))
 	for i, t := range targets {
-		areq := core.AskRequest{Folder: folder, Prompt: core.AskPrompt(prompt), Tier: tier, Model: t.Model, Effort: t.Effort}
+		// A follow-up's record goes before the question (#29), with the
+		// earlier questions for an AI new to the conversation.
+		fresh := t.Session == ""
+		areq := core.AskRequest{Folder: folder, Prompt: judge.AskWithConversation(prompt, conv, fresh), Tier: tier, Model: t.Model, Effort: t.Effort}
 		if t.Session != "" {
 			_, areq.Resume, _ = core.ParseID(t.Session)
 		}
@@ -373,7 +384,7 @@ func (s *Server) startRun(w http.ResponseWriter, r *http.Request) {
 				if err != nil {
 					return core.AskResult{}, err
 				}
-				areq.Prompt = core.AskPrompt(q)
+				areq.Prompt = judge.AskWithConversation(q, conv, fresh)
 			}
 			return asker.Ask(ctx, areq)
 		}}
@@ -393,7 +404,7 @@ func (s *Server) startRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if cmp != nil {
-		cmpErr = s.attachCompare(owner, prompt, run, targets, cmp)
+		cmpErr = s.attachCompare(owner, prompt, run, targets, cmp, conv)
 	}
 	if s.o.Logger != nil {
 		names := make([]string, len(targets))
@@ -407,8 +418,8 @@ func (s *Server) startRun(w http.ResponseWriter, r *http.Request) {
 			compareCode = cmpErr.Code
 		}
 		synth := cmp != nil && cmpErr == nil && cmp.Synthesis != nil && !cmp.Synthesis.Off
-		s.o.Logger.Info("run started", "mode", req.Mode, "tier", tier, "agents", strings.Join(names, ","), "followUp", followUp,
-			"compare", cmp != nil || cmpErr != nil, "compareCode", compareCode, "synthesis", synth, "refine", refiner != nil)
+		s.o.Logger.Info("run started", append([]any{"mode", req.Mode, "tier", tier, "agents", strings.Join(names, ","), "followUp", followUp,
+			"compare", cmp != nil || cmpErr != nil, "compareCode", compareCode, "synthesis", synth, "refine", refiner != nil}, conv.Log()...)...)
 	}
 	st := s.runStatus(owner, run)
 	st.CompareError = cmpErr

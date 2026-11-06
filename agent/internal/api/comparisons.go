@@ -56,6 +56,9 @@ type ComparisonRequest struct {
 	// Synthesis asks for the combined answer once the answers are taken
 	// (S5b); absent is off.
 	Synthesis *ComparisonSynthesis `json:"synthesis,omitempty"`
+	// Context is the conversation record of the turn's follow-up (#29),
+	// for the combined answer.
+	Context *RequestContext `json:"context,omitempty"`
 }
 
 // ComparisonSynthesis is ComparisonRequest.synthesis: the AI that should
@@ -120,6 +123,11 @@ func (s *Server) startComparison(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, CodeBadRequest, "clientComparisonId is too long")
 		return
 	}
+	conv, ok := conversationOf(req.Context)
+	if !ok {
+		writeError(w, http.StatusBadRequest, CodeBadRequest, msgBadContext)
+		return
+	}
 	if sy := req.Synthesis; sy != nil && ((sy.Agent != "" && s.adapterFor(sy.Agent) == nil) || (sy.Tier != "" && !core.ValidTier(sy.Tier)) || badSynthModel(sy.Agent, sy.Model, sy.Effort)) {
 		writeError(w, http.StatusBadRequest, CodeBadRequest, msgBadComparisonSynth)
 		return
@@ -134,7 +142,7 @@ func (s *Server) startComparison(w http.ResponseWriter, r *http.Request) {
 	}
 	spec := compares.DirectSpec{
 		Owner: deviceOf(r), Key: req.ClientComparisonID,
-		Question: req.Question, Earlier: req.Earlier, Judges: req.Judges,
+		Question: req.Question, Earlier: req.Earlier, Judges: req.Judges, Conversation: conv,
 	}
 	for _, a := range req.Answers {
 		spec.Answers = append(spec.Answers, compares.DirectAnswer{ID: a.ID, Agent: a.Agent, Via: a.Via, Model: a.Model, Text: a.Text})

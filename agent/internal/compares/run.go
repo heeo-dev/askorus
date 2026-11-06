@@ -130,7 +130,7 @@ func (m *Manager) answers(c *comparison) (judge.Spec, *judge.Error) {
 	var want []string
 	switch {
 	case d != nil:
-		spec = judge.Spec{Question: d.Question, Earlier: slices.Clone(d.Earlier)}
+		spec = judge.Spec{Question: d.Question, Earlier: slices.Clone(d.Earlier), Conversation: d.Conversation}
 		for _, a := range d.Answers {
 			family := judge.HandoffFamily(a.Agent)
 			if a.Via == judge.ViaPC {
@@ -145,7 +145,7 @@ func (m *Manager) answers(c *comparison) (judge.Spec, *judge.Error) {
 			}
 		}
 	case rs != nil && run != nil:
-		spec = judge.Spec{Question: rs.Question, Earlier: slices.Clone(rs.Earlier)}
+		spec = judge.Spec{Question: rs.Question, Earlier: slices.Clone(rs.Earlier), Conversation: rs.Conversation}
 		for _, part := range run.Parts {
 			ready := part.Status == runs.Done && strings.TrimSpace(part.Answer) != ""
 			spec.Answers = append(spec.Answers, answer(part.Agent, part.Agent, judge.ViaPC, part.Model, m.family(part.Agent, part.Model), part.Answer, ready))

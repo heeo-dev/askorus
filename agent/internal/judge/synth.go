@@ -59,6 +59,9 @@ type SynthTask struct {
 	// since 2026-11-04). The prompt does not use it; it is kept so a
 	// record shows how the question was read.
 	Spec *QuestionSpec
+	// Conversation is the record a follow-up came with (#29): with one, the
+	// prompt is synth-v6 (debate-v5 after a debate, debate-plan v3).
+	Conversation *Conversation
 }
 
 // SynthAnswer is one answer: the name of the AI or app that wrote it, as
@@ -114,8 +117,9 @@ func HandoffName(app string) string {
 // number. Every cut is at a UTF-8 character boundary.
 func BuildSynthTask(s Spec, name func(answerID string) string) SynthTask {
 	t := SynthTask{
-		Question: promptClip(s.Question, MaxSynthQuestionBytes),
-		Earlier:  promptEarlier(s.Earlier),
+		Question:     promptClip(s.Question, MaxSynthQuestionBytes),
+		Earlier:      promptEarlier(s.Earlier),
+		Conversation: s.Conversation,
 	}
 	var ready []Answer
 	for _, a := range s.Answers {
@@ -184,6 +188,9 @@ func synthContent(task SynthTask) []string {
 		add(a.AI)
 		add(a.Text)
 	}
+	for _, s := range task.Conversation.content() {
+		add(s)
+	}
 	return out
 }
 
@@ -219,6 +226,11 @@ func SynthPrompt(task SynthTask, nonce string) string {
 	}
 	b.WriteString("</data-" + nonce + ">\n")
 	b.WriteString(synthTail)
+	if !task.Conversation.Empty() {
+		// synth-v6 (#29): the conversation record and what to do with it; its
+		// earlier questions only for a writer that got none of its own.
+		return withConversation(b.String(), nonce, task.Conversation, conversationRule, synthLabel, synthLabelV6, len(task.Earlier) == 0, true)
+	}
 	return b.String()
 }
 
