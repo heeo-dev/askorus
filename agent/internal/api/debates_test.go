@@ -28,7 +28,7 @@ func (w debateWriter) Synthesize(ctx context.Context, req core.SynthRequest) (co
 	}
 	answer := "AFTER-TEXT"
 	switch {
-	case strings.HasPrefix(req.Prompt, "[Asksemble debate-plan v1]"):
+	case strings.HasPrefix(req.Prompt, "[Asksemble debate-plan v2]"):
 		answer = apiPlan
 	case strings.HasPrefix(req.Prompt, "[Asksemble debate-check v1]"):
 		answer = "DONE | agreed | 8시입니다."

@@ -81,7 +81,7 @@ func TestIT19Debate(t *testing.T) {
 			}
 			heads = append(heads, strings.SplitN(c.Stdin, "]", 2)[0]+"]")
 		}
-		if strings.Join(heads, ",") != "[Asksemble debate-plan v1],[Asksemble debate-check v1],[Asksemble debate-check v1],[Asksemble synthesis debate-v4]" {
+		if strings.Join(heads, ",") != "[Asksemble debate-plan v2],[Asksemble debate-check v1],[Asksemble debate-check v1],[Asksemble synthesis debate-v4]" {
 			t.Errorf("moderator calls %v", heads)
 		}
 		// The turns: the ask command, in the judge folder, the prompt on

@@ -21,7 +21,7 @@ const (
 	debateQuestion = "첫 배는 몇 시에 떠?"
 	debateCombined = "첫 배 시간은 AI마다 다릅니다: {{Claude}} 7시, {{Codex}}와 {{OpenCode}} 8시."
 	debateAfter    = "첫 배는 8시입니다."
-	planHead       = "[Asksemble debate-plan v1]"
+	planHead       = "[Asksemble debate-plan v2]"
 	checkHead      = "[Asksemble debate-check v1]"
 	afterHead      = "[Asksemble synthesis debate-v4]"
 	turnHead       = "[Asksemble debate-turn v1]"
