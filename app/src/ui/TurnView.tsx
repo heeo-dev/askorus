@@ -103,10 +103,11 @@ export function TurnView({
           : views.map((p) => (
               <AnswerBlock
                 key={p.agent}
-                p={p}
+                // A question to the moderator (#25): its one card is the moderator's.
+                p={turn.moderator ? { ...p, name: t('ask.moderatorName', { name: p.name }) } : p}
                 onCopy={() => act.copy(`${turn.id}/${p.agent}`, p.part.answer ?? '')}
-                onOnly={act.only(p.agent)}
-                onContinue={act.carryOn(`${turn.id}/${p.agent}`, p.part)}
+                onOnly={turn.moderator ? undefined : act.only(p.agent)}
+                onContinue={turn.moderator ? undefined : act.carryOn(`${turn.id}/${p.agent}`, p.part)}
                 note={notes[`${turn.id}/${p.agent}`]}
               />
             ))}

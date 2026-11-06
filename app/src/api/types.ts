@@ -81,7 +81,18 @@ export type Info = {
   debate?: DebateInfo;
   /** The agent takes a conversation record (#29); an older agent leaves it out, and the phone sends none. */
   context?: ContextInfo;
+  /** The agent asks the moderator alone (#25); an older agent leaves it out, and the phone offers no '사회자'. */
+  moderator?: ModeratorInfo;
 };
+
+/** /v1/info's moderator: the limits of the answers a moderator ask carries. */
+export type ModeratorInfo = { maxAnswers: number; maxAnswerBytes: number; rules: string };
+
+/**
+ * A question to the moderator (#25): the moderator AI (its model and effort
+ * as set for it), and the previous turn's answers by AI it reads.
+ */
+export type RunModerator = { agent: string; model?: string; effort?: string; answers?: { agent: string; text: string }[] };
 
 /** /v1/info's context: the record's limits. */
 export type ContextInfo = { maxSettled: number; maxLastBytes: number };
@@ -200,6 +211,8 @@ export type RunRequest = {
   refine?: RefineRequest;
   /** The conversation record (#29), only to an agent whose info has context. */
   context?: RequestContext;
+  /** Ask the moderator alone (#25): agents, compare and refine are then not read. */
+  moderator?: RunModerator;
 };
 
 /**

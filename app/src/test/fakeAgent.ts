@@ -141,6 +141,7 @@ export class FakeAgent {
   debateError: { status: number; code: string } | null = null;
   private debateOn = false;
   private contextOn = false;
+  private moderatorOn = false;
   private debates = new Map<string, FakeDebate>();
   /** How the PC can be reached: fine, agent stopped behind serve, or not at all. */
   reach: 'ok' | 'agent_down' | 'offline' = 'ok';
@@ -212,6 +213,11 @@ export class FakeAgent {
   /** enableContext makes the agent take a conversation record (#29: /v1/info's context). */
   enableContext() {
     this.contextOn = true;
+  }
+
+  /** enableModerator makes the agent ask the moderator alone (#25: /v1/info's moderator); call it after enableContext. */
+  enableModerator() {
+    this.moderatorOn = true;
   }
 
   /** The bodies of every POST /v1/debates, in order. */
@@ -675,6 +681,7 @@ export class FakeAgent {
         reserved: [],
         ...(this.debateOn ? { debate: { maxPoints: 2, maxTurns: 4, rules: 'debate-v4' } } : {}),
         ...(this.contextOn ? { context: { maxSettled: 12, maxLastBytes: 8192 } } : {}),
+        ...(this.moderatorOn ? { moderator: { maxAnswers: 6, maxAnswerBytes: 8192, rules: 'moderator-ask-v1' } } : {}),
       });
     }
     if (key === 'DELETE /v1/devices/self') {
@@ -778,9 +785,10 @@ export class FakeAgent {
       if (known) return json(200, this.runState(known));
       const id = `run-${++this.n}`;
       const parts = (c.body.agents ?? []).map((t: any) => {
-        const sessionId = t.session ?? `${t.agent}:s-${this.n}`;
+        // A question to the moderator is a one-off: like the agent, its part names no session (#25).
+        const sessionId = c.body.moderator ? undefined : (t.session ?? `${t.agent}:s-${this.n}`);
         // Claude's asks are Claude sessions too; they show under Ask chats.
-        if (t.agent === 'claude' && !this.sessions.some((x) => x.id === sessionId)) {
+        if (sessionId && t.agent === 'claude' && !this.sessions.some((x) => x.id === sessionId)) {
           this.sessions = [session({ id: sessionId, title: c.body.prompt, state: 'history', badges: ['ask'] }), ...this.sessions];
         }
         return { agent: t.agent, status: 'running', session: sessionId, model: t.model ?? `${t.agent}-${c.body.tier}`, ms: 1234, prompt: c.body.prompt };

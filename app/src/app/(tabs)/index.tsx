@@ -5,8 +5,9 @@
 // (F-Ask-Empty … F-Result-Light).
 // Follow-ups go to the AIs picked in the follow-up bar (#22: by default
 // the last question's AIs and tier; one AI is the old 'only this AI'), each
-// carrying its own conversation on; Claude's answer can be carried on in
-// the Claude app.
+// carrying its own conversation on, or to the moderator alone (#25: its
+// row on top of the picker, where the PC asks the moderator); Claude's
+// answer can be carried on in the Claude app.
 //
 // thread.ts follows the runs and comparisons; compare.ts and present.ts
 // say what each state shows; ui/TurnView draws a turn. This screen keeps
@@ -40,7 +41,7 @@ import { features } from '@/ask/features';
 import { modelLabel, pickOf, runsWith } from '@/ask/models';
 import { aiStatus, askErrorText, metaLine, partViews, rowValue } from '@/ask/present';
 import { type AskPrefs, defaultAskPrefs, loadAskPrefs, saveAskPrefs } from '@/ask/prefs';
-import { buildRecord, concluding } from '@/ask/record';
+import { buildRecord, concluding, moderatorAnswers } from '@/ask/record';
 import {
   askers,
   carry,
@@ -110,7 +111,7 @@ export default function Ask() {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [text, setText] = useState('');
   // The follow-up bar's AIs and tier (#22), picked for this conversation; null is its default.
-  const [pick, setPick] = useState<{ agents: string[]; tier: Tier } | null>(null);
+  const [pick, setPick] = useState<{ agents: string[]; tier: Tier; moderator?: boolean } | null>(null);
   const [notes, setNotes] = useState<Record<string, Note>>({});
   const [sheet, setSheet] = useState<SheetState>(null);
   // The notice before the first follow-up that carries the record (#29).
@@ -412,9 +413,14 @@ export default function Ask() {
   const canAsk = (agent: string) => list.some((a) => a.agent === agent && a.canAsk);
   const now = Date.now();
   // Who the next follow-up goes to (#22): what the bar picked, else the last question's AIs and tier.
-  const follow = pick ?? followDefault(turns, on, canAsk, prefs.tier);
+  const follow: { agents: string[]; tier: Tier; moderator?: boolean } = pick ?? followDefault(turns, on, canAsk, prefs.tier);
+  // The moderator (#25): the moderator AI set, else the first AI that can answer, where the PC
+  // asks the moderator and there are answers to talk about.
+  const modAgent = info?.moderator ? (canAsk(prefs.synthAgent) ? prefs.synthAgent : (list.find((a) => a.canAsk)?.agent ?? null)) : null;
+  const modOffered = !!modAgent && moderatorAnswers(turns).length > 0;
+  const modAsk = !!follow.moderator && modOffered;
   // One AI alone (the old 'only this AI'), shown as its chip while others are on.
-  const one = follow.agents.length === 1 && on.length > 1 ? follow.agents[0] : null;
+  const one = !modAsk && follow.agents.length === 1 && on.length > 1 ? follow.agents[0] : null;
 
   // record: the answer to the notice (#29), left out when none was shown.
   const sendWith = (record?: 'with' | 'without') => {
@@ -424,8 +430,12 @@ export default function Ask() {
     // What this conversation concludes is still coming (its combined answer or debate): a
     // question that carries the record waits for it (#29); one sent without a record goes now.
     const coming = concluding(turns);
-    const carries = prefs.carryRecord && !!info.context;
-    if (!record && carries && !prefs.recordNoticed && (coming || buildRecord(turns, info))) {
+    const followUp = turns.length > 0;
+    // A question to the moderator always reads the record and needs no notice (#25: its
+    // company already gets every answer).
+    const toModerator = followUp && modAsk && !!modAgent;
+    const carries = toModerator || (prefs.carryRecord && !!info.context);
+    if (!record && !toModerator && carries && !prefs.recordNoticed && (coming || buildRecord(turns, info))) {
       setAskRecord(true);
       return;
     }
@@ -434,7 +444,7 @@ export default function Ask() {
       change({ recordNoticed: true });
     }
     // The first question goes to everyone turned on with the tier set; a follow-up as its bar says (#22).
-    const followUp = turns.length > 0;
+    const modPick = toModerator && modAgent ? prefs.synthModels[modAgent] : undefined;
     let turn = newTurn({
       id: Crypto.randomUUID(),
       question,
@@ -447,6 +457,10 @@ export default function Ask() {
       info,
       synth: { on: prefs.synth, agent: prefs.synthAgent, models: prefs.synthModels },
       refine: features.refine ? { on: prefs.refine, agent: prefs.synthAgent } : undefined,
+      moderator:
+        toModerator && modAgent
+          ? { agent: modAgent, ...(modPick ? { model: modPick.model, ...(modPick.effort ? { effort: modPick.effort } : {}) } : {}), answers: moderatorAnswers(turns) }
+          : undefined,
       at: Date.now(),
     });
     if (!turn.agents.length) return;
@@ -557,6 +571,8 @@ export default function Ask() {
   };
   // The same in the follow-up bar's picker (#22), for this conversation only, in the PC's order.
   const toggleFollow = (agent: string) => {
+    // From the moderator back to the AIs: this one.
+    if (modAsk) return setPick({ agents: [agent], tier: follow.tier });
     const has = follow.agents.includes(agent);
     if (has && follow.agents.length === 1) return;
     const next = has ? follow.agents.filter((x) => x !== agent) : list.map((a) => a.agent).filter((a) => a === agent || follow.agents.includes(a));
@@ -613,10 +629,24 @@ export default function Ask() {
     };
   });
 
-  // The follow-up bar's picker (#22): the same rows, switching the AIs of the next follow-up.
-  const followRows: AISheetRow[] = list.map((a) => {
+  // The follow-up bar's picker (#22): the same rows, switching the AIs of the next follow-up,
+  // under the moderator's row (#25: it goes alone, never with the AIs).
+  const modRow: AISheetRow[] =
+    modOffered && modAgent
+      ? [
+          {
+            agent: modAgent,
+            name: t('ask.moderatorRow'),
+            model: t('ask.moderatorRowHint', { name: agentName(modAgent) }),
+            onPress: () => setPick({ agents: follow.agents, tier: follow.tier, moderator: !modAsk }),
+            checked: modAsk,
+            accessibilityValue: { text: '' },
+          },
+        ]
+      : [];
+  const followRows: AISheetRow[] = modRow.concat(list.map((a) => {
     const name = agentName(a.agent);
-    const picked = follow.agents.includes(a.agent);
+    const picked = !modAsk && follow.agents.includes(a.agent);
     return {
       agent: a.agent,
       name,
@@ -638,7 +668,7 @@ export default function Ask() {
       ),
       accessibilityValue: { text: '' },
     };
-  });
+  }));
 
   const resultViews = sheet?.kind === 'ais' && sheetTurn ? partViews(sheetTurn, now, info) : [];
   const resultRows: AISheetRow[] = resultViews.map((p) => ({
@@ -854,11 +884,18 @@ export default function Ask() {
         onChangeText={setText}
         onSend={send}
         canSend={!!text.trim() && !busy && !!info && follow.agents.length > 0}
-        placeholder={one ? t('ask.followTo', { name: oneName }) : t('ask.followPlaceholder')}
-        sendLabel={one ? t('ask.sendTo', { name: oneName }) : t('ask.sendIcon')}
+        placeholder={modAsk ? t('ask.followModerator') : one ? t('ask.followTo', { name: oneName }) : t('ask.followPlaceholder')}
+        sendLabel={modAsk ? t('ask.sendModerator') : one ? t('ask.sendTo', { name: oneName }) : t('ask.sendIcon')}
         sendHint={busy ? t('ask.sendWait') : undefined}
         to={
-          one
+          modAsk && modAgent
+            ? {
+                agent: modAgent,
+                label: t('ask.toModerator'),
+                cancelLabel: t('ask.toModeratorCancel'),
+                onCancel: () => setPick({ agents: follow.agents, tier: follow.tier }),
+              }
+            : one
             ? {
                 agent: one,
                 label: t('ask.toOne', { name: oneName }),
@@ -868,7 +905,7 @@ export default function Ask() {
             : undefined
         }
         agents={follow.agents}
-        pickLabel={t('ask.followPick', { n: follow.agents.length, names: followNames })}
+        pickLabel={modAsk ? t('ask.toModerator') : t('ask.followPick', { n: follow.agents.length, names: followNames })}
         onPickAIs={() => setSheet({ kind: 'followPick' })}
         tier={follow.tier}
         onPickTier={() => setSheet({ kind: 'followTier' })}
