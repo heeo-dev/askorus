@@ -292,6 +292,7 @@
   "ask.sendWait": "You can send once every answer is in.",
   "ask.queued": "Waiting: it goes once the question before it is done.",
   "ask.notSent": "Not sent: you left before the question before it was done.",
+  "ask.error.run_not_found": "The PC no longer has this answer: the phone did not fetch it within 30 minutes of its end (while the screen was off), or the agent restarted.",
   "ask.goingOn": "The question before is still being answered and is kept in the history.",
   "ask.toOneCancel": "Stop asking only {name}",
   "ask.followTo": "Ask {name} a follow-up",

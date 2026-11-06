@@ -69,6 +69,8 @@ test('a debate is offered on a done combined answer of two or more answers, wher
   expect(debateOffered(turn({ debate: { id: 'd1', snap: snap({ status: 'failed', pollAfterMs: undefined, error: { code: 'judge_bad_output', message: '' } }) } }), info())).toBe(true);
   expect(debateOffered(turn({ debate: { id: 'd1', snap: snap({ status: 'failed', pollAfterMs: undefined, error: { code: 'need_two_answers', message: '' } }) } }), info())).toBe(false);
   expect(debateOffered(turn({ debate: { error: 'too_many_debates' } }), info())).toBe(true);
+  // A stopped debate may be started again (11-07).
+  expect(debateOffered(turn({ debate: { id: 'd1', snap: snap({ status: 'stopped', pollAfterMs: undefined }) } }), info())).toBe(true);
   expect(debateCost(turn())).toBe(10);
   expect(debateCost(turn({ agents: ['claude', 'codex'] }))).toBe(8);
 });

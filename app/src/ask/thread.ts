@@ -210,30 +210,56 @@ export type FollowDeps = {
 };
 
 /**
+ * lostRun is a run the PC no longer has (run_not_found: it ended more than
+ * 30 minutes before the phone asked again, as when the phone slept, or the
+ * agent restarted): what came is kept, an answer still coming is failed
+ * with run_not_found, and the run has ended (11-07). Asking again could
+ * never bring the rest back.
+ */
+export function lostRun(run: Run): Run {
+  const parts = run.parts.map((p) => (p.status === 'running' ? { ...p, status: 'failed', error: { code: 'run_not_found' } } : p));
+  return { ...run, status: parts.some((p) => p.status === 'done') ? 'done' : 'failed', pollAfterMs: undefined, parts };
+}
+
+/**
  * followRun sends (or, with a run id, picks up) a turn's run and patches in
  * its answers as they come. A turn that compares then follows the
- * comparison the PC made of them.
+ * comparison the PC made of them. A run the PC no longer has keeps what
+ * came (lostRun); its comparison is then followed too, so a lost one can be
+ * made again from the answers (다시 비교).
  */
 export async function followRun(client: AgentClient, turn: Turn, deps: FollowDeps, runId?: string): Promise<void> {
   deps.follows.get(turn.id)?.abort();
   const ctl = new AbortController();
   deps.follows.set(turn.id, ctl);
   // A follow that was replaced or stopped patches nothing more.
+  let last = turn.run;
   const put = (run: Run) => {
+    last = run;
     if (!ctl.signal.aborted) deps.update(turn.id, (t) => ({ run, compare: withRun(t.compare, run) }));
   };
   deps.update(turn.id, () => ({ error: undefined }));
   let run: Run;
+  let lost = false;
   try {
     run = runId ? await client.run(runId, ctl.signal) : await client.startRun(turn.req, ctl.signal);
     put(run);
     run = await client.waitRun(run, { signal: ctl.signal, onUpdate: put });
     put(run);
   } catch (e) {
-    if (!(e instanceof CancelledError) && !ctl.signal.aborted) deps.update(turn.id, () => ({ error: deps.errorText(e) }));
-    return;
+    if (e instanceof AgentError && e.code === 'run_not_found' && last && !ctl.signal.aborted) {
+      run = lostRun(last);
+      lost = true;
+    } else {
+      if (!(e instanceof CancelledError) && !ctl.signal.aborted) deps.update(turn.id, () => ({ error: deps.errorText(e) }));
+      return;
+    }
   } finally {
     if (deps.follows.get(turn.id) === ctl) deps.follows.delete(turn.id);
+  }
+  if (lost && !ctl.signal.aborted) {
+    const kept = run;
+    deps.update(turn.id, (t) => ({ error: undefined, run: kept, compare: withRun(t.compare, kept) }));
   }
   if (ctl.signal.aborted) return;
   const compare = withRun(turn.compare, run);

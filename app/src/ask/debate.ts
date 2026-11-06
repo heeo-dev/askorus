@@ -43,7 +43,8 @@ function combined(turn: Turn, info: Info | null): { text: string; agent: string 
 /**
  * debateOffered: the turn may start a debate: the PC runs them (info's
  * debate), the combined answer is done, two or more answers came, and the
- * turn has no debate yet (or one that ended in a way a new one may fix).
+ * turn has no debate yet, or one that was stopped (11-07, the user's
+ * request) or ended in a way a new one may fix.
  */
 export function debateOffered(turn: Turn, info: Info | null): boolean {
   if (!info?.debate || turn.error || !combined(turn, info) || readyParts(turn).length < 2) return false;
@@ -52,7 +53,8 @@ export function debateOffered(turn: Turn, info: Info | null): boolean {
   if (d.key) return false;
   if (d.error) return again.includes(d.error);
   const s = d.snap;
-  return !!s && s.debateId === d.id && s.status === 'failed' && again.includes(s.error?.code ?? 'internal');
+  if (!s || s.debateId !== d.id) return false;
+  return s.status === 'stopped' || (s.status === 'failed' && again.includes(s.error?.code ?? 'internal'));
 }
 
 /**

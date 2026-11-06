@@ -4,10 +4,11 @@ import type { AdapterInfo, Comparison, Info, Run } from '@/api/types';
 import { compareState, synthState } from './compare';
 import {
   askers,
-  type FollowDeps,
   followCompare,
+  type FollowDeps,
   followRun,
   lastSessions,
+  lostRun,
   newTurn,
   parts,
   request,
@@ -511,4 +512,30 @@ test('stopAll also stops a comparison whose combined answer is still being writt
   ];
   stopAll(pc.client, turns, new Map());
   expect(said(pc.calls)).toEqual(['POST comparisons/c1/cancel']);
+});
+
+// R-80 (11-07): a run the PC no longer has keeps what came; an answer still coming fails with run_not_found.
+test('lostRun keeps what came and ends the run', () => {
+  const run: Run = {
+    runId: 'r1',
+    mode: 'ask',
+    status: 'running',
+    startedAt: 'x',
+    pollAfterMs: 1000,
+    parts: [
+      { agent: 'claude', status: 'done', answer: 'A' },
+      { agent: 'codex', status: 'failed', error: { code: 'ask_failed' } },
+      { agent: 'opencode', status: 'running' },
+    ],
+  };
+  const lost = lostRun(run);
+  expect(lost.status).toBe('done');
+  expect(lost.pollAfterMs).toBeUndefined();
+  expect(lost.parts.map((p) => [p.agent, p.status, p.error?.code])).toEqual([
+    ['claude', 'done', undefined],
+    ['codex', 'failed', 'ask_failed'],
+    ['opencode', 'failed', 'run_not_found'],
+  ]);
+  expect(lostRun({ ...run, parts: [{ agent: 'claude', status: 'running' }] }).status).toBe('failed');
+  expect(run.status).toBe('running'); // not changed in place
 });
