@@ -221,8 +221,12 @@ export function cardPreview(p: PartView): string {
   return firstLine(p.error ?? '');
 }
 
-/** onlyTarget: the AI a follow-up goes to alone, or null for everyone. */
-export const onlyTarget = (to: Target): string | null => (to === 'all' ? null : to.agent);
+/** onlyTarget: the AI a follow-up goes to alone, or null for several. */
+export const onlyTarget = (to: Target): string | null => {
+  if (to === 'all') return null;
+  if ('agent' in to) return to.agent;
+  return to.agents.length === 1 ? to.agents[0] : null;
+};
 
 // ---- Plain text of Markdown ----
 

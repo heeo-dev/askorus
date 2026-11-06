@@ -3,8 +3,10 @@
 // the AI picker), the tier (one chip that opens the tier sheet, #16) and
 // the send button. FollowBar is the bar under
 // a conversation (F-Ask-Answering, F-Followup-One): a follow-up, its send
-// button, and the 'only {name}' chip when it goes to one AI. Both sit at
-// the bottom of the screen and lift themselves over the keyboard.
+// button, and above them (#22, 11-07) the AIs it goes to (the pile, or the
+// 'only {name}' chip when it goes to one AI or to the moderator) and its
+// tier. Both sit at the bottom of the screen and lift themselves over the
+// keyboard.
 //
 // S5c review: the board is 411 dp wide. Narrower (or with a larger system
 // font) the toolbar packs closer: no count beside the pile (its label still
@@ -128,6 +130,11 @@ export function FollowBar({
   sendLabel,
   sendHint,
   to,
+  agents,
+  pickLabel,
+  onPickAIs,
+  tier,
+  onPickTier,
 }: {
   value: string;
   onChangeText: (s: string) => void;
@@ -136,28 +143,72 @@ export function FollowBar({
   placeholder: string;
   sendLabel: string;
   sendHint?: string;
+  /** One AI, or the moderator, the follow-up goes to alone: a chip in place of the pile. */
   to?: { agent: string; label: string; cancelLabel: string; onCancel: () => void };
+  /** The AIs the follow-up goes to, their picker and its tier (#22); left out, the bar has no tools row. */
+  agents?: string[];
+  pickLabel?: string;
+  onPickAIs?: () => void;
+  tier?: Tier;
+  onPickTier?: () => void;
 }) {
   const th = useTheme();
   const s = styles(th);
   const lift = Math.max(useKeyboardInset(), useSafeInsets().bottom);
+  const tools = !!(onPickAIs && tier && onPickTier);
   return (
-    <View style={[s.bar, to && s.barTo, { paddingBottom: 6 + lift }]} testID="follow-bar">
-      {to ? (
+    <View style={[s.bar, (to || tools) && s.barTo, { paddingBottom: 6 + lift }]} testID="follow-bar">
+      {to || tools ? (
         <View style={s.toRow}>
-          <View style={s.to}>
-            <Avatar agent={to.agent} />
-            <Text style={s.toText}>{to.label}</Text>
+          {to ? (
+            <View style={s.to}>
+              <Pressable
+                onPress={onPickAIs}
+                disabled={!onPickAIs}
+                accessibilityRole="button"
+                accessibilityLabel={pickLabel ?? to.label}
+                style={s.toPick}
+              >
+                <Avatar agent={to.agent} />
+                <Text style={s.toText}>{to.label}</Text>
+              </Pressable>
+              <Pressable
+                onPress={to.onCancel}
+                accessibilityRole="button"
+                accessibilityLabel={to.cancelLabel}
+                hitSlop={8}
+                style={({ pressed }) => [s.toClose, pressed && { backgroundColor: th.softLine }]}
+              >
+                <Icon name="close" size={14} color={th.accent} />
+              </Pressable>
+            </View>
+          ) : tools ? (
             <Pressable
-              onPress={to.onCancel}
+              onPress={onPickAIs}
               accessibilityRole="button"
-              accessibilityLabel={to.cancelLabel}
-              hitSlop={8}
-              style={({ pressed }) => [s.toClose, pressed && { backgroundColor: th.softLine }]}
+              accessibilityLabel={pickLabel}
+              style={({ pressed }) => [s.followPick, pressed && { backgroundColor: th.raised }]}
+              testID="follow-pick"
             >
-              <Icon name="close" size={14} color={th.accent} />
+              <AvatarPile agents={agents ?? []} ring={th.bg} />
+              <Icon name="chevronDown" size={14} color={th.textSub} />
             </Pressable>
-          </View>
+          ) : null}
+          {tools && tier ? (
+            <Pressable
+              onPress={onPickTier}
+              accessibilityRole="button"
+              accessibilityLabel={t('ask.tierPick', { tier: t(`ask.tier.${tier}`) })}
+              hitSlop={{ top: 6, bottom: 6 }}
+              style={({ pressed }) => [s.tier, s.followTier, pressed && { opacity: 0.8 }]}
+              testID="follow-tier"
+            >
+              <Text style={s.tierText} numberOfLines={1}>
+                {t(`ask.tier.${tier}`)}
+              </Text>
+              <Icon name="chevronDown" size={14} color={th.onChipOn} />
+            </Pressable>
+          ) : null}
         </View>
       ) : null}
       <View style={s.followRow}>
@@ -228,8 +279,11 @@ const styles = themed((th) =>
       backgroundColor: th.bg,
     },
     barTo: { paddingTop: 8 },
-    toRow: { flexDirection: 'row' },
-    to: { height: 32, flexDirection: 'row', alignItems: 'center', gap: 6, paddingLeft: 4, paddingRight: 2, borderRadius: 16, backgroundColor: th.soft },
+    toRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    to: { height: 32, flexShrink: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 2, paddingLeft: 4, paddingRight: 2, borderRadius: 16, backgroundColor: th.soft },
+    toPick: { flexShrink: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 6 },
+    followPick: { height: 32, flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: 4, paddingLeft: 2, paddingRight: 6, borderRadius: 16 },
+    followTier: { height: 28, paddingLeft: 10, paddingRight: 8, flexShrink: 0 },
     toText: { fontSize: 13, fontWeight: '600', lineHeight: 18, color: th.accent },
     toClose: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
     // The send button stays at the bottom as the follow-up grows.

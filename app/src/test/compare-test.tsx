@@ -212,9 +212,26 @@ test('a follow-up sends the earlier questions every writer answered, not one sen
   await user.press(within(await screen.findByTestId('answer-sheet')).getByRole('button', { name: 'Only this AI' }));
   await follow(user, 'only you', 'Ask Codex a follow-up', 'Send to Codex');
   await screen.findByText('codex says: only you');
+  // The next follow-up starts with Codex again (#22); back to everyone.
+  await user.press(screen.getByRole('button', { name: 'Stop asking only Codex' }));
   await follow(user, 'all again');
   await waitFor(() => expect(agent.runRequests()).toHaveLength(3));
   expect(agent.runRequests()[2].compare).toEqual({ earlier: ['first'], judges: all, synthesis: { agent: 'claude' } });
+  await waitFor(() => expect(screen.getAllByText('Fake combined answer.')).toHaveLength(2), { timeout: 5000 });
+});
+
+// #22: a follow-up to two of the three AIs picked in the follow-up bar is compared too.
+test('a follow-up to two AIs picked in the follow-up bar gets a combined answer from them', async () => {
+  const user = await open();
+  await ask(user, 'first');
+  await written();
+  await user.press(screen.getByRole('button', { name: 'AIs for the follow-up: 3 (Claude, Codex, OpenCode). Pick' }));
+  await user.press(await screen.findByRole('switch', { name: /^OpenCode, / }));
+  await user.press(screen.getByLabelText('Close'));
+  await follow(user, 'two of you');
+  await waitFor(() => expect(agent.runRequests()).toHaveLength(2));
+  expect(agent.runRequests()[1].agents.map((a: { agent: string }) => a.agent)).toEqual(['claude', 'codex']);
+  expect(agent.runRequests()[1].compare).toMatchObject({ judges: ['claude', 'codex'], synthesis: { agent: 'claude' } });
   await waitFor(() => expect(screen.getAllByText('Fake combined answer.')).toHaveLength(2), { timeout: 5000 });
 });
 

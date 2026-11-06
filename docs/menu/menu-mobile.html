@@ -86,7 +86,7 @@ td.enc { font-family: var(--mono); font-size: 0.85rem; white-space: nowrap; }
 <div class="wrap">
   <header style="display:grid;gap:8px">
     <h1>Asksemble 두 입구와 메뉴</h1>
-    <p class="lead">한 번에 묻기(ask)·일 맡기기(work)·코딩하기(code)를 원칙 9의 두 입구에 나눈 구조입니다. 이름마다 한국어와 영어를 같이 적었고, 바꿀 수 있는 한국어 이름은 아래 표에 후보를 모았습니다. 2026-10-29 확정(사용자). 2026-11-02 화면 재구성(S5c, 사용자 결정 8)에 맞춰 고침: 아래 탭 대신 헤더 가운데 스위치와 서랍. 2026-11-05 사회자 혼자(C6)에 맞춰 고침: 근거·판정 정보·'AI 답이 다른 곳' 없앰. 2026-11-05 토론(#26)을 더함: 종합 답변 아래 '토론하기', '더 따져 보기'를 대신함. 2026-11-06 대화 결론 기록(#29)을 더함: 이어서 묻기 질문 아래 '앞 결론을 이어받음', 처음 한 번 안내, 설정 › 사회자의 '이어서 물을 때 결론 이어 주기', 토론 중 이어서 묻기는 대기.</p>
+    <p class="lead">한 번에 묻기(ask)·일 맡기기(work)·코딩하기(code)를 원칙 9의 두 입구에 나눈 구조입니다. 이름마다 한국어와 영어를 같이 적었고, 바꿀 수 있는 한국어 이름은 아래 표에 후보를 모았습니다. 2026-10-29 확정(사용자). 2026-11-02 화면 재구성(S5c, 사용자 결정 8)에 맞춰 고침: 아래 탭 대신 헤더 가운데 스위치와 서랍. 2026-11-05 사회자 혼자(C6)에 맞춰 고침: 근거·판정 정보·'AI 답이 다른 곳' 없앰. 2026-11-05 토론(#26)을 더함: 종합 답변 아래 '토론하기', '더 따져 보기'를 대신함. 2026-11-06 대화 결론 기록(#29)을 더함: 이어서 묻기 질문 아래 '앞 결론을 이어받음', 처음 한 번 안내, 설정 › 사회자의 '이어서 물을 때 결론 이어 주기', 토론 중 이어서 묻기는 대기. 2026-11-07 이어서 묻기 칸(#22): AI 묶음과 단계 칩(기본은 앞 질문의 AI와 단계), AI 하나는 '이 AI에게만' 칩과 합침.</p>
     <div class="legend">
       <span><span class="ph p1">P1</span> 지금 있음</span>
       <span><span class="ph p2">P2</span> 다음(한 번에 묻기)</span>
@@ -150,8 +150,10 @@ td.enc { font-family: var(--mono); font-size: 0.85rem; white-space: nowrap; }
             </li>
             <li><div class="item"><b>이어서 묻기</b><span class="en">Follow up</span></div>
               <div class="chips">
-                <span class="chip">모두에게 <span class="en">Everyone</span></span>
-                <span class="chip">이 AI에게만 <span class="en">Only this AI</span></span>
+                <span class="chip">이어서 물을 AI ▾ <span class="en">AIs for the follow-up ▾</span></span>
+                <span class="chip">단계 칩 ▾ <span class="en">Tier ▾</span></span>
+                <span class="chip">{이름}에게만 × <span class="en">Only {name} ×</span></span>
+                <span class="note">입력 칸 위(#22). 기본은 앞 질문의 AI와 단계이고 이 대화에만 적용. AI 하나만 고르면 '이 AI에게만'과 같은 칩(답 카드의 '이 AI에게만'과 합침), ×는 켜 둔 AI 모두로</span>
               </div>
             </li>
             <li><div class="item"><b>기록</b><span class="en">History</span><span class="note">서랍에 오늘·어제·날짜별. 폰에 저장(최근 100개), 길게 눌러 지우기 <span class="en">Delete</span> (마일스톤 B)</span></div></li>

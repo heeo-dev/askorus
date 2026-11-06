@@ -3,8 +3,10 @@
 // at it; once the answers are in, the moderator AI writes a combined answer
 // from them (C6, #19), shown with the AIs' own answers as cards
 // (F-Ask-Empty … F-Result-Light).
-// Follow-ups go to everyone or one AI, each carrying its own conversation
-// on; Claude's answer can be carried on in the Claude app.
+// Follow-ups go to the AIs picked in the follow-up bar (#22: by default
+// the last question's AIs and tier; one AI is the old 'only this AI'), each
+// carrying its own conversation on; Claude's answer can be carried on in
+// the Claude app.
 //
 // thread.ts follows the runs and comparisons; compare.ts and present.ts
 // say what each state shows; ui/TurnView draws a turn. This screen keeps
@@ -36,7 +38,7 @@ import { canSynthesize, polling, writerFor } from '@/ask/compare';
 import { conversations, recentQuestions, useConversations } from '@/ask/conversations';
 import { features } from '@/ask/features';
 import { modelLabel, pickOf, runsWith } from '@/ask/models';
-import { aiStatus, askErrorText, metaLine, onlyTarget, partViews, rowValue } from '@/ask/present';
+import { aiStatus, askErrorText, metaLine, partViews, rowValue } from '@/ask/present';
 import { type AskPrefs, defaultAskPrefs, loadAskPrefs, saveAskPrefs } from '@/ask/prefs';
 import { buildRecord, concluding } from '@/ask/record';
 import {
@@ -45,11 +47,11 @@ import {
   type FollowDeps,
   followCompare,
   followDebate,
+  followDefault,
   followRun,
   newTurn,
   running,
   stopTurns,
-  type Target,
   type Turn,
 } from '@/ask/thread';
 import { connect } from '@/connections/open';
@@ -80,8 +82,10 @@ type Head = { id: string; pcId: string; startedAt: number; title: string };
 // The one sheet open over the screen.
 type SheetState =
   | { kind: 'pick' }
-  | { kind: 'model'; agent: string }
+  | { kind: 'model'; agent: string; back?: 'pick' | 'followPick' }
   | { kind: 'tier' }
+  | { kind: 'followPick' }
+  | { kind: 'followTier' }
   | { kind: 'ais'; turn: string }
   | { kind: 'answer'; turn: string; agent: string }
   | { kind: 'refine'; turn: string }
@@ -105,7 +109,8 @@ export default function Ask() {
   const [load, setLoad] = useState<Load>({ state: 'loading' });
   const [turns, setTurns] = useState<Turn[]>([]);
   const [text, setText] = useState('');
-  const [to, setTo] = useState<Target>('all');
+  // The follow-up bar's AIs and tier (#22), picked for this conversation; null is its default.
+  const [pick, setPick] = useState<{ agents: string[]; tier: Tier } | null>(null);
   const [notes, setNotes] = useState<Record<string, Note>>({});
   const [sheet, setSheet] = useState<SheetState>(null);
   // The notice before the first follow-up that carries the record (#29).
@@ -294,7 +299,7 @@ export default function Ask() {
     setNotes({});
     setSheet(null);
     setAskRecord(false);
-    setTo('all');
+    setPick(null);
   }, [keepNow, finishBg, jobsOf]);
 
   // The current PC answers; its info says which AIs can.
@@ -406,6 +411,10 @@ export default function Ask() {
   const canOpen = info?.capabilities.includes('open_official') ?? false;
   const canAsk = (agent: string) => list.some((a) => a.agent === agent && a.canAsk);
   const now = Date.now();
+  // Who the next follow-up goes to (#22): what the bar picked, else the last question's AIs and tier.
+  const follow = pick ?? followDefault(turns, on, canAsk, prefs.tier);
+  // One AI alone (the old 'only this AI'), shown as its chip while others are on.
+  const one = follow.agents.length === 1 && on.length > 1 ? follow.agents[0] : null;
 
   // record: the answer to the notice (#29), left out when none was shown.
   const sendWith = (record?: 'with' | 'without') => {
@@ -424,11 +433,13 @@ export default function Ask() {
       setAskRecord(false);
       change({ recordNoticed: true });
     }
+    // The first question goes to everyone turned on with the tier set; a follow-up as its bar says (#22).
+    const followUp = turns.length > 0;
     let turn = newTurn({
       id: Crypto.randomUUID(),
       question,
-      tier: prefs.tier,
-      to,
+      tier: followUp ? follow.tier : prefs.tier,
+      to: followUp ? { agents: follow.agents } : 'all',
       on,
       turns,
       models: prefs.models,
@@ -455,7 +466,7 @@ export default function Ask() {
     turnsRef.current = [...turnsRef.current, turn];
     setTurns((ts) => [...ts, turn]);
     setText('');
-    setTo('all');
+    setPick(null);
     Keyboard.dismiss();
     stick.current = true;
     if (!wait) track(turn.id, followRun(p.client, turn, deps));
@@ -497,7 +508,7 @@ export default function Ask() {
     note(key, { text: t('sheet.copied') });
   };
 
-  const onlyOf = (agent: string, then?: () => void) => (canAsk(agent) ? () => (setTo({ agent }), then?.()) : undefined);
+  const onlyOf = (agent: string, then?: () => void) => (canAsk(agent) ? () => (setPick({ agents: [agent], tier: follow.tier }), then?.()) : undefined);
   const carryOn = (key: string, p: RunPart) =>
     p.agent === 'claude' && p.session && canOpen ? () => continueInClaude(key, p.session ?? '') : undefined;
 
@@ -544,20 +555,27 @@ export default function Ask() {
     if (on.length === 1 && on[0] === agent) return;
     change({ off: prefs.off.includes(agent) ? prefs.off.filter((x) => x !== agent) : [...prefs.off, agent] });
   };
+  // The same in the follow-up bar's picker (#22), for this conversation only, in the PC's order.
+  const toggleFollow = (agent: string) => {
+    const has = follow.agents.includes(agent);
+    if (has && follow.agents.length === 1) return;
+    const next = has ? follow.agents.filter((x) => x !== agent) : list.map((a) => a.agent).filter((a) => a === agent || follow.agents.includes(a));
+    setPick({ agents: next, tier: follow.tier });
+  };
 
   // ---- The sheets ----
 
   const sheetTurn = sheet && 'turn' in sheet ? (turns.find((x) => x.id === sheet.turn) ?? null) : null;
   // What an AI answers with now: its own pick, else the tier's model and effort.
   const asker = (agent: string) => list.find((a) => a.agent === agent);
-  const modelOf = (agent: string) => {
-    const m = runsWith(pickOf(prefs, agent), asker(agent)?.tiers ?? {}, prefs.tier);
+  const modelOf = (agent: string, tier: Tier = prefs.tier) => {
+    const m = runsWith(pickOf(prefs, agent), asker(agent)?.tiers ?? {}, tier);
     return m ? modelLabel(m) : '';
   };
-  // Per tier, the models and efforts of the AIs that are on and follow the tier (#16).
-  const tierModels = Object.fromEntries(
+  // Per tier, the models and efforts of the AIs that are on (or picked for the follow-up) and follow the tier (#16).
+  const tierModelsOf = (agents: string[]) => Object.fromEntries(
     tiers.map((x) => {
-      const line = on
+      const line = agents
         .filter((a) => !prefs.models[a])
         .map((a) => {
           const m = asker(a)?.tiers[x];
@@ -568,6 +586,7 @@ export default function Ask() {
       return [x, line];
     }),
   ) as Record<Tier, string>;
+  const tierModels = tierModelsOf(on);
 
   const pickRows: AISheetRow[] = list.map((a) => {
     const name = agentName(a.agent);
@@ -588,6 +607,33 @@ export default function Ask() {
           disabled={!a.canAsk}
           onToggle={() => toggle(a.agent)}
           onModel={() => setSheet({ kind: 'model', agent: a.agent })}
+        />
+      ),
+      accessibilityValue: { text: '' },
+    };
+  });
+
+  // The follow-up bar's picker (#22): the same rows, switching the AIs of the next follow-up.
+  const followRows: AISheetRow[] = list.map((a) => {
+    const name = agentName(a.agent);
+    const picked = follow.agents.includes(a.agent);
+    return {
+      agent: a.agent,
+      name,
+      model: a.canAsk ? modelOf(a.agent, follow.tier) || undefined : t('ask.error.agent_cannot_ask'),
+      onPress: a.canAsk ? () => toggleFollow(a.agent) : undefined,
+      onLongPress: a.canAsk ? () => setSheet({ kind: 'model', agent: a.agent, back: 'followPick' }) : undefined,
+      disabled: !a.canAsk,
+      checked: picked,
+      right: (
+        <PickControls
+          th={th}
+          agent={a.agent}
+          name={name}
+          on={picked}
+          disabled={!a.canAsk}
+          onToggle={() => toggleFollow(a.agent)}
+          onModel={() => setSheet({ kind: 'model', agent: a.agent, back: 'followPick' })}
         />
       ),
       accessibilityValue: { text: '' },
@@ -623,7 +669,7 @@ export default function Ask() {
         efforts={sheet?.kind === 'model' ? (asker(sheet.agent)?.efforts ?? {}) : {}}
         tier={prefs.tier}
         value={sheet?.kind === 'model' ? pickOf(prefs, sheet.agent) : null}
-        onClose={() => setSheet({ kind: 'pick' })}
+        onClose={() => setSheet({ kind: sheet?.kind === 'model' && sheet.back ? sheet.back : 'pick' })}
         onPick={(pick, close) => {
           if (sheet?.kind !== 'model') return;
           const models = { ...prefs.models };
@@ -635,7 +681,24 @@ export default function Ask() {
             if (pick.effort) efforts[sheet.agent] = pick.effort;
           }
           change({ models, efforts });
-          if (close) setSheet({ kind: 'pick' });
+          if (close) setSheet({ kind: sheet.back ?? 'pick' });
+        }}
+      />
+      <AISheet
+        open={sheet?.kind === 'followPick'}
+        onClose={() => setSheet(null)}
+        title={t('ask.followPickTitle')}
+        subtitle={pc ? t('ask.onPC', { name: pc.conn.name }) : undefined}
+        rows={followRows}
+      />
+      <TierSheet
+        open={sheet?.kind === 'followTier'}
+        value={follow.tier}
+        models={tierModelsOf(follow.agents)}
+        onClose={() => setSheet(null)}
+        onPick={(tier) => {
+          setPick({ agents: follow.agents, tier });
+          setSheet(null);
         }}
       />
       <TierSheet
@@ -755,8 +818,8 @@ export default function Ask() {
     );
   }
 
-  const one = onlyTarget(to);
   const oneName = one ? agentName(one) : '';
+  const followNames = follow.agents.map(agentName).join(', ');
   return (
     <View style={s.screen}>
       {header}
@@ -790,15 +853,25 @@ export default function Ask() {
         value={text}
         onChangeText={setText}
         onSend={send}
-        canSend={!!text.trim() && !busy && !!info && (one ? true : on.length > 0)}
+        canSend={!!text.trim() && !busy && !!info && follow.agents.length > 0}
         placeholder={one ? t('ask.followTo', { name: oneName }) : t('ask.followPlaceholder')}
         sendLabel={one ? t('ask.sendTo', { name: oneName }) : t('ask.sendIcon')}
         sendHint={busy ? t('ask.sendWait') : undefined}
         to={
           one
-            ? { agent: one, label: t('ask.toOne', { name: oneName }), cancelLabel: t('ask.toOneCancel', { name: oneName }), onCancel: () => setTo('all') }
+            ? {
+                agent: one,
+                label: t('ask.toOne', { name: oneName }),
+                cancelLabel: t('ask.toOneCancel', { name: oneName }),
+                onCancel: () => setPick({ agents: on, tier: follow.tier }),
+              }
             : undefined
         }
+        agents={follow.agents}
+        pickLabel={t('ask.followPick', { n: follow.agents.length, names: followNames })}
+        onPickAIs={() => setSheet({ kind: 'followPick' })}
+        tier={follow.tier}
+        onPickTier={() => setSheet({ kind: 'followTier' })}
       />
       {sheets}
     </View>
