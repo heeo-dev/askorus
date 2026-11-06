@@ -59,15 +59,19 @@ func (a *Adapter) AskTiers() map[string]core.AskModel {
 	return out
 }
 
-// askArgs builds the command line of one ask. The prompt is not in it.
-func askArgs(model, effort, resume string) []string {
+// askArgs builds the command line of one ask. The prompt is not in it. A
+// one-off ask (a debate turn) keeps no conversation and never resumes.
+func askArgs(model, effort, resume string, oneOff bool) []string {
 	args := []string{"-p", "--output-format", "json", "--model", model}
 	if effort != "" {
 		args = append(args, "--effort", effort)
 	}
 	args = append(args, "--tools", askWebTools, "--allowedTools", askWebTools, "--strict-mcp-config")
-	if resume != "" {
+	switch {
+	case resume != "":
 		args = append(args, "--resume", resume)
+	case oneOff:
+		args = append(args, "--no-session-persistence")
 	}
 	return args
 }
@@ -86,7 +90,7 @@ func checkAskArgs(args []string) error {
 			return fmt.Errorf("%w: %s twice", ErrArgRejected, a)
 		}
 		seen[a] = true
-		if a == "--strict-mcp-config" {
+		if a == "--strict-mcp-config" || a == "--no-session-persistence" {
 			continue
 		}
 		if i+1 >= len(args) {
@@ -115,6 +119,9 @@ func checkAskArgs(args []string) error {
 		if !seen[need] {
 			return fmt.Errorf("%w: an ask needs %s", ErrArgRejected, need)
 		}
+	}
+	if seen["--no-session-persistence"] && seen["--resume"] {
+		return fmt.Errorf("%w: a one-off ask never resumes", ErrArgRejected)
 	}
 	return nil
 }
@@ -157,7 +164,10 @@ func (a *Adapter) Ask(ctx context.Context, req core.AskRequest) (core.AskResult,
 	if req.Resume != "" && !ValidUUID(req.Resume) {
 		return core.AskResult{}, core.Fail(core.ErrCodeNotFound, "")
 	}
-	args := askArgs(model, effort, req.Resume)
+	if req.OneOff && req.Resume != "" {
+		return core.AskResult{}, core.Fail(core.ErrCodeInternal, "a one-off ask never resumes")
+	}
+	args := askArgs(model, effort, req.Resume, req.OneOff)
 	if err := checkAskArgs(args); err != nil {
 		return core.AskResult{}, err
 	}
@@ -183,7 +193,11 @@ func (a *Adapter) Ask(ctx context.Context, req core.AskRequest) (core.AskResult,
 	case err != nil:
 		return core.AskResult{}, core.Fail(core.ErrCodeAskFailed, err.Error())
 	}
-	return parseAskOutput(res, model)
+	out, err := parseAskOutput(res, model)
+	if req.OneOff {
+		out.SessionID = "" // nothing was kept to carry on
+	}
+	return out, err
 }
 
 func parseAskOutput(res proc.Result, asked string) (core.AskResult, error) {

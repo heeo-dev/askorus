@@ -83,7 +83,7 @@ func TestSynthArgsAndStdin(t *testing.T) {
 	if err := a.checkSynthArgs(c.Args); err != nil {
 		t.Errorf("the synth check refused its own arguments: %v", err)
 	}
-	if err := a.checkSynthArgs(askArgs("gpt-6-luna", "medium", "")); err == nil {
+	if err := a.checkSynthArgs(askArgs("gpt-6-luna", "medium", "", false)); err == nil {
 		t.Error("the synth check accepted ask arguments")
 	}
 }
@@ -180,8 +180,8 @@ func TestCheckSynthArgsRefuses(t *testing.T) {
 		"unknown effort":   synthArgs("gpt-6-luna", "turbo", schema),
 		"prompt argument":  set(len(good)-1, "첫 배는 몇 시인가요?"),
 		"short":            good[:len(good)-1],
-		"ask args":         askArgs("gpt-6-luna", "medium", ""),
-		"ask resume args":  askArgs("gpt-6-luna", "medium", "0b6f2a8e-1111-4222-8333-444455556666"),
+		"ask args":         askArgs("gpt-6-luna", "medium", "", false),
+		"ask resume args":  askArgs("gpt-6-luna", "medium", "0b6f2a8e-1111-4222-8333-444455556666", false),
 		"profile":          set(3, "--profile"),
 		"config overrides": set(11, `model_provider="x"`),
 	}

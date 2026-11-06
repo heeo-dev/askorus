@@ -255,12 +255,23 @@ func TestAskErrors(t *testing.T) {
 }
 
 func TestCheckArgs(t *testing.T) {
-	good := askArgs("gpt-6.1-terra", "medium", "")
-	follow := askArgs("gpt-6.1-terra", "medium", testThread)
-	for _, args := range [][]string{good, follow, askArgs("gpt-6.1-terra", "", ""), askArgs("gpt-6.1-terra", "", testThread)} {
+	good := askArgs("gpt-6.1-terra", "medium", "", false)
+	follow := askArgs("gpt-6.1-terra", "medium", testThread, false)
+	for _, args := range [][]string{good, follow, askArgs("gpt-6.1-terra", "", "", false), askArgs("gpt-6.1-terra", "", testThread, false)} {
 		if err := checkArgs(args); err != nil {
 			t.Fatal(err)
 		}
+	}
+	// 11-06: a new one-off ask (a debate turn) keeps no session file; never on resume.
+	oneOff := askArgs("gpt-6.1-terra", "medium", "", true)
+	if err := checkArgs(oneOff); err != nil || oneOff[slices.Index(oneOff, "--skip-git-repo-check")+1] != "--ephemeral" {
+		t.Fatalf("one-off %q: %v", oneOff, err)
+	}
+	if slices.Contains(askArgs("gpt-6.1-terra", "medium", testThread, true), "--ephemeral") {
+		t.Error("a resume became ephemeral")
+	}
+	if err := checkArgs(slices.Insert(slices.Clone(follow), slices.Index(follow, "--skip-git-repo-check")+1, "--ephemeral")); err == nil {
+		t.Error("an ephemeral resume was accepted")
 	}
 	ins := func(base []string, at int, extra ...string) []string {
 		return slices.Insert(slices.Clone(base), at, extra...)
@@ -329,7 +340,7 @@ func TestCheckArgs(t *testing.T) {
 // decision 4), and keeps its web search.
 func TestAskDisablesTheWriterFeatures(t *testing.T) {
 	a := New(Options{Path: filepath.Join(t.TempDir(), "codex.exe"), SchemaDir: t.TempDir()})
-	ask, follow := askArgs("gpt-6-luna", "medium", ""), askArgs("gpt-6-luna", "medium", testThread)
+	ask, follow := askArgs("gpt-6-luna", "medium", "", false), askArgs("gpt-6-luna", "medium", testThread, false)
 	written := synthArgs("gpt-6-luna", "medium", a.synthSchemaPath())
 
 	if !slices.Equal(featuresOff, wantOff) {

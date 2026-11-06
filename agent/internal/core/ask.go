@@ -118,6 +118,10 @@ type AskRequest struct {
 	Model  string // overrides the tier's model when not empty
 	Effort string // overrides the tier's effort when not empty
 	Resume string // native session id to continue, or "" for a new one
+	// OneOff keeps no conversation (a debate turn, 11-06): Claude and Codex
+	// save none (--no-session-persistence, --ephemeral) and OpenCode's is
+	// deleted after it; the result has no SessionID. Never with Resume.
+	OneOff bool
 }
 
 // AskModel is the model and effort of one tier.

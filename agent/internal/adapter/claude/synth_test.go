@@ -128,7 +128,7 @@ func TestCheckSynthArgsRefuses(t *testing.T) {
 		"unknown effort":        synthArgs("sonnet", "ultra"),
 		"empty effort":          synthArgs("sonnet", ""),
 		"text output":           set(2, "text"),
-		"ask args":              askArgs("sonnet", "medium", ""),
+		"ask args":              askArgs("sonnet", "medium", "", false),
 	}
 	for name, args := range bad {
 		if err := checkSynthArgs(args); !errors.Is(err, ErrArgRejected) {

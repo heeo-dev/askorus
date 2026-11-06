@@ -218,9 +218,10 @@ func TestDebateRuns(t *testing.T) {
 	}
 	for _, r := range [][]core.AskRequest{clAsks, cxAsks, ocAsks} {
 		for _, a := range r {
-			if a.Folder != m.o.Gate.Folder || a.Tier != core.TierStandard || a.Resume != "" ||
+			// One-off (11-06): no turn keeps a conversation on any AI.
+			if a.Folder != m.o.Gate.Folder || a.Tier != core.TierStandard || a.Resume != "" || !a.OneOff ||
 				!strings.HasPrefix(a.Prompt, core.AskPreamble+"\n\n"+turnHead) {
-				t.Errorf("ask: folder %q tier %q prompt %.80q", a.Folder, a.Tier, a.Prompt)
+				t.Errorf("ask: folder %q tier %q one-off %v prompt %.80q", a.Folder, a.Tier, a.OneOff, a.Prompt)
 			}
 		}
 	}

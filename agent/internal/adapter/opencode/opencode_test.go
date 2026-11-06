@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/asksemble/asksemble/agent/internal/core"
 	"github.com/asksemble/asksemble/agent/internal/fakecli"
@@ -91,6 +92,10 @@ func fakeOpenCode(args []string) int {
 		return 1
 	case "exit":
 		return 1
+	case "slow": // the session starts, then no answer in time
+		fmt.Printf("{\"type\":\"step_start\",\"timestamp\":1,\"sessionID\":%q,\"part\":{\"type\":\"step-start\"}}\n", id)
+		time.Sleep(20 * time.Second)
+		return 0
 	}
 	lines := strings.Split(strings.TrimSpace(string(in)), "\n")
 	answer, _ := json.Marshal("fake: " + lines[len(lines)-1])
@@ -152,6 +157,46 @@ func TestInfo(t *testing.T) {
 	missing := New(Options{Path: filepath.Join(t.TempDir(), "opencode.exe")})
 	if info := missing.Info(context.Background()); info.Available || !slices.Contains(info.Notices, NoticeNotFound) {
 		t.Errorf("missing info = %+v", info)
+	}
+}
+
+// 11-06: a one-off ask (a debate turn) and a new ask cut off delete their
+// conversation; a carried-on one cut off keeps it.
+func TestOneOffAndCutOffSessionsAreDeleted(t *testing.T) {
+	a, argsFile, folder := fakeAdapter(t, nil)
+	const id = "ses_e773ef84effedagCyC2bkvl1W9"
+	last := func() fakeCall {
+		cs := calls(t, argsFile)
+		return cs[len(cs)-1]
+	}
+	isDelete := func(c fakeCall) bool { return slices.Equal(c.Args, deleteArgs(id)) && c.PWD == folder }
+
+	res, err := a.Ask(context.Background(), core.AskRequest{Folder: folder, Prompt: "q", Tier: core.TierQuick, OneOff: true})
+	if err != nil || res.SessionID != "" || res.Answer == "" || !isDelete(last()) {
+		t.Fatalf("one-off: %+v %v, last call %q", res, err, last().Args)
+	}
+	if _, err := a.Ask(context.Background(), core.AskRequest{Folder: folder, Prompt: "q", Tier: core.TierQuick, OneOff: true, Resume: id}); err == nil {
+		t.Error("a one-off ask resumed")
+	}
+
+	// A new ask that fails after its session started: deleted.
+	t.Setenv("ASKSEMBLE_FAKE_MODE", "badmodel")
+	n := len(calls(t, argsFile))
+	if _, err := a.Ask(context.Background(), core.AskRequest{Folder: folder, Prompt: "q", Tier: core.TierQuick}); err == nil || !isDelete(last()) || len(calls(t, argsFile)) != n+2 {
+		t.Errorf("failed new ask: %v, last call %q", err, last().Args)
+	}
+	// A follow-up that fails keeps its conversation.
+	n = len(calls(t, argsFile))
+	if _, err := a.Ask(context.Background(), core.AskRequest{Folder: folder, Prompt: "q", Tier: core.TierQuick, Resume: id}); err == nil || isDelete(last()) {
+		t.Errorf("failed follow-up: %v, last call %q (calls %d → %d)", err, last().Args, n, len(calls(t, argsFile)))
+	}
+
+	// A new ask that times out: deleted all the same.
+	t.Setenv("ASKSEMBLE_FAKE_MODE", "slow")
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if _, err := a.Ask(ctx, core.AskRequest{Folder: folder, Prompt: "q", Tier: core.TierQuick}); core.ErrorCode(err) != core.ErrCodeAskTimeout || !isDelete(last()) {
+		t.Errorf("timed out: %v, last call %q", err, last().Args)
 	}
 }
 

@@ -201,12 +201,20 @@ func TestAskTimeout(t *testing.T) {
 }
 
 func TestCheckAskArgs(t *testing.T) {
-	good := askArgs("sonnet", "medium", "")
+	good := askArgs("sonnet", "medium", "", false)
 	if err := checkAskArgs(good); err != nil {
 		t.Fatalf("own args refused: %v", err)
 	}
-	if err := checkAskArgs(askArgs("sonnet", "", "12345678-1234-4234-8234-123456789abc")); err != nil {
+	if err := checkAskArgs(askArgs("sonnet", "", "12345678-1234-4234-8234-123456789abc", false)); err != nil {
 		t.Fatalf("resume args refused: %v", err)
+	}
+	// 11-06: a one-off ask (a debate turn) keeps no session, and never resumes.
+	oneOff := askArgs("sonnet", "medium", "", true)
+	if err := checkAskArgs(oneOff); err != nil || oneOff[len(oneOff)-1] != "--no-session-persistence" {
+		t.Fatalf("one-off args %q: %v", oneOff, err)
+	}
+	if err := checkAskArgs(append(slices.Clone(oneOff), "--resume", "12345678-1234-4234-8234-123456789abc")); !errors.Is(err, ErrArgRejected) {
+		t.Errorf("one-off with resume: %v", err)
 	}
 	bad := map[string][]string{
 		"no -p":             good[1:],

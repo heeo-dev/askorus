@@ -881,7 +881,8 @@ func (m *Manager) speak(d *debate, agent, prompt string) DebateTurn {
 				res, err = core.AskResult{}, core.Fail(core.ErrCodeInternal, "")
 			}
 		}()
-		return asker.Ask(ctx, core.AskRequest{Folder: m.o.Gate.Folder, Prompt: core.AskPrompt(prompt), Tier: d.spec.Tier})
+		// One-off (11-06): a turn keeps no conversation on any AI.
+		return asker.Ask(ctx, core.AskRequest{Folder: m.o.Gate.Folder, Prompt: core.AskPrompt(prompt), Tier: d.spec.Tier, OneOff: true})
 	}()
 	switch {
 	case err == nil && strings.TrimSpace(res.Answer) == "":
