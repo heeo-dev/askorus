@@ -177,7 +177,7 @@ func TestCheckSynthArgsRefuses(t *testing.T) {
 		"bypass":           append(slices.Clone(good[:len(good)-1]), "--dangerously-bypass-approvals-and-sandbox", "-"),
 		"feature on":       set(16, "--enable"),
 		"model as a flag":  synthArgs("--full-auto", "medium", schema),
-		"unknown effort":   synthArgs("gpt-6-luna", "ultra", schema),
+		"unknown effort":   synthArgs("gpt-6-luna", "turbo", schema),
 		"prompt argument":  set(len(good)-1, "첫 배는 몇 시인가요?"),
 		"short":            good[:len(good)-1],
 		"ask args":         askArgs("gpt-6-luna", "medium", ""),
@@ -266,7 +266,7 @@ func TestSynthTimeoutAndGuards(t *testing.T) {
 		"missing folder":  {core.SynthRequest{Folder: filepath.Join(folder, "gone"), Prompt: p, Model: "gpt-6-luna"}, core.ErrCodeInternal},
 		"no model":        {core.SynthRequest{Folder: folder, Prompt: p}, core.ErrCodeBadModel},
 		"model as a flag": {core.SynthRequest{Folder: folder, Prompt: p, Model: "--full-auto"}, core.ErrCodeBadModel},
-		"unknown effort":  {core.SynthRequest{Folder: folder, Prompt: p, Model: "gpt-6-luna", Effort: "max"}, core.ErrCodeBadModel},
+		"unknown effort":  {core.SynthRequest{Folder: folder, Prompt: p, Model: "gpt-6-luna", Effort: "turbo"}, core.ErrCodeBadModel},
 	} {
 		if _, err := a.Synthesize(context.Background(), c.req); core.ErrorCode(err) != c.code {
 			t.Errorf("%s: %v, want %s", name, err, c.code)

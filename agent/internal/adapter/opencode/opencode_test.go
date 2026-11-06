@@ -163,7 +163,7 @@ func TestAskAndFollowUp(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := calls(t, argsFile)[0]
-	want := []string{"run", "--standalone", "--format", "json", "--agent", "asksemble-ask", "-m", "opencode-go/deepseek-v4.1-flash#max"}
+	want := []string{"run", "--standalone", "--format", "json", "--agent", "asksemble-ask", "-m", "opencode-go/deepseek-v4.1-flash#high"}
 	if !reflect.DeepEqual(c.Args, want) || c.Stdin != prompt || c.PWD != folder {
 		t.Errorf("call = %+v", c)
 	}
@@ -182,7 +182,7 @@ func TestAskAndFollowUp(t *testing.T) {
 	}
 	// The answer is the last step's text, not the lead-in before the search.
 	if res.Answer != `fake: 한 문장으로. 100% "정확히" & 짧게` || res.SessionID != "ses_e773ef84effedagCyC2bkvl1W9" ||
-		res.Model != "opencode-go/deepseek-v4.1-flash#max" || res.InputTokens != 120 || res.OutputTokens != 5 {
+		res.Model != "opencode-go/deepseek-v4.1-flash#high" || res.InputTokens != 120 || res.OutputTokens != 5 {
 		t.Errorf("result = %+v", res)
 	}
 
@@ -229,6 +229,37 @@ func TestFollowUpNeedsAnAskSession(t *testing.T) {
 		if c.Args[0] == "run" {
 			t.Errorf("ran %q", c.Args)
 		}
+	}
+}
+
+// 11-06 user decision: quick Flash low, standard Flash high, deep Pro high;
+// the variants each model takes (Flash refused medium and xhigh).
+func TestTiersAndEfforts(t *testing.T) {
+	a, _, _ := fakeAdapter(t, nil)
+	want := map[string]core.AskModel{
+		core.TierQuick:    {Model: "opencode-go/deepseek-v4.1-flash", Effort: "low"},
+		core.TierStandard: {Model: "opencode-go/deepseek-v4.1-flash", Effort: "high"},
+		core.TierDeep:     {Model: "opencode-go/deepseek-v4-pro", Effort: "high"},
+	}
+	if got := a.AskTiers(); !reflect.DeepEqual(got, want) {
+		t.Errorf("AskTiers = %v", got)
+	}
+	wantE := map[string][]string{
+		"opencode-go/deepseek-v4.1-flash": {"low", "high", "max"},
+		"opencode-go/deepseek-v4-pro":     {"high", "max"},
+	}
+	if got := a.AskEfforts(); !reflect.DeepEqual(got, wantE) {
+		t.Errorf("AskEfforts = %v", got)
+	}
+	// A model named with its variant in agent.json is looked up without
+	// it; one this adapter does not know offers only its own variant.
+	b, _, _ := fakeAdapter(t, map[string]core.AskModel{
+		core.TierQuick: {Model: "opencode-go/deepseek-v4-pro#max"},
+		core.TierDeep:  {Model: "opencode-go/glm-5.2", Effort: "high"},
+	})
+	got := b.AskEfforts()
+	if !reflect.DeepEqual(got["opencode-go/deepseek-v4-pro#max"], []string{"high", "max"}) || !reflect.DeepEqual(got["opencode-go/glm-5.2"], []string{"high"}) {
+		t.Errorf("AskEfforts with overrides = %v", got)
 	}
 }
 

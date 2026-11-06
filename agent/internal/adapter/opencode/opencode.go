@@ -59,11 +59,30 @@ var askConfig = func() string {
 // 2026-11-04). The effort is OpenCode's variant ("model#variant"). Deep was
 // Kimi K3.1 Pro until the person found it used too much (11-04); DeepSeek
 // V4 Pro, the latest Pro (v4.1 is Flash only), has no low or medium, so
-// high, as for Kimi.
+// high, as for Kimi. 11-06 (the person: standard's max was too slow, two
+// 3-minute timeouts that day): quick Flash low, standard Flash high.
 var defaultTiers = map[string]core.AskModel{
-	core.TierQuick:    {Model: "opencode-go/deepseek-v4.1-flash", Effort: "high"},
-	core.TierStandard: {Model: "opencode-go/deepseek-v4.1-flash", Effort: "max"},
+	core.TierQuick:    {Model: "opencode-go/deepseek-v4.1-flash", Effort: "low"},
+	core.TierStandard: {Model: "opencode-go/deepseek-v4.1-flash", Effort: "high"},
 	core.TierDeep:     {Model: "opencode-go/deepseek-v4-pro", Effort: "high"},
+}
+
+// modelEfforts are the variants each known model takes (11-06, short
+// questions: Flash answered with low, high and max and refused medium and
+// xhigh, "Variant unavailable"; Pro takes high and max only, 11-04).
+var modelEfforts = map[string][]string{
+	"opencode-go/deepseek-v4.1-flash": {"low", "high", "max"},
+	"opencode-go/deepseek-v4-pro":     {"high", "max"},
+}
+
+// AskEfforts lists the variants each tier model may take
+// (core.EffortLister). A model named with its variant in agent.json is
+// looked up without it.
+func (a *Adapter) AskEfforts() map[string][]string {
+	return core.TierEfforts(a.AskTiers(), func(m string) []string {
+		base, _, _ := strings.Cut(m, "#")
+		return modelEfforts[base]
+	})
 }
 
 var (

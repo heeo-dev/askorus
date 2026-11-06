@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"regexp"
+	"slices"
 )
 
 // Modes of POST /v1/runs (2026-10-29). Phase 2 builds ask; work and code
@@ -56,6 +57,57 @@ type Asker interface {
 	Ask(ctx context.Context, req AskRequest) (AskResult, error)
 	// AskTiers reports the model each tier uses on this PC.
 	AskTiers() map[string]AskModel
+}
+
+// EffortLister is implemented by askers that know which efforts each of
+// their tier models takes (11-06, /v1/info ask.efforts). The keys are the
+// models as AskTiers names them.
+type EffortLister interface {
+	AskEfforts() map[string][]string
+}
+
+// effortRank orders effort levels from least to most thinking.
+var effortRank = map[string]int{"none": 0, "minimal": 1, "low": 2, "medium": 3, "high": 4, "xhigh": 5, "max": 6, "ultra": 7}
+
+// SortEfforts orders efforts from least to most thinking, unknown ones
+// last, without repeats or empties.
+func SortEfforts(es []string) []string {
+	out := []string{}
+	for _, e := range es {
+		if e != "" && !slices.Contains(out, e) {
+			out = append(out, e)
+		}
+	}
+	slices.SortStableFunc(out, func(a, b string) int {
+		ra, oka := effortRank[a]
+		rb, okb := effortRank[b]
+		switch {
+		case oka && okb:
+			return ra - rb
+		case oka:
+			return -1
+		case okb:
+			return 1
+		}
+		return 0
+	})
+	return out
+}
+
+// TierEfforts lists, for each tier model, known(model) when the adapter
+// has a list for it, else only the efforts its tiers use: a model the
+// adapter does not know (agent.json ask.tiers) still offers what the PC
+// already runs it with.
+func TierEfforts(tiers map[string]AskModel, known func(model string) []string) map[string][]string {
+	out := map[string][]string{}
+	for _, m := range tiers {
+		if k := known(m.Model); len(k) > 0 {
+			out[m.Model] = SortEfforts(k)
+			continue
+		}
+		out[m.Model] = SortEfforts(append(out[m.Model], m.Effort))
+	}
+	return out
 }
 
 // AskRequest is one question to one AI.

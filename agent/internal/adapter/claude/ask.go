@@ -33,6 +33,15 @@ var defaultAskTiers = map[string]core.AskModel{
 	core.TierDeep:     {Model: "opus", Effort: "medium"},
 }
 
+// askEfforts are Claude Code's --effort levels; every model takes them
+// (11-06: haiku answered with xhigh and max too).
+var askEfforts = []string{"low", "medium", "high", "xhigh", "max"}
+
+// AskEfforts lists the efforts each tier model may take (core.EffortLister).
+func (a *Adapter) AskEfforts() map[string][]string {
+	return core.TierEfforts(a.AskTiers(), func(string) []string { return askEfforts })
+}
+
 // AskTiers returns the tier models, with the settings' overrides.
 func (a *Adapter) AskTiers() map[string]core.AskModel {
 	out := make(map[string]core.AskModel, len(defaultAskTiers))

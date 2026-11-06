@@ -85,6 +85,33 @@ func TestGateReasons(t *testing.T) {
 	}
 }
 
+// effortAI is an asker that lists its efforts (core.EffortLister).
+type effortAI struct {
+	askerAI
+	efforts map[string][]string
+}
+
+func (a effortAI) AskEfforts() map[string][]string { return a.efforts }
+
+// 11-06: /v1/info ask.efforts comes from askers that list their efforts.
+func TestAnnounceEfforts(t *testing.T) {
+	with := effortAI{askerAI{fakeAI: newFake("codex", "openai"), tiers: map[string]core.AskModel{core.TierStandard: {Model: "gpt-std", Effort: "medium"}}}, map[string][]string{"gpt-std": {"low", "medium"}}}
+	with.caps = []core.Capability{core.CapAsk}
+	without := askerAI{fakeAI: newFake("kimi", "moonshot"), tiers: map[string]core.AskModel{core.TierStandard: {Model: "k"}}}
+	without.caps = []core.Capability{core.CapAsk}
+	ais := []core.Adapter{with, without}
+	infos, _ := Announce(context.Background(), ais, testGate(t, ais...))
+	if infos[0].Ask == nil || !slices.Equal(infos[0].Ask.Efforts["gpt-std"], []string{"low", "medium"}) {
+		t.Errorf("with = %+v", infos[0].Ask)
+	}
+	if infos[1].Ask == nil || infos[1].Ask.Efforts != nil {
+		t.Errorf("without = %+v", infos[1].Ask)
+	}
+	if b, _ := json.Marshal(infos[1].Ask); strings.Contains(string(b), "efforts") {
+		t.Errorf("an AI without a list sends efforts: %s", b)
+	}
+}
+
 func TestAnnounce(t *testing.T) {
 	claude := newWriter("claude", "anthropic", "Claude")
 	// The adapter's own slice has room, so an append in place would show.

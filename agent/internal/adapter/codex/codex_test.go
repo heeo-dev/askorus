@@ -203,6 +203,16 @@ func TestAskErrors(t *testing.T) {
 	if m := a.AskTiers()[core.TierQuick]; m.Model != "gpt-6-luna-mini" || m.Effort != "medium" {
 		t.Errorf("tier override = %+v", m)
 	}
+	// Efforts as Codex's models_cache.json lists them (11-06); a model it
+	// does not know offers its tier's effort only.
+	e := a.AskEfforts()
+	six := []string{"low", "medium", "high", "xhigh", "max", "ultra"}
+	if !slices.Equal(e["gpt-6-luna-mini"], []string{"medium"}) || !slices.Equal(e["gpt-6.1-terra"], six) || !slices.Equal(e["gpt-6.1-sol"], six) {
+		t.Errorf("AskEfforts = %v", e)
+	}
+	if !slices.Equal(modelEfforts["gpt-6-luna"], six[:5]) {
+		t.Errorf("luna = %v", modelEfforts["gpt-6-luna"])
+	}
 	ask := func(req core.AskRequest) error {
 		req.Folder, req.Prompt, req.Tier = folder, "q", core.TierStandard
 		_, err := a.Ask(context.Background(), req)
@@ -229,7 +239,7 @@ func TestAskErrors(t *testing.T) {
 		"thread not a uuid": {Resume: "../../x"},
 		"model as a flag":   {Model: "--dangerously-bypass-approvals-and-sandbox"},
 		"model with quote":  {Model: `x"`},
-		"unknown effort":    {Effort: "max"},
+		"unknown effort":    {Effort: "turbo"},
 	} {
 		if err := ask(req); err == nil {
 			t.Errorf("%s: accepted", name)
