@@ -962,8 +962,11 @@ function PickControls({
       >
         <View style={[s.knob, { backgroundColor: on ? th.onFill : th.bg }]} />
       </Pressable>
-      {disabled || !onModel ? null : (
+      {disabled ? null : onModel ? (
         <IconButton name="chevronRight" label={t('ask.modelTitle', { name })} hint={t('ask.pickModel')} onPress={onModel} size={18} color={th.caption} />
+      ) : (
+        // No model › (the moderator's row): the space it takes, so the switches line up.
+        <View style={s.noModel} />
       )}
     </View>
   );
@@ -986,6 +989,7 @@ const styles = themed((th) =>
     pressed: { backgroundColor: th.raised },
     thread: { gap: 28, paddingHorizontal: 20, paddingTop: 4, paddingBottom: 20 },
     pickRight: { flexDirection: 'row', alignItems: 'center', gap: 2, marginRight: -6 },
+    noModel: { width: 44, height: 44 },
     track: { width: 40, height: 24, borderRadius: 12, padding: 3, flexDirection: 'row' },
     knob: { width: 18, height: 18, borderRadius: 9 },
   }),
