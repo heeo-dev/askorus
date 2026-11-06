@@ -415,6 +415,7 @@
   "settings.carryRecord": "Carry conclusions into follow-ups",
   "settings.carryRecordHint": "A follow-up also sends what was concluded so far (what debates settled and the last final answer) to the AIs that answer and to the moderator, so they build on it instead of starting over. Off sends the question only.",
   "ask.queuedDebate": "Waiting: it goes with the debate's conclusions once the debate ends.",
+  "ask.queuedSynth": "Waiting: it goes with the combined answer once it is written.",
   "ask.record.notice.title": "Earlier conclusions go along",
   "ask.record.notice.body": "A follow-up sends what was concluded so far (a combined answer that includes other AIs' answers) to every AI that answers. Each AI's company receives it. You can turn this off in Settings › Moderator.",
   "ask.record.notice.go": "Continue",

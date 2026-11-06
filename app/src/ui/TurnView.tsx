@@ -77,7 +77,7 @@ export function TurnView({
       <View style={s.turn}>
         <ThreadBubble text={turn.question} />
         <Text style={s.caption} accessibilityLiveRegion="polite">
-          {t(turn.queuedFor === 'debate' ? 'ask.queuedDebate' : 'ask.queued')}
+          {t(turn.queuedFor === 'debate' ? 'ask.queuedDebate' : turn.queuedFor === 'synth' ? 'ask.queuedSynth' : 'ask.queued')}
         </Text>
       </View>
     );

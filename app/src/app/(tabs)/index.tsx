@@ -18,9 +18,10 @@
 // done. Only a removed conversation is stopped.
 //
 // #29: a follow-up carries the conversation record (record.ts), built when
-// it goes; one sent while this conversation's debate runs waits for it and
-// then goes with its outcome. The first one that would carry a record
-// shows, once, where it goes.
+// it goes; one sent while this conversation's combined answer is written
+// or its debate runs waits for it and then goes with it (only when it
+// carries a record). The first one that would carry a record shows, once,
+// where it goes.
 
 import * as Clipboard from 'expo-clipboard';
 import * as Crypto from 'expo-crypto';
@@ -33,12 +34,11 @@ import type { AgentClient } from '@/api/client';
 import { type Info, type RunPart, type Tier, tiers } from '@/api/types';
 import { canSynthesize, polling, writerFor } from '@/ask/compare';
 import { conversations, recentQuestions, useConversations } from '@/ask/conversations';
-import { debating } from '@/ask/debate';
 import { features } from '@/ask/features';
 import { modelLabel, pickOf, runsWith } from '@/ask/models';
 import { aiStatus, askErrorText, metaLine, onlyTarget, partViews, rowValue } from '@/ask/present';
 import { type AskPrefs, defaultAskPrefs, loadAskPrefs, saveAskPrefs } from '@/ask/prefs';
-import { buildRecord } from '@/ask/record';
+import { buildRecord, concluding } from '@/ask/record';
 import {
   askers,
   carry,
@@ -225,18 +225,18 @@ export default function Ask() {
       if (bgTimer.current) clearTimeout(bgTimer.current);
       bgTimer.current = null;
       setBgBusy(false);
-      // A debate of this conversation still running holds it back until it ends (#29).
-      if (turnsRef.current.some(debating)) return;
+      // A combined answer or debate of this conversation still coming holds it back (#29).
+      if (concluding(turnsRef.current)) return;
       for (const x of turnsRef.current) if (x.queued) startQueued(pcRef.current?.client, x);
     },
     [startQueued],
   );
 
-  // A question that waited for this conversation's debate goes once the
-  // debate has ended (#29), and nothing else runs in the background.
+  // A question that waited for this conversation's combined answer or
+  // debate goes once it is in (#29), and nothing else runs in the background.
   useEffect(() => {
     const client = pcRef.current?.client;
-    if (!client || bgs.current.size || turns.some(debating)) return;
+    if (!client || bgs.current.size || concluding(turns)) return;
     for (const x of turns) if (x.queued) startQueued(client, x);
   }, [turns, startQueued]);
 
@@ -355,7 +355,7 @@ export default function Ask() {
       for (const turn of c.turns) {
         // Kept while it waited (the app was closed): it goes once none runs in the background.
         if (turn.queued) {
-          if (!bgs.current.size && !c.turns.some(debating)) startQueued(p.client, turn);
+          if (!bgs.current.size && !concluding(c.turns)) startQueued(p.client, turn);
           continue;
         }
         if (running(turn)) {
@@ -412,9 +412,11 @@ export default function Ask() {
     const question = text.trim();
     const p = pcRef.current;
     if (!p || !info || !question || busy) return;
-    // A debate of this conversation that still runs: the question waits for its outcome (#29).
-    const waitDebate = turns.some(debating);
-    if (!record && prefs.carryRecord && !prefs.recordNoticed && info.context && (waitDebate || buildRecord(turns, info))) {
+    // What this conversation concludes is still coming (its combined answer or debate): a
+    // question that carries the record waits for it (#29); one sent without a record goes now.
+    const coming = concluding(turns);
+    const carries = prefs.carryRecord && !!info.context;
+    if (!record && carries && !prefs.recordNoticed && (coming || buildRecord(turns, info))) {
       setAskRecord(true);
       return;
     }
@@ -440,10 +442,11 @@ export default function Ask() {
     if (record === 'without') turn.noRecord = true;
     // A conversation left running goes first: this question waits for it (#23).
     const waitBg = bgs.current.size > 0;
-    const wait = waitBg || waitDebate;
+    const waitHere = carries && record !== 'without' && coming ? coming : null;
+    const wait = waitBg || !!waitHere;
     if (wait) {
       turn.queued = true;
-      if (!waitBg) turn.queuedFor = 'debate';
+      if (!waitBg && waitHere) turn.queuedFor = waitHere;
     } else turn = carry(turn, turns, info, prefs.carryRecord);
     if (!head.current) {
       head.current = { id: Crypto.randomUUID(), pcId: p.conn.id, startedAt: Date.now(), title: question };

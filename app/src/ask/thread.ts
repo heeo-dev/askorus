@@ -60,10 +60,11 @@ export type Turn = {
   at?: number; // when it was sent (phone clock, ms)
   compare?: TurnCompare; // set when the turn has a Summary tab (P2-3)
   // Not sent yet: it waits until the conversation left running before it
-  // is done (#23), then goes as it is; or, queuedFor 'debate', until this
-  // conversation's debate ends, and then goes with its outcome (#29).
+  // is done (#23), then goes as it is; or, queuedFor 'debate' or 'synth',
+  // until this conversation's debate or combined answer is in, and then
+  // goes with it in its record (#29).
   queued?: boolean;
-  queuedFor?: 'debate';
+  queuedFor?: 'debate' | 'synth';
   // The debate on its combined answer (토론, P2-5), kept with the turn.
   debate?: TurnDebate;
   // Sent without the conversation record by the person's choice ('이번만

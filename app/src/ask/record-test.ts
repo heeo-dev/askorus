@@ -3,9 +3,9 @@
 
 import type { Debate, DebatePoint, Info } from '@/api/types';
 
-import { directRequest } from './compare';
+import { combining, directRequest } from './compare';
 import { debateRequest } from './debate';
-import { buildRecord, finalAnswer, maxSettled, settledOf } from './record';
+import { buildRecord, concluding, finalAnswer, maxSettled, settledOf } from './record';
 import { carry, newTurn, type Turn } from './thread';
 
 const info = (context = true) =>
@@ -158,4 +158,25 @@ test('carry sets the record when the turn goes; off, or left out this time, send
   expect(debateRequest(done, info(), 'k')?.context).toEqual(sent.req.context);
   expect(directRequest(turn('2'), 'k')).not.toHaveProperty('context');
   expect(debateRequest(turn('2'), info(), 'k')).not.toHaveProperty('context');
+});
+
+test('what a turn concludes is still coming: its combined answer, then its debate (11-07)', () => {
+  const writing = turn('1');
+  writing.compare!.snap = { comparisonId: 'c-1', status: 'done', source: 'run', engine: 'pc', pollAfterMs: 1000, synthesis: { status: 'running' } };
+  expect(combining(writing)).toBe(true);
+  expect(concluding([turn('0'), writing])).toBe('synth');
+  // The run ended and the PC's next answer is not in yet: coming, when a combined answer was asked for.
+  const noSnap = { ...turn('2'), compare: { ...turn('2').compare!, snap: undefined } } as Turn;
+  expect(combining(noSnap)).toBe(true);
+  expect(combining({ ...noSnap, compare: { ...noSnap.compare!, synth: { off: true } } } as Turn)).toBe(false);
+  // A comparison request on its way.
+  expect(combining({ ...turn('3'), compare: { ...turn('3').compare!, key: 'k' } } as Turn)).toBe(true);
+  // Done, failed, still answering, an error, one AI: nothing coming.
+  expect(combining(turn('4'))).toBe(false);
+  expect(combining({ ...turn('5'), run: { ...turn('5').run!, status: 'running' } } as Turn)).toBe(false);
+  expect(combining({ ...turn('6'), compare: { ...turn('6').compare!, error: 'network' } } as Turn)).toBe(false);
+  expect(combining(turn('7', { agents: ['codex'] }))).toBe(false);
+  // A running debate comes first.
+  expect(concluding([writing, turn('8', { debate: { status: 'debating', pollAfterMs: 1000 } })])).toBe('debate');
+  expect(concluding([turn('9')])).toBeNull();
 });
