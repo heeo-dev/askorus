@@ -6,13 +6,13 @@ const memory = () => {
   return { mem, kv };
 };
 
-const defaults = { tier: 'standard', off: [], models: {}, pc: '', synth: true, synthAgent: 'claude', refine: false, debateNoticed: false };
+const defaults = { tier: 'standard', off: [], models: {}, efforts: {}, pc: '', synth: true, synthAgent: 'claude', refine: false, debateNoticed: false };
 
 test('ask prefs survive a round trip, the combined answer off included', async () => {
   const { kv } = memory();
   expect(await loadAskPrefs(kv)).toEqual(defaults);
-  const saved = { tier: 'deep', off: ['codex'], models: { claude: 'opus' }, pc: 'pc-1', synth: false, synthAgent: 'codex', refine: true, debateNoticed: true } as const;
-  await saveAskPrefs({ ...saved, off: [...saved.off], models: { ...saved.models } }, kv);
+  const saved = { tier: 'deep', off: ['codex'], models: { claude: 'opus' }, efforts: { claude: 'high' }, pc: 'pc-1', synth: false, synthAgent: 'codex', refine: true, debateNoticed: true } as const;
+  await saveAskPrefs({ ...saved, off: [...saved.off], models: { ...saved.models }, efforts: { ...saved.efforts } }, kv);
   expect(await loadAskPrefs(kv)).toEqual(saved);
   for (const synthAgent of synthWriters) {
     await saveAskPrefs({ ...defaultAskPrefs, synthAgent }, kv);
@@ -78,4 +78,14 @@ test('the debate notice is unseen until saved, and only true counts', async () =
   }
   await saveAskPrefs({ ...defaultAskPrefs, debateNoticed: true }, kv);
   expect((await loadAskPrefs(kv)).debateNoticed).toBe(true);
+});
+
+// 11-06: the effort picked with an AI's model; prefs saved before it pick
+// none, and an effort without its model, or not a word, is dropped.
+test('an effort is kept only with its model', async () => {
+  const { mem, kv } = memory();
+  mem.set('ask.v1', JSON.stringify({ models: { opencode: 'opencode-go/deepseek-v4.1-flash' } }));
+  expect(await loadAskPrefs(kv)).toMatchObject({ models: { opencode: 'opencode-go/deepseek-v4.1-flash' }, efforts: {} });
+  mem.set('ask.v1', JSON.stringify({ models: { opencode: 'flash', claude: 'opus' }, efforts: { opencode: 'low', codex: 'high', claude: 3 } }));
+  expect((await loadAskPrefs(kv)).efforts).toEqual({ opencode: 'low' });
 });

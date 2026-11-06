@@ -22,7 +22,7 @@ export function TierSheet({
 }: {
   open: boolean;
   value: Tier;
-  /** models: per tier, a line like 'Claude haiku · Codex gpt-5-mini' ('' when none follow the tier). */
+  /** models: per tier, a line like 'Claude haiku · medium, Codex gpt-6-luna · medium' ('' when none follow the tier). */
   models: Record<Tier, string>;
   onPick: (tier: Tier) => void;
   onClose: () => void;

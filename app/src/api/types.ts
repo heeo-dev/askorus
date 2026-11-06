@@ -54,8 +54,11 @@ export type AdapterInfo = {
   available: boolean;
   capabilities: string[];
   notices?: string[];
-  /** Set for AIs that can ask (Phase 2): the model of each tier. */
-  ask?: { tiers: Record<string, { model: string; effort?: string }> };
+  /**
+   * Set for AIs that can ask (Phase 2): the model of each tier, and (11-06,
+   * newer agents) the efforts each of those models may take, least to most.
+   */
+  ask?: { tiers: Record<string, { model: string; effort?: string }>; efforts?: Record<string, string[]> };
 };
 
 /** A stable error code from the agent; message is English detail (or an AI's own words). */

@@ -188,6 +188,11 @@ export class FakeAgent {
     ];
   }
 
+  /** askModels gives Codex or OpenCode these tier models and, as newer agents do, their efforts (11-06). */
+  askModels(agent: string, tiers: Record<string, { model: string; effort?: string }>, efforts?: Record<string, string[]>) {
+    this.askAgents = this.askAgents.map((a) => (a.agent === agent ? { ...a, ask: { tiers, ...(efforts ? { efforts } : {}) } } : a));
+  }
+
   /**
    * enableSynth makes the PC's AIs write combined answers (S5b; since C6
    * the moderator alone, from the answers); call it after enableAsk.

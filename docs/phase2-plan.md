@@ -90,13 +90,14 @@ Phase 2가 다른 AI에게 쓰는 것은 '질문 한 번(ask)'뿐이다. 명령 
 
 | 단계 | Claude | Codex | OpenCode |
 | --- | --- | --- | --- |
-| 빠르게 | `--model haiku --effort medium` | `-m gpt-6-luna -c model_reasoning_effort="medium"` | `-m opencode-go/deepseek-v4.1-flash#high` |
-| **기본** | `--model sonnet --effort medium` (Sonnet 5.5) | `-m gpt-6.1-terra -c model_reasoning_effort="medium"` | `-m opencode-go/deepseek-v4.1-flash#max` |
+| 빠르게 | `--model haiku --effort medium` | `-m gpt-6-luna -c model_reasoning_effort="medium"` | `-m opencode-go/deepseek-v4.1-flash#low`(11-06 사용자 결정, 전에는 `#high`) |
+| **기본** | `--model sonnet --effort medium` (Sonnet 5.5) | `-m gpt-6.1-terra -c model_reasoning_effort="medium"` | `-m opencode-go/deepseek-v4.1-flash#high`(11-06 사용자 결정, 전에는 `#max`) |
 | 깊게 | `--model opus --effort medium` | `-m gpt-6.1-sol -c model_reasoning_effort="medium"` | `-m opencode-go/deepseek-v4-pro#high`(11-04 사용자 결정, 전에는 `kimi-k3.1-pro#high`) |
 
 - 2026-10-29 사용자 결정: 단계는 모델로 나누고 생각 수준은 medium으로 맞춘다. OpenCode만 DeepSeek high / DeepSeek max / Kimi K3.1 Pro로.
 - OpenCode 변형(`#이름`)은 모델마다 다르다. Kimi K3.1 Pro는 `low`·`high`·`max`와 변형 없음만 되고 `medium`·`xhigh`는 "Variant unavailable"로 거절된다(짧은 질문으로 하나씩 시험). 변형 없이 부르면 OpenCode가 정한 기본 수준으로 돈다.
 - 2026-11-04 사용자 결정: OpenCode '깊게'의 Kimi K3.1 Pro가 사용량을 너무 많이 써서 DeepSeek의 최신 Pro인 V4 Pro(`opencode-go/deepseek-v4-pro`, v4.1은 Flash만 있음)로 바꾼다. V4 Pro는 `high`·`max`와 변형 없음만 되고 `low`·`medium`은 거절된다(짧은 질문으로 시험, high 3.9초). Kimi 때처럼 `high`를 쓴다. 이 PC의 agent.json에는 단계 덮어쓰기가 없어 기본값이 바로 쓰인다.
+- 2026-11-06 사용자 결정: OpenCode '기본'의 Flash `max`가 너무 느렸다(그날 '기본' 질문 두 번 모두 3분 제한에 걸리고, 종합 답변이 그만큼 기다림. 11-04부터 OpenCode 답 시간 중앙값 29초, Claude 19초, Codex 21초) → 빠르게 Flash `low`, 기본 Flash `high`, 깊게 V4 Pro `high` 그대로. Flash는 `low`·`high`·`max`만 되고 `medium`·`xhigh`는 "Variant unavailable"로 거절된다(짧은 질문, low 9초). 같은 날 사용자 요청으로 앱의 모델 시트를 바꿨다: 모든 AI의 줄이 모델과 노력 수준을 같이 보이고('haiku · medium', 단계가 같은 모델을 다른 노력 수준으로 쓰면 줄도 따로. 전에는 Flash high와 max가 한 줄이라 고르면 노력 수준 없이 가서 OpenCode 기본값으로 답함, R-74), '직접 고르기'에서 단계들의 모델 중 하나와 PC가 알려 준 노력 수준을 고른다(누르면 바로 바뀌고 시트는 열린 채). 고른 노력 수준은 `RunTarget.effort`로 간다. `/v1/info` 묻기 정보에 `ask.efforts`(단계 모델마다 고를 수 있는 노력 수준, 낮은 것부터)를 더했다: Claude는 다섯 단계 모두(haiku로 `xhigh`·`max` 응답 확인), Codex는 `models_cache.json`의 supported_reasoning_levels(gpt-6-luna `low`~`max`, gpt-6.1-terra·sol `low`~`ultra`, 어댑터가 받는 값에 `max`·`ultra`를 더함), OpenCode는 위 시험(Pro는 `high`·`max`). 어댑터가 모르는 모델(agent.json ask.tiers)은 그 단계가 쓰는 노력 수준만.
 
 - Codex의 Luna는 6.1이 없어 `gpt-6-luna`(최신)를 쓴다. 모델 이름은 `~/.codex/models_cache.json`과 `opencode models`로 확인했다.
 - 단계와 모델은 에이전트 설정으로 바꿀 수 있게 하고, 앱에서는 질문마다 고른다(5절 P2-2).

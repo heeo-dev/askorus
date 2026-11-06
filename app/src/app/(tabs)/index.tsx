@@ -29,7 +29,8 @@ import { type Info, type RunPart, type Tier, tiers } from '@/api/types';
 import { canSynthesize, polling, writerFor } from '@/ask/compare';
 import { conversations, recentQuestions, useConversations } from '@/ask/conversations';
 import { features } from '@/ask/features';
-import { aiStatus, askErrorText, displayModel, metaLine, onlyTarget, partViews, rowValue } from '@/ask/present';
+import { modelLabel, pickOf, runsWith } from '@/ask/models';
+import { aiStatus, askErrorText, metaLine, onlyTarget, partViews, rowValue } from '@/ask/present';
 import { type AskPrefs, defaultAskPrefs, loadAskPrefs, saveAskPrefs } from '@/ask/prefs';
 import { askers, type FollowDeps, followCompare, followDebate, followRun, newTurn, running, stopTurns, type Target, type Turn } from '@/ask/thread';
 import { connect } from '@/connections/open';
@@ -371,6 +372,7 @@ export default function Ask() {
       on,
       turns,
       models: prefs.models,
+      efforts: prefs.efforts,
       info,
       synth: { on: prefs.synth, agent: prefs.synthAgent },
       refine: features.refine ? { on: prefs.refine, agent: prefs.synthAgent } : undefined,
@@ -478,18 +480,23 @@ export default function Ask() {
   // ---- The sheets ----
 
   const sheetTurn = sheet && 'turn' in sheet ? (turns.find((x) => x.id === sheet.turn) ?? null) : null;
-  const modelOf = (agent: string) => prefs.models[agent] || list.find((a) => a.agent === agent)?.tiers[prefs.tier]?.model || '';
-  // Per tier, the models of the AIs that are on and follow the tier (#16).
+  // What an AI answers with now: its own pick, else the tier's model and effort.
+  const asker = (agent: string) => list.find((a) => a.agent === agent);
+  const modelOf = (agent: string) => {
+    const m = runsWith(pickOf(prefs, agent), asker(agent)?.tiers ?? {}, prefs.tier);
+    return m ? modelLabel(m) : '';
+  };
+  // Per tier, the models and efforts of the AIs that are on and follow the tier (#16).
   const tierModels = Object.fromEntries(
     tiers.map((x) => {
       const line = on
         .filter((a) => !prefs.models[a])
         .map((a) => {
-          const m = list.find((l) => l.agent === a)?.tiers[x]?.model;
-          return m ? `${agentName(a)} ${displayModel(m)}` : '';
+          const m = asker(a)?.tiers[x];
+          return m?.model ? `${agentName(a)} ${modelLabel(m)}` : '';
         })
         .filter(Boolean)
-        .join(' · ');
+        .join(', ');
       return [x, line];
     }),
   ) as Record<Tier, string>;
@@ -499,7 +506,7 @@ export default function Ask() {
     return {
       agent: a.agent,
       name,
-      model: a.canAsk ? displayModel(modelOf(a.agent)) || undefined : t('ask.error.agent_cannot_ask'),
+      model: a.canAsk ? modelOf(a.agent) || undefined : t('ask.error.agent_cannot_ask'),
       onPress: a.canAsk ? () => toggle(a.agent) : undefined,
       onLongPress: a.canAsk ? () => setSheet({ kind: 'model', agent: a.agent }) : undefined,
       disabled: !a.canAsk,
@@ -544,16 +551,23 @@ export default function Ask() {
       />
       <ModelSheet
         agent={sheet?.kind === 'model' ? sheet.agent : null}
-        tierModels={sheet?.kind === 'model' ? (list.find((a) => a.agent === sheet.agent)?.tiers ?? {}) : {}}
-        value={sheet?.kind === 'model' ? (prefs.models[sheet.agent] ?? '') : ''}
+        tierModels={sheet?.kind === 'model' ? (asker(sheet.agent)?.tiers ?? {}) : {}}
+        efforts={sheet?.kind === 'model' ? (asker(sheet.agent)?.efforts ?? {}) : {}}
+        tier={prefs.tier}
+        value={sheet?.kind === 'model' ? pickOf(prefs, sheet.agent) : null}
         onClose={() => setSheet({ kind: 'pick' })}
-        onPick={(model) => {
+        onPick={(pick, close) => {
           if (sheet?.kind !== 'model') return;
           const models = { ...prefs.models };
-          if (model) models[sheet.agent] = model;
-          else delete models[sheet.agent];
-          change({ models });
-          setSheet({ kind: 'pick' });
+          const efforts = { ...prefs.efforts };
+          delete models[sheet.agent];
+          delete efforts[sheet.agent];
+          if (pick) {
+            models[sheet.agent] = pick.model;
+            if (pick.effort) efforts[sheet.agent] = pick.effort;
+          }
+          change({ models, efforts });
+          if (close) setSheet({ kind: 'pick' });
         }}
       />
       <TierSheet

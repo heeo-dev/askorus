@@ -8,7 +8,8 @@
 // on (features.ts, off since 2026-11-04). The compare switch of P2-3 went
 // with judging (C6d): a value saved for it is no longer read.
 // debateNoticed (P2-5): the person has seen, once, what a debate sends
-// where.
+// where. efforts (11-06): the effort picked with an AI's model; only used
+// with that model.
 
 import { tiers, type Tier } from '@/api/types';
 import { type KeyValue, secureKeyValue } from '@/connections/store';
@@ -24,6 +25,8 @@ export type AskPrefs = {
   tier: Tier;
   off: string[];
   models: Record<string, string>;
+  /** The effort picked with an AI's model (models), absent for the model's tier effort. */
+  efforts: Record<string, string>;
   pc: string;
   synth: boolean;
   synthAgent: string;
@@ -33,19 +36,36 @@ export type AskPrefs = {
 };
 
 const key = 'ask.v1';
-export const defaultAskPrefs: AskPrefs = { tier: 'standard', off: [], models: {}, pc: '', synth: true, synthAgent: 'claude', refine: false, debateNoticed: false };
+export const defaultAskPrefs: AskPrefs = {
+  tier: 'standard',
+  off: [],
+  models: {},
+  efforts: {},
+  pc: '',
+  synth: true,
+  synthAgent: 'claude',
+  refine: false,
+  debateNoticed: false,
+};
+
+/** strings keeps the non-empty string values of a saved map. */
+function strings(v: unknown): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (v && typeof v === 'object') for (const [a, m] of Object.entries(v)) if (typeof m === 'string' && m) out[a] = m;
+  return out;
+}
 
 export async function loadAskPrefs(kv: KeyValue = secureKeyValue): Promise<AskPrefs> {
   try {
     const v = JSON.parse((await kv.get(key)) ?? '{}');
-    const models: Record<string, string> = {};
-    if (v.models && typeof v.models === 'object') {
-      for (const [a, m] of Object.entries(v.models)) if (typeof m === 'string' && m) models[a] = m;
-    }
+    const models = strings(v.models);
+    // An effort without its model means nothing.
+    const efforts = Object.fromEntries(Object.entries(strings(v.efforts)).filter(([a]) => models[a]));
     return {
       tier: (tiers as readonly string[]).includes(v.tier) ? v.tier : 'standard',
       off: Array.isArray(v.off) ? v.off.filter((x: unknown) => typeof x === 'string') : [],
       models,
+      efforts,
       pc: typeof v.pc === 'string' ? v.pc : '',
       synth: typeof v.synth === 'boolean' ? v.synth : true,
       synthAgent: (synthWriters as readonly unknown[]).includes(v.synthAgent) ? v.synthAgent : 'claude',

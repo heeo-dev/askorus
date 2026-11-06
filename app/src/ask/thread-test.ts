@@ -36,15 +36,15 @@ const runOf = (status: string, ps: NonNullable<Turn['run']>['parts']) => ({
 test('askers keeps the PC order and dims what cannot ask', () => {
   const info = {
     agents: [
-      { agent: 'claude', available: true, capabilities: ['list', 'ask'], ask: { tiers: { standard: { model: 'sonnet' } } } },
+      { agent: 'claude', available: true, capabilities: ['list', 'ask'], ask: { tiers: { standard: { model: 'sonnet' } }, efforts: { sonnet: ['low', 'high'] } } },
       { agent: 'codex', available: false, capabilities: [] },
       { agent: 'opencode', available: true, capabilities: ['ask'] },
     ],
   } as unknown as Info;
   expect(askers(info)).toEqual([
-    { agent: 'claude', canAsk: true, tiers: { standard: { model: 'sonnet' } } },
-    { agent: 'codex', canAsk: false, tiers: {} },
-    { agent: 'opencode', canAsk: true, tiers: {} },
+    { agent: 'claude', canAsk: true, tiers: { standard: { model: 'sonnet' } }, efforts: { sonnet: ['low', 'high'] } },
+    { agent: 'codex', canAsk: false, tiers: {}, efforts: {} },
+    { agent: 'opencode', canAsk: true, tiers: {}, efforts: {} },
   ]);
 });
 
@@ -68,6 +68,18 @@ test('a follow-up carries each AI on its latest session, a new AI starts fresh',
   });
   const one = request({ question: 'you', tier: 'quick', to: { agent: 'codex' }, on: ['claude'], turns, models: {}, id: 'k2' });
   expect(one.agents).toEqual([{ agent: 'codex', session: 'codex:b' }]);
+  // 11-06: the effort picked with a model goes with it; without the model it means nothing.
+  const own = request({
+    question: 'q',
+    tier: 'standard',
+    to: 'all',
+    on: ['claude', 'opencode'],
+    turns: [],
+    models: { opencode: 'opencode-go/deepseek-v4-pro' },
+    efforts: { opencode: 'max', claude: 'high' },
+    id: 'k3',
+  });
+  expect(own.agents).toEqual([{ agent: 'claude' }, { agent: 'opencode', model: 'opencode-go/deepseek-v4-pro', effort: 'max' }]);
 });
 
 test('every asked AI has a card, running until the PC says otherwise', () => {
