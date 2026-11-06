@@ -16,6 +16,11 @@
 // not stopped. It goes on in the background, kept in the history as it
 // changes, and a question sent meanwhile waits (Turn.queued) until it is
 // done. Only a removed conversation is stopped.
+//
+// #29: a follow-up carries the conversation record (record.ts), built when
+// it goes; one sent while this conversation's debate runs waits for it and
+// then goes with its outcome. The first one that would carry a record
+// shows, once, where it goes.
 
 import * as Clipboard from 'expo-clipboard';
 import * as Crypto from 'expo-crypto';
@@ -28,11 +33,25 @@ import type { AgentClient } from '@/api/client';
 import { type Info, type RunPart, type Tier, tiers } from '@/api/types';
 import { canSynthesize, polling, writerFor } from '@/ask/compare';
 import { conversations, recentQuestions, useConversations } from '@/ask/conversations';
+import { debating } from '@/ask/debate';
 import { features } from '@/ask/features';
 import { modelLabel, pickOf, runsWith } from '@/ask/models';
 import { aiStatus, askErrorText, metaLine, onlyTarget, partViews, rowValue } from '@/ask/present';
 import { type AskPrefs, defaultAskPrefs, loadAskPrefs, saveAskPrefs } from '@/ask/prefs';
-import { askers, type FollowDeps, followCompare, followDebate, followRun, newTurn, running, stopTurns, type Target, type Turn } from '@/ask/thread';
+import { buildRecord } from '@/ask/record';
+import {
+  askers,
+  carry,
+  type FollowDeps,
+  followCompare,
+  followDebate,
+  followRun,
+  newTurn,
+  running,
+  stopTurns,
+  type Target,
+  type Turn,
+} from '@/ask/thread';
 import { connect } from '@/connections/open';
 import { type Cause, cause } from '@/connections/reach';
 import { type Connection, ConnectionStore } from '@/connections/store';
@@ -45,6 +64,7 @@ import { Spinner } from '@/ui/controls';
 import { Header } from '@/ui/Header';
 import { Icon, IconButton } from '@/ui/Icon';
 import { ModelSheet } from '@/ui/ModelSheet';
+import { RecordNotice, RecordSheet } from '@/ui/Record';
 import { RefineSheet } from '@/ui/Refine';
 import { ReachError } from '@/ui/ReachError';
 import { usePCs } from '@/ui/shell/pcs';
@@ -65,6 +85,7 @@ type SheetState =
   | { kind: 'ais'; turn: string }
   | { kind: 'answer'; turn: string; agent: string }
   | { kind: 'refine'; turn: string }
+  | { kind: 'record'; turn: string }
   | null;
 
 // An agent from before asks (P2-1) reports Claude alone and no tiers; a
@@ -87,6 +108,8 @@ export default function Ask() {
   const [to, setTo] = useState<Target>('all');
   const [notes, setNotes] = useState<Record<string, Note>>({});
   const [sheet, setSheet] = useState<SheetState>(null);
+  // The notice before the first follow-up that carries the record (#29).
+  const [askRecord, setAskRecord] = useState(false);
   const follows = useRef(new Map<string, AbortController>());
   const pcRef = useRef<PC | null>(null);
   const turnsRef = useRef<Turn[]>([]);
@@ -167,12 +190,24 @@ export default function Ask() {
   }, []);
   const jobsOf = useCallback((ts: Turn[]) => [...jobs.current].filter(([, id]) => ts.some((x) => x.id === id)).map(([job]) => job), []);
 
-  // A question that waited goes now, as it was written (#23).
+  // What a question that waited needs when it goes: the PC's info and the prefs as they are then.
+  const infoRef = useRef<Info | null>(null);
+  const prefsRef = useRef<AskPrefs>(prefs);
+  prefsRef.current = prefs;
+  const started = useRef(new Set<string>());
+
+  // A question that waited goes now, as it was written (#23), with the
+  // conversation record as it is now (#29): a debate it waited for is in.
   const startQueued = useCallback(
     (client: AgentClient | undefined, x: Turn) => {
+      if (started.current.has(x.id)) return;
+      started.current.add(x.id);
       const at = Date.now();
-      deps.update(x.id, () => ({ queued: undefined, at }));
-      if (client) track(x.id, followRun(client, { ...x, queued: undefined, at }, deps));
+      const all = turnsRef.current;
+      const i = all.findIndex((y) => y.id === x.id);
+      const { req } = carry(x, i < 0 ? [] : all.slice(0, i), infoRef.current, prefsRef.current.carryRecord);
+      deps.update(x.id, () => ({ queued: undefined, queuedFor: undefined, at, req }));
+      if (client) track(x.id, followRun(client, { ...x, queued: undefined, queuedFor: undefined, at, req }, deps));
       else deps.update(x.id, () => ({ error: t('ask.notSent') }));
     },
     [deps, track],
@@ -190,10 +225,20 @@ export default function Ask() {
       if (bgTimer.current) clearTimeout(bgTimer.current);
       bgTimer.current = null;
       setBgBusy(false);
+      // A debate of this conversation still running holds it back until it ends (#29).
+      if (turnsRef.current.some(debating)) return;
       for (const x of turnsRef.current) if (x.queued) startQueued(pcRef.current?.client, x);
     },
     [startQueued],
   );
+
+  // A question that waited for this conversation's debate goes once the
+  // debate has ended (#29), and nothing else runs in the background.
+  useEffect(() => {
+    const client = pcRef.current?.client;
+    if (!client || bgs.current.size || turns.some(debating)) return;
+    for (const x of turns) if (x.queued) startQueued(client, x);
+  }, [turns, startQueued]);
 
   // The current conversation is kept on the phone as it changes (milestone
   // B): at most about once a second, and at once when the app goes to the
@@ -248,6 +293,7 @@ export default function Ask() {
     setTurns([]);
     setNotes({});
     setSheet(null);
+    setAskRecord(false);
     setTo('all');
   }, [keepNow, finishBg, jobsOf]);
 
@@ -309,7 +355,7 @@ export default function Ask() {
       for (const turn of c.turns) {
         // Kept while it waited (the app was closed): it goes once none runs in the background.
         if (turn.queued) {
-          if (!bgs.current.size) startQueued(p.client, turn);
+          if (!bgs.current.size && !c.turns.some(debating)) startQueued(p.client, turn);
           continue;
         }
         if (running(turn)) {
@@ -352,6 +398,7 @@ export default function Ask() {
   }, []);
 
   const info = load.state === 'ok' && pc ? load.info : null;
+  infoRef.current = info;
   const list = info ? askers(info) : [];
   const anyAsk = list.some((a) => a.canAsk);
   const on = list.filter((a) => a.canAsk && !prefs.off.includes(a.agent)).map((a) => a.agent);
@@ -360,11 +407,22 @@ export default function Ask() {
   const canAsk = (agent: string) => list.some((a) => a.agent === agent && a.canAsk);
   const now = Date.now();
 
-  const send = () => {
+  // record: the answer to the notice (#29), left out when none was shown.
+  const sendWith = (record?: 'with' | 'without') => {
     const question = text.trim();
     const p = pcRef.current;
     if (!p || !info || !question || busy) return;
-    const turn = newTurn({
+    // A debate of this conversation that still runs: the question waits for its outcome (#29).
+    const waitDebate = turns.some(debating);
+    if (!record && prefs.carryRecord && !prefs.recordNoticed && info.context && (waitDebate || buildRecord(turns, info))) {
+      setAskRecord(true);
+      return;
+    }
+    if (record) {
+      setAskRecord(false);
+      change({ recordNoticed: true });
+    }
+    let turn = newTurn({
       id: Crypto.randomUUID(),
       question,
       tier: prefs.tier,
@@ -379,9 +437,14 @@ export default function Ask() {
       at: Date.now(),
     });
     if (!turn.agents.length) return;
+    if (record === 'without') turn.noRecord = true;
     // A conversation left running goes first: this question waits for it (#23).
-    const wait = bgs.current.size > 0;
-    if (wait) turn.queued = true;
+    const waitBg = bgs.current.size > 0;
+    const wait = waitBg || waitDebate;
+    if (wait) {
+      turn.queued = true;
+      if (!waitBg) turn.queuedFor = 'debate';
+    } else turn = carry(turn, turns, info, prefs.carryRecord);
     if (!head.current) {
       head.current = { id: Crypto.randomUUID(), pcId: p.conn.id, startedAt: Date.now(), title: question };
       conversations.setCurrent(head.current);
@@ -394,6 +457,7 @@ export default function Ask() {
     stick.current = true;
     if (!wait) track(turn.id, followRun(p.client, turn, deps));
   };
+  const send = () => sendWith();
 
   const note = (key: string, n: Note | null) =>
     setNotes((m) => {
@@ -448,6 +512,7 @@ export default function Ask() {
     openAnswer: (agent) => setSheet({ kind: 'answer', turn: turn.id, agent }),
     openAIs: () => setSheet({ kind: 'ais', turn: turn.id }),
     openRefine: () => setSheet({ kind: 'refine', turn: turn.id }),
+    openRecord: () => setSheet({ kind: 'record', turn: turn.id }),
     copy,
     only: (agent) => onlyOf(agent),
     carryOn,
@@ -596,6 +661,7 @@ export default function Ask() {
         note={answerKey ? notes[answerKey] : undefined}
       />
       <RefineSheet refine={sheet?.kind === 'refine' ? (sheetTurn?.run?.refine ?? null) : null} onClose={() => setSheet(null)} />
+      <RecordSheet context={sheet?.kind === 'record' ? (sheetTurn?.req.context ?? null) : null} onClose={() => setSheet(null)} />
     </>
   );
 
@@ -716,6 +782,7 @@ export default function Ask() {
           />
         ))}
       </ScrollView>
+      {askRecord ? <RecordNotice onGo={() => sendWith('with')} onWithout={() => sendWith('without')} /> : null}
       <FollowBar
         value={text}
         onChangeText={setText}

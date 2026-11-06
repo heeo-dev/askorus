@@ -28,6 +28,7 @@ import { CombinedAnswerCard } from './CombinedAnswer';
 import { type DebateActions, DebateSection } from './Debate';
 import { Markdown } from './Markdown';
 import { themed, useTheme } from './theme';
+import { RecordLine } from './Record';
 import { RefineLine } from './Refine';
 import { ThreadBubble } from './ThreadBubble';
 
@@ -41,6 +42,8 @@ export type TurnActions = {
   openAIs: () => void;
   /** Show what refining sent with the question (milestone C). */
   openRefine: () => void;
+  /** Show the conversation record the question carried (#29). */
+  openRecord: () => void;
   copy: (key: string, text: string) => void;
   /** Follow up with this AI only; null when it cannot answer now. */
   only: (agent: string) => (() => void) | undefined;
@@ -74,7 +77,7 @@ export function TurnView({
       <View style={s.turn}>
         <ThreadBubble text={turn.question} />
         <Text style={s.caption} accessibilityLiveRegion="polite">
-          {t('ask.queued')}
+          {t(turn.queuedFor === 'debate' ? 'ask.queuedDebate' : 'ask.queued')}
         </Text>
       </View>
     );
@@ -93,6 +96,7 @@ export function TurnView({
     return (
       <View style={s.turn}>
         <ThreadBubble text={turn.question} />
+        <RecordLine context={turn.req.context} onOpen={act.openRecord} />
         <RefineLine refine={turn.run?.refine} onOpen={act.openRefine} />
         {turn.error && !turn.run
           ? null
@@ -118,6 +122,7 @@ export function TurnView({
     return (
       <View style={s.turn}>
         <ThreadBubble text={turn.question} />
+        <RecordLine context={turn.req.context} onOpen={act.openRecord} />
         <RefineLine refine={turn.run?.refine} onOpen={act.openRefine} />
         {turn.error && !turn.run ? null : <AnsweringList rows={views} heading={going ? t('ask.answering') : undefined} caption={caption} />}
         {lost}
@@ -128,6 +133,7 @@ export function TurnView({
   return (
     <View style={s.turn}>
       <ThreadBubble text={turn.question} />
+      <RecordLine context={turn.req.context} onOpen={act.openRecord} />
       <RefineLine refine={turn.run?.refine} onOpen={act.openRefine} />
       <Result turn={turn} info={info} views={views} only={only} notes={notes} act={act} />
       {lost}

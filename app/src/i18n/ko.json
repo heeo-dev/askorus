@@ -411,5 +411,18 @@
   "debate.error.judge_timeout": "토론이 시간 제한을 넘었습니다.",
   "debate.error.no_judge": "이 질문에 답한 AI 중 사회자를 맡을 AI가 없습니다.",
   "debate.error.cancelled": "토론이 멈췄습니다.",
-  "debate.error.bad_model": "사회자 AI가 예정과 다른 회사의 모델로 답해 버렸습니다."
+  "debate.error.bad_model": "사회자 AI가 예정과 다른 회사의 모델로 답해 버렸습니다.",
+  "settings.carryRecord": "이어서 물을 때 결론 이어 주기",
+  "settings.carryRecordHint": "이어서 물으면 지금까지의 결론(토론에서 정한 것과 바로 앞 최종 답)을 답하는 AI와 사회자에게 함께 보냅니다. AI들은 앞 결론을 다시 따지지 않고 그 위에서 답합니다. 끄면 질문만 보냅니다.",
+  "ask.queuedDebate": "대기 중: 토론이 끝나면 그 결론을 이어서 보냅니다.",
+  "ask.record.notice.title": "앞 결론을 함께 보냅니다",
+  "ask.record.notice.body": "이어서 물을 때 지금까지의 결론(다른 AI의 답이 섞인 종합 답변)을 답하는 모든 AI에게 보냅니다. 각 AI의 회사가 그 내용을 받습니다. 설정 › 사회자에서 끌 수 있습니다.",
+  "ask.record.notice.go": "계속",
+  "ask.record.notice.without": "이번만 빼고 보내기",
+  "ask.record.line": "앞 결론을 이어받음",
+  "ask.record.lineLabel": "앞 결론을 이어받음. 보기",
+  "ask.record.title": "이어받은 앞 결론",
+  "ask.record.settled": "토론에서 정한 것",
+  "ask.record.last": "바로 앞 최종 답도 함께 보냈습니다.",
+  "ask.record.how": "답하는 AI와 종합 답변을 쓰는 사회자가 이 결론을 자료로 받고, 이번 질문에 필요한 곳에만 씁니다. 새 질문의 조건이 다르면 새 조건을 따릅니다."
 }

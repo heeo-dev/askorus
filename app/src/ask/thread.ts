@@ -10,7 +10,7 @@
 // followCompare follow the PC and patch the turn; the screen only draws.
 
 import { type AgentClient, AgentError, CancelledError } from '@/api/client';
-import type { Comparison, Debate, Info, Run, RunCompare, RunPart, RunRequest, RunTarget, SynthesisRequest, Tier } from '@/api/types';
+import type { Comparison, Debate, Info, RequestContext, Run, RunCompare, RunPart, RunRequest, RunTarget, SynthesisRequest, Tier } from '@/api/types';
 
 import {
   compares,
@@ -27,6 +27,7 @@ import {
 } from './compare';
 import { debateRequest, type TurnDebate } from './debate';
 import type { ModelPick } from './models';
+import { buildRecord } from './record';
 
 /**
  * A turn's comparison. start, judges, earlier and synth are fixed at send
@@ -59,10 +60,15 @@ export type Turn = {
   at?: number; // when it was sent (phone clock, ms)
   compare?: TurnCompare; // set when the turn has a Summary tab (P2-3)
   // Not sent yet: it waits until the conversation left running before it
-  // is done (#23), then goes as it is.
+  // is done (#23), then goes as it is; or, queuedFor 'debate', until this
+  // conversation's debate ends, and then goes with its outcome (#29).
   queued?: boolean;
+  queuedFor?: 'debate';
   // The debate on its combined answer (토론, P2-5), kept with the turn.
   debate?: TurnDebate;
+  // Sent without the conversation record by the person's choice ('이번만
+  // 빼고 보내기', #29); the record it went with is req.context.
+  noRecord?: boolean;
 };
 
 /** Who a follow-up goes to: everyone turned on, or one AI. */
@@ -146,6 +152,8 @@ export function newTurn(o: {
   synth: { on: boolean; agent: string; models?: Record<string, ModelPick> };
   /** Refine the question first (milestone C): the setting and the moderator; left out is off. */
   refine?: { on: boolean; agent: string };
+  /** The conversation record to send with it (#29); null or left out sends none. */
+  context?: RequestContext | null;
   at: number;
 }): Turn {
   const req = request({ question: o.question, tier: o.tier, to: o.to, on: o.on, turns: o.turns, models: o.models, efforts: o.efforts, id: o.id });
@@ -160,7 +168,20 @@ export function newTurn(o: {
   }
   const refine = o.refine ? refineRequest(o.info, o.refine) : undefined;
   if (refine) req.refine = refine;
+  if (o.context) req.context = o.context;
   return turn;
+}
+
+/**
+ * carry gives a turn the conversation record of the turns before it, built
+ * at the moment it goes (#29): a question that waited for a debate takes
+ * that debate's outcome. None when the setting is off (on), the person
+ * left it out this time, or there is nothing to carry.
+ */
+export function carry(turn: Turn, before: Turn[], info: Info | null, on: boolean): Turn {
+  const context = on && !turn.noRecord ? buildRecord(before, info) : null;
+  const { context: _, ...req } = turn.req;
+  return { ...turn, req: context ? { ...req, context } : req };
 }
 
 /** parts shows one card per asked AI, running until the PC says otherwise. */

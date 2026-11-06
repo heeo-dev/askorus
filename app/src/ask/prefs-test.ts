@@ -6,12 +6,12 @@ const memory = () => {
   return { mem, kv };
 };
 
-const defaults = { tier: 'standard', off: [], models: {}, efforts: {}, pc: '', synth: true, synthAgent: 'claude', synthModels: {}, refine: false, debateNoticed: false };
+const defaults = { tier: 'standard', off: [], models: {}, efforts: {}, pc: '', synth: true, synthAgent: 'claude', synthModels: {}, refine: false, debateNoticed: false, carryRecord: true, recordNoticed: false };
 
 test('ask prefs survive a round trip, the combined answer off included', async () => {
   const { kv } = memory();
   expect(await loadAskPrefs(kv)).toEqual(defaults);
-  const saved = { tier: 'deep', off: ['codex'], models: { claude: 'opus' }, efforts: { claude: 'high' }, pc: 'pc-1', synth: false, synthAgent: 'codex', synthModels: { codex: { model: 'gpt-6.1-sol', effort: 'high' } }, refine: true, debateNoticed: true } as const;
+  const saved = { tier: 'deep', off: ['codex'], models: { claude: 'opus' }, efforts: { claude: 'high' }, pc: 'pc-1', synth: false, synthAgent: 'codex', synthModels: { codex: { model: 'gpt-6.1-sol', effort: 'high' } }, refine: true, debateNoticed: true, carryRecord: false, recordNoticed: true } as const;
   await saveAskPrefs({ ...saved, off: [...saved.off], models: { ...saved.models }, efforts: { ...saved.efforts }, synthModels: { codex: { ...saved.synthModels.codex } } }, kv);
   expect(await loadAskPrefs(kv)).toEqual(saved);
   for (const synthAgent of synthWriters) {
@@ -98,4 +98,16 @@ test('moderator models keep only picks with a model', async () => {
     JSON.stringify({ synthModels: { claude: { model: 'opus', effort: 'high' }, codex: { model: 'gpt-6-luna' }, opencode: { effort: 'max' }, x: 'opus', y: { model: 3 } } }),
   );
   expect((await loadAskPrefs(kv)).synthModels).toEqual({ claude: { model: 'opus', effort: 'high' }, codex: { model: 'gpt-6-luna' } });
+});
+
+// #29: a follow-up carries the record unless turned off; the notice is seen once.
+test('a missing or odd record setting carries the record, notice not seen', async () => {
+  const { mem, kv } = memory();
+  expect(defaultAskPrefs).toMatchObject({ carryRecord: true, recordNoticed: false });
+  for (const odd of ['false', 0, null, {}]) {
+    mem.set('ask.v1', JSON.stringify({ carryRecord: odd, recordNoticed: odd }));
+    expect(await loadAskPrefs(kv)).toMatchObject({ carryRecord: true, recordNoticed: false });
+  }
+  mem.set('ask.v1', JSON.stringify({ carryRecord: false, recordNoticed: true }));
+  expect(await loadAskPrefs(kv)).toMatchObject({ carryRecord: false, recordNoticed: true });
 });

@@ -79,7 +79,23 @@ export type Info = {
   integrations?: Integration[];
   /** The agent runs debates (P2-5, #26); an older agent leaves it out, and the phone offers none. */
   debate?: DebateInfo;
+  /** The agent takes a conversation record (#29); an older agent leaves it out, and the phone sends none. */
+  context?: ContextInfo;
 };
+
+/** /v1/info's context: the record's limits. */
+export type ContextInfo = { maxSettled: number; maxLastBytes: number };
+
+/** A point an earlier debate of the conversation closed (#29): its topic, result and the moderator's line. */
+export type Settled = { topic: string; result: string; line: string };
+
+/**
+ * The conversation record a follow-up, a comparison made again and a debate
+ * carry (#29): the latest earlier questions (oldest first; the last is the
+ * previous turn's), the points earlier debates settled, and the previous
+ * turn's final answer.
+ */
+export type RequestContext = { earlier?: string[]; settled?: Settled[]; last?: string };
 
 /** /v1/info's debate: its limits and the prompts' version. */
 export type DebateInfo = { maxPoints: number; maxTurns: number; rules: string };
@@ -182,6 +198,8 @@ export type RunRequest = {
   compare?: RunCompare;
   /** Refine the question first (질문 정제, milestone C); left out is off (an older agent ignores it). */
   refine?: RefineRequest;
+  /** The conversation record (#29), only to an agent whose info has context. */
+  context?: RequestContext;
 };
 
 /**
@@ -311,6 +329,8 @@ export type ComparisonRequest = {
   judges?: string[];
   /** The combined answer (S5b), with the question's tier ('' or left out: standard). */
   synthesis?: SynthesisRequest & { tier?: Tier };
+  /** The conversation record the turn was sent with (#29). */
+  context?: RequestContext;
 };
 
 // Debates (토론, P2-5, #26): POST /v1/debates, GET /v1/debates/{id},
@@ -378,4 +398,6 @@ export type DebateRequest = {
   /** The moderator model set for moderator (11-06), as SynthesisRequest's model and effort. */
   moderatorModel?: string;
   moderatorEffort?: string;
+  /** The conversation record the turn was sent with (#29), for the plan and the answer after it. */
+  context?: RequestContext;
 };

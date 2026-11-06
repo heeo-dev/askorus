@@ -1,7 +1,8 @@
 // Settings (S5c, board F-Settings): paired PCs (a sheet each to check the
 // connection or unpair), what new sessions start with, pairing another PC;
 // the default ask tier; whether the moderator writes a combined answer once
-// the answers are in (S5b; since C6 the one switch) and which AI it is
+// the answers are in (S5b; since C6 the one switch) and which AI it is,
+// its model, and whether a follow-up carries the conclusions so far (#29)
 // (question refining, milestone C, is hidden while its feature is off:
 // features.ts); the theme
 // (system, dark or light) and whether each AI has its own colour (#6); the
@@ -162,6 +163,8 @@ export default function Settings() {
               onPress={moderator ? () => setModelOpen(true) : undefined}
               accessibilityValue={{ text: moderatorValue }}
             />
+            {/* #29: a follow-up carries what was concluded so far. */}
+            <SwitchRow label={t('settings.carryRecord')} value={ask.carryRecord} onChange={(carryRecord) => changeAsk({ ...ask, carryRecord })} />
           </Group>
         </Section>
 
@@ -242,6 +245,7 @@ export default function Settings() {
         <View style={s.infoBody}>
           {features.refine && <Text style={s.infoText}>{t('settings.refineHint')}</Text>}
           <Text style={s.infoText}>{t('settings.synthHint')}</Text>
+          <Text style={s.infoText}>{t('settings.carryRecordHint')}</Text>
         </View>
       </Sheet>
     </View>
