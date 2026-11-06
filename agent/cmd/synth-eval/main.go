@@ -91,6 +91,10 @@ const usage = `synth-eval measures the combined answer (milestone C). A run uses
   rewrite   -from RUN[,RUN] -base RUN[,RUN] -run NAME -style short|short2|short3|plus|edit [-only ID,ID] [-tier …] [-moderator …] -expect N
             writes the answers after debate runs' debates again (C9, up to 2 calls each); -base is the run each
             debate came from: edit changes its combined answer only where the debate changed something
+  followup  -from RUN -q FILE -run NAME [-tier …] [-moderator …] [-checker …] -expect N
+            a follow-up after each debate (C11): <name>-a as now, <name>-b with the conversation record given
+            to the AIs, the combined answer and the next debate's plan; a checker counts debates again,
+            contradictions and repeats (about 12 calls a conversation). FILE lines: <id><TAB><follow-up>
 A question file has one question per line; blank lines and lines starting with # are skipped.
 -expect is the number of questions the run will ask (each uses the PC's AIs up to 4 times, 6 with -refine on, light or live).
 `
@@ -130,6 +134,8 @@ func runMain(ctx context.Context, args []string, out, errOut io.Writer) int {
 		return debateCmd(ctx, args[1:], out, errOut)
 	case "rewrite":
 		return rewriteCmd(ctx, args[1:], out, errOut)
+	case "followup":
+		return followupCmd(ctx, args[1:], out, errOut)
 	}
 	fmt.Fprint(errOut, usage)
 	return exitFlags

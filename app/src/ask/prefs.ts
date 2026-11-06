@@ -11,6 +11,9 @@
 // where. efforts (11-06): the effort picked with an AI's model; only used
 // with that model. synthModels (11-06): the moderator model set per AI in
 // Settings, for the combined answer and debates when that AI moderates.
+// carryRecord (#29): a follow-up carries the conversation record (what was
+// concluded so far) to the AIs; on unless turned off in Settings.
+// recordNoticed (#29): the person has seen, once, where the record goes.
 
 import { tiers, type Tier } from '@/api/types';
 import type { ModelPick } from '@/ask/models';
@@ -37,6 +40,10 @@ export type AskPrefs = {
   refine: boolean;
   /** The person has seen, once, what a debate sends where (P2-5). */
   debateNoticed: boolean;
+  /** A follow-up carries the conversation record (#29). */
+  carryRecord: boolean;
+  /** The person has seen, once, where the record goes (#29). */
+  recordNoticed: boolean;
 };
 
 const key = 'ask.v1';
@@ -51,6 +58,8 @@ export const defaultAskPrefs: AskPrefs = {
   synthModels: {},
   refine: false,
   debateNoticed: false,
+  carryRecord: true,
+  recordNoticed: false,
 };
 
 /** picks keeps the saved model picks that have a model. */
@@ -90,6 +99,8 @@ export async function loadAskPrefs(kv: KeyValue = secureKeyValue): Promise<AskPr
       synthModels: picks(v.synthModels),
       refine: typeof v.refine === 'boolean' ? v.refine : false,
       debateNoticed: v.debateNoticed === true,
+      carryRecord: typeof v.carryRecord === 'boolean' ? v.carryRecord : true,
+      recordNoticed: v.recordNoticed === true,
     };
   } catch {
     return defaultAskPrefs;

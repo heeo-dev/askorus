@@ -338,6 +338,10 @@ type InfoResponse struct {
 	// Debate is there when the agent runs debates (P2-5, #26): the phone
 	// shows '토론하기' only then, so an older agent never gets one.
 	Debate *DebateInfo `json:"debate,omitempty"`
+	// Context is there when the agent takes a conversation record with a
+	// follow-up, a comparison and a debate (#29): the phone sends one only
+	// then.
+	Context *ContextInfo `json:"context,omitempty"`
 }
 
 // IntegrationInfo is one service outside the PC the agent would send to.
@@ -356,6 +360,7 @@ func (s *Server) info(w http.ResponseWriter, r *http.Request) {
 		Agents: []core.AdapterInfo{}, Capabilities: []core.Capability{}, Reserved: []core.Capability{},
 		Integrations: []IntegrationInfo{},
 		Debate:       s.debateInfo(),
+		Context:      contextInfo(),
 	}
 	// The CLI's info calls Announce too, so the two cannot disagree on
 	// the ask tiers or on which AIs write combined answers.

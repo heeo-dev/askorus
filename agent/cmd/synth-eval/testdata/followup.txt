@@ -1,0 +1,9 @@
+# C11 (#29, 11-06): a follow-up after each conversation's debate (from run c10-s3).
+# Kinds: builds on (mine-14 the S23 follow-up as asked, intent-5, taste-3), conditions change (mine-10),
+# challenges a conclusion (mine-5), unrelated (general-5).
+mine-14	Ryzen 7 8845HS, 7840HS 실제 판매되는 '완제품'과 '베어본+32GB+SSD' 제품들 찾아줘.
+intent-5	갤럭시에서 사진과 동영상만 클라우드에 자동 백업하려면 어떻게 설정해?
+taste-3	그 이름들 중 하나로 인스타그램 프로필 소개글도 써줘.
+mine-10	만약 2년 실거주를 못 하고 바로 전세를 준다면 결론이 달라져?
+mine-5	Codex Ultra가 병렬 서브에이전트라는 건 틀린 것 같아. 공식 문서로 다시 확인해줘.
+general-5	그건 그렇고, 오늘 저녁에 15분 안에 만들 수 있는 파스타 레시피 하나 알려줘.

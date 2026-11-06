@@ -46,6 +46,10 @@ type Record struct {
 	// Debate is how Synth came out of a debate between the AIs (debate,
 	// C7); nil for a combined answer written at once.
 	Debate *DebateRec `json:"debate,omitempty"`
+	// Context is the conversation a follow-up continued (followup, C11)
+	// and Check the checker's count of how it used it.
+	Context *ContextRec `json:"context,omitempty"`
+	Check   *CheckRec   `json:"check,omitempty"`
 }
 
 // RunInfo is how a run asks.

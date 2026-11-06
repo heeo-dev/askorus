@@ -38,14 +38,25 @@
 #   the judge folder, which the session list leaves out. About 6 to 8 AI
 #   calls, 1 or 2 of them Codex asks.
 #
+# LT-12, a follow-up with the conversation record (#29,
+#   agent/internal/live/conversation_live_test.go): the agent with the real
+#   claude and codex on the quick tier, in the live ask folder. Claude
+#   answers the boiling point at sea level, then the follow-up (3,000 m)
+#   goes to claude in its session and to codex anew with a record (a
+#   settled point, the last answer), and claude writes the combined answer
+#   (synth-v6). Both answers and the combined answer must give a
+#   temperature below 100, and the combined answer must not mention a
+#   debate. 4 AI calls, 1 of them a Codex ask.
+#
 # One full run writes one combined answer with Codex (LT-08 1), refines
-# once with Codex (LT-09 1), asks Codex 3 times (LT-05) and lets Codex
-# speak once or twice in a debate (LT-11).
+# once with Codex (LT-09 1), asks Codex 4 times (LT-05 3, LT-12 1) and lets
+# Codex speak once or twice in a debate (LT-11).
 #
 #   powershell -NoProfile -File scripts\test-live.ps1              # every LT
 #   powershell -NoProfile -File scripts\test-live.ps1 -Run LT08    # only LT-08
 #   powershell -NoProfile -File scripts\test-live.ps1 -Run LT09    # only LT-09
 #   powershell -NoProfile -File scripts\test-live.ps1 -Run LT11    # only LT-11
+#   powershell -NoProfile -File scripts\test-live.ps1 -Run LT12    # only LT-12
 param([string]$Run)
 $go = Join-Path $env:USERPROFILE 'sdk\go1.27.3\bin'
 if (Test-Path $go) { $env:Path = "$go;" + $env:Path }

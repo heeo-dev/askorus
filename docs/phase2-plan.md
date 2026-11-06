@@ -1360,6 +1360,17 @@ S5c를 worktree에서 만들었다(커밋 전, 57f9776 위). 기반(테마·아�
     - **만들면서 정한 것(추천대로).** ① 사회자는 그 차례의 종합 답변을 쓴 AI(설정의 사회자 AI가 아니라 실제로 쓴 AI, 그 질문을 받은 AI). ② 토론 뒤 정리가 있으면 다시 토론하기는 없음(실패·PC에서 사라짐·바쁨일 때만 '다시 토론하기'). ③ 안내는 버튼 아래 펼침(시트 없이 '계속해서 토론하기'·'취소'). ④ 진행 중 말풍선의 초는 PC가 주는 값(폴링 1초).
   - **E4 내기(11-06).** 메뉴 지도는 11-05에 고친 그대로 맞음('토론하기 · 토론 멈추기 · 토론 뒤 정리'). main f354daf에 합치고 푸시, 에이전트 배포(check 주의 0), APK 9745389c(EAS 대기 약 50분). S10 확인('빠르게', 영어 질문 'Suggest 3 names for a small bakery in Seoul…', Codex는 오류라 답 둘): 종합 아래 'Debate'와 'Uses the AIs about 8 more times', 처음 안내, 'Debate · 1 point'와 'Stop the debate', 취향 칩과 편 줄, 사회자 질문 줄, 말풍선(Partly changes·Changes 칩, 11~23초, More), 한 번 더 뒤 결과 'Depends'와 줄, 토론 뒤 정리(토론에서 나온 새 이름 'Mapo Dalbit'이 약한 후보 자리에, 'AI가 정리한 글이라…'). 화면이 꺼지면 앱이 폴링을 멈춰(#23과 같음) 켜면 이어서 보임. 고친 것: 접힌 말풍선에 Markdown이 그대로 보임(R-73, `foldText`).
 
+### #29 대화 결론 기록 (2026-11-06 사용자 결정, 마일스톤 E)
+
+11-06 사용자가 '모두에게 묻기 → 토론1 → 이어서 묻기(추가 주제) → 토론2'에서 문제를 찾았다: 종합 답변과 토론의 사회자는 일회성이라 앞 차례를 모르고, 토론2가 토론1에서 닫힌 쟁점을 다시 골랐다. 경우를 따져 '기록 방식'(추천안)으로 정했고, 자세한 설계는 Claude Docs '대화 결론 기록과 사회자에게 묻기 설계'(링크는 CLAUDE.local.md)가 기준이다. 순서는 #29 → #22(이어서 묻기 칸의 AI·단계 고르기와 '사회자' 자리) → #25(사회자에게 묻기).
+
+- **정한 것(11-06, 사용자 결정, 정할 것 셋은 추천대로).** 폰이 대화의 앞 차례들에서 기록을 만들어 요청마다 싣는다(PC는 저장하지 않음). 기록: 최근 질문 셋(처음 들어온 AI용), 끝나거나 멈춘 토론에서 결과가 있는 쟁점(12개까지), 바로 앞 차례의 최종 답(토론 뒤 정리 → 종합 답변 → AI 하나의 답, AI 여럿인데 종합이 없으면 없음). 규칙 셋: 질문과 상관없는 결론은 무시, 새 조건이 이김, 반박된 결론은 다시 따짐. 토론 중에 보낸 이어서 묻기는 기다렸다가 토론 결과를 싣고 간다(#23 방식). 처음 한 번 개인정보 안내(계속 · 이번만 빼고 보내기), 설정 › 사회자의 '이어서 물을 때 결론 이어 주기'(기본 켬), 질문 아래 '앞 결론을 이어받음' 줄과 시트. 호출은 지금처럼 일회성, 로그에는 개수만.
+- **C11 재기(11-06, 사용자 OK, synth-eval `followup`).** 대화 6개에서 지금 방식(A) vs 기록 방식(B): 재토론 1 → 0, 이유 없는 합의 어긋남 2 → 0, 품질 1:11, 입력 토큰 중앙값 +9%. 고칠 것 둘(앞 결론을 조금씩 되풀이하고 다른 대상에 넘겨 씀 → '이번 질문에 필요한 곳에서만 몇 마디로, 다른 대상에 넘겨 쓰지 않음', 재검토 접두어가 영어 → 질문의 언어로 '재검토:')을 제품 지시문에 넣었다. 코드 f284b91.
+- **만든 것(11-06, 브랜치 `conversation-record`).**
+  - 에이전트(46a9627): `judge/conversation.go`(`Conversation`, 묻기 머리말 `AskWithConversation`: 묻기 앞 nonce 데이터 블록에 SETTLED·PREVIOUS QUESTION·PREVIOUS ANSWER, 처음 들어온 AI는 EARLIER QUESTIONS도), synth-v6·debate-plan v3(SETTLED만)·debate-v5는 지금 지시문의 데이터 블록 끝에 기록 줄, 그 뒤에 규칙을 더하고 머리 판만 바꿈(기록이 없으면 지금 지시문 그대로). 앞 질문은 쓰는 AI가 자기 앞 질문을 받지 못할 때만 기록의 것을 준다. 골든 `testdata/conversation-v1.golden`. API: `POST /v1/runs`·`/v1/comparisons`·`/v1/debates`의 `context {earlier, settled, last}`(앞 질문 3개 4 KiB, 쟁점 12개, 주제 512 B, 줄 1 KiB, 결과 agreed·conditional·differ·kept, 앞 답 8 KiB, 넘으면 400 bad_request. 쟁점도 앞 답도 없으면 기록 없음), 앞 질문은 `earlier`의 마지막, /v1/info `context {maxSettled 12, maxLastBytes 8192}`, 로그 `settled`·`lastBytes`와 `rules`(synth-v6·debate-v5). fakecli는 plan v3·debate-v5를 앎. 시험: UT, API, IT-20, LT-12.
+    - **만들면서 정한 것(추천대로).** ① 설계의 모양 `{settled, last}`에 `earlier`를 더함(처음 들어온 AI에게 앞 질문을 주려면 필요). 설계 문서도 고침. ② 앞 질문만 있고 결론이 없으면 기록을 보내지 않음. ③ 로그 키 `earlier`는 로거가 가리는 이름이라 개수도 남기지 않음.
+  - 앱(dfed1db): `ask/record.ts`(`buildRecord`·`settledOf`·`finalAnswer`, 순수 함수), `thread.ts`(`carry`: 보내는 순간 앞 차례들로 기록을 만듦, `Turn.noRecord`·`queuedFor`), 다시 비교·토론 요청은 그 차례가 보낸 기록을 그대로, `prefs`(`carryRecord` 기본 켬, `recordNoticed`), `ui/Record.tsx`(줄·시트·안내), 설정 스위치와 안내 시트 문구, 질문 화면(안내, 토론 중 대기와 끝나면 보내기), 한국어·영어 문구 13개. 시험: UT `ask/record-test.ts`, `prefs-test.ts`, ST `record-test.tsx`.
+
 ## 5. 단계 (초안)
 
 | 단계 | 할 일 |

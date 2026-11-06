@@ -51,6 +51,9 @@ type Spec struct {
 	// request's judges): each of them got every one of them. A writer gets
 	// the earlier questions only when it is listed.
 	Listed []string
+	// Conversation is the conversation record a follow-up came with (#29);
+	// nil for a first question or a phone that sends none.
+	Conversation *Conversation
 }
 
 // Error is why a comparison or its combined answer failed. Message is for

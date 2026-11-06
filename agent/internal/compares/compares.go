@@ -149,6 +149,9 @@ type RunSpec struct {
 	// Synth asks for the combined answer once the answers are in (S5b);
 	// nil is off. Its Tier is the run's.
 	Synth *SynthSpec
+	// Conversation is the conversation record of a follow-up (#29), for
+	// its combined answer; nil is none. It is never changed after.
+	Conversation *judge.Conversation
 }
 
 // DirectAnswer is one answer of a DirectSpec. Via is judge.ViaPC (Agent is
@@ -170,6 +173,8 @@ type DirectSpec struct {
 	Judges     []string // the AIs Earlier may go to, as RunSpec's; empty means every AI that writes
 	// Synth asks for the combined answer at once (S5b); nil is off.
 	Synth *SynthSpec
+	// Conversation is the conversation record (#29), as RunSpec's.
+	Conversation *judge.Conversation
 }
 
 // Manager keeps comparisons in memory. One mutex guards every comparison;

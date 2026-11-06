@@ -140,6 +140,7 @@ export class FakeAgent {
   /** POST /v1/debates answers this error instead (for example 429 too_many_debates). */
   debateError: { status: number; code: string } | null = null;
   private debateOn = false;
+  private contextOn = false;
   private debates = new Map<string, FakeDebate>();
   /** How the PC can be reached: fine, agent stopped behind serve, or not at all. */
   reach: 'ok' | 'agent_down' | 'offline' = 'ok';
@@ -208,9 +209,19 @@ export class FakeAgent {
     this.debateOn = true;
   }
 
+  /** enableContext makes the agent take a conversation record (#29: /v1/info's context). */
+  enableContext() {
+    this.contextOn = true;
+  }
+
   /** The bodies of every POST /v1/debates, in order. */
   debateRequests(): any[] {
     return this.callsTo('POST', '/v1/debates').map((c) => c.body);
+  }
+
+  /** releaseDebates lets the debates held at their first turn (debateReply 'hold') go on. */
+  releaseDebates() {
+    for (const d of this.debates.values()) if (d.reply === 'hold') d.reply = 'ok';
   }
 
   /** Like an agent restart: every debate is gone (404 debate_not_found). */
@@ -658,6 +669,7 @@ export class FakeAgent {
         capabilities: this.capabilities,
         reserved: [],
         ...(this.debateOn ? { debate: { maxPoints: 2, maxTurns: 4, rules: 'debate-v4' } } : {}),
+        ...(this.contextOn ? { context: { maxSettled: 12, maxLastBytes: 8192 } } : {}),
       });
     }
     if (key === 'DELETE /v1/devices/self') {

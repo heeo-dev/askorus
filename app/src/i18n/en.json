@@ -411,5 +411,18 @@
   "debate.error.judge_timeout": "The debate went over its time limit.",
   "debate.error.no_judge": "None of the AIs that answered may moderate the debate.",
   "debate.error.cancelled": "The debate stopped.",
-  "debate.error.bad_model": "The moderator answered with a model of another company than planned."
+  "debate.error.bad_model": "The moderator answered with a model of another company than planned.",
+  "settings.carryRecord": "Carry conclusions into follow-ups",
+  "settings.carryRecordHint": "A follow-up also sends what was concluded so far (what debates settled and the last final answer) to the AIs that answer and to the moderator, so they build on it instead of starting over. Off sends the question only.",
+  "ask.queuedDebate": "Waiting: it goes with the debate's conclusions once the debate ends.",
+  "ask.record.notice.title": "Earlier conclusions go along",
+  "ask.record.notice.body": "A follow-up sends what was concluded so far (a combined answer that includes other AIs' answers) to every AI that answers. Each AI's company receives it. You can turn this off in Settings › Moderator.",
+  "ask.record.notice.go": "Continue",
+  "ask.record.notice.without": "Send without them this time",
+  "ask.record.line": "Builds on earlier conclusions",
+  "ask.record.lineLabel": "Builds on earlier conclusions. Show",
+  "ask.record.title": "Earlier conclusions sent",
+  "ask.record.settled": "Settled in debates",
+  "ask.record.last": "The last final answer went along too.",
+  "ask.record.how": "The AIs that answer and the moderator that writes the combined answer get these as data and use them only where this question needs them. New conditions in the question win."
 }

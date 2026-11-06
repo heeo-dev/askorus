@@ -153,7 +153,7 @@ func (t DebateTask) TaskContent() []string {
 	for _, a := range t.Answers {
 		out = append(out, a.AI, a.Text)
 	}
-	return out
+	return append(out, t.Conversation.content()...)
 }
 
 // PointContent is every string of p a debate prompt may carry.
@@ -224,6 +224,11 @@ func DebatePlanPrompt(t DebateTask, nonce string) string {
 	debateLine(&b, "COMBINED", t.Combined)
 	b.WriteString("</data-" + nonce + ">\n")
 	b.WriteString(debatePlanTask)
+	if c := t.Conversation; c != nil && len(c.Settled) > 0 {
+		// debate-plan v3 (#29): what earlier debates settled is not
+		// debated again without a reason.
+		return withConversation(b.String(), nonce, &Conversation{Settled: c.Settled}, conversationPlanRule, planLabel, planLabelV3, false, false)
+	}
 	return b.String()
 }
 
@@ -493,6 +498,12 @@ func AfterDebatePrompt(t SynthTask, points []DebatePoint, nonce string) string {
 	if promptOccurs(lowered(content), nonce) {
 		return ""
 	}
+	// The record (#29) is added last, as debate-v5, to the synth-v5.1 form.
+	conv := t.Conversation
+	t.Conversation = nil
+	if promptOccurs(lowered(conv.content()), nonce) {
+		return ""
+	}
 	p := SynthPrompt(t, nonce)
 	end := "</data-" + nonce + ">\n"
 	i := strings.LastIndex(p, end)
@@ -523,6 +534,9 @@ func AfterDebatePrompt(t SynthTask, points []DebatePoint, nonce string) string {
 	}
 	b.WriteString(end)
 	b.WriteString(debateAfterTail)
+	if !conv.Empty() {
+		return withConversation(b.String(), nonce, conv, conversationRule, afterLabel, afterLabelV5, len(t.Earlier) == 0, true)
+	}
 	return b.String()
 }
 

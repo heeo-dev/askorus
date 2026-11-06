@@ -298,6 +298,9 @@ const maxScoreAnswer = 12000
 // apart.
 func scorePrompt(first, second Record) string {
 	content := []string{first.Question.Text, first.Synth.Text, second.Synth.Text}
+	if first.Context != nil {
+		content = append(content, ctxContent(first.Context)...)
+	}
 	debated := false
 	for _, r := range []Record{first, second} {
 		for _, a := range r.Answers {
@@ -317,6 +320,10 @@ func scorePrompt(first, second Record) string {
 		head = strings.Replace(head, " Judge which", scoreDebateNote+" Judge which", 1)
 		tail = strings.Replace(tail, "no claim that no answer makes", "no claim that no answer or debate line makes", 1)
 	}
+	if first.Context != nil {
+		head = strings.Replace(head, " Judge which", scoreContextNote+" Judge which", 1)
+		tail = strings.Replace(tail, "no claim that no answer makes", "no claim that no answer or line of the conversation makes", 1)
+	}
 	var b strings.Builder
 	b.WriteString(strings.ReplaceAll(head, "{N}", n))
 	b.WriteString("<data-" + n + ">\n")
@@ -327,6 +334,17 @@ func scorePrompt(first, second Record) string {
 		b.WriteByte('\n')
 	}
 	line("QUESTION", first.Question.Text)
+	if c := first.Context; c != nil {
+		// A follow-up (C11): the conversation before it, which both combined
+		// answers may build on.
+		for _, e := range c.Earlier {
+			line("EARLIER QUESTION", e)
+		}
+		for _, s := range c.Settled {
+			line("SETTLED IN AN EARLIER DEBATE", s.Topic+" ("+s.Result+"): "+s.Line)
+		}
+		line("PREVIOUS ANSWER", clip(c.Last, maxScoreAnswer))
+	}
 	answers := func(prefix string, r Record) {
 		for _, a := range r.Answers {
 			if a.Status == "done" && strings.TrimSpace(a.Text) != "" {
@@ -356,6 +374,10 @@ func scorePrompt(first, second Record) string {
 // debate (C7): what the AIs said in it is a source as their answers are,
 // so the judge does not take it for a claim no answer makes.
 const scoreDebateNote = " Before a combined answer was written, the AIs may also have debated the points where their answers differed: each DEBATE line is what one AI said then, a source for that combined answer as the answers are."
+
+// scoreContextNote is said for a follow-up (C11): the conversation before
+// it is context both combined answers may build on.
+const scoreContextNote = " The QUESTION continues a conversation: the EARLIER QUESTION, what an earlier debate between the AIs SETTLED and the PREVIOUS ANSWER are its context, a source both combined answers may build on as the answers are; a combined answer that contradicts a settled conclusion should say why."
 
 type scoreTurn struct {
 	DebateTurn

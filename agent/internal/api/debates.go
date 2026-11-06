@@ -22,8 +22,8 @@ const (
 )
 
 // maxDebateBody bounds POST /v1/debates: six answers of 64 KiB, the
-// combined answer, the question and the earlier questions, with room for
-// JSON escapes.
+// combined answer, the question, the earlier questions and the context,
+// with room for JSON escapes.
 const maxDebateBody = 2 << 20
 
 const msgDebateNotFound = "no such debate (ended more than 30 minutes ago, made by another device, or the agent restarted)"
@@ -72,6 +72,9 @@ type DebateRequest struct {
 	Tier            string         `json:"tier,omitempty"`
 	ModeratorModel  string         `json:"moderatorModel,omitempty"`
 	ModeratorEffort string         `json:"moderatorEffort,omitempty"`
+	// Context is the conversation record of the turn (#29), for the plan
+	// and the answer after the debate.
+	Context *RequestContext `json:"context,omitempty"`
 }
 
 // DebateStatus is the answer to the debate routes: the debate and, while
@@ -106,6 +109,11 @@ func (s *Server) startDebate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, CodeBadRequest, "clientDebateId is too long")
 		return
 	}
+	conv, ok := conversationOf(req.Context)
+	if !ok {
+		writeError(w, http.StatusBadRequest, CodeBadRequest, msgBadContext)
+		return
+	}
 	if badSynthModel(req.Moderator, req.ModeratorModel, req.ModeratorEffort) {
 		writeError(w, http.StatusBadRequest, CodeBadRequest, "moderatorModel and moderatorEffort must be a model name and an effort level, with the moderator they were set for")
 		return
@@ -122,7 +130,7 @@ func (s *Server) startDebate(w http.ResponseWriter, r *http.Request) {
 	spec := compares.DebateSpec{
 		Owner: deviceOf(r), Key: req.ClientDebateID, Question: req.Question, Earlier: req.Earlier, Judges: req.Judges,
 		Combined: req.Synthesis, Moderator: req.Moderator, Tier: req.Tier,
-		ModeratorModel: req.ModeratorModel, ModeratorEffort: req.ModeratorEffort,
+		ModeratorModel: req.ModeratorModel, ModeratorEffort: req.ModeratorEffort, Conversation: conv,
 	}
 	for _, a := range req.Answers {
 		spec.Answers = append(spec.Answers, compares.DebateAnswer{Agent: a.Agent, Via: a.Via, Model: a.Model, Text: a.Text})

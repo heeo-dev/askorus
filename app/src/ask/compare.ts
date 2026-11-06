@@ -234,6 +234,8 @@ export function directRequest(turn: Turn, key: string): ComparisonRequest | null
   // The combined answer as fixed at send time, with the question's tier.
   const synth = turn.compare?.synth;
   if (synth) req.synthesis = turn.req.tier ? { ...synth, tier: turn.req.tier } : { ...synth };
+  // The conversation record the turn went with (#29).
+  if (turn.req.context) req.context = turn.req.context;
   return req;
 }
 

@@ -90,6 +90,8 @@ export function debateRequest(turn: Turn, info: Info | null, key: string): Debat
     req.moderatorModel = synth.model;
     if (synth.effort) req.moderatorEffort = synth.effort;
   }
+  // The conversation record the turn went with (#29): what earlier debates settled.
+  if (turn.req.context) req.context = turn.req.context;
   return req;
 }
 

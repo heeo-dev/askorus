@@ -375,7 +375,7 @@ func (m *Manager) synthRun(c *comparison) (string, *judge.Error) {
 		c.synth.writer, c.synth.model = w.Agent, w.Model
 		m.touchLocked(c)
 	})
-	m.log.Info("synthesis started", "comparison", c.id, "writer", w.Agent, "rules", judge.SynthRules, "ais", len(task.Answers))
+	m.log.Info("synthesis started", append([]any{"comparison", c.id, "writer", w.Agent, "rules", judge.SynthRulesFor(task), "ais", len(task.Answers)}, task.Conversation.Log()...)...)
 	if err := makeFolder(m.o.Gate.Folder); err != nil {
 		return "", synthFailure(core.ErrCodeInternal, "")
 	}
