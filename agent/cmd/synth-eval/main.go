@@ -88,7 +88,7 @@ const usage = `synth-eval measures the combined answer (milestone C). A run uses
             [-ways m2,r2,m1] -expect N
             the AIs debate where their answers differ (C7): runs NAME-<way> for each way, by default m2 (a chat
             the moderator leads) and m1 (every point at once); r2 refines taste points together (C8)
-  rewrite   -from RUN[,RUN] -base RUN[,RUN] -run NAME -style short|plus|edit [-only ID,ID] [-tier …] [-moderator …] -expect N
+  rewrite   -from RUN[,RUN] -base RUN[,RUN] -run NAME -style short|short2|short3|plus|edit [-only ID,ID] [-tier …] [-moderator …] -expect N
             writes the answers after debate runs' debates again (C9, up to 2 calls each); -base is the run each
             debate came from: edit changes its combined answer only where the debate changed something
 A question file has one question per line; blank lines and lines starting with # are skipped.

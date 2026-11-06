@@ -461,7 +461,7 @@ const debateRule5 = `5. The AIs debated the POINT entries. Use what the debate r
 // text the person will use as their own words, keeping useful specifics.
 // C10: the first wording (short2) lost to plain short 10:15 (it dropped
 // links and prices); short3 tied short 11:12 and beat the combined answer
-// 27:4. The user picks short or short3 (2026-11-06); short is this
+// 27:4. The user picked short3 (2026-11-06); plain short would be this
 // constant empty.
 const debateRule5Two = ` When the debate settled on a combination or a single pick but the person asked for separate items, still give the separate items in the form asked, and put the combination in one line. In text the person will use as their own words (such as a greeting, a notice or a slogan), add no detail of their own situation that they did not give, such as their opening time or an offer a debater made up: leave a placeholder such as ○○ there. Keep every useful specific the answers or the debate give, such as links, prices and model names.`
 
