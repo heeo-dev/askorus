@@ -296,6 +296,8 @@
   "ask.goingOn": "The question before is still being answered and is kept in the history.",
   "ask.toOneCancel": "Stop asking only {name}",
   "ask.followTo": "Ask {name} a follow-up",
+  "ask.followPick": "AIs for the follow-up: {n} ({names}). Pick",
+  "ask.followPickTitle": "AIs for the follow-up",
   "ask.sendTo": "Send to {name}",
   "ask.answeredAIs": "AIs that answered: {n} ({names}). Details",
   "ask.metaAnswers": "answers {s} s",

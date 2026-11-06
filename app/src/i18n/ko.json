@@ -296,6 +296,8 @@
   "ask.goingOn": "앞 질문은 계속 답을 받고 있고, 끝나면 기록에 저장됩니다.",
   "ask.toOneCancel": "{name}에게만 묻기 취소",
   "ask.followTo": "{name}에게 이어서 묻기",
+  "ask.followPick": "이어서 물을 AI: {n}개 ({names}). 고르기",
+  "ask.followPickTitle": "이어서 물을 AI",
   "ask.sendTo": "{name}에게 보내기",
   "ask.answeredAIs": "답한 AI {n}개: {names}. 자세히",
   "ask.metaAnswers": "답 {s}초",

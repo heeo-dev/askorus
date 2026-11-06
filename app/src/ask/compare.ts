@@ -177,12 +177,14 @@ export function writersOf(info: Info, asked: string[]): string[] {
 /**
  * compares decides at send time whether a turn is compared, which since C6
  * means the moderator's combined answer (on, or off with 'Write a combined
- * answer' once the answers are in): a question to every AI turned on, two
- * or more of them, on a PC whose AIs can write. A follow-up to one AI, a
- * one-AI turn or an older agent shows each answer in full.
+ * answer' once the answers are in): a question to two or more AIs (every
+ * AI turned on, or since #22 those picked for a follow-up) on a PC whose
+ * AIs can write. A question to one AI or an older agent shows each answer
+ * in full.
  */
 export function compares(o: { info: Info; asked: string[]; to: Target }): boolean {
-  return o.to === 'all' && o.asked.length >= 2 && canSynthesize(o.info);
+  // Two or more AIs, whichever way they were picked (#22: some of them in the follow-up bar).
+  return o.asked.length >= 2 && canSynthesize(o.info);
 }
 
 const doneWith = (turn: Turn, agent: string) => (turn.run?.parts ?? []).some((p) => p.agent === agent && p.status === 'done');

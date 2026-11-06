@@ -67,13 +67,35 @@ export type Turn = {
   queuedFor?: 'debate' | 'synth';
   // The debate on its combined answer (토론, P2-5), kept with the turn.
   debate?: TurnDebate;
+  // A question to the moderator (#25): its one answer is the moderator's.
+  moderator?: boolean;
   // Sent without the conversation record by the person's choice ('이번만
   // 빼고 보내기', #29); the record it went with is req.context.
   noRecord?: boolean;
 };
 
-/** Who a follow-up goes to: everyone turned on, or one AI. */
-export type Target = 'all' | { agent: string };
+/**
+ * Who a question goes to: everyone turned on, one AI, or the AIs picked in
+ * the follow-up bar (#22, 11-07).
+ */
+export type Target = 'all' | { agent: string } | { agents: string[] };
+
+/**
+ * followDefault is what the follow-up bar starts with (#22, 11-07): the AIs
+ * of the last question to the AIs (not one to the moderator) that can
+ * still answer, and its tier; with none, everyone turned on and `tier`.
+ */
+export function followDefault(turns: Turn[], on: string[], canAsk: (agent: string) => boolean, tier: Tier): { agents: string[]; tier: Tier } {
+  const last = [...turns].reverse().find((x) => !x.moderator && x.agents.length > 0);
+  const agents = (last?.agents ?? []).filter(canAsk);
+  return { agents: agents.length ? agents : on, tier: (last?.req.tier as Tier | undefined) ?? tier };
+}
+
+/** targetNames: the AIs a question to `to` goes to, everyone being `on`. */
+export function targetNames(to: Target, on: string[]): string[] {
+  if (to === 'all') return on;
+  return 'agent' in to ? [to.agent] : to.agents;
+}
 
 /** An AI the PC reports, and whether it can answer now. */
 export type Asker = {
@@ -118,7 +140,7 @@ export function request(opts: {
   compare?: RunCompare;
 }): RunRequest {
   const sessions = lastSessions(opts.turns);
-  const names = opts.to === 'all' ? opts.on : [opts.to.agent];
+  const names = targetNames(opts.to, opts.on);
   const agents: RunTarget[] = names.map((agent) => {
     const t: RunTarget = { agent };
     if (opts.models[agent]) {

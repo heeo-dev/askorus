@@ -5,6 +5,7 @@ import { compareState, synthState } from './compare';
 import {
   askers,
   followCompare,
+  followDefault,
   type FollowDeps,
   followRun,
   lastSessions,
@@ -15,6 +16,7 @@ import {
   running,
   stopAll,
   stopTurns,
+  targetNames,
   type Turn,
 } from './thread';
 
@@ -538,4 +540,20 @@ test('lostRun keeps what came and ends the run', () => {
   ]);
   expect(lostRun({ ...run, parts: [{ agent: 'claude', status: 'running' }] }).status).toBe('failed');
   expect(run.status).toBe('running'); // not changed in place
+});
+
+// #22 (11-07): the follow-up bar starts with the last question's AIs and tier.
+test('followDefault: the last question to the AIs, those that can still answer, and its tier', () => {
+  const t = (id: string, agents: string[], tier: string, moderator = false) =>
+    ({ id, question: id, req: { mode: 'ask', prompt: id, tier, agents: agents.map((agent) => ({ agent })) }, agents, ...(moderator ? { moderator } : {}) }) as Turn;
+  const all = (a: string) => a !== 'gone';
+  expect(followDefault([], ['claude', 'codex'], all, 'standard')).toEqual({ agents: ['claude', 'codex'], tier: 'standard' });
+  expect(followDefault([t('1', ['claude', 'codex', 'opencode'], 'deep'), t('2', ['codex'], 'quick')], ['claude', 'codex', 'opencode'], all, 'standard')).toEqual({ agents: ['codex'], tier: 'quick' });
+  // A question to the moderator is passed over; an AI that cannot answer now is left out.
+  expect(followDefault([t('1', ['claude', 'gone'], 'deep'), t('2', ['claude'], 'quick', true)], ['claude'], all, 'standard')).toEqual({ agents: ['claude'], tier: 'deep' });
+  // None left: everyone turned on.
+  expect(followDefault([t('1', ['gone'], 'deep')], ['claude', 'codex'], all, 'standard')).toEqual({ agents: ['claude', 'codex'], tier: 'deep' });
+  expect(targetNames('all', ['a', 'b'])).toEqual(['a', 'b']);
+  expect(targetNames({ agent: 'b' }, ['a', 'b'])).toEqual(['b']);
+  expect(targetNames({ agents: ['b', 'c'] }, ['a'])).toEqual(['b', 'c']);
 });

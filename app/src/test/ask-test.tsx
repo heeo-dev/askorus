@@ -296,7 +296,10 @@ test('follow-ups carry each AI on its own conversation; Only this AI asks just t
   await follow(user, 'only you', 'Ask Codex a follow-up', 'Send to Codex');
   await screen.findByText('codex says: only you');
   expect(agent.runRequests()[1].agents).toEqual([{ agent: 'codex', session: 'codex:s-1' }]);
-  // After sending, the next one goes to everyone again.
+  // After sending, the next one starts with the last question's AIs (#22, 11-07): Codex
+  // again, until its chip is cancelled (everyone turned on).
+  expect(screen.getByText('Only Codex')).toBeTruthy();
+  await user.press(screen.getByRole('button', { name: 'Stop asking only Codex' }));
   expect(screen.queryByText('Only Codex')).toBeNull();
 
   // The chip can be cancelled before sending.
@@ -321,6 +324,64 @@ test('follow-ups carry each AI on its own conversation; Only this AI asks just t
   await ask(user, 'fresh');
   await screen.findByText('opencode says: fresh');
   expect(agent.runRequests()[3].agents).toEqual([{ agent: 'claude' }, { agent: 'codex' }, { agent: 'opencode' }]);
+});
+
+// #22 (11-07): the follow-up bar has the AIs and the tier, for this conversation:
+// by default the last question's, picked in their own sheets, one AI as its chip.
+test("the follow-up bar picks the AIs and the tier of the next follow-up, starting with the last question's", async () => {
+  const { user } = await open();
+  await ask(user, 'first');
+  await screen.findByText('opencode says: first');
+  const pile = (n: number, names: string) => screen.getByRole('button', { name: `AIs for the follow-up: ${n} (${names}). Pick` });
+  expect(pile(3, 'Claude, Codex, OpenCode')).toBeTruthy();
+  expect(within(screen.getByTestId('follow-bar')).getByRole('button', { name: 'Tier: Standard. Pick' })).toBeTruthy();
+
+  // Two of the three, on the quick tier.
+  await user.press(pile(3, 'Claude, Codex, OpenCode'));
+  expect(await screen.findByRole('header', { name: 'AIs for the follow-up' })).toBeTruthy();
+  await user.press(screen.getByRole('switch', { name: 'OpenCode, opencode-std · medium' }));
+  expect(screen.getByRole('switch', { name: 'OpenCode, opencode-std · medium' })).not.toBeChecked();
+  await user.press(screen.getByLabelText('Close'));
+  expect(pile(2, 'Claude, Codex')).toBeTruthy();
+  await user.press(within(screen.getByTestId('follow-bar')).getByRole('button', { name: 'Tier: Standard. Pick' }));
+  await user.press(await screen.findByRole('radio', { name: 'Quick' }));
+  await follow(user, 'two of you');
+  await screen.findByText('codex says: two of you');
+  expect(agent.runRequests()[1]).toMatchObject({
+    tier: 'quick',
+    agents: [
+      { agent: 'claude', session: 'claude:s-1' },
+      { agent: 'codex', session: 'codex:s-1' },
+    ],
+  });
+  // The follow-up's picks are this conversation's: the AIs turned on and the tier set stay.
+  expect((await loadAskPrefs()).off).toEqual([]);
+  expect((await loadAskPrefs()).tier).toBe('standard');
+  // The next one starts with the last question's AIs and tier.
+  expect(pile(2, 'Claude, Codex')).toBeTruthy();
+  expect(within(screen.getByTestId('follow-bar')).getByRole('button', { name: 'Tier: Quick. Pick' })).toBeTruthy();
+
+  // Down to one AI: its chip (the old Only this AI); the last one stays on.
+  await user.press(pile(2, 'Claude, Codex'));
+  await screen.findByRole('header', { name: 'AIs for the follow-up' });
+  // The models are the follow-up tier's.
+  expect(screen.getAllByRole('switch').map((x) => x.props.accessibilityLabel)).toEqual(['Claude, haiku', 'Codex, codex-quick · medium', 'OpenCode, opencode-quick · medium']);
+  await user.press(screen.getByRole('switch', { name: 'Codex, codex-quick · medium' }));
+  await user.press(screen.getByRole('switch', { name: 'Claude, haiku' }));
+  expect(screen.getByRole('switch', { name: 'Claude, haiku' })).toBeChecked();
+  await user.press(screen.getByLabelText('Close'));
+  expect(within(screen.getByTestId('follow-bar')).getByText('Only Claude')).toBeTruthy();
+  expect(screen.getByLabelText('Ask Claude a follow-up')).toBeTruthy();
+  // Cancelled: everyone turned on.
+  await user.press(screen.getByRole('button', { name: 'Stop asking only Claude' }));
+  expect(pile(3, 'Claude, Codex, OpenCode')).toBeTruthy();
+
+  // A new question starts from the AIs turned on and the tier set.
+  await user.press(screen.getByRole('button', { name: 'New question' }));
+  await ask(user, 'second');
+  await screen.findByText('opencode says: second');
+  expect(agent.runRequests()[2]).toMatchObject({ prompt: 'second', tier: 'standard' });
+  expect(agent.runRequests()[2].agents).toHaveLength(3);
 });
 
 test('answers are drawn from their Markdown; copy keeps the Markdown', async () => {
