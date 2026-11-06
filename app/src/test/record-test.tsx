@@ -185,6 +185,57 @@ test('a follow-up sent while the debate runs waits, then goes with its outcome',
   await combined(2);
 });
 
+test('a follow-up sent while the combined answer is written waits, then goes with it (11-07)', async () => {
+  agent.synthReply = 'hold'; // the combined answer stays "writing" until released
+  const user = await open({ recordNoticed: true });
+  await ask(user, 'When is the first ferry?');
+  expect(await screen.findByText('Writing the combined answer…', {}, { timeout: 5000 })).toBeTruthy();
+  await follow(user, 'And the last ferry?');
+  expect(screen.getByText('Waiting: it goes with the combined answer once it is written.')).toBeTruthy();
+  await later();
+  await later();
+  expect(agent.runRequests()).toHaveLength(1);
+  agent.synthReply = 'ok';
+  await combined(1);
+  await waitFor(() => expect(agent.runRequests()).toHaveLength(2), { timeout: 5000 });
+  expect(agent.runRequests()[1]).toMatchObject({
+    prompt: 'And the last ferry?',
+    context: { earlier: ['When is the first ferry?'], last: 'Fake combined answer.\n\nFrom {{Claude}}, {{Codex}}, {{OpenCode}}.' },
+  });
+  expect(agent.runRequests()[1].context).not.toHaveProperty('settled');
+  expect(screen.queryByText('Waiting: it goes with the combined answer once it is written.')).toBeNull();
+});
+
+test('a follow-up that carries no record does not wait for the combined answer', async () => {
+  agent.synthReply = 'hold';
+  // Not seen yet: the notice comes first; "without them this time" goes at once.
+  const user = await open();
+  await ask(user, 'When is the first ferry?');
+  expect(await screen.findByText('Writing the combined answer…', {}, { timeout: 5000 })).toBeTruthy();
+  await follow(user, 'And the last ferry?');
+  await user.press(screen.getByRole('button', { name: 'Send without them this time' }));
+  await waitFor(() => expect(agent.runRequests()).toHaveLength(2));
+  expect(agent.runRequests()[1]).not.toHaveProperty('context');
+  expect(screen.queryByText('Waiting: it goes with the combined answer once it is written.')).toBeNull();
+  screen.unmount();
+
+  // Turned off in Settings: no notice, no wait.
+  agent = new FakeAgent();
+  agent.enableAsk();
+  agent.enableSynth();
+  agent.enableDebate();
+  agent.enableContext();
+  agent.askReplies = { ...answers };
+  agent.synthReply = 'hold';
+  globalThis.fetch = agent.fetch;
+  const user2 = await open({ carryRecord: false });
+  await ask(user2, 'When is the first ferry?');
+  expect(await screen.findByText('Writing the combined answer…', {}, { timeout: 5000 })).toBeTruthy();
+  await follow(user2, 'And the last ferry?');
+  await waitFor(() => expect(agent.runRequests()).toHaveLength(2));
+  expect(agent.runRequests()[1]).not.toHaveProperty('context');
+});
+
 test('Settings has the switch under Moderator', async () => {
   const user = userEvent.setup();
   await pairedPC();

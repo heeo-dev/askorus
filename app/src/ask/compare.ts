@@ -293,6 +293,23 @@ export function comparing(s: Pick<Comparison, 'status' | 'pollAfterMs'>): boolea
   return (s.pollAfterMs ?? 0) > 0;
 }
 
+/**
+ * combining: the answers are in and the turn's combined answer is still
+ * coming: its comparison or combined answer runs on the PC (also one
+ * written again), or a comparison request is on its way. A follow-up sent
+ * meanwhile waits for it (#29, 11-07).
+ */
+export function combining(turn: Turn): boolean {
+  const c = turn.compare;
+  if (!c || c.start !== 'auto' || turn.error || c.error || !turn.run || turn.run.status === 'running') return false;
+  if (c.key) return true;
+  if (!c.id) return false;
+  const s = c.snap;
+  // The run has ended and the PC's next answer is not in yet: it comes while a combined answer was asked for.
+  if (!s || s.comparisonId !== c.id) return !!c.synth && !c.synth.off;
+  return polling(s);
+}
+
 /** canRetry: a final comparison that failed as a whole for a reason a retry may fix (the PC starts it over). */
 export function canRetry(s?: Comparison): boolean {
   if (!s || polling(s)) return false;

@@ -15,7 +15,8 @@
 
 import type { Info, RequestContext, Settled } from '@/api/types';
 
-import { cutUtf8, maxEarlier, maxEarlierBytes, readyParts, synthState } from './compare';
+import { combining, cutUtf8, maxEarlier, maxEarlierBytes, readyParts, synthState } from './compare';
+import { debating } from './debate';
 import type { Turn } from './thread';
 
 /** The agent's limits on a record (also in /v1/info's context). */
@@ -71,6 +72,17 @@ export function finalAnswer(turn: Turn): string {
   if (s?.kind === 'done' && s.text.trim()) return s.text;
   const ready = readyParts(turn);
   return ready.length === 1 ? (ready[0].answer ?? '') : '';
+}
+
+/**
+ * concluding: what the turn concludes is still coming, its combined answer
+ * or its debate; a follow-up that carries the record waits for it (#29),
+ * 'synth' or 'debate' for its caption, null when nothing is coming.
+ */
+export function concluding(turns: Turn[]): 'synth' | 'debate' | null {
+  if (turns.some(debating)) return 'debate';
+  if (turns.some(combining)) return 'synth';
+  return null;
 }
 
 /**
