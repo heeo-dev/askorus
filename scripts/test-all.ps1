@@ -46,6 +46,18 @@ if (Test-Path $patterns) {
   $hits = & git -C $root grep --untracked -I -n -i -E -f $patterns
   if ($hits) { Write-Output '== private values in the repo'; $hits | ForEach-Object { "   $_" }; $failed += 'private values' }
 }
+# The E2E script changes no phone setting but the screen-off timeout (it
+# puts that back): no other settings, properties, services, permissions or
+# display size, in it or in phone-lib.ps1 it loads (R-83: an animation scale
+# it restored stayed 0 on the S10 and froze the spinners).
+$phoneScripts = 'e2e.ps1', 'phone-lib.ps1' | ForEach-Object { Join-Path $PSScriptRoot $_ }
+$phoneWrites = Select-String -Path $phoneScripts -Pattern 'shell\s+(settings\s+(put|delete|reset)|setprop|svc|cmd|pm\s+(grant|revoke|enable|disable|clear)|wm\s+(size|density))\b' |
+  Where-Object { $_.Line -notmatch 'shell\s+settings\s+put\s+system\s+screen_off_timeout\b' }
+if ($phoneWrites) {
+  Write-Output '== e2e: phone settings besides the screen-off timeout'
+  $phoneWrites | ForEach-Object { "   $($_.Filename):$($_.LineNumber): $($_.Line.Trim())" }
+  $failed += 'e2e phone settings'
+}
 Step 'agent: go vet (windows)' $agent 'go' @('vet', './...')
 $env:GOOS = 'linux'
 Step 'agent: go vet (linux)' $agent 'go' @('vet', './...')

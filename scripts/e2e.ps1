@@ -75,13 +75,6 @@ if ($Emulator) {
   if (-not (Wake-Phone)) { Write-Output 'the phone is locked: set its screen lock to None or Swipe'; exit 1 }
   # A live session (phone.ps1, agent-device) may hold the screen reader.
   Release-Screen
-  $screenTimeout = Adb shell settings get system screen_off_timeout
-  Adb shell settings put system screen_off_timeout 1800000
-  # Without animations each tap settles sooner (Maestro waits for the
-  # screen to stop changing). Restored at the end; 'null' means unset.
-  $animKeys = 'window_animation_scale', 'transition_animation_scale', 'animator_duration_scale'
-  $anim = @{}
-  foreach ($k in $animKeys) { $anim[$k] = Adb shell settings get global $k; Adb shell settings put global $k 0 }
   $battery = (Adb shell dumpsys battery) -join "`n"
   if (($battery -match 'level: (\d+)') -and [int]$Matches[1] -lt 20 -and -not ($battery -match 'powered: true')) {
     Write-Output 'warning: the phone battery is low and not charging'
@@ -89,72 +82,87 @@ if ($Emulator) {
   Write-Output "phone ready ($serial)"
 }
 
-# Tailscale must be up on the device, or every flow fails to reach the PC
-# (open the Tailscale app there and connect). After a fresh emulator boot
-# Tailscale reconnects by itself within a minute or so; on the phone it is
-# either up or not, so fail fast.
-# The PC's MagicDNS name, from Tailscale itself (nothing personal is
-# written in this file).
-$pcName = ((& tailscale status --json) -join "`n" | ConvertFrom-Json).Self.DNSName.TrimEnd('.')
-$tries = if ($Emulator) { 30 } else { 3 }
-for ($i = 0; $i -lt $tries; $i++) {
-  $ping = Adb shell "ping -c1 -W2 $pcName" 2>$null
-  if ($ping -match '1 received') { break }
-  Start-Sleep 3
-}
-if (-not ($ping -match '1 received')) { Write-Output 'the device cannot reach the PC: is Tailscale connected on it?'; exit 1 }
-
-$installed = Adb shell pm list packages host.exp.exponent 2>$null
-if (-not $installed) {
-  $apk = "$android\dl\Expo-Go-58.0.5.apk"
-  if (-not (Test-Path $apk)) {
-    Invoke-WebRequest -Uri 'https://github.com/expo/expo-go-releases/releases/download/Expo-Go-58.0.5/Expo-Go-58.0.5.apk' -OutFile $apk -UseBasicParsing
-  }
-  Adb install -r $apk | Select-Object -Last 1
-}
-
-$code = 0
-if ($Prepare) {
-  Write-Output 'prepared'
-} else {
-  # Start Expo Go fresh so it loads the code the dev server serves now, not
-  # a bundle cached from an earlier server or branch.
-  Adb shell am force-stop host.exp.exponent
-
-  $flows = Join-Path $root 'app\e2e'
-  if ($Flow) {
-    $target = Get-ChildItem $flows -Filter "$Flow*.yaml" | Select-Object -First 1
-    if (-not $target) { Write-Output "no flow $Flow"; exit 1 }
-    & maestro --device $serial test --no-reinstall-driver $target.FullName
-  } else {
-    $all = Get-ChildItem $flows -Filter '*.yaml' | Where-Object { $_.Name -notlike '_*' } | Sort-Object Name
-    & maestro --device $serial test --no-reinstall-driver @($all.FullName)
-  }
-  $code = $LASTEXITCODE
-  # On a failure, keep the screen the flow left: what agent-device reads
-  # there (exact texts to fix a selector) and a picture, next to Maestro's
-  # own report. phone.ps1 can then look further.
-  if ($code -ne 0) {
-    $report = Get-ChildItem "$env:USERPROFILE\.maestro\tests" -Directory | Sort-Object Name | Select-Object -Last 1
-    Release-Screen
-    Invoke-AgentDevice snapshot -i | Out-File -Encoding utf8 "$($report.FullName)\after-failure.txt"
-    Invoke-AgentDevice close | Out-Null
-    Adb shell screencap -p /sdcard/after-failure.png
-    Adb pull /sdcard/after-failure.png "$($report.FullName)\after-failure.png" | Out-Null
-    Adb shell rm /sdcard/after-failure.png
-    Write-Output "failed: Maestro report and the screen after the failure (after-failure.txt, .png) in $($report.FullName)"
-  }
-}
+# The screen-off timeout is the only phone setting this script changes: 30
+# minutes while the flows run, put back however the script ends (finally,
+# also on an early exit or Ctrl+C). Nothing else, animation scales included:
+# one restored scale stayed 0 on the S10 and froze the spinners (#30, R-83).
+# test-all checks this file and phone-lib.ps1 for other writes.
 if (-not $Emulator) {
-  # Hand the screen reader back for live use (phone.ps1).
-  Release-Screen
-  if ($screenTimeout -match '^\d+$') { Adb shell settings put system screen_off_timeout $screenTimeout }
-  foreach ($k in $anim.Keys) {
-    if ($anim[$k] -match '^[\d.]+$') { Adb shell settings put global $k $anim[$k] } else { Adb shell settings delete global $k | Out-Null }
-  }
+  $screenTimeout = Adb shell settings get system screen_off_timeout
+  Adb shell settings put system screen_off_timeout 1800000
 }
-if ($startedHere -and -not $Keep) {
-  Write-Output 'shutting the emulator down'
-  Adb emu kill | Out-Null
+# Tailscale and adb print UTF-8. A new console window reads native output in
+# its own code page (949 on this PC), where a peer's Korean name in
+# Tailscale's JSON ate a quote and the JSON did not parse (11-07).
+$consoleEncoding = [Console]::OutputEncoding
+[Console]::OutputEncoding = [Text.Encoding]::UTF8
+$code = 0
+try {
+  # Tailscale must be up on the device, or every flow fails to reach the PC
+  # (open the Tailscale app there and connect). After a fresh emulator boot
+  # Tailscale reconnects by itself within a minute or so; on the phone it is
+  # either up or not, so fail fast.
+  # The PC's MagicDNS name, from Tailscale itself (nothing personal is
+  # written in this file).
+  $pcName = ((& tailscale status --json) -join "`n" | ConvertFrom-Json).Self.DNSName.TrimEnd('.')
+  $tries = if ($Emulator) { 30 } else { 3 }
+  for ($i = 0; $i -lt $tries; $i++) {
+    $ping = Adb shell "ping -c1 -W2 $pcName" 2>$null
+    if ($ping -match '1 received') { break }
+    Start-Sleep 3
+  }
+  if (-not ($ping -match '1 received')) { Write-Output 'the device cannot reach the PC: is Tailscale connected on it?'; exit 1 }
+
+  $installed = Adb shell pm list packages host.exp.exponent 2>$null
+  if (-not $installed) {
+    $apk = "$android\dl\Expo-Go-58.0.5.apk"
+    if (-not (Test-Path $apk)) {
+      Invoke-WebRequest -Uri 'https://github.com/expo/expo-go-releases/releases/download/Expo-Go-58.0.5/Expo-Go-58.0.5.apk' -OutFile $apk -UseBasicParsing
+    }
+    Adb install -r $apk | Select-Object -Last 1
+  }
+
+  if ($Prepare) {
+    Write-Output 'prepared'
+  } else {
+    # Start Expo Go fresh so it loads the code the dev server serves now, not
+    # a bundle cached from an earlier server or branch.
+    Adb shell am force-stop host.exp.exponent
+
+    $flows = Join-Path $root 'app\e2e'
+    if ($Flow) {
+      $target = Get-ChildItem $flows -Filter "$Flow*.yaml" | Select-Object -First 1
+      if (-not $target) { Write-Output "no flow $Flow"; exit 1 }
+      & maestro --device $serial test --no-reinstall-driver $target.FullName
+    } else {
+      $all = Get-ChildItem $flows -Filter '*.yaml' | Where-Object { $_.Name -notlike '_*' } | Sort-Object Name
+      & maestro --device $serial test --no-reinstall-driver @($all.FullName)
+    }
+    $code = $LASTEXITCODE
+    # On a failure, keep the screen the flow left: what agent-device reads
+    # there (exact texts to fix a selector) and a picture, next to Maestro's
+    # own report. phone.ps1 can then look further.
+    if ($code -ne 0) {
+      $report = Get-ChildItem "$env:USERPROFILE\.maestro\tests" -Directory | Sort-Object Name | Select-Object -Last 1
+      Release-Screen
+      Invoke-AgentDevice snapshot -i | Out-File -Encoding utf8 "$($report.FullName)\after-failure.txt"
+      Invoke-AgentDevice close | Out-Null
+      Adb shell screencap -p /sdcard/after-failure.png
+      Adb pull /sdcard/after-failure.png "$($report.FullName)\after-failure.png" | Out-Null
+      Adb shell rm /sdcard/after-failure.png
+      Write-Output "failed: Maestro report and the screen after the failure (after-failure.txt, .png) in $($report.FullName)"
+    }
+  }
+} finally {
+  if (-not $Emulator) {
+    # Hand the screen reader back for live use (phone.ps1).
+    Release-Screen
+    if ($screenTimeout -match '^\d+$') { Adb shell settings put system screen_off_timeout $screenTimeout }
+  }
+  if ($startedHere -and -not $Keep) {
+    Write-Output 'shutting the emulator down'
+    Adb emu kill | Out-Null
+  }
+  [Console]::OutputEncoding = $consoleEncoding
 }
 exit $code
