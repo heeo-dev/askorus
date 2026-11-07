@@ -21,6 +21,8 @@ import { themeChoices, useTheme, useThemeChoice } from '@/ui/theme';
 
 const mockScheme = { value: 'light' as 'light' | 'dark' | null };
 jest.mock('react-native/Libraries/Utilities/useColorScheme', () => ({ __esModule: true, default: () => mockScheme.value }));
+const mockNavigationBar = jest.fn();
+jest.mock('@/ui/navigationBar', () => ({ applyNavigationBar: (scheme: string) => mockNavigationBar(scheme) }));
 
 let agent: FakeAgent;
 
@@ -304,6 +306,25 @@ test('the theme choice is drawn at once and kept: dark, light, system', async ()
   mockScheme.value = 'dark';
   await renderRouter(routes, { initialUrl: '/' });
   await waitFor(() => expect(bg('ask-bg')).toBe('#FCFAF8'));
+});
+
+// R-82 (#17): Android set the navigation bar from the phone's light or dark
+// once, as the app started, so a theme chosen in the app (or the phone's,
+// changed while the app ran) left a white bar under a dark screen (S10).
+test('the navigation bar follows the theme choice', async () => {
+  const user = userEvent.setup();
+  const last = () => mockNavigationBar.mock.calls.at(-1)?.[0];
+  mockNavigationBar.mockClear();
+  await renderRouter(routes, { initialUrl: '/settings' });
+  expect(await screen.findByRole('radio', { name: 'system' })).toBeChecked();
+  expect(last()).toBe('light'); // the phone is light
+  await user.press(screen.getByRole('radio', { name: 'dark' }));
+  expect(last()).toBe('dark');
+  await user.press(screen.getByRole('radio', { name: 'light' }));
+  expect(last()).toBe('light');
+  mockScheme.value = 'dark';
+  await user.press(screen.getByRole('radio', { name: 'system' }));
+  expect(last()).toBe('dark'); // follows the (now dark) phone
 });
 
 describe('the current PC and its status, without screens', () => {

@@ -42,9 +42,14 @@ function deviceSplashIconScale(): number {
   return splashIconScale({ os: Platform.OS, version: Platform.Version, manufacturer });
 }
 
-export function LaunchCover() {
+export function LaunchCover({ onDone }: { onDone?: () => void } = {}) {
   const scheme = resolveScheme('system', useColorScheme());
   const [done, setDone] = useState(false);
+  const doneRef = useRef(onDone);
+  doneRef.current = onDone;
+  useEffect(() => {
+    if (done) doneRef.current?.();
+  }, [done]);
   const word = useRef(new Animated.Value(0)).current;
   const cover = useRef(new Animated.Value(1)).current;
   const start = useRef(deviceSplashIconScale()).current;
