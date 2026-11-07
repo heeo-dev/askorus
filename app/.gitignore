@@ -42,3 +42,6 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+# what a local APK build leaves in the app's own native modules
+/modules/*/android/build
+/modules/*/android/.cxx

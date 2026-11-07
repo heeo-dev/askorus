@@ -363,6 +363,26 @@ test('About leaves the version line out when the app has no version', async () =
 
 // --- Launch cover (#1) ------------------------------------------------------
 
+// R-82 (#17): the root layout sets the navigation bar again once the cover
+// is done, as the splash put the bar back the way it was at start-up.
+test('the launch cover tells once when it is done', async () => {
+  jest.useFakeTimers();
+  try {
+    const done = jest.fn();
+    await render(<LaunchCover onDone={done} />);
+    const hidden = { includeHiddenElements: true };
+    await act(async () => screen.getByTestId('launch-mark', hidden).props.onLoad());
+    expect(done).not.toHaveBeenCalled();
+    await act(async () => {
+      jest.advanceTimersByTime(3000);
+    });
+    expect(screen.queryByTestId('launch-cover', hidden)).toBeNull();
+    expect(done).toHaveBeenCalledTimes(1);
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
 // R-60: the APK opened on the icon alone, while the board
 // F-Brand-Splash-Final has the wordmark under it. The native splash can draw
 // only the icon, so the cover takes over in the same place and colour as the
