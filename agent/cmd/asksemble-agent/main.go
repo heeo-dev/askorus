@@ -462,7 +462,7 @@ func PairURL(host string, port int, code string) string {
 	q.Set("host", host)
 	q.Set("port", strconv.Itoa(port))
 	q.Set("code", code)
-	return "asksemble://pair?" + q.Encode()
+	return "askorus://pair?" + q.Encode()
 }
 
 // TestPageURL opens the test page with the code in the fragment, which the

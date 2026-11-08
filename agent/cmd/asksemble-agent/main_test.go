@@ -27,7 +27,7 @@ func TestPairURL(t *testing.T) {
 		t.Fatal(err)
 	}
 	q := u.Query()
-	if u.Scheme != "asksemble" || u.Host != "pair" || q.Get("v") != "1" || q.Get("host") != "pc.example.ts.net" || q.Get("port") != "8800" || q.Get("code") != "ABCDEFGHIJKLMNOPQRSTUVWXYZ" {
+	if u.Scheme != "askorus" || u.Host != "pair" || q.Get("v") != "1" || q.Get("host") != "pc.example.ts.net" || q.Get("port") != "8800" || q.Get("code") != "ABCDEFGHIJKLMNOPQRSTUVWXYZ" {
 		t.Errorf("link = %s", link)
 	}
 }

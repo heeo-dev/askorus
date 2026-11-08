@@ -364,7 +364,7 @@ describe('pairing', () => {
     expect(screen.getByText('Run this in a terminal on the PC')).toBeTruthy();
     expect(screen.getByText('Scan the QR on the PC')).toBeTruthy();
     // The link is the second way, behind a quiet button; there is no code entry.
-    expect(screen.queryByPlaceholderText('asksemble://pair?…')).toBeNull();
+    expect(screen.queryByPlaceholderText('askorus://pair?…')).toBeNull();
     expect(screen.queryByText(/enter.*code/i)).toBeNull();
     expect(screen.getByText('Not an official product of any AI company.')).toBeTruthy();
 

@@ -25,7 +25,7 @@ let native: SystemBarsModule | null | undefined;
 /** Sets the navigation bar for the app's scheme (Android only): a light bar with dark buttons for the light theme. */
 export function applyNavigationBar(scheme: 'light' | 'dark'): void {
   if (Platform.OS !== 'android') return;
-  if (native === undefined) native = requireOptionalNativeModule<SystemBarsModule>('AsksembleSystemBars');
+  if (native === undefined) native = requireOptionalNativeModule<SystemBarsModule>('AskorusSystemBars');
   if (!native || typeof native.setNavigationBarLight !== 'function') return;
   native.setNavigationBarLight(scheme === 'light').catch((e: unknown) => console.warn('[navigation bar]', e));
 }

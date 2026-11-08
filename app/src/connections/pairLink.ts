@@ -1,5 +1,5 @@
 // The pairing link the PC shows as a QR code:
-//   asksemble://pair?v=1&host=<MagicDNS name>&port=<serve HTTPS port>&code=<code>
+//   askorus://pair?v=1&host=<MagicDNS name>&port=<serve HTTPS port>&code=<code>
 // `asksemble-agent pair -test-page` shows the test page instead:
 //   https://<host>:<port>/test/#code=<code>
 // Both are accepted, so the same PC window pairs the app or the browser.
@@ -26,7 +26,7 @@ export function parsePairLink(text: string): PairLink | null {
   let host: string;
   let port: string;
   let code: string | null;
-  if (u.protocol === 'asksemble:') {
+  if (u.protocol === 'askorus:') {
     // URL puts "pair" in host or pathname depending on the runtime.
     const what = (u.host || u.pathname.replace(/^\/+/, '')).toLowerCase();
     if (what !== 'pair') return null;

@@ -16,7 +16,7 @@ export const HOST = 'desktop-test.tail0.ts.net';
 export const PORT = 8790;
 export const CODE = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 export const TOKEN = 'device-token';
-export const PAIR_LINK = `asksemble://pair?v=1&host=${HOST}&port=${PORT}&code=${CODE}`;
+export const PAIR_LINK = `askorus://pair?v=1&host=${HOST}&port=${PORT}&code=${CODE}`;
 
 export type Call = { method: string; path: string; query: URLSearchParams; body?: any; auth?: string };
 

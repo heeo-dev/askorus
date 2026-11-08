@@ -123,7 +123,9 @@ test('app.json: no Android backup, and the SQLite plugin for the history', () =>
 test('app.json: icon I2-A in apricot, the adaptive and themed layers, the icon-only splash', () => {
   const { expo } = readJSON('app.json');
   expect(expo.name).toBe('Askorus');
-  expect(expo.slug).toBe('asksemble');
+  expect(expo.slug).toBe('askorus');
+  expect(expo.scheme).toBe('askorus');
+  expect(expo.android.package).toBe('app.askorus');
   expect(`${expo.name} ${expo.slug}`).not.toMatch(/claude|anthropic/i);
   expect(expo.userInterfaceStyle).toBe('automatic');
   expect(expo.icon).toBe('./assets/icon.png');

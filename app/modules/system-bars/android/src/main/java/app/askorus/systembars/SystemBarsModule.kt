@@ -1,4 +1,4 @@
-package app.asksemble.systembars
+package app.askorus.systembars
 
 import android.graphics.Color
 import android.os.Build
@@ -48,7 +48,7 @@ class SystemBarsModule : Module(), ExtraWindowEventListener {
   private val reactContext get() = appContext.reactContext as? ReactApplicationContext
 
   override fun definition() = ModuleDefinition {
-    Name("AsksembleSystemBars")
+    Name("AskorusSystemBars")
 
     OnCreate {
       reactContext?.addExtraWindowEventListener(this@SystemBarsModule)

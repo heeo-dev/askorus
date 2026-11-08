@@ -1,10 +1,10 @@
 {
   "expo": {
     "name": "Askorus",
-    "slug": "asksemble",
+    "slug": "askorus",
     "owner": "heeodev",
     "version": "0.1.0",
-    "scheme": "asksemble",
+    "scheme": "askorus",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -13,7 +13,7 @@
       "infoPlist": {}
     },
     "android": {
-      "package": "app.asksemble",
+      "package": "app.askorus",
       "allowBackup": false,
       "adaptiveIcon": {
         "backgroundColor": "#FFAD85",

@@ -2,7 +2,7 @@
 // scan the QR it shows (the main way) or paste the link printed with it,
 // check which PC it is, send the code and wait until the person at the PC
 // allows it. Opened from 내 PC, Settings, a PC's 'pair again', or by the
-// asksemble://pair link itself. A newly paired PC becomes the current one.
+// askorus://pair link itself. A newly paired PC becomes the current one.
 
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Clipboard from 'expo-clipboard';
@@ -72,7 +72,7 @@ export default function Pair() {
     }, []),
   );
 
-  // Opened by the asksemble://pair link: start at the confirm step.
+  // Opened by the askorus://pair link: start at the confirm step.
   useEffect(() => {
     if (!params.code) return;
     const q = new URLSearchParams({
@@ -81,7 +81,7 @@ export default function Pair() {
       port: params.port ?? '',
       code: params.code,
     });
-    const link = parsePairLink(`asksemble://pair?${q}`);
+    const link = parsePairLink(`askorus://pair?${q}`);
     if (link) setStep({ kind: 'confirm', link });
   }, [params.v, params.host, params.port, params.code]);
 
@@ -191,7 +191,7 @@ export default function Pair() {
                         setPasted(v);
                         setPasteError('');
                       }}
-                      placeholder="asksemble://pair?…"
+                      placeholder="askorus://pair?…"
                       placeholderTextColor={th.caption}
                       accessibilityLabel={t('pair.linkLabel')}
                       autoCapitalize="none"

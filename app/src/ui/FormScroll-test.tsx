@@ -19,7 +19,7 @@ test('the form gets room as tall as the keyboard while it is up', async () => {
   await render(
     <FormScroll>
       <Text>Paste the link</Text>
-      <TextInput placeholder="asksemble://pair?…" />
+      <TextInput placeholder="askorus://pair?…" />
     </FormScroll>,
   );
   expect(screen.queryByTestId('keyboard-room')).toBeNull();
