@@ -96,4 +96,8 @@ test('errors are explained in words', () => {
   setLang('ko');
   expect(errorText(new AgentError('pair_denied', 403))).toBe('PC에서 거절했습니다.');
   expect(errorText(new NetworkError())).toContain('Tailscale');
+  // R-88: the agent caps the sessions it opens or starts at once.
+  expect(errorText(new AgentError('too_many_jobs', 429))).toBe('PC가 다른 세션을 열거나 시작하는 중입니다. 잠시 뒤에 다시 하세요.');
+  setLang('en');
+  expect(errorText(new AgentError('too_many_jobs', 429))).toBe('The PC is still opening or starting other sessions. Try again in a moment.');
 });

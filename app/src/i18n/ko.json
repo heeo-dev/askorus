@@ -41,6 +41,7 @@
   "error.service_elevated": "Claude 백그라운드 서비스가 관리자 권한으로 돌고 있습니다. PC의 관리자 터미널에서 claude daemon stop --any를 실행하세요.",
   "error.not_a_git_repository": "git 저장소인 폴더에서만 쓸 수 있습니다.",
   "error.job_not_found": "작업이 끝났거나 에이전트가 다시 켜졌습니다.",
+  "error.too_many_jobs": "PC가 다른 세션을 열거나 시작하는 중입니다. 잠시 뒤에 다시 하세요.",
   "pair.title": "PC와 짝 맺기",
   "pair.tailscaleTitle": "폰에서 Tailscale 켜기",
   "pair.tailscaleBody": "PC와 같은 Tailscale 계정으로 로그인하고 연결을 켜 두세요. 폰은 VPN을 하나만 켤 수 있어 다른 VPN은 꺼야 합니다.",

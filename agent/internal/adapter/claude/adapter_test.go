@@ -171,11 +171,73 @@ func TestAgentsCache(t *testing.T) {
 	}
 }
 
-func TestQuoteArg(t *testing.T) {
-	cases := map[string]string{"job": "job", "my job": `"my job"`, `a"b`: `"a\"b"`, "a&b": `"a&b"`, "": `""`}
-	for in, want := range cases {
-		if got := quoteArg(in); got != want {
-			t.Errorf("quoteArg(%q) = %q, want %q", in, got, want)
+// R-86 (security review 11-08): a session name is pasted into cmd,
+// PowerShell or sh, so a name any of them would run or expand gives way to
+// the short id.
+func TestAttachCommand(t *testing.T) {
+	const short = "cf6efa4e"
+	cases := map[string]string{
+		"job":                       "claude attach job",
+		"named-bg":                  "claude attach named-bg",
+		"v1.2_fix":                  "claude attach v1.2_fix",
+		"my job":                    `claude attach "my job"`,
+		"새 작업":                      `claude attach "새 작업"`,
+		"로그인":                       "claude attach 로그인",
+		"a&b":                       `claude attach "a&b"`,
+		"fix (login), part 2: #12":  `claude attach "fix (login), part 2: #12"`,
+		"$(Start-Process calc.exe)": "claude attach " + short,
+		"`calc`":                    "claude attach " + short,
+		"a\"b":                      "claude attach " + short,
+		"100% done":                 "claude attach " + short,
+		"%PATH%":                    "claude attach " + short,
+		"hi!":                       "claude attach " + short,
+		`C:\work`:                   "claude attach " + short,
+		"a;b":                       "claude attach " + short,
+		"a|b":                       "claude attach " + short,
+		"a<b":                       "claude attach " + short,
+		"x\ny":                      "claude attach " + short,
+		"“smart”":                   "claude attach " + short,
+		"‘smart’":                   "claude attach " + short,
+		"＂wide＂":                    "claude attach " + short,
+		// Best-fit conversion (Codex cross-review 11-08): modifier
+		// letters, combining marks and click letters become " ` | ! in
+		// a program that reads its command line through ANSI functions.
+		"xʺ & calc & ʺ": "claude attach " + short,
+		"aˋb":           "claude attach " + short,
+		"àb":           "claude attach " + short,
+		"a̎b":           "claude attach " + short,
+		"aǀb":           "claude attach " + short,
+		"aǃb":           "claude attach " + short,
+		"café crème":    `claude attach "café crème"`,
+		"日本語の作業":        "claude attach 日本語の作業",
+		"Задача":        "claude attach Задача",
+		"-x":            "claude attach " + short,
+		"--help":        "claude attach " + short,
+		"":              "claude attach " + short,
+	}
+	for name, want := range cases {
+		if got := attachCommand(name, short, "55555555-5555-4555-8555-555555555555"); got != want {
+			t.Errorf("attachCommand(%q) = %q, want %q", name, got, want)
+		}
+	}
+	// Without a plain short id the session id is next, and then nothing.
+	if got := attachCommand("$(x)", "", "55555555-5555-4555-8555-555555555555"); got != "claude attach 55555555-5555-4555-8555-555555555555" {
+		t.Errorf("no short id: %q", got)
+	}
+	if got := attachCommand("$(x)", "$(y)", "-z"); got != "" {
+		t.Errorf("nothing plain: %q, want no command", got)
+	}
+}
+
+func TestPlainID(t *testing.T) {
+	for _, ok := range []string{"cf6efa4e", "55555555-5555-4555-8555-555555555555", "a_b"} {
+		if !plainID(ok) {
+			t.Errorf("plainID(%q) = false", ok)
+		}
+	}
+	for _, bad := range []string{"", "-x", "a b", "a$b", "a\"b", "가"} {
+		if plainID(bad) {
+			t.Errorf("plainID(%q) = true", bad)
 		}
 	}
 }

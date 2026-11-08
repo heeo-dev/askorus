@@ -459,7 +459,7 @@ func (a *Adapter) sessionWith(id string, e agentEntry, state core.State) core.Se
 	}
 	switch state {
 	case core.StateRunning, core.StateStopped:
-		s.AttachCommand = "claude attach " + quoteArg(firstNonEmpty(e.Name, e.ID, id))
+		s.AttachCommand = attachCommand(e.Name, e.ID, id)
 	case core.StateTerminal:
 		s.AttachCommand = ""
 	}

@@ -452,17 +452,36 @@ func serve(dir string, args []string) error {
 	return err
 }
 
-// openLog writes JSON lines to stderr and <dir>/logs/agent.log.
+// Log file sizes (R-87): agent.log rolls over to agent.log.1 at logMax, so
+// the two hold at most about twice that. background.out, the console of an
+// agent run by `start`, rolls over when that start finds it past consoleMax.
+const (
+	logMax     = 5 << 20
+	consoleMax = 1 << 20
+)
+
+// detachedEnv is set by `start` for the agent it runs in the background:
+// its console goes to background.out, so the log lines go to agent.log only
+// instead of twice.
+const detachedEnv = "ASKORUS_DETACHED"
+
+// openLog writes JSON lines to <dir>/logs/agent.log, and to stderr unless
+// the agent runs detached.
 func openLog(dir string) (*slog.Logger, func(), error) {
 	logDir := filepath.Join(dir, "logs")
 	if err := os.MkdirAll(logDir, 0o700); err != nil {
 		return nil, nil, err
 	}
-	f, err := os.OpenFile(filepath.Join(logDir, "agent.log"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	f, err := logx.OpenFile(filepath.Join(logDir, "agent.log"), logMax)
 	if err != nil {
 		return nil, nil, err
 	}
-	return logx.New(io.MultiWriter(os.Stderr, f), slog.LevelInfo), func() { f.Close() }, nil
+	var w io.Writer = io.MultiWriter(os.Stderr, f)
+	if os.Getenv(detachedEnv) == "1" {
+		w = f
+	}
+	os.Unsetenv(detachedEnv) // not for the AI programs the agent runs
+	return logx.New(w, slog.LevelInfo), func() { f.Close() }, nil
 }
 
 // PairURL is what the QR code holds. The app also opens it as a deep link.

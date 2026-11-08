@@ -8,6 +8,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"sync"
 	"time"
 )
@@ -28,7 +29,16 @@ const (
 	KeepFor = 10 * time.Minute
 	// maxJobs bounds memory; the oldest finished jobs go first.
 	maxJobs = 200
+	// MaxRunning and MaxRunningPerOwner cap the jobs running at once. Each
+	// one runs claude, and nothing capped them before, so one device could
+	// start session after session (security review 11-08, R-88). A phone
+	// opens or starts one or two sessions at a time.
+	MaxRunning         = 8
+	MaxRunningPerOwner = 4
 )
+
+// ErrBusy is returned by Start when too many jobs run already.
+var ErrBusy = errors.New("too many jobs are running")
 
 // Job is a snapshot of one job.
 type Job struct {
@@ -65,23 +75,34 @@ func (m *Manager) now() time.Time {
 // Start runs fn in the background and returns the job. If the same owner
 // already has a running job of this kind for this target, that job is
 // returned instead, so a phone that retries does not start the work twice.
-func (m *Manager) Start(owner, kind, target string, fn func(ctx context.Context) (any, error)) Job {
+// Otherwise it returns ErrBusy when MaxRunning jobs run, or
+// MaxRunningPerOwner of this owner's.
+func (m *Manager) Start(owner, kind, target string, fn func(ctx context.Context) (any, error)) (Job, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.prune()
-	if target != "" {
-		for _, j := range m.jobs {
-			if j.State == Running && j.owner == owner && j.Kind == kind && j.Target == target {
-				return *j
-			}
+	running, mine := 0, 0
+	for _, j := range m.jobs {
+		if j.State != Running {
+			continue
 		}
+		if target != "" && j.owner == owner && j.Kind == kind && j.Target == target {
+			return *j, nil
+		}
+		running++
+		if j.owner == owner {
+			mine++
+		}
+	}
+	if running >= MaxRunning || mine >= MaxRunningPerOwner {
+		return Job{}, ErrBusy
 	}
 	raw := make([]byte, 16)
 	_, _ = rand.Read(raw)
 	j := &Job{ID: hex.EncodeToString(raw), Kind: kind, Target: target, State: Running, StartedAt: m.now().UTC(), owner: owner}
 	m.jobs[j.ID] = j
 	go m.run(j, fn)
-	return *j
+	return *j, nil
 }
 
 func (m *Manager) run(j *Job, fn func(ctx context.Context) (any, error)) {
