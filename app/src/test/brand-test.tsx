@@ -1,8 +1,8 @@
-// S5c brand: app icon B (the user's 11-01 choice) as the launcher icon, the
-// adaptive and themed icon layers and the icon-only native splash, all set
-// in app.json; the PNGs scripts/render-brand.mjs drew (sizes, colour types,
-// the board's colours at known points); the wordmark's measured box; and
-// the About screen that carries the whole board F-Brand-Splash-Final.
+// The brand: app icon I2-A (picked on 11-08, #31; masters in docs/brand) as
+// the launcher icon, the adaptive and themed icon layers and the icon-only
+// native splash, all set in app.json; the PNGs scripts/render-brand.mjs drew
+// (sizes, colour types, the master's colours at known points); the
+// wordmark's box; and the About screen with the mark, wordmark and slogan.
 
 import { act, render, userEvent } from '@testing-library/react-native';
 import Constants from 'expo-constants';
@@ -120,7 +120,7 @@ test('app.json: no Android backup, and the SQLite plugin for the history', () =>
   expect(expo.plugins).toContain('expo-sqlite');
 });
 
-test('app.json: icon B in apricot, the adaptive and themed layers, the icon-only splash', () => {
+test('app.json: icon I2-A in apricot, the adaptive and themed layers, the icon-only splash', () => {
   const { expo } = readJSON('app.json');
   expect(expo.name).toBe('Asksemble');
   expect(expo.slug).toBe('asksemble');
@@ -179,14 +179,16 @@ test.each(assets)('%s is %i×%i, colour type %i, 8-bit, not interlaced', (file, 
   expect(head(file)).toEqual({ w, h, depth: 8, colour, interlace: 0 });
 });
 
-test('the store icon is full-bleed apricot with the ink bubble, and has no alpha', () => {
+test('the store icon is full-bleed apricot with the ink bubble and its three mouths, and has no alpha', () => {
   const img = png('assets/icon.png');
   expect(img.colour).toBe(RGB);
   expect(board(img, icon, 0.2, 0.2)).toBe(APRICOT);
   expect(board(img, icon, 99.8, 99.8)).toBe(APRICOT);
-  expect(board(img, icon, 50, 33)).toBe(INK); // top circle
-  expect(board(img, icon, 29.5, 69.5)).toBe(INK); // tail
-  expect(board(img, icon, 48.5, 51.5)).toBe(APRICOT); // the ring that parts the two lower circles
+  expect(board(img, icon, 42, 35)).toBe(INK); // top circle
+  expect(board(img, icon, 30, 70)).toBe(INK); // tail
+  expect(board(img, icon, 48, 55)).toBe(APRICOT); // the ring that parts the two lower circles
+  expect(board(img, icon, 50, 33.5)).toBe(APRICOT); // the top mouth
+  expect(board(img, icon, 36, 56)).toBe(APRICOT); // the left mouth
 });
 
 test('the adaptive layers: solid apricot behind, the mark inside the 66 dp safe circle, a themed silhouette with the rings cut out', () => {
@@ -195,15 +197,17 @@ test('the adaptive layers: solid apricot behind, the mark inside the 66 dp safe 
 
   const fore = png('assets/android-icon-foreground.png');
   const mono = png('assets/android-icon-monochrome.png');
-  expect(board(fore, adaptive, 50, 33)).toBe(INK);
-  expect(board(fore, adaptive, 48.5, 51.5)).toBe(APRICOT);
+  expect(board(fore, adaptive, 42, 35)).toBe(INK);
+  expect(board(fore, adaptive, 48, 55)).toBe(APRICOT);
+  expect(board(fore, adaptive, 64, 56)).toBe(APRICOT); // the right mouth
   expect(board(fore, adaptive, -24, -24)).toMatch(/\/0$/);
-  expect(board(mono, adaptive, 50, 33)).toBe('#FFFFFF');
-  expect(board(mono, adaptive, 30, 55)).toBe('#FFFFFF');
-  expect(board(mono, adaptive, 48.5, 51.5)).toMatch(/\/0$/);
+  expect(board(mono, adaptive, 42, 35)).toBe('#FFFFFF');
+  expect(board(mono, adaptive, 25, 55)).toBe('#FFFFFF');
+  expect(board(mono, adaptive, 48, 55)).toMatch(/\/0$/);
+  expect(board(mono, adaptive, 36, 56)).toMatch(/\/0$/); // the mouths are cut out too
 
   // Nothing drawn outside the 66 dp circle of the 108 dp layer; the mark is
-  // as big as on the board (its ink reaches r = 32.5 of the board's 150).
+  // as big as on the master (its ink reaches r = 31.8 of the 150 units).
   for (const img of [fore, mono]) {
     let far = 0;
     for (let y = 0; y < img.h; y += 2) {
@@ -227,23 +231,30 @@ test.each(['assets/splash-icon.png', 'assets/favicon.png', 'assets/brand/mark.pn
   expect(board(img, icon, 1.5, 1.5)).toMatch(/\/0$/);
   expect(board(img, icon, 98.5, 98.5)).toMatch(/\/0$/);
   expect(board(img, icon, 6, 50)).toBe(APRICOT);
-  expect(board(img, icon, 50, 33)).toBe(INK);
-  expect(board(img, icon, 48.5, 51.5)).toBe(APRICOT);
+  expect(board(img, icon, 42, 35)).toBe(INK);
+  expect(board(img, icon, 48, 55)).toBe(APRICOT);
+  expect(board(img, icon, 64, 56)).toBe(APRICOT);
 });
 
 test.each([
   ['dark', '#FFAD85', '#EDEBE7'],
   ['light', '#DD5A26', '#1D1A17'],
-])('the %s wordmark is Ask %s + semble %s on transparent', (scheme, ask, semble) => {
+])('the %s wordmark is Ask %s + orus %s on transparent', (scheme, ask, rest) => {
   const img = png(`assets/brand/wordmark-${scheme}@2x.png`);
+  // Every solid pixel is one of the two colours; where the o's tail meets
+  // its ring the browser's blending may be one step off (render-brand allows 2).
+  const rgb = (c: string) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16));
+  const near = (p: number[], c: string) => rgb(c).every((v, i) => Math.abs(p[i] - v) <= 2);
   const seen = new Map<string, number>();
   for (let y = 0; y < img.h; y++) {
     for (let x = 0; x < img.w; x++) {
       const p = img.at(x, y);
-      if (p[3] === 255) seen.set(hex(p), (seen.get(hex(p)) ?? 0) + 1);
+      if (p[3] !== 255) continue;
+      const c = near(p, ask) ? ask : near(p, rest) ? rest : hex(p);
+      seen.set(c, (seen.get(c) ?? 0) + 1);
     }
   }
-  expect([...seen.keys()].sort()).toEqual([ask, semble].sort());
+  expect([...seen.keys()].sort()).toEqual([ask, rest].sort());
   // 'Ask' is the left part: the first solid column is apricot.
   let first = '';
   for (let x = 0; x < img.w && !first; x++) for (let y = 0; y < img.h && !first; y++) if (img.at(x, y)[3] === 255) first = hex(img.at(x, y));
@@ -257,9 +268,9 @@ test('wordmark-size.json is the 1x wordmark box at 36 px', () => {
     const one = head(`assets/brand/wordmark-${s}.png`);
     expect([one.w, one.h]).toEqual([box.width, box.height]);
   }
-  // Noto Sans KR 800 'Asksemble' at 36 px: about 5.2 em wide, 1.1 em tall.
-  expect(box.width / box.fontSize).toBeGreaterThan(4.9);
-  expect(box.width / box.fontSize).toBeLessThan(5.6);
+  // 'Askorus' outlines at 36 px with a 4 px pad: about 4.2 em wide, 1.1 em tall.
+  expect(box.width / box.fontSize).toBeGreaterThan(3.9);
+  expect(box.width / box.fontSize).toBeLessThan(4.5);
   expect(box.height).toBe(Math.ceil(36 * 1.1));
 });
 
