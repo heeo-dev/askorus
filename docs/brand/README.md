@@ -8,7 +8,8 @@
 |---|---|
 | `icon/` | 앱 아이콘(살구 바탕 + 원 셋 말풍선, 세 입). `-foreground`는 바탕 없는 전경, `-monochrome`은 입과 경계가 실제로 뚫린 단색 |
 | `logo/` | 글자 로고. `askorus-logo-*`가 기본(원 o), `askorus-logo-character-*`가 캐릭터(입 o). 배경별 `dark`, `light`, `apricot`, 단색 `mono`(밝은 바탕), `mono-light`(어두운 바탕), 투명 `-transparent` |
-| `lockup/` | 아이콘 + 글자 로고 가로 조합 |
+| `lockup/` | 아이콘 + 글자 로고 가로 조합. `-transparent`는 바탕 없는 것(README에 씀) |
+| `social/` | GitHub 링크 미리보기 그림 1280×640(저장소 설정 › Social preview에 올림) |
 | `android/` | 안드로이드 적응형 아이콘 원본 층(108 좌표) |
 
 ## 색
