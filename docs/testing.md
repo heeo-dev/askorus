@@ -275,12 +275,12 @@ powershell -NoProfile -File scripts\phone.ps1 release         # 끝나면(e2e.ps
 | --- | --- | --- |
 | 앱 | `host.exp.exponent` 안에서 우리 번들이 돈다 | `app.askorus` 하나로 깔림 |
 | 여는 법 | `exp://<PC 주소>:8081/--/<경로>`(개발 서버 필요) | `askorus://<경로>`, 아이콘, `open app.askorus` |
-| 볼 수 있는 것 | 화면·에이전트 연동, 밖으로 나가는 링크(Claude 앱), 밖으로 보내는 공유 | 위 전부 + 아이콘·이름, 권한 창, 다크 모드(R-14), `askorus://` 딥 링크(카메라 QR, MT-08), **공유 받기**(다른 앱이 공유 시트에서 Askorus을 고르는 것), 앱을 껐다 켠 뒤 상태(MT-07) |
+| 볼 수 있는 것 | 화면·에이전트 연동, 밖으로 나가는 링크(Claude 앱), 밖으로 보내는 공유 | 위 전부 + 아이콘·이름, 권한 창, 다크 모드(R-14), `askorus://` 딥 링크(카메라 QR, MT-08), **공유 받기**(다른 앱이 공유 시트에서 Askorus를 고르는 것), 앱을 껐다 켠 뒤 상태(MT-07) |
 | 못 보는 것 | 설치본 설정(app.json의 scheme·권한·인텐트 필터), Expo Go의 개발 도구 버튼이 화면을 가림 | 코드를 고칠 때마다 다시 빌드(개발 빌드면 JS는 metro로 바로 바뀜) |
 | Maestro | `appId: host.exp.exponent`(지금 흐름) | `appId: app.askorus`로 바꾼 흐름이 필요 |
 | phone.ps1 | `open exp://…` | `install <apk>`, `open app.askorus`, 개발 빌드는 `metro reload` |
 
-- P0-4(공식 앱이 공유로 받은 글을 입력창에 넣는지, 답을 공유로 내보낼 수 있는지)는 다른 앱끼리의 시험이라 **Expo Go 단계에서 테스트 폰으로 할 수 있다**. 답을 Askorus이 공유로 받는 길(P2-4)을 볼 때는 APK가 필요하다.
+- P0-4(공식 앱이 공유로 받은 글을 입력창에 넣는지, 답을 공유로 내보낼 수 있는지)는 다른 앱끼리의 시험이라 **Expo Go 단계에서 테스트 폰으로 할 수 있다**. 답을 Askorus가 공유로 받는 길(P2-4)을 볼 때는 APK가 필요하다.
 
 ## 6. 회귀 표
 
