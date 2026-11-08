@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/asksemble/asksemble/agent/internal/config"
-	"github.com/asksemble/asksemble/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/config"
+	"github.com/heeo-dev/askorus/agent/internal/core"
 )
 
 // Folder servers (F10): the settings file says which folders should be

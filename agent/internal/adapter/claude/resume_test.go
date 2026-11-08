@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asksemble/asksemble/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/core"
 )
 
 // A woken session keeps its old link archived until Claude reconnects it.
@@ -22,7 +22,7 @@ func TestRemoveRetriesWhileTheServiceSettles(t *testing.T) {
 	e := newLaunchEnv(t, []agentEntry{runningEntry})
 	busy := filepath.Join(t.TempDir(), "busy")
 	os.WriteFile(busy, nil, 0o600)
-	t.Setenv("ASKSEMBLE_FAKE_RM_BUSY", busy)
+	t.Setenv("ASKORUS_FAKE_RM_BUSY", busy)
 	if err := e.a.Remove(context.Background(), id1); err != nil {
 		t.Fatalf("remove = %v, want it to retry rm", err)
 	}
@@ -46,8 +46,8 @@ func TestRemoveWaitsForALongSettle(t *testing.T) {
 	e := newLaunchEnv(t, []agentEntry{runningEntry})
 	busy := filepath.Join(t.TempDir(), "busy")
 	os.WriteFile(busy, []byte("4"), 0o600)
-	t.Setenv("ASKSEMBLE_FAKE_RM_BUSY", busy)
-	t.Setenv("ASKSEMBLE_FAKE_RM_SILENT", "1")
+	t.Setenv("ASKORUS_FAKE_RM_BUSY", busy)
+	t.Setenv("ASKORUS_FAKE_RM_SILENT", "1")
 	if err := e.a.Remove(context.Background(), id1); err != nil {
 		t.Fatalf("remove = %v, want it to keep trying while the service settles", err)
 	}
@@ -65,7 +65,7 @@ func TestRemoveWaitsForALongSettle(t *testing.T) {
 func TestOpenStoppedNeverHandsOutTheOldLink(t *testing.T) {
 	stopped := agentEntry{ID: "11111111", Kind: kindBackground, SessionID: id1, Name: "job one", State: "stopped"}
 	e := newLaunchEnv(t, []agentEntry{stopped}) // id1's transcript already has a link
-	t.Setenv("ASKSEMBLE_FAKE_NOLINK", "1")      // the resumed process never reconnects
+	t.Setenv("ASKORUS_FAKE_NOLINK", "1")        // the resumed process never reconnects
 	res, err := e.a.Open(context.Background(), id1)
 	if core.ErrorCode(err) != core.ErrCodeLinkTimeout {
 		t.Fatalf("got %+v, %v; want a link timeout, not the old link", res, err)

@@ -18,8 +18,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/asksemble/asksemble/agent/internal/core"
-	"github.com/asksemble/asksemble/agent/internal/proc"
+	"github.com/heeo-dev/askorus/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/proc"
 )
 
 // JudgeMinVersion is the oldest codex the one-off command was tested with

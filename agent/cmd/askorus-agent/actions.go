@@ -11,9 +11,9 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"github.com/asksemble/asksemble/agent/internal/config"
-	"github.com/asksemble/asksemble/agent/internal/core"
-	"github.com/asksemble/asksemble/agent/internal/hidden"
+	"github.com/heeo-dev/askorus/agent/internal/config"
+	"github.com/heeo-dev/askorus/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/hidden"
 )
 
 // These commands do on the PC what the phone does through the API, so the
@@ -93,7 +93,7 @@ func explain(err error) error {
 
 func openCmd(dir string, args []string, out io.Writer) error {
 	if len(args) != 1 {
-		return fail("usage: asksemble-agent open SESSION_ID", "사용법: asksemble-agent open 세션_ID")
+		return fail("usage: askorus-agent open SESSION_ID", "사용법: askorus-agent open 세션_ID")
 	}
 	id, err := nativeID(args[0])
 	if err != nil {
@@ -113,7 +113,7 @@ func openCmd(dir string, args []string, out io.Writer) error {
 
 func newCmd(dir string, args []string, out io.Writer) error {
 	fs := flag.NewFlagSet("new", flag.ContinueOnError)
-	folder := fs.String("folder", "", "folder id from `asksemble-agent folders`")
+	folder := fs.String("folder", "", "folder id from `askorus-agent folders`")
 	name := fs.String("name", "", "session name")
 	model := fs.String("model", "", "model (default: Claude Code's)")
 	effort := fs.String("effort", "", "effort: low, medium, high, xhigh, max (default: Claude Code's)")
@@ -126,7 +126,7 @@ func newCmd(dir string, args []string, out io.Writer) error {
 	}
 	f, ok := cfg.FolderByID(*folder)
 	if !ok {
-		return fail("unknown folder %q; see asksemble-agent folders", "모르는 폴더 %q입니다. asksemble-agent folders로 확인하세요", *folder)
+		return fail("unknown folder %q; see askorus-agent folders", "모르는 폴더 %q입니다. askorus-agent folders로 확인하세요", *folder)
 	}
 	if *model != "" && !config.ValidModel(*model) {
 		return fail("bad model %q", "모델 이름이 잘못됐습니다: %q", *model)
@@ -148,7 +148,7 @@ func newCmd(dir string, args []string, out io.Writer) error {
 
 func stopCmd(dir string, args []string, out io.Writer) error {
 	if len(args) != 1 {
-		return fail("usage: asksemble-agent stop SESSION_ID", "사용법: asksemble-agent stop 세션_ID")
+		return fail("usage: askorus-agent stop SESSION_ID", "사용법: askorus-agent stop 세션_ID")
 	}
 	id, err := nativeID(args[0])
 	if err != nil {
@@ -168,7 +168,7 @@ func stopCmd(dir string, args []string, out io.Writer) error {
 
 func rmCmd(dir string, args []string, out io.Writer) error {
 	if len(args) != 1 {
-		return fail("usage: asksemble-agent rm SESSION_ID", "사용법: asksemble-agent rm 세션_ID")
+		return fail("usage: askorus-agent rm SESSION_ID", "사용법: askorus-agent rm 세션_ID")
 	}
 	id, err := nativeID(args[0])
 	if err != nil {
@@ -189,8 +189,8 @@ func rmCmd(dir string, args []string, out io.Writer) error {
 	if err := hid.Add(full); err != nil {
 		return err
 	}
-	say(out, m("removed %s from the list (the transcript stays; undo: asksemble-agent hidden unhide %[1]s)",
-		"%s를 목록에서 지웠습니다 (대화 기록은 남습니다. 되돌리기: asksemble-agent hidden unhide %[1]s)", full))
+	say(out, m("removed %s from the list (the transcript stays; undo: askorus-agent hidden unhide %[1]s)",
+		"%s를 목록에서 지웠습니다 (대화 기록은 남습니다. 되돌리기: askorus-agent hidden unhide %[1]s)", full))
 	return nil
 }
 
@@ -225,7 +225,7 @@ func hiddenCmd(dir string, args []string, out io.Writer) error {
 		say(out, m("%s is back in the list", "%s를 목록에 다시 보입니다", id))
 		return nil
 	}
-	return fail("usage: asksemble-agent hidden [list | unhide SESSION_ID]", "사용법: asksemble-agent hidden [list | unhide 세션_ID]")
+	return fail("usage: askorus-agent hidden [list | unhide SESSION_ID]", "사용법: askorus-agent hidden [list | unhide 세션_ID]")
 }
 
 func foldersCmd(dir string, args []string, out io.Writer) error {
@@ -254,7 +254,7 @@ func foldersCmd(dir string, args []string, out io.Writer) error {
 			return err
 		}
 		if fs.NArg() != 1 {
-			return fail("usage: asksemble-agent folders add [-id ID] PATH", "사용법: asksemble-agent folders add [-id ID] 경로")
+			return fail("usage: askorus-agent folders add [-id ID] PATH", "사용법: askorus-agent folders add [-id ID] 경로")
 		}
 		path, err := filepath.Abs(fs.Arg(0))
 		if err != nil {
@@ -278,8 +278,8 @@ func foldersCmd(dir string, args []string, out io.Writer) error {
 		spawn := fs.String("spawn", "", "same-dir or worktree (git repositories only)")
 		capacity := fs.Int("capacity", 0, "concurrent sessions, 1-32")
 		if len(args) < 3 || (args[2] != "on" && args[2] != "off") {
-			return fail("usage: asksemble-agent folders serve ID on|off [-spawn same-dir|worktree] [-capacity N]",
-				"사용법: asksemble-agent folders serve ID on|off [-spawn same-dir|worktree] [-capacity N]")
+			return fail("usage: askorus-agent folders serve ID on|off [-spawn same-dir|worktree] [-capacity N]",
+				"사용법: askorus-agent folders serve ID on|off [-spawn same-dir|worktree] [-capacity N]")
 		}
 		if err := fs.Parse(args[3:]); err != nil {
 			return err
@@ -316,7 +316,7 @@ func foldersCmd(dir string, args []string, out io.Writer) error {
 		return nil
 	case "remove":
 		if len(args) != 2 {
-			return fail("usage: asksemble-agent folders remove ID", "사용법: asksemble-agent folders remove ID")
+			return fail("usage: askorus-agent folders remove ID", "사용법: askorus-agent folders remove ID")
 		}
 		kept := cfg.Folders[:0]
 		found := false

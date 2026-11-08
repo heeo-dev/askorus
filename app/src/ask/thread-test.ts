@@ -102,7 +102,7 @@ test('every asked AI has a card, running until the PC says otherwise', () => {
 const all = ['claude', 'codex', 'opencode'];
 const ai = (agent: string, caps = ['ask', 'synthesize'], available = true): AdapterInfo => ({ agent, available, capabilities: caps });
 const infoOf = (agents: AdapterInfo[]) =>
-  ({ name: 'asksemble-agent', version: '0.3.0', apiVersion: 1, hostname: 'pc', os: 'windows', agents, capabilities: ['ask'], reserved: [] }) as Info;
+  ({ name: 'askorus-agent', version: '0.3.0', apiVersion: 1, hostname: 'pc', os: 'windows', agents, capabilities: ['ask'], reserved: [] }) as Info;
 const info3 = infoOf([ai('claude'), ai('codex'), ai('opencode')]);
 const ask = (over: Partial<Parameters<typeof newTurn>[0]> = {}) =>
   newTurn({

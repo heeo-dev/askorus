@@ -8,14 +8,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asksemble/asksemble/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/core"
 )
 
 func testAdapter(t *testing.T) *Adapter {
 	t.Helper()
 	r, _ := fakeRunner(t)
 	agents, _ := filepath.Abs(filepath.Join("testdata", "agents.json"))
-	t.Setenv("ASKSEMBLE_FAKE_AGENTS", agents)
+	t.Setenv("ASKORUS_FAKE_AGENTS", agents)
 	claudeDir := filepath.Dir(copyProjects(t))
 	a := New(Options{ClaudeDir: claudeDir, ClaudePath: r.Path()})
 	a.folderExists = func(string) bool { return true } // testdata folders are from another PC
@@ -75,7 +75,7 @@ func TestListSessions(t *testing.T) {
 
 func TestListSessionsWithoutAgents(t *testing.T) {
 	a := testAdapter(t)
-	t.Setenv("ASKSEMBLE_FAKE_EXIT", "1")
+	t.Setenv("ASKORUS_FAKE_EXIT", "1")
 	res, err := a.ListSessions(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -138,7 +138,7 @@ func TestIgnoresFilesOutsideProjects(t *testing.T) {
 func TestAgentsCache(t *testing.T) {
 	r, argsFile := fakeRunner(t)
 	agents, _ := filepath.Abs(filepath.Join("testdata", "agents.json"))
-	t.Setenv("ASKSEMBLE_FAKE_AGENTS", agents)
+	t.Setenv("ASKORUS_FAKE_AGENTS", agents)
 	a := New(Options{ClaudeDir: filepath.Dir(copyProjects(t)), ClaudePath: r.Path()})
 	ctx := context.Background()
 	runs := func() int { return len(recordedArgs(t, argsFile)) }

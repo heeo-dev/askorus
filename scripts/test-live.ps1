@@ -1,7 +1,7 @@
 # Live scenario tests (docs/testing.md, LT-xx): the agent with the real
 # claude on this PC. Sessions are only made in the test folder
 # .local\rc-test, and what the tests start is removed. Asks (LT-05) also
-# use the real codex and opencode, in %LOCALAPPDATA%\Asksemble\ask\live;
+# use the real codex and opencode, in %LOCALAPPDATA%\Askorus\ask\live;
 # their conversations stay there as history, like any ask. Run after
 # changing how the agent drives an AI. Keep this file ASCII.
 #
@@ -12,7 +12,7 @@
 #   each adapter's Synthesize once with the real claude, codex and opencode
 #   on the quick tier's ask model (one Codex call; one more only when an
 #   output is refused and written again), in the judge folder
-#   %LOCALAPPDATA%\Asksemble\ask\judge\live. Three short answers, one
+#   %LOCALAPPDATA%\Askorus\ask\judge\live. Three short answers, one
 #   with an injection, and synth-v5 (no differ items since C6). The
 #   combined answer must be valid and name at least one AI. No
 #   Claude transcript, Codex rollout or thread history may hold its

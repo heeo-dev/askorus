@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/asksemble/asksemble/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/core"
 )
 
 // RecentFolders lists the folders Claude Code sessions ran in, newest

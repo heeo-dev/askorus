@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/asksemble/asksemble/agent/internal/compares"
-	"github.com/asksemble/asksemble/agent/internal/fakecli"
+	"github.com/heeo-dev/askorus/agent/internal/compares"
+	"github.com/heeo-dev/askorus/agent/internal/fakecli"
 )
 
 // IT-18 (C6, #19, 2026-11-05, the user's decision; the judging's code went
@@ -30,7 +30,7 @@ func TestIT18NoJudging(t *testing.T) {
 			t.Fatalf("%d synth calls", len(synths))
 		}
 		_, data := synthData(t, synths[0].Stdin)
-		if !strings.HasPrefix(synths[0].Stdin, "[Asksemble synthesis v5.1] ") || strings.Contains(synths[0].Stdin, "COMPARED") ||
+		if !strings.HasPrefix(synths[0].Stdin, "[Askorus synthesis v5.1] ") || strings.Contains(synths[0].Stdin, "COMPARED") ||
 			len(linesWith(data, "ANSWER: ")) != 3 || len(linesWith(data, "DIFFER: "))+len(linesWith(data, "CHECK: ")) != 0 {
 			t.Errorf("writer stdin is not synth-v5 with three answers:\n%s", synths[0].Stdin)
 		}

@@ -442,9 +442,9 @@ test('the ask folder that needs trusting is explained when continuing in the Cla
   const { user } = await open();
   await ask(user, 'q');
   await screen.findByText('opencode says: q');
-  agent.openError = { code: 'workspace_not_trusted', message: 'C:\\Users\\me\\AppData\\Local\\Asksemble\\ask' };
+  agent.openError = { code: 'workspace_not_trusted', message: 'C:\\Users\\me\\AppData\\Local\\Askorus\\ask' };
   await user.press(screen.getByRole('button', { name: 'Continue in the Claude app' }));
-  expect(await screen.findByText(/trust the ask folder on the PC once: in a PC terminal, go to C:\\Users\\me\\AppData\\Local\\Asksemble\\ask/)).toBeTruthy();
+  expect(await screen.findByText(/trust the ask folder on the PC once: in a PC terminal, go to C:\\Users\\me\\AppData\\Local\\Askorus\\ask/)).toBeTruthy();
 });
 
 test('New question keeps the conversation: recent questions and the drawer bring it back', async () => {

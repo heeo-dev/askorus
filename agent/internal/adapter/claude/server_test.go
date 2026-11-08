@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asksemble/asksemble/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/core"
 )
 
 // newTestServers runs the fake claude through the real pseudo console.
@@ -21,8 +21,8 @@ func newTestServers(t *testing.T) (*servers, string) {
 		t.Skip("folder servers need a pseudo console (Windows)")
 	}
 	r, argsFile := fakeRunner(t)
-	t.Setenv("ASKSEMBLE_FAKE_UNTRUSTED", "")
-	t.Setenv("ASKSEMBLE_FAKE_SERVE_EXIT", "")
+	t.Setenv("ASKORUS_FAKE_UNTRUSTED", "")
+	t.Setenv("ASKORUS_FAKE_SERVE_EXIT", "")
 	ss := &servers{
 		exe:     func() (string, error) { return r.Path(), nil },
 		start:   startPTY,
@@ -115,7 +115,7 @@ func TestServerSameOptionsIsNoop(t *testing.T) {
 
 func TestServerUntrustedIsNotRetried(t *testing.T) {
 	ss, argsFile := newTestServers(t)
-	t.Setenv("ASKSEMBLE_FAKE_UNTRUSTED", "1")
+	t.Setenv("ASKORUS_FAKE_UNTRUSTED", "1")
 	dir := t.TempDir()
 	ss.StartServer(dir, core.ServeOptions{Spawn: "same-dir", Capacity: 1})
 	st := waitState(t, ss, dir, core.ServeUntrusted)
@@ -135,7 +135,7 @@ func TestServerUntrustedIsNotRetried(t *testing.T) {
 	}
 	// After a minute it tries again, in case the folder was trusted meanwhile.
 	ss.now = func() time.Time { return time.Now().Add(untrustedRetry + time.Second) }
-	t.Setenv("ASKSEMBLE_FAKE_UNTRUSTED", "")
+	t.Setenv("ASKORUS_FAKE_UNTRUSTED", "")
 	ss.StartServer(dir, core.ServeOptions{Spawn: "same-dir", Capacity: 1})
 	waitState(t, ss, dir, core.ServeRunning)
 	ss.StopServer(dir)
@@ -143,7 +143,7 @@ func TestServerUntrustedIsNotRetried(t *testing.T) {
 
 func TestServerRestartsAfterCrash(t *testing.T) {
 	ss, argsFile := newTestServers(t)
-	t.Setenv("ASKSEMBLE_FAKE_SERVE_EXIT", "1")
+	t.Setenv("ASKORUS_FAKE_SERVE_EXIT", "1")
 	dir := t.TempDir()
 	ss.StartServer(dir, core.ServeOptions{Spawn: "same-dir", Capacity: 1})
 	deadline := time.Now().Add(15 * time.Second)
@@ -265,9 +265,9 @@ func TestTrustPromptRecognised(t *testing.T) {
 
 func TestProjectDirName(t *testing.T) {
 	cases := map[string]string{
-		`D:\ClaudeHome\Asksemble\.local\rc-test`: "D--ClaudeHome-Asksemble--local-rc-test",
-		`D:\ClaudeHome`:                          "D--ClaudeHome",
-		`D:\가나`:                                  "D----",
+		`D:\ClaudeHome\Askorus\.local\rc-test`: "D--ClaudeHome-Askorus--local-rc-test",
+		`D:\ClaudeHome`:                        "D--ClaudeHome",
+		`D:\가나`:                                "D----",
 	}
 	for in, want := range cases {
 		if got := projectDirName(in); got != want && os.PathSeparator == '\\' {

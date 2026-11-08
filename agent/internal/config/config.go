@@ -5,12 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 
-	"github.com/asksemble/asksemble/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/core"
 )
 
 // FileName is the settings file inside the agent directory.
@@ -67,7 +68,7 @@ type Config struct {
 type AskConfig struct {
 	// Folder is where asks run: an empty folder outside every project, so
 	// no CLAUDE.md or AGENTS.md reaches the answers (P0-9). Default
-	// <user cache dir>/Asksemble/ask, %LOCALAPPDATA%\Asksemble\ask on Windows.
+	// <user cache dir>/Askorus/ask, %LOCALAPPDATA%\Askorus\ask on Windows.
 	Folder string `json:"folder,omitempty"`
 	// Tiers overrides the model of a tier for one AI, e.g.
 	// {"codex": {"deep": {"model": "gpt-6.1-sol", "effort": "high"}}}.
@@ -117,11 +118,11 @@ func (c Config) AskFolder() (string, error) {
 	if c.Ask.Folder != "" {
 		return filepath.Clean(c.Ask.Folder), nil
 	}
-	base, err := os.UserCacheDir()
+	base, err := CacheBase()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(base, "Asksemble", "ask"), nil
+	return filepath.Join(base, "ask"), nil
 }
 
 // HistoryFoldersOn reports whether folders with conversations may be used.
@@ -160,17 +161,155 @@ func Default() Config {
 	return Config{Port: DefaultPort, Folders: []Folder{}}
 }
 
-// Dir returns the agent directory: $ASKSEMBLE_AGENT_DIR, or
-// <user config dir>/Asksemble.
+// Dir returns the agent directory: $ASKORUS_AGENT_DIR, or
+// <user config dir>/Askorus.
 func Dir() (string, error) {
-	if d := os.Getenv("ASKSEMBLE_AGENT_DIR"); d != "" {
+	if d := os.Getenv("ASKORUS_AGENT_DIR"); d != "" {
 		return d, nil
 	}
+	return ConfigBase()
+}
+
+// DirName is the agent's folder under the user's config and cache folders.
+// OldDirName is its name before 11-08 (#31): MoveOldDirs copies a folder of
+// that name to DirName once, and until it has, the old folder is used.
+const (
+	DirName    = "Askorus"
+	OldDirName = "Asksemble"
+)
+
+// Under returns base/Askorus, or base/Asksemble when only that one exists
+// (the copy has not happened yet, or it failed).
+func Under(base string) string {
+	cur := filepath.Join(base, DirName)
+	if _, err := os.Stat(cur); err == nil {
+		return cur
+	}
+	old := filepath.Join(base, OldDirName)
+	if fi, err := os.Stat(old); err == nil && fi.IsDir() {
+		return old
+	}
+	return cur
+}
+
+// ConfigBase is the folder under the user's config folder (%APPDATA% on
+// Windows): settings, paired devices, logs.
+func ConfigBase() (string, error) {
 	base, err := os.UserConfigDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(base, "Asksemble"), nil
+	return Under(base), nil
+}
+
+// CacheBase is the folder under the user's cache folder (%LOCALAPPDATA%
+// on Windows): the ask folder and the evaluation runs.
+func CacheBase() (string, error) {
+	base, err := os.UserCacheDir()
+	if err != nil {
+		return "", err
+	}
+	return Under(base), nil
+}
+
+// Moved is a folder MoveOldDirs copied.
+type Moved struct{ From, To string }
+
+// MoveOldDirs copies the old folders (Asksemble under the user's config and
+// cache folders) to the new name, once: only when the old folder exists and
+// the new one does not. The old folder stays as it was. The copy is made
+// in a side folder and renamed into place, so a failed copy leaves nothing
+// behind and the old folder goes on being used. agent.pid is not copied:
+// it belongs to the agent that wrote it. Nothing is done while
+// $ASKORUS_AGENT_DIR points the agent elsewhere (tests, a second agent).
+func MoveOldDirs() ([]Moved, error) {
+	if os.Getenv("ASKORUS_AGENT_DIR") != "" {
+		return nil, nil
+	}
+	var moved []Moved
+	var errs []error
+	for _, base := range []func() (string, error){os.UserConfigDir, os.UserCacheDir} {
+		b, err := base()
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		m, err := moveOld(b)
+		if err != nil {
+			errs = append(errs, err)
+		} else if m != nil {
+			moved = append(moved, *m)
+		}
+	}
+	return moved, errors.Join(errs...)
+}
+
+// moveOld copies base/Asksemble to base/Askorus when only the old exists.
+func moveOld(base string) (*Moved, error) {
+	from := filepath.Join(base, OldDirName)
+	to := filepath.Join(base, DirName)
+	if fi, err := os.Stat(from); err != nil || !fi.IsDir() {
+		return nil, nil
+	}
+	if _, err := os.Lstat(to); err == nil || !errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	side := to + ".copying"
+	if err := os.RemoveAll(side); err != nil {
+		return nil, err
+	}
+	if err := copyTree(from, side); err != nil {
+		os.RemoveAll(side)
+		return nil, fmt.Errorf("copy %s to %s: %w", from, to, err)
+	}
+	if err := os.Rename(side, to); err != nil {
+		os.RemoveAll(side)
+		return nil, fmt.Errorf("copy %s to %s: %w", from, to, err)
+	}
+	return &Moved{From: from, To: to}, nil
+}
+
+// copyTree copies the folder from to to (which must not exist): folders and
+// regular files, with their modes and times. Links and agent.pid are left
+// out.
+func copyTree(from, to string) error {
+	return filepath.Walk(from, func(path string, fi os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(from, path)
+		if err != nil {
+			return err
+		}
+		dst := filepath.Join(to, rel)
+		switch {
+		case fi.IsDir():
+			return os.MkdirAll(dst, 0o700)
+		case !fi.Mode().IsRegular(), rel == "agent.pid":
+			return nil
+		}
+		if err := copyFile(path, dst, fi); err != nil {
+			return err
+		}
+		return os.Chtimes(dst, fi.ModTime(), fi.ModTime())
+	})
+}
+
+func copyFile(src, dst string, fi os.FileInfo) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL, fi.Mode().Perm())
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(out, in); err != nil {
+		out.Close()
+		return err
+	}
+	return out.Close()
 }
 
 // Load reads dir/agent.json. A missing file gives the defaults.

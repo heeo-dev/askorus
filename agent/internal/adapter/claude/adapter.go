@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/asksemble/asksemble/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/core"
 )
 
 // Name is the agent name used in session ids ("claude:<uuid>").

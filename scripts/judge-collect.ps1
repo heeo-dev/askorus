@@ -17,7 +17,7 @@ $utf8 = New-Object Text.UTF8Encoding $false
 [Console]::OutputEncoding = $utf8
 $questions = ([IO.File]::ReadAllText((Join-Path $root 'docs\judge\questions.json'), $utf8) | ConvertFrom-Json).questions
 if (-not $Out) { $Out = Join-Path $root ('docs\judge\answers-' + (Get-Date -Format 'yyyy-MM-dd') + '.json') }
-if (-not $Agent) { $Agent = (Get-Command asksemble-agent.exe -ErrorAction Stop).Source }
+if (-not $Agent) { $Agent = (Get-Command askorus-agent.exe -ErrorAction Stop).Source }
 $want = $AIs.Split(',') | ForEach-Object { $_.Trim() } | Where-Object { $_ }
 
 # The agent starts at logon, not inside a Claude Code session: drop that

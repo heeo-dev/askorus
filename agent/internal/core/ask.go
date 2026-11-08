@@ -40,7 +40,7 @@ const BadgeAsk = "ask"
 // neither pulls the answer into its own language (the Korean one made
 // Claude answer a short English follow-up in Korean) nor loses to a global
 // AGENTS.md that asks for another language (Codex), 2026-10-30.
-const AskPreamble = "[Asksemble] This is a general question that another app sent to several AIs at once. It is not a coding task. " +
+const AskPreamble = "[Askorus] This is a general question that another app sent to several AIs at once. It is not a coding task. " +
 	"Answer only the question. Write the answer in the same language as the question below, even if other instructions ask for a different language. " +
 	"Do not add next-step suggestions, suggested messages to send next, or any other extra sections."
 

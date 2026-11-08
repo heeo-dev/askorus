@@ -1,6 +1,6 @@
 // The pairing link the PC shows as a QR code:
 //   askorus://pair?v=1&host=<MagicDNS name>&port=<serve HTTPS port>&code=<code>
-// `asksemble-agent pair -test-page` shows the test page instead:
+// `askorus-agent pair -test-page` shows the test page instead:
 //   https://<host>:<port>/test/#code=<code>
 // Both are accepted, so the same PC window pairs the app or the browser.
 

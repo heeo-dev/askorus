@@ -45,7 +45,7 @@ type FakeComparison = {
 
 /** The template the fake moderator sends with a comparison question (milestone C). */
 export const REFINE_TEMPLATE =
-  'Answer format (added by Asksemble, not written by the person asking)\n- Give the conclusion in one line first.\n- Compare in a Markdown table (a row per criterion, a column per thing compared).\n- End with what to look at when choosing.\n- Keep it short (within 3–5 sentences).';
+  'Answer format (added by Askorus, not written by the person asking)\n- Give the conclusion in one line first.\n- Compare in a Markdown table (a row per criterion, a column per thing compared).\n- End with what to look at when choosing.\n- Keep it short (within 3–5 sentences).';
 
 // The combined answer's state; want is the AI asked for, tier the question's.
 type FakeSynth = Omit<Synthesis, 'agent'> & { agent?: string; want?: string; tier: string };
@@ -671,7 +671,7 @@ export class FakeAgent {
 
     if (key === 'GET /v1/info') {
       return json(200, {
-        name: 'asksemble-agent',
+        name: 'askorus-agent',
         version: '0.1.0',
         apiVersion: 1,
         hostname: 'DESKTOP-TEST',

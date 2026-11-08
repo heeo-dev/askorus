@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/asksemble/asksemble/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/core"
 )
 
 // The moderator ask (#25): a golden file pins the prompt.
@@ -39,7 +39,7 @@ func TestModeratorAskPrompt(t *testing.T) {
 	answers := moderatorAnswersFixture()
 	answers[1].Text = strings.Repeat("가", MaxModeratorAnswerBytes) // 3 bytes each
 	p := ModeratorAskPrompt("AI들이 뭐가 달랐지?", conversationFixture(), answers)
-	if !strings.HasPrefix(p, core.AskPreamble) || !strings.Contains(p, "[Asksemble moderator-ask v1]") || !strings.HasSuffix(p, "The new question:\nAI들이 뭐가 달랐지?") {
+	if !strings.HasPrefix(p, core.AskPreamble) || !strings.Contains(p, "[Askorus moderator-ask v1]") || !strings.HasSuffix(p, "The new question:\nAI들이 뭐가 달랐지?") {
 		t.Fatalf("prompt:\n%.400s", p)
 	}
 	// One data block: the record (with the earlier questions) and the answers.

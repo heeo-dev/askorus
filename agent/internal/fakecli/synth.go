@@ -11,32 +11,32 @@ import (
 // The combined-answer writer (종합 답변, P2-3 S5b). Each fake plays it when
 // the adapters' synth command reaches it: Claude's -p whose --json-schema
 // is the synth schema, Codex's exec whose --output-schema file is, and
-// OpenCode's run with the agent asksemble-synth. ASKSEMBLE_FAKE_SYNTH picks
+// OpenCode's run with the agent askorus-synth. ASKORUS_FAKE_SYNTH picks
 // what it does. Until C6d (#24) the fakes also played a judge and the
 // topics call; both went with the judging.
 
 // EnvSynth is the writer's mode: "prose" for every AI, or per AI
 // "claude=usage_limit_once,codex=bad_json"; _once is only that AI's first
 // synth call, later ones are ok.
-const EnvSynth = "ASKSEMBLE_FAKE_SYNTH"
+const EnvSynth = "ASKORUS_FAKE_SYNTH"
 
 // SynthAgent is the agent OpenCode's synth command names.
-const SynthAgent = "asksemble-synth"
+const SynthAgent = "askorus-synth"
 
 // RefineAgent is the agent OpenCode's refine command names (질문 정제,
 // milestone C). A refine call is a synth call whose prompt is refine-v1:
 // it answers RefineSpec, and the synth modes apply to it as to a combined
 // answer (prose, bad_json, slow, usage_limit…, with _once for the AI's
 // first writer call).
-const RefineAgent = "asksemble-refine"
+const RefineAgent = "askorus-refine"
 
 // RefineSpec is the question spec the fake moderator gives.
 const RefineSpec = `{"kind":"compare","intent":"상자의 가격과 높이","depth":"short","language":"ko"}`
 
 // isRefinePrompt reports whether a writer's prompt is a refine prompt.
-func isRefinePrompt(prompt string) bool { return strings.HasPrefix(prompt, "[Asksemble refine ") }
+func isRefinePrompt(prompt string) bool { return strings.HasPrefix(prompt, "[Askorus refine ") }
 
-// Synth modes of ASKSEMBLE_FAKE_SYNTH.
+// Synth modes of ASKORUS_FAKE_SYNTH.
 const (
 	SynthOK           = "ok"            // the default: SynthLead
 	SynthMissingNames = "missing_names" // SynthMissingNamesText: another valid answer, naming no AI
@@ -45,7 +45,7 @@ const (
 	SynthEmpty        = "empty"         // {"answer":""}
 	SynthUsageLimit   = "usage_limit"   // the AI's usage limit message, exit 1
 	SynthToolUse      = "tool_use"      // a tool call (denied), then the answer
-	SynthSlow         = "slow"          // waits ASKSEMBLE_FAKECLI_SLEEP, then the answer (OpenCode: its text, then the wait)
+	SynthSlow         = "slow"          // waits ASKORUS_FAKECLI_SLEEP, then the answer (OpenCode: its text, then the wait)
 	SynthBadModel     = "bad_model"     // the AI does not know the model
 	// SynthFailedWithOutput fails after the answer: Claude is_error with
 	// structured_output and OverloadedStderr, Codex turn.failed and

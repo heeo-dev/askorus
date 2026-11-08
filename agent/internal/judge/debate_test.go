@@ -79,7 +79,7 @@ func TestAfterDebatePromptKeepsSynthRules(t *testing.T) {
 	task := debateTaskFixture().SynthTask
 	p := AfterDebatePrompt(task, []DebatePoint{debatePointFixture(NatureFact)}, debateNonceA)
 	v5 := SynthPrompt(task, debateNonceA)
-	if !strings.HasPrefix(p, "[Asksemble synthesis debate-v4] Several AIs answered the same question, then debated the points where they differed.") ||
+	if !strings.HasPrefix(p, "[Askorus synthesis debate-v4] Several AIs answered the same question, then debated the points where they differed.") ||
 		!strings.Contains(p, `POINT: {"debated":true,`) || !strings.Contains(p, debateRule5) || strings.Contains(p, "5. For every place") {
 		t.Fatalf("prompt:\n%s", p)
 	}
@@ -133,7 +133,7 @@ func TestDebatePromptsRefuseANonceInTheContent(t *testing.T) {
 func TestDebatePlanLanguage(t *testing.T) {
 	p := DebatePlanPrompt(debateTaskFixture(), debateNonceA)
 	for _, want := range []string{
-		"[Asksemble debate-plan v2]",
+		"[Askorus debate-plan v2]",
 		"Write everything you write, the topics, the sides, the goals and your questions, in the language of the QUESTION.",
 		"TURN | p1 | <AI> | <your question to it, in the language of the QUESTION>",
 	} {

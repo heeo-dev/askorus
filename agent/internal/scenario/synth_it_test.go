@@ -13,10 +13,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asksemble/asksemble/agent/internal/api"
-	"github.com/asksemble/asksemble/agent/internal/compares"
-	"github.com/asksemble/asksemble/agent/internal/core"
-	"github.com/asksemble/asksemble/agent/internal/fakecli"
+	"github.com/heeo-dev/askorus/agent/internal/api"
+	"github.com/heeo-dev/askorus/agent/internal/compares"
+	"github.com/heeo-dev/askorus/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/fakecli"
 )
 
 // synthRun asks all three on the standard tier with compare and waits for
@@ -156,7 +156,7 @@ func TestIT15Synthesis(t *testing.T) {
 
 	// The prompt: synth-v5, the question and every answer with its AI's
 	// name in one nonce block, and nothing of judging.
-	if !strings.HasPrefix(sc.Stdin, "[Asksemble synthesis v5.1] ") {
+	if !strings.HasPrefix(sc.Stdin, "[Askorus synthesis v5.1] ") {
 		t.Errorf("writer stdin is not synth-v5: %q", sc.Stdin[:min(len(sc.Stdin), 80)])
 	}
 	nonce, data := synthData(t, sc.Stdin)

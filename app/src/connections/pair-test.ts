@@ -26,7 +26,7 @@ test('pairing saves the PC under its own host name, with the token apart', async
   const answers = [
     json(202, { requestId: 'r1', status: 'pending', pollAfterMs: 1000 }),
     json(200, { status: 'approved', token: 'secret', deviceId: 'd1', deviceName: 'S23', apiVersion: 1 }),
-    json(200, { name: 'asksemble-agent', version: '0.1.0', apiVersion: 1, hostname: 'MY-PC' }),
+    json(200, { name: 'askorus-agent', version: '0.1.0', apiVersion: 1, hostname: 'MY-PC' }),
   ];
   const fetchFn = (async (u: RequestInfo | URL, init?: RequestInit) => {
     urls.push(String(u));

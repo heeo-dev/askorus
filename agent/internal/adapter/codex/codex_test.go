@@ -12,21 +12,21 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/asksemble/asksemble/agent/internal/core"
-	"github.com/asksemble/asksemble/agent/internal/fakecli"
-	"github.com/asksemble/asksemble/agent/internal/proc"
+	"github.com/heeo-dev/askorus/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/fakecli"
+	"github.com/heeo-dev/askorus/agent/internal/proc"
 )
 
 // The test binary doubles as a fake codex. The combined-answer and refine
 // tests use the shared fake (internal/fakecli). The ask tests keep their own: with
-// ASKSEMBLE_FAKE_CODEX=1 it records {args, cwd, stdin} to
-// ASKSEMBLE_FAKE_ARGS and prints what `codex exec --json` prints.
-// ASKSEMBLE_FAKE_MODE: "badmodel", "noresume", "nothing" (exit 0, no turn).
+// ASKORUS_FAKE_CODEX=1 it records {args, cwd, stdin} to
+// ASKORUS_FAKE_ARGS and prints what `codex exec --json` prints.
+// ASKORUS_FAKE_MODE: "badmodel", "noresume", "nothing" (exit 0, no turn).
 func TestMain(m *testing.M) {
 	if fakecli.Active() {
 		os.Exit(fakecli.Main(os.Args[1:]))
 	}
-	if os.Getenv("ASKSEMBLE_FAKE_CODEX") == "1" {
+	if os.Getenv("ASKORUS_FAKE_CODEX") == "1" {
 		os.Exit(fakeCodex(os.Args[1:]))
 	}
 	os.Exit(m.Run())
@@ -46,7 +46,7 @@ func fakeCodex(args []string) int {
 	in, _ := io.ReadAll(os.Stdin)
 	cwd, _ := os.Getwd()
 	b, _ := json.Marshal(fakeCall{Args: args, Cwd: cwd, Stdin: string(in)})
-	if f, err := os.OpenFile(os.Getenv("ASKSEMBLE_FAKE_ARGS"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600); err == nil {
+	if f, err := os.OpenFile(os.Getenv("ASKORUS_FAKE_ARGS"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600); err == nil {
 		f.Write(append(b, '\n'))
 		f.Close()
 	}
@@ -54,7 +54,7 @@ func fakeCodex(args []string) int {
 	if slices.Contains(args, "resume") {
 		thread = args[len(args)-2]
 	}
-	switch os.Getenv("ASKSEMBLE_FAKE_MODE") {
+	switch os.Getenv("ASKORUS_FAKE_MODE") {
 	case "noresume":
 		fmt.Fprintf(os.Stderr, "Error: thread/resume: thread/resume failed: no rollout found for thread id %s (code -32600)\n", thread)
 		return 1
@@ -86,9 +86,9 @@ func fakeAdapter(t *testing.T, tiers map[string]core.AskModel) (*Adapter, string
 		t.Fatal(err)
 	}
 	argsFile := filepath.Join(t.TempDir(), "args.jsonl")
-	t.Setenv("ASKSEMBLE_FAKE_CODEX", "1")
-	t.Setenv("ASKSEMBLE_FAKE_ARGS", argsFile)
-	t.Setenv("ASKSEMBLE_FAKE_MODE", "")
+	t.Setenv("ASKORUS_FAKE_CODEX", "1")
+	t.Setenv("ASKORUS_FAKE_ARGS", argsFile)
+	t.Setenv("ASKORUS_FAKE_MODE", "")
 	return New(Options{Path: exe, Tiers: tiers}), argsFile, t.TempDir()
 }
 
@@ -218,22 +218,22 @@ func TestAskErrors(t *testing.T) {
 		_, err := a.Ask(context.Background(), req)
 		return err
 	}
-	t.Setenv("ASKSEMBLE_FAKE_MODE", "badmodel")
+	t.Setenv("ASKORUS_FAKE_MODE", "badmodel")
 	err := ask(core.AskRequest{Model: "x"})
 	var ae *core.ActionError
 	if core.ErrorCode(err) != core.ErrCodeBadModel || !strings.Contains(err.Error(), "not supported") {
 		t.Errorf("bad model: %v", err)
 	}
 	_ = ae
-	t.Setenv("ASKSEMBLE_FAKE_MODE", "noresume")
+	t.Setenv("ASKORUS_FAKE_MODE", "noresume")
 	if err := ask(core.AskRequest{Resume: "01a188b9-9dfe-7b92-b37c-d12a1eca2235"}); core.ErrorCode(err) != core.ErrCodeNotFound {
 		t.Errorf("unknown thread: %v", err)
 	}
-	t.Setenv("ASKSEMBLE_FAKE_MODE", "nothing")
+	t.Setenv("ASKORUS_FAKE_MODE", "nothing")
 	if err := ask(core.AskRequest{}); core.ErrorCode(err) != core.ErrCodeAskFailed {
 		t.Errorf("no turn: %v", err)
 	}
-	t.Setenv("ASKSEMBLE_FAKE_MODE", "")
+	t.Setenv("ASKORUS_FAKE_MODE", "")
 	n := len(calls(t, argsFile))
 	for name, req := range map[string]core.AskRequest{
 		"thread not a uuid": {Resume: "../../x"},

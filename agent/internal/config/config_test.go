@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/asksemble/asksemble/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/core"
 )
 
 func abs(t *testing.T, parts ...string) string {
@@ -112,16 +112,20 @@ func TestLoadRejectsBadFile(t *testing.T) {
 }
 
 func TestDirEnvOverride(t *testing.T) {
-	t.Setenv("ASKSEMBLE_AGENT_DIR", `X:\somewhere`)
+	t.Setenv("ASKORUS_AGENT_DIR", `X:\somewhere`)
 	if d, _ := Dir(); d != `X:\somewhere` {
 		t.Errorf("Dir = %q", d)
 	}
 }
 
 func TestAskSettings(t *testing.T) {
+	// A cache folder of the test's own, so the PC's old Asksemble folder
+	// (#31) does not decide the answer.
+	t.Setenv("LOCALAPPDATA", t.TempDir())
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
 	c := Default()
 	dir, err := c.AskFolder()
-	if err != nil || !filepath.IsAbs(dir) || filepath.Base(dir) != "ask" || filepath.Base(filepath.Dir(dir)) != "Asksemble" {
+	if err != nil || !filepath.IsAbs(dir) || filepath.Base(dir) != "ask" || filepath.Base(filepath.Dir(dir)) != "Askorus" {
 		t.Fatalf("default ask folder = %q, %v", dir, err)
 	}
 	c.Ask.Folder = abs(t, "asks")
@@ -252,5 +256,75 @@ func TestJudgeValidate(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, FileName), []byte(`{"judge": {"perAI": 9}}`), 0o600)
 	if _, err := Load(dir); err == nil || !strings.Contains(err.Error(), "judge.perAI") {
 		t.Errorf("Load err = %v", err)
+	}
+}
+
+// #31: the folder was called Asksemble before 11-08.
+func TestUnderPrefersTheNewName(t *testing.T) {
+	base := t.TempDir()
+	if got := Under(base); got != filepath.Join(base, "Askorus") {
+		t.Fatalf("neither: %q", got)
+	}
+	os.Mkdir(filepath.Join(base, "Asksemble"), 0o700)
+	if got := Under(base); got != filepath.Join(base, "Asksemble") {
+		t.Fatalf("only the old: %q", got)
+	}
+	os.Mkdir(filepath.Join(base, "Askorus"), 0o700)
+	if got := Under(base); got != filepath.Join(base, "Askorus") {
+		t.Fatalf("both: %q", got)
+	}
+}
+
+func TestMoveOldCopiesOnceAndLeavesTheOld(t *testing.T) {
+	base := t.TempDir()
+	old := filepath.Join(base, "Asksemble")
+	write := func(rel, s string) {
+		p := filepath.Join(old, rel)
+		os.MkdirAll(filepath.Dir(p), 0o700)
+		if err := os.WriteFile(p, []byte(s), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("agent.json", `{"port":8790}`)
+	write("agent.pid", "123")
+	write(filepath.Join("logs", "agent.log"), "hello")
+
+	m, err := moveOld(base)
+	if err != nil || m == nil || m.From != old || m.To != filepath.Join(base, "Askorus") {
+		t.Fatalf("moveOld = %+v, %v", m, err)
+	}
+	got := func(dir, rel string) string {
+		b, err := os.ReadFile(filepath.Join(dir, rel))
+		if err != nil {
+			return "<none>"
+		}
+		return string(b)
+	}
+	if got(m.To, "agent.json") != `{"port":8790}` || got(m.To, filepath.Join("logs", "agent.log")) != "hello" {
+		t.Error("the settings or the log were not copied")
+	}
+	if got(m.To, "agent.pid") != "<none>" {
+		t.Error("agent.pid belongs to the old agent and must not be copied")
+	}
+	if got(old, "agent.pid") != "123" || got(old, "agent.json") != `{"port":8790}` {
+		t.Error("the old folder changed")
+	}
+	if _, err := os.Stat(m.To + ".copying"); !os.IsNotExist(err) {
+		t.Error("the side folder was left behind")
+	}
+	// Once the new folder is there, nothing more is copied.
+	write("agent.json", `{"port":1}`)
+	if m2, err := moveOld(base); m2 != nil || err != nil {
+		t.Fatalf("second moveOld = %+v, %v", m2, err)
+	}
+	if got(m.To, "agent.json") != `{"port":8790}` {
+		t.Error("the new folder was overwritten")
+	}
+}
+
+func TestMoveOldDirsLeavesTestsAlone(t *testing.T) {
+	t.Setenv("ASKORUS_AGENT_DIR", t.TempDir())
+	if m, err := MoveOldDirs(); m != nil || err != nil {
+		t.Fatalf("MoveOldDirs with ASKORUS_AGENT_DIR set = %+v, %v", m, err)
 	}
 }

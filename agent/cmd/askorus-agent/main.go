@@ -1,4 +1,4 @@
-// Command asksemble-agent is the Asksemble PC agent.
+// Command askorus-agent is the Askorus PC agent.
 package main
 
 import (
@@ -24,90 +24,90 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/asksemble/asksemble/agent/internal/adapter/claude"
-	"github.com/asksemble/asksemble/agent/internal/adapter/codex"
-	"github.com/asksemble/asksemble/agent/internal/adapter/opencode"
-	"github.com/asksemble/asksemble/agent/internal/api"
-	"github.com/asksemble/asksemble/agent/internal/compares"
-	"github.com/asksemble/asksemble/agent/internal/config"
-	"github.com/asksemble/asksemble/agent/internal/core"
-	"github.com/asksemble/asksemble/agent/internal/devices"
-	"github.com/asksemble/asksemble/agent/internal/hidden"
-	"github.com/asksemble/asksemble/agent/internal/logx"
-	"github.com/asksemble/asksemble/agent/internal/pairing"
-	"github.com/asksemble/asksemble/agent/internal/tailnet"
+	"github.com/heeo-dev/askorus/agent/internal/adapter/claude"
+	"github.com/heeo-dev/askorus/agent/internal/adapter/codex"
+	"github.com/heeo-dev/askorus/agent/internal/adapter/opencode"
+	"github.com/heeo-dev/askorus/agent/internal/api"
+	"github.com/heeo-dev/askorus/agent/internal/compares"
+	"github.com/heeo-dev/askorus/agent/internal/config"
+	"github.com/heeo-dev/askorus/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/devices"
+	"github.com/heeo-dev/askorus/agent/internal/hidden"
+	"github.com/heeo-dev/askorus/agent/internal/logx"
+	"github.com/heeo-dev/askorus/agent/internal/pairing"
+	"github.com/heeo-dev/askorus/agent/internal/tailnet"
 )
 
 // version is set at release time with -ldflags "-X main.version=...".
 var version = "0.1.0-dev"
 
-const usage = `Asksemble PC agent (not an official Anthropic product)
-Asksemble PC 에이전트 (Anthropic의 공식 제품이 아닙니다)
+const usage = `Askorus PC agent (not an official Anthropic product)
+Askorus PC 에이전트 (Anthropic의 공식 제품이 아닙니다)
 
 Usage / 사용법:
-  asksemble-agent serve [-port N] [-test-page]
+  askorus-agent serve [-port N] [-test-page]
       start the API on 127.0.0.1
       127.0.0.1에서 API를 엽니다
       (-test-page: phone-browser test page at /test/ / 폰 브라우저 시험 페이지를 /test/에 엽니다)
-  asksemble-agent pair [-host H] [-port N] [-light-terminal] [-test-page]
+  askorus-agent pair [-host H] [-port N] [-light-terminal] [-test-page]
       show a QR code for 5 minutes to pair a phone
       폰과 짝을 맺는 QR을 5분 동안 보여 줍니다
       (-test-page: the QR opens the test page / QR이 시험 페이지를 엽니다)
-  asksemble-agent sessions [-state S] [-q TEXT] [-folder DIR] [-json]
+  askorus-agent sessions [-state S] [-q TEXT] [-folder DIR] [-json]
       print the session list
       세션 목록을 보여 줍니다
-  asksemble-agent info
+  askorus-agent info
       print what the agent can do
       에이전트가 할 수 있는 일을 보여 줍니다
-  asksemble-agent devices [list]
+  askorus-agent devices [list]
       list paired devices
       짝을 맺은 기기를 보여 줍니다
-  asksemble-agent devices revoke ID|NAME
+  askorus-agent devices revoke ID|NAME
       disconnect a device
       기기 연결을 끊습니다
-  asksemble-agent folders [list] | folders add [-id ID] PATH | folders remove ID
+  askorus-agent folders [list] | folders add [-id ID] PATH | folders remove ID
       folders new sessions may start in
       새 세션을 열 수 있는 폴더
-  asksemble-agent folders serve ID on|off [-spawn same-dir|worktree] [-capacity N]
+  askorus-agent folders serve ID on|off [-spawn same-dir|worktree] [-capacity N]
       keep a folder open so the Claude app can start sessions there (off by default)
       폴더를 열어 두어 Claude 앱에서 바로 새 세션을 만들게 합니다 (기본은 꺼짐)
-  asksemble-agent open SESSION_ID
+  askorus-agent open SESSION_ID
       wake a session and print its remote link
       세션을 켜고 원격 링크를 보여 줍니다
-  asksemble-agent new -folder ID [-name N] [-model M] [-effort E]
+  askorus-agent new -folder ID [-name N] [-model M] [-effort E]
       start a new remote session
       새 원격 세션을 시작합니다
-  asksemble-agent ask [-agents claude,codex,opencode] [-tier quick|standard|deep] [-follow ID,ID] QUESTION
+  askorus-agent ask [-agents claude,codex,opencode] [-tier quick|standard|deep] [-follow ID,ID] QUESTION
       ask several AIs at once, answer only (web search on, no file writes)
       여러 AI에게 한 번에 묻습니다 (답만, 웹 검색 켬, 파일 쓰기 없음)
-  asksemble-agent stop SESSION_ID
+  askorus-agent stop SESSION_ID
       stop a background session
       백그라운드 세션을 멈춥니다
-  asksemble-agent rm SESSION_ID
+  askorus-agent rm SESSION_ID
       remove a session from the list (the transcript stays)
       세션을 목록에서 지웁니다 (대화 기록은 남습니다)
-  asksemble-agent hidden [list | unhide SESSION_ID]
+  askorus-agent hidden [list | unhide SESSION_ID]
       sessions removed from the list
       목록에서 지운 세션
-  asksemble-agent check
+  askorus-agent check
       check everything the agent needs and print fixes
       에이전트에 필요한 것을 점검하고 고칠 방법을 보여 줍니다
-  asksemble-agent start [-test-page] | shutdown | status
+  askorus-agent start [-test-page] | shutdown | status
       run the agent in the background, stop it, or show whether it runs
       에이전트를 백그라운드로 켜고, 끄고, 상태를 봅니다
-  asksemble-agent autostart on [-test-page] | off | status
+  askorus-agent autostart on [-test-page] | off | status
       start the agent at logon, with normal rights
       로그인할 때 에이전트를 일반 권한으로 켭니다
-  asksemble-agent path on | off | status
-      put the folder of this asksemble-agent.exe on this user's PATH
-      이 asksemble-agent.exe가 있는 폴더를 이 사용자의 PATH에 넣습니다
-  asksemble-agent uninstall [-yes] [-all]
+  askorus-agent path on | off | status
+      put the folder of this askorus-agent.exe on this user's PATH
+      이 askorus-agent.exe가 있는 폴더를 이 사용자의 PATH에 넣습니다
+  askorus-agent uninstall [-yes] [-all]
       undo the setup (logon entry, PATH entry, the agent's serve port, paired phones)
       설치한 것을 되돌립니다 (자동 시작, PATH, 에이전트 serve 포트, 짝 맺은 폰)
-  asksemble-agent version
+  askorus-agent version
 
-Settings live in %s (override with ASKSEMBLE_AGENT_DIR).
-설정 폴더: %s (ASKSEMBLE_AGENT_DIR로 바꿀 수 있습니다)
+Settings live in %s (override with ASKORUS_AGENT_DIR).
+설정 폴더: %s (ASKORUS_AGENT_DIR로 바꿀 수 있습니다)
 `
 
 // refineOn turns 질문 정제 (the answer formats, milestone C) on. Off since
@@ -117,6 +117,16 @@ Settings live in %s (override with ASKSEMBLE_AGENT_DIR).
 var refineOn = false
 
 func main() {
+	// The agent was called Asksemble before 11-08 (#31): copy its folders once.
+	moved, err := config.MoveOldDirs()
+	for _, mv := range moved {
+		say(os.Stderr, m("copied %s to %s (the old folder stays; remove it when you no longer need it)",
+			"%s를 %s로 복사했습니다 (옛 폴더는 그대로 있습니다. 필요 없으면 지우세요)", mv.From, mv.To))
+	}
+	if err != nil {
+		say(os.Stderr, m("could not copy the old Asksemble folder, so it is used as it is: %v",
+			"옛 Asksemble 폴더를 복사하지 못해 그대로 씁니다: %v", err))
+	}
 	if err := run(os.Args[1:], os.Stdin, os.Stdout); err != nil {
 		printError(os.Stderr, err)
 		os.Exit(1)
@@ -134,7 +144,7 @@ func run(args []string, in io.Reader, out io.Writer) error {
 	}
 	switch args[0] {
 	case "version":
-		fmt.Fprintln(out, "asksemble-agent", version)
+		fmt.Fprintln(out, "askorus-agent", version)
 		return nil
 	case "serve":
 		return serve(dir, args[1:])
@@ -175,7 +185,7 @@ func run(args []string, in io.Reader, out io.Writer) error {
 	case "uninstall":
 		return uninstallCmd(dir, args[1:], in, out)
 	}
-	return fail("unknown command %q (try: asksemble-agent help)", "모르는 명령 %q입니다 (asksemble-agent help로 확인하세요)", args[0])
+	return fail("unknown command %q (try: askorus-agent help)", "모르는 명령 %q입니다 (askorus-agent help로 확인하세요)", args[0])
 }
 
 func newAdapter(cfg config.Config) (*claude.Adapter, error) {
@@ -385,14 +395,14 @@ func serve(dir string, args []string) error {
 		return fail("cannot listen on 127.0.0.1:%d (%v)", "127.0.0.1:%d를 열 수 없습니다 (%v)", cfg.Port, err)
 	}
 	if list, _ := store.List(); len(list) == 0 {
-		say(os.Stderr, m("no paired devices yet: run `asksemble-agent pair` in another window",
-			"아직 짝을 맺은 기기가 없습니다. 다른 창에서 `asksemble-agent pair`를 실행하세요"))
+		say(os.Stderr, m("no paired devices yet: run `askorus-agent pair` in another window",
+			"아직 짝을 맺은 기기가 없습니다. 다른 창에서 `askorus-agent pair`를 실행하세요"))
 	}
 	logger.Info("listening", "addr", ln.Addr().String(), "version", version, "tailscale_served", ti.served)
 	_ = config.WriteFileAtomic(filepath.Join(dir, pidFile), []byte(strconv.Itoa(os.Getpid())+"\n"))
 	defer os.Remove(filepath.Join(dir, pidFile))
-	say(os.Stderr, m("asksemble-agent %s listening on http://%s (Ctrl+C to stop)",
-		"asksemble-agent %s가 http://%s에서 기다립니다 (Ctrl+C로 멈춤)", version, ln.Addr()))
+	say(os.Stderr, m("askorus-agent %s listening on http://%s (Ctrl+C to stop)",
+		"askorus-agent %s가 http://%s에서 기다립니다 (Ctrl+C로 멈춤)", version, ln.Addr()))
 	if *testPage {
 		say(os.Stderr, m("test page is on at /test/ (for trying pairing in a phone browser; leave it off otherwise)",
 			"시험 페이지가 /test/에 켜져 있습니다 (폰 브라우저로 짝 맺기를 시험할 때만 켜세요)"))
@@ -407,7 +417,7 @@ func serve(dir string, args []string) error {
 	exposed := make(chan struct{})
 	go funnelWatch(recCtx, cfg.Port, time.Minute, func() { close(exposed) })
 	go awakeWatch(recCtx, dir, adapter, adapter, time.Minute)
-	stopReq := listenStop(cfg.Port) // `asksemble-agent shutdown`
+	stopReq := listenStop(cfg.Port) // `askorus-agent shutdown`
 	errc := make(chan error, 1)
 	go func() { errc <- srv.Serve(ln) }()
 	var serveErr error
@@ -486,8 +496,8 @@ func pair(dir string, args []string, in io.Reader, out io.Writer) error {
 	}
 	conn, err := net.DialTimeout("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(cfg.Port)), time.Second)
 	if err != nil {
-		return fail("the agent is not running on 127.0.0.1:%d; start `asksemble-agent serve` first",
-			"에이전트가 127.0.0.1:%d에서 돌고 있지 않습니다. 먼저 `asksemble-agent serve`를 실행하세요", cfg.Port)
+		return fail("the agent is not running on 127.0.0.1:%d; start `askorus-agent serve` first",
+			"에이전트가 127.0.0.1:%d에서 돌고 있지 않습니다. 먼저 `askorus-agent serve`를 실행하세요", cfg.Port)
 	}
 	conn.Close()
 
@@ -522,7 +532,7 @@ func pair(dir string, args []string, in io.Reader, out io.Writer) error {
 	}
 	defer pairing.Close(dir)
 	link := PairURL(host, port, code)
-	scan := m("Scan this with the Asksemble app (Settings > Add PC):", "Asksemble 앱으로 이 QR을 찍으세요(설정 > PC 추가):")
+	scan := m("Scan this with the Askorus app (Settings > Add PC):", "Askorus 앱으로 이 QR을 찍으세요(설정 > PC 추가):")
 	if *testPage {
 		link = TestPageURL(host, port, code)
 		scan = m("Scan this with the phone camera; it opens the test page:", "폰 카메라로 이 QR을 찍으세요. 시험 페이지가 열립니다:")
@@ -614,8 +624,8 @@ func decide(ctx context.Context, dir, id string, req pairing.Request, lines <-ch
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	return fail("the agent did not confirm; check `asksemble-agent devices`",
-		"에이전트가 결과를 알려 주지 않았습니다. `asksemble-agent devices`로 확인하세요")
+	return fail("the agent did not confirm; check `askorus-agent devices`",
+		"에이전트가 결과를 알려 주지 않았습니다. `askorus-agent devices`로 확인하세요")
 }
 
 var (
@@ -625,8 +635,8 @@ var (
 
 func reportResult(res pairing.Result, out io.Writer) error {
 	if res.OK {
-		say(out, m("Paired %s (id %s). Disconnect it any time with: asksemble-agent devices revoke %[2]s",
-			"%s 기기와 짝을 맺었습니다 (id %s). 끊으려면 언제든: asksemble-agent devices revoke %[2]s", res.DeviceName, res.DeviceID))
+		say(out, m("Paired %s (id %s). Disconnect it any time with: askorus-agent devices revoke %[2]s",
+			"%s 기기와 짝을 맺었습니다 (id %s). 끊으려면 언제든: askorus-agent devices revoke %[2]s", res.DeviceName, res.DeviceID))
 		return nil
 	}
 	switch res.Reason {
@@ -783,7 +793,7 @@ func devicesCmd(dir string, args []string, out io.Writer) error {
 		return tw.Flush()
 	case "revoke":
 		if len(args) != 2 {
-			return fail("usage: asksemble-agent devices revoke ID|NAME", "사용법: asksemble-agent devices revoke ID|이름")
+			return fail("usage: askorus-agent devices revoke ID|NAME", "사용법: askorus-agent devices revoke ID|이름")
 		}
 		d, err := store.Revoke(args[1])
 		if errors.Is(err, devices.ErrNotFound) {

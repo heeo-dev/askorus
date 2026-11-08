@@ -5,11 +5,11 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/asksemble/asksemble/agent/internal/adapter/claude"
-	"github.com/asksemble/asksemble/agent/internal/adapter/codex"
-	"github.com/asksemble/asksemble/agent/internal/adapter/opencode"
-	"github.com/asksemble/asksemble/agent/internal/compares"
-	"github.com/asksemble/asksemble/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/adapter/claude"
+	"github.com/heeo-dev/askorus/agent/internal/adapter/codex"
+	"github.com/heeo-dev/askorus/agent/internal/adapter/opencode"
+	"github.com/heeo-dev/askorus/agent/internal/compares"
+	"github.com/heeo-dev/askorus/agent/internal/core"
 )
 
 // What check says about combined answers (종합 답변): which AIs write them,

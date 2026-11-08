@@ -6,7 +6,7 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/asksemble/asksemble/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/core"
 )
 
 // agentEntry is one item of `claude agents --json --all`. Unknown fields

@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/asksemble/asksemble/agent/internal/core"
-	"github.com/asksemble/asksemble/agent/internal/judge"
-	"github.com/asksemble/asksemble/agent/internal/runs"
+	"github.com/heeo-dev/askorus/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/judge"
+	"github.com/heeo-dev/askorus/agent/internal/runs"
 )
 
 // Debates (토론, P2-5, #26). After a combined answer, the AIs that answered

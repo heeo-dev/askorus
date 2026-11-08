@@ -31,8 +31,8 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/asksemble/asksemble/agent/internal/config"
-	"github.com/asksemble/asksemble/agent/internal/devices"
+	"github.com/heeo-dev/askorus/agent/internal/config"
+	"github.com/heeo-dev/askorus/agent/internal/devices"
 )
 
 const (
@@ -387,7 +387,7 @@ func cleanName(s string) (string, bool) {
 }
 
 func hashCode(code string) string {
-	sum := sha256.Sum256([]byte("asksemble-pair:" + code))
+	sum := sha256.Sum256([]byte("askorus-pair:" + code))
 	return hex.EncodeToString(sum[:])
 }
 

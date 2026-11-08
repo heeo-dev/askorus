@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asksemble/asksemble/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/core"
 )
 
 // askAdapter is an AI that can answer questions, with sessions and a

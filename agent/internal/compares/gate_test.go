@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/asksemble/asksemble/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/core"
 )
 
 func testGate(t *testing.T, ais ...core.Adapter) Gate {

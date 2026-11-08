@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/asksemble/asksemble/agent/internal/fakecli"
-	"github.com/asksemble/asksemble/agent/internal/runs"
+	"github.com/heeo-dev/askorus/agent/internal/fakecli"
+	"github.com/heeo-dev/askorus/agent/internal/runs"
 )
 
 // IT-21 (#25, 11-07): asking the moderator through the whole agent and the
@@ -52,7 +52,7 @@ func TestIT21ModeratorAsk(t *testing.T) {
 			if !strings.EqualFold(filepath.Clean(c.Dir), filepath.Clean(r.judge)) {
 				t.Errorf("asked in %q, not the judge folder", c.Dir)
 			}
-			for _, part := range []string{"[Asksemble moderator-ask v1]", `EARLIER QUESTIONS (context only, do not answer them): ["` + question + `"]`, `PREVIOUS ANSWER: "Fake combined answer."`, `ANSWER: {"ai":"Claude","text":`, `ANSWER: {"ai":"Codex","text":`, `ANSWER: {"ai":"OpenCode","text":`} {
+			for _, part := range []string{"[Askorus moderator-ask v1]", `EARLIER QUESTIONS (context only, do not answer them): ["` + question + `"]`, `PREVIOUS ANSWER: "Fake combined answer."`, `ANSWER: {"ai":"Claude","text":`, `ANSWER: {"ai":"Codex","text":`, `ANSWER: {"ai":"OpenCode","text":`} {
 				if !strings.Contains(c.Stdin, part) {
 					t.Errorf("stdin lacks %q", part)
 				}

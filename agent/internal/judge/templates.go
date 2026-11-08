@@ -5,15 +5,15 @@ import "strings"
 // Answer templates (답 틀; milestone C, design C-3): one short form per
 // kind, the same for every AI, in Korean for a Korean question and in
 // English otherwise. The agent adds the template of the moderator's kind
-// after the question, under a heading that says Asksemble added it, so no
+// after the question, under a heading that says Askorus added it, so no
 // AI takes it for the person's words. KindOpen adds nothing. The depth
 // adds one line on length. The phone shows the question as written and
 // the template apart (C-4).
 
 // templateHead is the heading of the block added to the question.
 var templateHead = map[string]string{
-	"ko": "답 형식 (Asksemble이 붙임. 질문한 사람이 쓴 글이 아닙니다)",
-	"en": "Answer format (added by Asksemble, not written by the person asking)",
+	"ko": "답 형식 (Askorus이 붙임. 질문한 사람이 쓴 글이 아닙니다)",
+	"en": "Answer format (added by Askorus, not written by the person asking)",
 }
 
 // templates are the forms, kind by kind, in each language.

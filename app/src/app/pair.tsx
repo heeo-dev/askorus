@@ -29,7 +29,7 @@ import { themed, useTheme } from '@/ui/theme';
 
 const store = new ConnectionStore();
 
-const pairCommand = 'asksemble-agent pair';
+const pairCommand = 'askorus-agent pair';
 
 const tailscaleStore =
   Platform.OS === 'ios'

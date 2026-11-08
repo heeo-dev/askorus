@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asksemble/asksemble/agent/internal/devices"
+	"github.com/heeo-dev/askorus/agent/internal/devices"
 )
 
 func newPairer(t *testing.T) (*Pairer, string) {

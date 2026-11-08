@@ -15,12 +15,12 @@ func fakeExpand(s string) string {
 
 func TestPathListWithAppendsOnce(t *testing.T) {
 	list := `C:\Windows;%LOCALAPPDATA%\Microsoft\WindowsApps`
-	got, changed := pathListWith(list, `D:\Tools\Asksemble`, fakeExpand)
-	if !changed || got != list+`;D:\Tools\Asksemble` {
+	got, changed := pathListWith(list, `D:\Tools\Askorus`, fakeExpand)
+	if !changed || got != list+`;D:\Tools\Askorus` {
 		t.Fatalf("with = %q, %v", got, changed)
 	}
 	// Same folder spelled differently: case, trailing backslash, quotes.
-	for _, again := range []string{`d:\tools\asksemble`, `D:\Tools\Asksemble\`, `"D:\Tools\Asksemble"`} {
+	for _, again := range []string{`d:\tools\askorus`, `D:\Tools\Askorus\`, `"D:\Tools\Askorus"`} {
 		if g, c := pathListWith(got, again, fakeExpand); c || g != got {
 			t.Errorf("adding %q again changed PATH to %q", again, g)
 		}
@@ -28,11 +28,11 @@ func TestPathListWithAppendsOnce(t *testing.T) {
 }
 
 func TestPathListKeepsOtherEntriesAsWritten(t *testing.T) {
-	list := `%LOCALAPPDATA%\Programs\Asksemble;C:\Go\bin;`
-	if !pathListHas(list, `C:\Users\u\AppData\Local\Programs\Asksemble`, fakeExpand) {
+	list := `%LOCALAPPDATA%\Programs\Askorus;C:\Go\bin;`
+	if !pathListHas(list, `C:\Users\u\AppData\Local\Programs\Askorus`, fakeExpand) {
 		t.Fatal("an entry with %LOCALAPPDATA% was not recognised")
 	}
-	got, changed := pathListWithout(list, `C:\Users\u\AppData\Local\Programs\Asksemble`, fakeExpand)
+	got, changed := pathListWithout(list, `C:\Users\u\AppData\Local\Programs\Askorus`, fakeExpand)
 	if !changed || got != `C:\Go\bin` {
 		t.Fatalf("without = %q, %v", got, changed)
 	}
@@ -55,10 +55,10 @@ func TestLooksTemporary(t *testing.T) {
 	if !looksTemporary(filepath.Join(home, "Downloads")) || !looksTemporary(filepath.Join(home, "Downloads", "x")) {
 		t.Error("Downloads is not seen as temporary")
 	}
-	if !looksTemporary(filepath.Join(os.TempDir(), "asksemble")) {
+	if !looksTemporary(filepath.Join(os.TempDir(), "askorus")) {
 		t.Error("the temp folder is not seen as temporary")
 	}
-	if looksTemporary(filepath.Join(home, "DownloadsArchive")) || looksTemporary(filepath.Join(home, "AppData", "Local", "Programs", "Asksemble")) {
+	if looksTemporary(filepath.Join(home, "DownloadsArchive")) || looksTemporary(filepath.Join(home, "AppData", "Local", "Programs", "Askorus")) {
 		t.Error("a kept folder is seen as temporary")
 	}
 }

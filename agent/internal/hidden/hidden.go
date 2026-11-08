@@ -14,7 +14,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/asksemble/asksemble/agent/internal/config"
+	"github.com/heeo-dev/askorus/agent/internal/config"
 )
 
 // FileName is the hidden-session file inside the agent directory.

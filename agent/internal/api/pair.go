@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/asksemble/asksemble/agent/internal/pairing"
-	"github.com/asksemble/asksemble/agent/internal/tailnet"
+	"github.com/heeo-dev/askorus/agent/internal/pairing"
+	"github.com/heeo-dev/askorus/agent/internal/tailnet"
 )
 
 // PairRequest is the body of POST /v1/pair.

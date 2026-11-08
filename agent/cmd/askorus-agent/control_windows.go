@@ -19,7 +19,7 @@ import (
 // The background agent is controlled through a named event in this logon
 // session, one per agent port: `shutdown` sets it and `serve` stops
 // cleanly when it fires.
-const stopEventPrefix = `Local\AsksembleAgentStop-`
+const stopEventPrefix = `Local\AskorusAgentStop-`
 
 // listenStop returns a channel closed when someone asks the agent to stop.
 func listenStop(port int) <-chan struct{} {
@@ -77,7 +77,10 @@ func startDetached(exe string, args []string, dir, logFile string) (int, error) 
 // under HKCU needs no administrator and starts nothing elevated (N3).
 const (
 	runKey       = `Software\Microsoft\Windows\CurrentVersion\Run`
-	runValueName = "Asksemble Agent"
+	runValueName = "Askorus Agent"
+	// oldRunValueName is the value before 11-08 (#31). Setting or removing
+	// the autostart removes it too, so the old agent does not start as well.
+	oldRunValueName = "Asksemble Agent"
 )
 
 func autostartCommand(exe string, testPage bool) string {
@@ -94,7 +97,13 @@ func autostartSet(exe string, testPage bool) error {
 		return err
 	}
 	defer k.Close()
-	return k.SetStringValue(runValueName, autostartCommand(exe, testPage))
+	if err := k.SetStringValue(runValueName, autostartCommand(exe, testPage)); err != nil {
+		return err
+	}
+	if err := k.DeleteValue(oldRunValueName); err != nil && !errors.Is(err, registry.ErrNotExist) {
+		return err
+	}
+	return nil
 }
 
 func autostartRemove() error {
@@ -103,8 +112,10 @@ func autostartRemove() error {
 		return err
 	}
 	defer k.Close()
-	if err := k.DeleteValue(runValueName); err != nil && !errors.Is(err, registry.ErrNotExist) {
-		return err
+	for _, name := range []string{runValueName, oldRunValueName} {
+		if err := k.DeleteValue(name); err != nil && !errors.Is(err, registry.ErrNotExist) {
+			return err
+		}
 	}
 	return nil
 }

@@ -5,9 +5,9 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/asksemble/asksemble/agent/internal/core"
-	"github.com/asksemble/asksemble/agent/internal/fakecli"
-	"github.com/asksemble/asksemble/agent/internal/judge"
+	"github.com/heeo-dev/askorus/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/fakecli"
+	"github.com/heeo-dev/askorus/agent/internal/judge"
 )
 
 // Milestone C: a question spec runs the combined-answer command with the
@@ -28,7 +28,7 @@ func TestRefineArgsAndOutput(t *testing.T) {
 	if spec, err := judge.ValidateRefine(res.Output); err != nil || spec.Kind != "compare" {
 		t.Fatalf("spec %+v %v", spec, err)
 	}
-	if checkSynthArgs(refineArgs(testSynthModel)) != nil || checkSynthArgs(writerArgs("asksemble-judge", testSynthModel)) == nil {
+	if checkSynthArgs(refineArgs(testSynthModel)) != nil || checkSynthArgs(writerArgs("askorus-judge", testSynthModel)) == nil {
 		t.Fatal("the check took the old judge agent or refused the refine agent")
 	}
 }

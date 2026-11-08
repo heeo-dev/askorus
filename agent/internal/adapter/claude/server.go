@@ -14,7 +14,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/asksemble/asksemble/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/core"
 )
 
 // Folder servers (F10, design: 서버 모드). For each folder the person turned

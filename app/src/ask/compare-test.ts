@@ -36,7 +36,7 @@ import type { Turn, TurnCompare } from './thread';
 const ai = (agent: string, caps = ['ask', 'synthesize'], available = true): AdapterInfo => ({ agent, available, capabilities: caps });
 
 const infoOf = (agents: AdapterInfo[]): Info => ({
-  name: 'asksemble-agent',
+  name: 'askorus-agent',
   version: '0.3.0',
   apiVersion: 1,
   hostname: 'pc',

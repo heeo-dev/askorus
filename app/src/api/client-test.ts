@@ -35,7 +35,7 @@ test('baseUrl leaves out the default port', () => {
 });
 
 test('requests carry the token and JSON body, and ignore unknown fields', async () => {
-  const f = fakeFetch([json(200, { name: 'asksemble-agent', version: '0.1.0', apiVersion: 1, newField: 7 })]);
+  const f = fakeFetch([json(200, { name: 'askorus-agent', version: '0.1.0', apiVersion: 1, newField: 7 })]);
   const c = new AgentClient(base, { token: 'tok', fetch: f.fn });
   const info = await c.info();
   expect(info.version).toBe('0.1.0');

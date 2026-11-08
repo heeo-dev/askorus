@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asksemble/asksemble/agent/internal/core"
-	"github.com/asksemble/asksemble/agent/internal/hidden"
+	"github.com/heeo-dev/askorus/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/hidden"
 )
 
 // The one-off calls (combined answers, refining) run in <ask folder>\judge

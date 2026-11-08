@@ -9,36 +9,36 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/asksemble/asksemble/agent/internal/judge"
+	"github.com/heeo-dev/askorus/agent/internal/judge"
 )
 
 // C9: the answer after a debate written again, short or as an edit of the
 // combined answer before the debate.
 
 func TestRewritePrompts(t *testing.T) {
-	task := judge.SynthTask{Question: "이름은?", Answers: []judge.SynthAnswer{{AI: "Claude", Text: "Panelist"}, {AI: "Codex", Text: "Asksemble"}}}
+	task := judge.SynthTask{Question: "이름은?", Answers: []judge.SynthAnswer{{AI: "Claude", Text: "Panelist"}, {AI: "Codex", Text: "Askorus"}}}
 	points := []DebatePoint{{ID: "p1", Topic: "이름", Nature: "taste", Debate: true, Turns: []DebateTurn{{AI: "Claude", Ask: "?", Text: "AskPanel", Stance: "partly"}}, Result: "kept", Line: "AskPanel"}}
 	const n = "0123456789abcdef"
 	short := rewritePrompt(task, points, "이전 글", "short", n)
-	if !strings.HasPrefix(short, "[Asksemble synthesis debate-v3] ") || !strings.Contains(short, debateShortRule5) || !strings.Contains(short, "Keep it short") || strings.Contains(short, "COMBINED BEFORE") {
+	if !strings.HasPrefix(short, "[Askorus synthesis debate-v3] ") || !strings.Contains(short, debateShortRule5) || !strings.Contains(short, "Keep it short") || strings.Contains(short, "COMBINED BEFORE") {
 		t.Fatalf("short:\n%s", short)
 	}
 	edit := rewritePrompt(task, points, " 이전 글 ", "edit", n)
-	if !strings.HasPrefix(edit, "[Asksemble synthesis debate-e1] ") || !strings.Contains(edit, debateEditRule5) ||
+	if !strings.HasPrefix(edit, "[Askorus synthesis debate-e1] ") || !strings.Contains(edit, debateEditRule5) ||
 		!strings.Contains(edit, "COMBINED BEFORE: \"이전 글\"\n</data-"+n+">") || strings.Contains(edit, "Keep it short") {
 		t.Fatalf("edit:\n%s", edit)
 	}
 	plus := rewritePrompt(task, points, "이전 글", "plus", n)
-	if !strings.HasPrefix(plus, "[Asksemble synthesis debate-v3p] ") || !strings.Contains(plus, debatePlusRule5) || !strings.Contains(plus, "({{Codex}} 안)") || !strings.Contains(plus, "at most 3 lines") {
+	if !strings.HasPrefix(plus, "[Askorus synthesis debate-v3p] ") || !strings.Contains(plus, debatePlusRule5) || !strings.Contains(plus, "({{Codex}} 안)") || !strings.Contains(plus, "at most 3 lines") {
 		t.Fatalf("plus:\n%s", plus)
 	}
 	short2 := rewritePrompt(task, points, "이전 글", "short2", n)
-	if !strings.HasPrefix(short2, "[Asksemble synthesis debate-v4] ") || !strings.Contains(short2, debateShort2Rule5) || !strings.Contains(short2, "Keep it short") || !strings.Contains(short2, "placeholder such as ○○") {
+	if !strings.HasPrefix(short2, "[Askorus synthesis debate-v4] ") || !strings.Contains(short2, debateShort2Rule5) || !strings.Contains(short2, "Keep it short") || !strings.Contains(short2, "placeholder such as ○○") {
 		t.Fatalf("short2:\n%s", short2)
 	}
 	// short3 (C10b) is the rule the user picked on 11-06, the product's debate-v4.
 	short3 := rewritePrompt(task, points, "이전 글", "short3", n)
-	if !strings.HasPrefix(short3, "[Asksemble synthesis debate-v4b] ") || !strings.Contains(short3, debateShort3Rule5) || !strings.Contains(short3, "their own words") || !strings.Contains(short3, "Keep every useful specific") {
+	if !strings.HasPrefix(short3, "[Askorus synthesis debate-v4b] ") || !strings.Contains(short3, debateShort3Rule5) || !strings.Contains(short3, "their own words") || !strings.Contains(short3, "Keep every useful specific") {
 		t.Fatalf("short3:\n%s", short3)
 	}
 	// The short rule is r2's with the length sentences before its last one.
@@ -58,7 +58,7 @@ func (w *rewriteWriter) Write(_ context.Context, r writeReq) (writeRes, error) {
 	w.mu.Lock()
 	w.prompts = append(w.prompts, r.Prompt)
 	w.mu.Unlock()
-	v := strings.SplitN(strings.TrimPrefix(r.Prompt, "[Asksemble synthesis "), "]", 2)[0]
+	v := strings.SplitN(strings.TrimPrefix(r.Prompt, "[Askorus synthesis "), "]", 2)[0]
 	return writeRes{Agent: r.Agent, Output: synthJSON("짧은 글 " + v)}, nil
 }
 

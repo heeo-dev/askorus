@@ -135,7 +135,7 @@ describe('new session', () => {
     agent.folders = [];
     const c = await pairedPC();
     await renderRouter(routes, { initialUrl: `/pc/${c.id}/new` });
-    expect(await screen.findByText(/asksemble-agent folders add/)).toBeTruthy();
+    expect(await screen.findByText(/askorus-agent folders add/)).toBeTruthy();
   });
 
   test('a start that takes long can be cancelled', async () => {
@@ -315,7 +315,7 @@ describe('settings', () => {
     await renderRouter(routes, { initialUrl: '/settings' });
     await user.press(await screen.findByRole('button', { name: 'DESKTOP-TEST, Not connected' }));
     await user.press(within(await screen.findByTestId('pc-sheet')).getByRole('button', { name: 'Unpair' }));
-    expect(await screen.findByText(/asksemble-agent devices revoke dev-1/)).toBeTruthy();
+    expect(await screen.findByText(/askorus-agent devices revoke dev-1/)).toBeTruthy();
     expect(await new ConnectionStore().list()).toEqual([]);
   });
 

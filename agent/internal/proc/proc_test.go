@@ -16,16 +16,16 @@ import (
 	"time"
 )
 
-// The test binary doubles as the command being run. ASKSEMBLE_PROC_HELPER:
+// The test binary doubles as the command being run. ASKORUS_PROC_HELPER:
 //
 //	sleep  sleep 30 s
 //	exit3  print to stdout and stderr, exit 3
 //	big    print 9 MiB
-//	echo   print stdin and ASKSEMBLE_PROC_X
+//	echo   print stdin and ASKORUS_PROC_X
 //	spawn  start a sleeping copy that holds stdout, write its pid to
-//	       ASKSEMBLE_PROC_PIDFILE, and end at once
+//	       ASKORUS_PROC_PIDFILE, and end at once
 func TestMain(m *testing.M) {
-	switch os.Getenv("ASKSEMBLE_PROC_HELPER") {
+	switch os.Getenv("ASKORUS_PROC_HELPER") {
 	case "":
 		os.Exit(m.Run())
 	case "sleep":
@@ -41,16 +41,16 @@ func TestMain(m *testing.M) {
 		}
 	case "echo":
 		b, _ := io.ReadAll(os.Stdin)
-		fmt.Printf("%s|%s", b, os.Getenv("ASKSEMBLE_PROC_X"))
+		fmt.Printf("%s|%s", b, os.Getenv("ASKORUS_PROC_X"))
 	case "spawn":
 		exe, _ := os.Executable()
 		child := exec.Command(exe)
-		child.Env = append(os.Environ(), "ASKSEMBLE_PROC_HELPER=sleep")
+		child.Env = append(os.Environ(), "ASKORUS_PROC_HELPER=sleep")
 		child.Stdout = os.Stdout // holds the pipe open after this one ends
 		if err := child.Start(); err != nil {
 			os.Exit(2)
 		}
-		os.WriteFile(os.Getenv("ASKSEMBLE_PROC_PIDFILE"), []byte(strconv.Itoa(child.Process.Pid)), 0o600)
+		os.WriteFile(os.Getenv("ASKORUS_PROC_PIDFILE"), []byte(strconv.Itoa(child.Process.Pid)), 0o600)
 	}
 	os.Exit(0)
 }
@@ -61,7 +61,7 @@ func helper(t *testing.T, mode string, extra map[string]string) Cmd {
 	if err != nil {
 		t.Fatal(err)
 	}
-	env := map[string]string{"ASKSEMBLE_PROC_HELPER": mode}
+	env := map[string]string{"ASKORUS_PROC_HELPER": mode}
 	for k, v := range extra {
 		env[k] = v
 	}
@@ -73,8 +73,8 @@ func TestRunOutputExitCodeAndStdin(t *testing.T) {
 	if err != nil || res.ExitCode != 3 || string(res.Stdout) != "out" || string(res.Stderr) != "err" {
 		t.Errorf("exit3 = %+v, %v", res, err)
 	}
-	c := helper(t, "echo", map[string]string{"ASKSEMBLE_PROC_X": "x1"})
-	c.Stdin = "[Asksemble] 머리말\n\n질문 100% \"따옴표\" & 끝"
+	c := helper(t, "echo", map[string]string{"ASKORUS_PROC_X": "x1"})
+	c.Stdin = "[Askorus] 머리말\n\n질문 100% \"따옴표\" & 끝"
 	res, err = Run(context.Background(), c)
 	if err != nil || string(res.Stdout) != c.Stdin+"|x1" {
 		t.Errorf("echo = %q, %v", res.Stdout, err)
@@ -107,7 +107,7 @@ func TestRunLeavesNoChildren(t *testing.T) {
 			defer cancel()
 		}
 		start := time.Now()
-		if _, err := Run(ctx, helper(t, "spawn", map[string]string{"ASKSEMBLE_PROC_PIDFILE": pidFile})); err != nil {
+		if _, err := Run(ctx, helper(t, "spawn", map[string]string{"ASKORUS_PROC_PIDFILE": pidFile})); err != nil {
 			t.Fatal(err)
 		}
 		if took := time.Since(start); took > 10*time.Second {

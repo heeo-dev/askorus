@@ -14,9 +14,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asksemble/asksemble/agent/internal/core"
-	"github.com/asksemble/asksemble/agent/internal/judge"
-	"github.com/asksemble/asksemble/agent/internal/proc"
+	"github.com/heeo-dev/askorus/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/judge"
+	"github.com/heeo-dev/askorus/agent/internal/proc"
 )
 
 func TestMain(m *testing.M) {
@@ -32,16 +32,16 @@ func TestNotInAgent(t *testing.T) {
 	if err != nil {
 		t.Skip("go is not on PATH")
 	}
-	out, err := exec.Command(gobin, "list", "-deps", "github.com/asksemble/asksemble/agent/cmd/asksemble-agent").Output()
+	out, err := exec.Command(gobin, "list", "-deps", "github.com/heeo-dev/askorus/agent/cmd/askorus-agent").Output()
 	if err != nil {
 		t.Fatalf("go list: %v", err)
 	}
 	deps := strings.Fields(string(out))
-	if !slices.Contains(deps, "github.com/asksemble/asksemble/agent/internal/core") {
+	if !slices.Contains(deps, "github.com/heeo-dev/askorus/agent/internal/core") {
 		t.Fatalf("go list gave no agent packages: %d lines", len(deps))
 	}
-	if slices.Contains(deps, "github.com/asksemble/asksemble/agent/internal/fakecli") {
-		t.Error("cmd/asksemble-agent depends on internal/fakecli")
+	if slices.Contains(deps, "github.com/heeo-dev/askorus/agent/internal/fakecli") {
+		t.Error("cmd/askorus-agent depends on internal/fakecli")
 	}
 }
 
@@ -201,7 +201,7 @@ func TestAskAnswersAndModes(t *testing.T) {
 	env := map[string]string{"PWD": dir}
 	claudeAsk := []string{"-p", "--output-format", "json", "--model", "haiku", "--tools", "WebSearch,WebFetch"}
 	codexAsk := []string{"--search", "exec", "-s", "read-only", "--ignore-user-config", "--skip-git-repo-check", "--json", "-m", "gpt-6-luna", "-"}
-	opencodeAsk := []string{"run", "--standalone", "--format", "json", "--agent", "asksemble-ask", "-m", "opencode-go/deepseek-v4.1-flash#high"}
+	opencodeAsk := []string{"run", "--standalone", "--format", "json", "--agent", "askorus-ask", "-m", "opencode-go/deepseek-v4.1-flash#high"}
 	answers := func() (string, string, string) {
 		t.Helper()
 		c := parseClaude(t, run(t, exes[RoleClaude], dir, claudeAsk, "preamble\n질문", nil))
@@ -312,7 +312,7 @@ func TestCodexAskAndSchema(t *testing.T) {
 
 // TestOpenCodeSessions: a writer saves its conversation; session list
 // prints every folder's sessions, newest first, and session delete removes
-// one, with the failures ASKSEMBLE_FAKECLI_FAIL names; an ask answers.
+// one, with the failures ASKORUS_FAKECLI_FAIL names; an ask answers.
 func TestOpenCodeSessions(t *testing.T) {
 	exe := Use(t, RoleOpenCode)
 	folder := t.TempDir()
@@ -361,7 +361,7 @@ func TestOpenCodeSessions(t *testing.T) {
 	}
 	t.Setenv(EnvFail, "")
 
-	ask := []string{"run", "--standalone", "--format", "json", "--agent", "asksemble-ask", "-m", "opencode-go/deepseek-v4.1-flash#high"}
+	ask := []string{"run", "--standalone", "--format", "json", "--agent", "askorus-ask", "-m", "opencode-go/deepseek-v4.1-flash#high"}
 	evs = parseOpenCode(t, run(t, exe, folder, ask, "preamble\n수도는?", env).Stdout)
 	if lastText(evs) != "fake: 수도는?" {
 		t.Errorf("ask = %+v", evs)

@@ -13,14 +13,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/asksemble/asksemble/agent/internal/adapter/claude"
-	"github.com/asksemble/asksemble/agent/internal/adapter/codex"
-	"github.com/asksemble/asksemble/agent/internal/adapter/opencode"
-	"github.com/asksemble/asksemble/agent/internal/compares"
-	"github.com/asksemble/asksemble/agent/internal/config"
-	"github.com/asksemble/asksemble/agent/internal/core"
-	"github.com/asksemble/asksemble/agent/internal/judge"
-	"github.com/asksemble/asksemble/agent/internal/runs"
+	"github.com/heeo-dev/askorus/agent/internal/adapter/claude"
+	"github.com/heeo-dev/askorus/agent/internal/adapter/codex"
+	"github.com/heeo-dev/askorus/agent/internal/adapter/opencode"
+	"github.com/heeo-dev/askorus/agent/internal/compares"
+	"github.com/heeo-dev/askorus/agent/internal/config"
+	"github.com/heeo-dev/askorus/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/judge"
+	"github.com/heeo-dev/askorus/agent/internal/runs"
 )
 
 // agentPipeline asks in this process the way POST /v1/runs does with a
@@ -87,7 +87,7 @@ func pipelineFrom(ctx context.Context, adapters []core.Adapter, folder string, s
 		}
 	}
 	if len(p.order) < 2 {
-		return nil, errors.New("fewer than two AIs can answer on this PC (asksemble-agent info)")
+		return nil, errors.New("fewer than two AIs can answer on this PC (askorus-agent info)")
 	}
 	if settings.Off {
 		return nil, errors.New("combined answers are off (agent.json judge.off)")
@@ -308,7 +308,7 @@ func (p *agentPipeline) Write(ctx context.Context, r writeReq) (writeRes, error)
 	ws := p.cmp.Writers(ctx, r.Tier)
 	i := slices.IndexFunc(ws, func(w compares.Writer) bool { return w.Agent == r.Agent })
 	if i < 0 {
-		return writeRes{Agent: r.Agent}, fmt.Errorf("%s does not write at tier %s on this PC (asksemble-agent check)", r.Agent, r.Tier)
+		return writeRes{Agent: r.Agent}, fmt.Errorf("%s does not write at tier %s on this PC (askorus-agent check)", r.Agent, r.Tier)
 	}
 	w := ws[i]
 	if err := os.MkdirAll(p.judgeFolder, 0o700); err != nil {

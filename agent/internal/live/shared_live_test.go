@@ -18,8 +18,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asksemble/asksemble/agent/internal/core"
-	"github.com/asksemble/asksemble/agent/internal/proc"
+	"github.com/heeo-dev/askorus/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/proc"
 )
 
 // What the live tests LT-08 and LT-09 share: P0-6 Q12's cut-down answers,
@@ -234,7 +234,7 @@ func openCodeJudgeSessionsIn(t *testing.T, folder string) int {
 	}
 	n := 0
 	for _, s := range list {
-		if s.Title == "asksemble-judge" && core.InFolder(s.Directory, folder) {
+		if s.Title == "askorus-judge" && core.InFolder(s.Directory, folder) {
 			n++
 		}
 	}

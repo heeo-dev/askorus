@@ -9,12 +9,12 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/asksemble/asksemble/agent/internal/core"
-	"github.com/asksemble/asksemble/agent/internal/proc"
+	"github.com/heeo-dev/askorus/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/proc"
 )
 
 // Combined answers (종합 답변, P2-3 S5b, spec part 20). A writer is one
-// `opencode run --standalone` with its own agent, asksemble-synth, that may
+// `opencode run --standalone` with its own agent, askorus-synth, that may
 // use no tool (the one-off command, judge.go). It runs in the judge folder
 // and takes the judge title, so CleanupJudge, and uninstall, delete its
 // conversation.
@@ -22,10 +22,10 @@ import (
 const (
 	// synthAgent is the agent a writer runs with, handed to OpenCode for
 	// one run only in OPENCODE_CONFIG_CONTENT.
-	synthAgent = "asksemble-synth"
+	synthAgent = "askorus-synth"
 	// refineAgent fills in a question spec (질문 정제, milestone C): the
 	// same locked agent with its own prompt; the message says the JSON.
-	refineAgent = "asksemble-refine"
+	refineAgent = "askorus-refine"
 	// synthTitle is the title of every writer conversation: the judge
 	// title, so CleanupJudge deletes it.
 	synthTitle = judgeTitle
@@ -40,16 +40,16 @@ var synthTimeout = core.SynthTimeout
 var synthConfig = func() string {
 	b, _ := json.Marshal(map[string]any{"agent": map[string]any{
 		synthAgent: map[string]any{
-			"description": "Asksemble synthesis: write one combined answer",
+			"description": "Askorus synthesis: write one combined answer",
 			"mode":        "primary",
-			"prompt": "You write the combined answer for the Asksemble app. " +
+			"prompt": "You write the combined answer for the Askorus app. " +
 				"Reply only with the JSON the message asks for, and use no tools.",
 			"permission": map[string]string{"*": "deny"},
 		},
 		refineAgent: map[string]any{
-			"description": "Asksemble refine: fill in a question spec",
+			"description": "Askorus refine: fill in a question spec",
 			"mode":        "primary",
-			"prompt": "You fill in a question spec for the Asksemble app; you do not answer the question. " +
+			"prompt": "You fill in a question spec for the Askorus app; you do not answer the question. " +
 				"Reply only with the JSON the message asks for, and use no tools.",
 			"permission": map[string]string{"*": "deny"},
 		},

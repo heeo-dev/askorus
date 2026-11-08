@@ -13,10 +13,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asksemble/asksemble/agent/internal/compares"
-	"github.com/asksemble/asksemble/agent/internal/core"
-	"github.com/asksemble/asksemble/agent/internal/fakecli"
-	"github.com/asksemble/asksemble/agent/internal/judge"
+	"github.com/heeo-dev/askorus/agent/internal/compares"
+	"github.com/heeo-dev/askorus/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/fakecli"
+	"github.com/heeo-dev/askorus/agent/internal/judge"
 )
 
 // ---- fakes ----------------------------------------------------------------
@@ -1033,7 +1033,7 @@ func TestRunWithSynthesis(t *testing.T) {
 	}
 	// synth-v5: the question as the person wrote it, the earlier questions
 	// and each answer with its AI's name, and nothing of the judging.
-	if !strings.HasPrefix(req.Prompt, "[Asksemble synthesis v5.1] ") {
+	if !strings.HasPrefix(req.Prompt, "[Askorus synthesis v5.1] ") {
 		t.Errorf("prompt is not synth-v5:\n%s", req.Prompt)
 	}
 	for _, line := range []string{

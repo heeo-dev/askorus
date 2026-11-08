@@ -10,13 +10,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/asksemble/asksemble/agent/internal/adapter/claude"
-	"github.com/asksemble/asksemble/agent/internal/adapter/codex"
-	"github.com/asksemble/asksemble/agent/internal/adapter/opencode"
-	"github.com/asksemble/asksemble/agent/internal/config"
-	"github.com/asksemble/asksemble/agent/internal/core"
-	"github.com/asksemble/asksemble/agent/internal/fakecli"
-	"github.com/asksemble/asksemble/agent/internal/judge"
+	"github.com/heeo-dev/askorus/agent/internal/adapter/claude"
+	"github.com/heeo-dev/askorus/agent/internal/adapter/codex"
+	"github.com/heeo-dev/askorus/agent/internal/adapter/opencode"
+	"github.com/heeo-dev/askorus/agent/internal/config"
+	"github.com/heeo-dev/askorus/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/fakecli"
+	"github.com/heeo-dev/askorus/agent/internal/judge"
 )
 
 // The test binary stands in for claude, codex and opencode (fakecli), as
@@ -85,9 +85,9 @@ func TestTheAgentPipelineAsksComparesAndWrites(t *testing.T) {
 	for _, call := range fakecli.Calls(t) {
 		switch {
 		case call.Stdin == "":
-		case strings.HasPrefix(call.Stdin, "[Asksemble] "):
+		case strings.HasPrefix(call.Stdin, "[Askorus] "):
 			asked++
-		case strings.HasPrefix(call.Stdin, "[Asksemble synthesis v5.1]"):
+		case strings.HasPrefix(call.Stdin, "[Askorus synthesis v5.1]"):
 			written++
 		default:
 			t.Errorf("%s got another prompt:\n%.80s", call.Role, call.Stdin)
@@ -133,7 +133,7 @@ func TestTheAgentPipelineRefinesFirst(t *testing.T) {
 	}
 	asked := 0
 	for _, c := range fakecli.Calls(t) {
-		if !strings.HasPrefix(c.Stdin, "[Asksemble] ") {
+		if !strings.HasPrefix(c.Stdin, "[Askorus] ") {
 			continue // the moderator, the writer
 		}
 		asked++
@@ -192,7 +192,7 @@ func TestTheRecordKeepsTheWritersTaskForResynth(t *testing.T) {
 			}
 			var sent string
 			for _, c := range fakecli.Calls(t) {
-				if strings.HasPrefix(c.Stdin, "[Asksemble synthesis ") {
+				if strings.HasPrefix(c.Stdin, "[Askorus synthesis ") {
 					sent = c.Stdin
 				}
 			}
@@ -255,7 +255,7 @@ func TestTheAgentPipelineLightAndLiveFormats(t *testing.T) {
 	}
 	asked := 0
 	for _, c := range fakecli.Calls(t) {
-		if !strings.HasPrefix(c.Stdin, "[Asksemble] ") {
+		if !strings.HasPrefix(c.Stdin, "[Askorus] ") {
 			continue // the moderator, the writer
 		}
 		asked++

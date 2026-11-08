@@ -13,9 +13,9 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/asksemble/asksemble/agent/internal/core"
-	"github.com/asksemble/asksemble/agent/internal/fakecli"
-	"github.com/asksemble/asksemble/agent/internal/proc"
+	"github.com/heeo-dev/askorus/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/fakecli"
+	"github.com/heeo-dev/askorus/agent/internal/proc"
 )
 
 const testDefaultModel = "opencode-go/deepseek-v4.1-flash#high"
@@ -90,7 +90,7 @@ func TestAskAfterWriter(t *testing.T) {
 		t.Errorf("configs: ask %s, writer %s", c.Env["OPENCODE_CONFIG_CONTENT"], j.Env["OPENCODE_CONFIG_CONTENT"])
 	}
 	agents := agentConfig(t, c.Env["OPENCODE_CONFIG_CONTENT"])
-	perm, _ := json.Marshal(agents["asksemble-ask"]["permission"])
+	perm, _ := json.Marshal(agents["askorus-ask"]["permission"])
 	if len(agents) != 1 || string(perm) != `{"*":"deny","webfetch":"allow","websearch":"allow"}` {
 		t.Errorf("ask agents = %v", agents)
 	}
@@ -190,7 +190,7 @@ func TestCleanupJudge(t *testing.T) {
 			sess("stalespelling", judgeTitle, otherSpelling, 11*time.Minute), // deleted: the same folder
 			sess("fresh", judgeTitle, jf, time.Minute),                       // kept: may be another comparison's, still running
 			unknownAge, // kept
-			sess("othertitle", "asksemble-judge-x", jf, time.Hour),              // kept
+			sess("othertitle", "askorus-judge-x", jf, time.Hour),                // kept
 			sess("subfolder", judgeTitle, filepath.Join(jf, "live"), time.Hour), // kept: a live test's
 			sess("ask", "fake ask", ask, time.Hour),                             // kept: an ask
 			sess("askfolder", judgeTitle, ask, time.Hour),                       // kept: not in the judge folder

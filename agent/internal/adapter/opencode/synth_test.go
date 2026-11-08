@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asksemble/asksemble/agent/internal/core"
-	"github.com/asksemble/asksemble/agent/internal/fakecli"
-	"github.com/asksemble/asksemble/agent/internal/judge"
+	"github.com/heeo-dev/askorus/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/fakecli"
+	"github.com/heeo-dev/askorus/agent/internal/judge"
 )
 
 const testSynthModel = "opencode-go/deepseek-v4.1-flash"
@@ -46,7 +46,7 @@ func TestSynthArgsEnvAndStdin(t *testing.T) {
 		t.Fatalf("%d calls, want 1", len(cs))
 	}
 	c := cs[0]
-	want := []string{"run", "--standalone", "--format", "json", "--agent", "asksemble-synth", "-m", testSynthModel + "#max", "--title", "asksemble-judge"}
+	want := []string{"run", "--standalone", "--format", "json", "--agent", "askorus-synth", "-m", testSynthModel + "#max", "--title", "askorus-judge"}
 	if !slices.Equal(c.Args, want) {
 		t.Errorf("args = %q, want %q", c.Args, want)
 	}
@@ -62,8 +62,8 @@ func TestSynthArgsEnvAndStdin(t *testing.T) {
 	// only other agent of the run is the refine agent, locked the same way
 	// (질문 정제, milestone C).
 	agents := agentConfig(t, c.Env["OPENCODE_CONFIG_CONTENT"])
-	ag, ok := agents["asksemble-synth"]
-	rf, ok2 := agents["asksemble-refine"]
+	ag, ok := agents["askorus-synth"]
+	rf, ok2 := agents["askorus-refine"]
 	if len(agents) != 2 || !ok || !ok2 {
 		t.Fatalf("agents = %v", agents)
 	}
@@ -74,7 +74,7 @@ func TestSynthArgsEnvAndStdin(t *testing.T) {
 	perm, _ := json.Marshal(ag["permission"])
 	prompt, _ := ag["prompt"].(string)
 	if string(perm) != `{"*":"deny"}` || ag["mode"] != "primary" || len(ag) != 4 ||
-		prompt != "You write the combined answer for the Asksemble app. Reply only with the JSON the message asks for, and use no tools." {
+		prompt != "You write the combined answer for the Askorus app. Reply only with the JSON the message asks for, and use no tools." {
 		t.Errorf("synth agent = %v", ag)
 	}
 	if synthConfig == askConfig {
@@ -124,9 +124,9 @@ func TestCheckSynthArgs(t *testing.T) {
 	}
 	set := func(i int, v string) []string { s := slices.Clone(good); s[i] = v; return s }
 	for name, args := range map[string][]string{
-		"old judge agent": set(5, "asksemble-judge"),
+		"old judge agent": set(5, "askorus-judge"),
 		"ask agent":       set(5, askAgent),
-		"other title":     set(9, "asksemble-synth"),
+		"other title":     set(9, "askorus-synth"),
 		"no title":        good[:8],
 		"model as a flag": synthArgs("--port"),
 		"prompt argument": append(slices.Clone(good), "첫 배"),

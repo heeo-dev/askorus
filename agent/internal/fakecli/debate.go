@@ -18,9 +18,9 @@ import (
 // ask, and the answers file does not.
 
 // EnvDebate is the debate mode: "" (one point), "two", "next" or "none".
-const EnvDebate = "ASKSEMBLE_FAKE_DEBATE"
+const EnvDebate = "ASKORUS_FAKE_DEBATE"
 
-// Debate modes of ASKSEMBLE_FAKE_DEBATE.
+// Debate modes of ASKORUS_FAKE_DEBATE.
 const (
 	DebateOne  = ""
 	DebateTwo  = "two"
@@ -43,9 +43,9 @@ var debateAnswerAI = regexp.MustCompile(`(?m)^ANSWER: \{"ai":"([^"]+)"`)
 func debateReply(prompt string) (string, bool) {
 	var text string
 	switch {
-	case strings.HasPrefix(prompt, "[Asksemble debate-plan v2]"), strings.HasPrefix(prompt, "[Asksemble debate-plan v3]"):
+	case strings.HasPrefix(prompt, "[Askorus debate-plan v2]"), strings.HasPrefix(prompt, "[Askorus debate-plan v3]"):
 		text = debatePlan(prompt)
-	case strings.HasPrefix(prompt, "[Asksemble debate-check v1]"):
+	case strings.HasPrefix(prompt, "[Askorus debate-check v1]"):
 		text = "DONE | agreed | " + DebateLine
 		if os.Getenv(EnvDebate) == DebateNext && !strings.Contains(prompt, "This is the last check") {
 			names := debateTurnAIs(prompt)
@@ -53,7 +53,7 @@ func debateReply(prompt string) (string, bool) {
 				text = "NEXT | " + names[0] + " | " + DebateNextAsk
 			}
 		}
-	case strings.HasPrefix(prompt, "[Asksemble synthesis debate-v4]"), strings.HasPrefix(prompt, "[Asksemble synthesis debate-v5]"):
+	case strings.HasPrefix(prompt, "[Askorus synthesis debate-v4]"), strings.HasPrefix(prompt, "[Askorus synthesis debate-v5]"):
 		text = DebateAfterText
 	default:
 		return "", false
@@ -108,7 +108,7 @@ func debateTurnAIs(prompt string) []string {
 // debateTurn is a debater's reply to a debate turn's ask prompt, and
 // whether the prompt was one.
 func debateTurn(role, prompt string) (string, bool) {
-	if !strings.Contains(prompt, "[Asksemble debate-turn v1]") {
+	if !strings.Contains(prompt, "[Askorus debate-turn v1]") {
 		return "", false
 	}
 	return DebateTurnText + role + ".\nSTANCE: keep", true

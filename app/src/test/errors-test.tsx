@@ -41,7 +41,7 @@ test('agent stopped behind Tailscale serve: says so and how to start it', async 
   await renderRouter(routes, { initialUrl: '/pcs' });
   // The PC's line and the box both name the cause.
   expect(await screen.findAllByText('The PC is on, but the agent is not running')).toHaveLength(2);
-  expect(screen.getByText(/asksemble-agent start/)).toBeTruthy();
+  expect(screen.getByText(/askorus-agent start/)).toBeTruthy();
   expect(screen.getAllByTestId('dot-failed', { includeHiddenElements: true }).length).toBeGreaterThanOrEqual(1);
   // A PC that does not answer offers no new session, which could only fail (UX-4).
   expect(screen.queryByRole('button', { name: 'New session' })).toBeNull();

@@ -16,13 +16,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/asksemble/asksemble/agent/internal/compares"
-	"github.com/asksemble/asksemble/agent/internal/config"
-	"github.com/asksemble/asksemble/agent/internal/core"
-	"github.com/asksemble/asksemble/agent/internal/devices"
-	"github.com/asksemble/asksemble/agent/internal/jobs"
-	"github.com/asksemble/asksemble/agent/internal/pairing"
-	"github.com/asksemble/asksemble/agent/internal/runs"
+	"github.com/heeo-dev/askorus/agent/internal/compares"
+	"github.com/heeo-dev/askorus/agent/internal/config"
+	"github.com/heeo-dev/askorus/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/devices"
+	"github.com/heeo-dev/askorus/agent/internal/jobs"
+	"github.com/heeo-dev/askorus/agent/internal/pairing"
+	"github.com/heeo-dev/askorus/agent/internal/runs"
 )
 
 // APIVersion is the major API version in the URL path.
@@ -358,7 +358,7 @@ type IntegrationInfo struct {
 
 func (s *Server) info(w http.ResponseWriter, r *http.Request) {
 	resp := InfoResponse{
-		Name: "asksemble-agent", Version: s.o.Version, APIVersion: APIVersion,
+		Name: "askorus-agent", Version: s.o.Version, APIVersion: APIVersion,
 		Hostname: s.o.Hostname, OS: runtime.GOOS,
 		Agents: []core.AdapterInfo{}, Capabilities: []core.Capability{}, Reserved: []core.Capability{},
 		Integrations: []IntegrationInfo{},

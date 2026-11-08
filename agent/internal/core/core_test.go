@@ -80,7 +80,7 @@ func TestInFolderCase(t *testing.T) {
 	if runtime.GOOS != "windows" {
 		t.Skip("case-insensitive paths are Windows only")
 	}
-	if !InFolder(`D:\ClaudeHome\Asksemble`, `d:\claudehome`) {
+	if !InFolder(`D:\ClaudeHome\Askorus`, `d:\claudehome`) {
 		t.Error("want case-insensitive match on Windows")
 	}
 	if InFolder(`D:\ClaudeHomeX`, `D:\ClaudeHome`) {

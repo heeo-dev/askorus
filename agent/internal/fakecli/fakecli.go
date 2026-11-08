@@ -1,6 +1,6 @@
 // Package fakecli is a fake claude, codex and opencode for tests (P2-3,
 // docs/testing.md). A test binary that calls Main from its TestMain acts
-// as the AI programs: it picks the AI from ASKSEMBLE_FAKECLI, and what to
+// as the AI programs: it picks the AI from ASKORUS_FAKECLI, and what to
 // do from the shape of its arguments, the way the adapters build them:
 // --version, an ask, a combined-answer writer or a moderator refining a
 // question (synth.go), and OpenCode's session list and delete. Every
@@ -20,31 +20,31 @@
 //
 // Environment:
 //
-//	ASKSEMBLE_FAKECLI          claude, codex, opencode, or auto: the AI named
+//	ASKORUS_FAKECLI          claude, codex, opencode, or auto: the AI named
 //	                           by the executable (claude.exe, codex.exe, …)
-//	ASKSEMBLE_FAKECLI_RECORD   folder; each call writes <unixnano>-<pid>.json
-//	ASKSEMBLE_FAKECLI_STATE    folder for OpenCode's sessions.json (with a
+//	ASKORUS_FAKECLI_RECORD   folder; each call writes <unixnano>-<pid>.json
+//	ASKORUS_FAKECLI_STATE    folder for OpenCode's sessions.json (with a
 //	                           lock file) and the _once flags
-//	ASKSEMBLE_FAKE_SYNTH       combined-answer writer mode: "prose" for every
+//	ASKORUS_FAKE_SYNTH       combined-answer writer mode: "prose" for every
 //	                           AI, or per AI "codex=bad_json,claude=
 //	                           usage_limit_once"; _once is only that AI's
 //	                           first writer call, later ones are ok; ok by
 //	                           default (see SynthModes)
-//	ASKSEMBLE_FAKECLI_SLEEP    how long mode slow waits (default 60s)
-//	ASKSEMBLE_FAKECLI_VERSION  "0.163.0" for every AI or "codex=0.163.0";
+//	ASKORUS_FAKECLI_SLEEP    how long mode slow waits (default 60s)
+//	ASKORUS_FAKECLI_VERSION  "0.163.0" for every AI or "codex=0.163.0";
 //	                           default the tested minimum of each AI
-//	ASKSEMBLE_FAKECLI_FAIL     OpenCode session commands that fail: "list"
+//	ASKORUS_FAKECLI_FAIL     OpenCode session commands that fail: "list"
 //	                           (exit 1), "listjunk" (no JSON), "delete" (every
 //	                           delete) or "delete=<id>", comma separated
-//	ASKSEMBLE_FAKECLI_ANSWERS  path of a JSON file {role: answer text}: an ask
+//	ASKORUS_FAKECLI_ANSWERS  path of a JSON file {role: answer text}: an ask
 //	                           of a role named there answers that text
 //	                           instead of "fake…: <the prompt's last line>"
 //	                           (S3 scenario tests); sessions are unchanged
-//	ASKSEMBLE_FAKE_ASK         ask mode: "fail" for every AI, or per AI
+//	ASKORUS_FAKE_ASK         ask mode: "fail" for every AI, or per AI
 //	                           "opencode=fail,codex=empty"; fail is the AI's
 //	                           usage limit (exit 1), empty an answer with
 //	                           no text, ok (the default) an answer
-//	ASKSEMBLE_FAKE_DEBATE      the debate (debate.go): "" one point, "two"
+//	ASKORUS_FAKE_DEBATE      the debate (debate.go): "" one point, "two"
 //	                           a taste point too, "next" one more turn at
 //	                           every check that may, "none" no point
 package fakecli
@@ -67,17 +67,17 @@ import (
 
 // Environment variables (see the package comment).
 const (
-	EnvRole    = "ASKSEMBLE_FAKECLI"
-	EnvRecord  = "ASKSEMBLE_FAKECLI_RECORD"
-	EnvState   = "ASKSEMBLE_FAKECLI_STATE"
-	EnvSleep   = "ASKSEMBLE_FAKECLI_SLEEP"
-	EnvVersion = "ASKSEMBLE_FAKECLI_VERSION"
-	EnvFail    = "ASKSEMBLE_FAKECLI_FAIL"
-	EnvAnswers = "ASKSEMBLE_FAKECLI_ANSWERS"
-	EnvAsk     = "ASKSEMBLE_FAKE_ASK"
+	EnvRole    = "ASKORUS_FAKECLI"
+	EnvRecord  = "ASKORUS_FAKECLI_RECORD"
+	EnvState   = "ASKORUS_FAKECLI_STATE"
+	EnvSleep   = "ASKORUS_FAKECLI_SLEEP"
+	EnvVersion = "ASKORUS_FAKECLI_VERSION"
+	EnvFail    = "ASKORUS_FAKECLI_FAIL"
+	EnvAnswers = "ASKORUS_FAKECLI_ANSWERS"
+	EnvAsk     = "ASKORUS_FAKE_ASK"
 )
 
-// Ask modes of ASKSEMBLE_FAKE_ASK.
+// Ask modes of ASKORUS_FAKE_ASK.
 const (
 	AskOK    = "ok"    // the default: an answer
 	AskFail  = "fail"  // the AI's usage limit: Claude is_error, Codex turn.failed, OpenCode an error event; exit 1
@@ -102,7 +102,7 @@ var Roles = []string{RoleClaude, RoleCodex, RoleOpenCode}
 // each AI (P2-3 version table).
 var Versions = map[string]string{RoleClaude: "2.1.314", RoleCodex: "0.164.0", RoleOpenCode: "2.2.1"}
 
-// DefaultSleep is how long mode slow waits when ASKSEMBLE_FAKECLI_SLEEP
+// DefaultSleep is how long mode slow waits when ASKORUS_FAKECLI_SLEEP
 // is not set.
 const DefaultSleep = 60 * time.Second
 
@@ -286,7 +286,7 @@ func flagValue(args []string, name string) string {
 	return ""
 }
 
-// askMode is role's ask mode (ASKSEMBLE_FAKE_ASK).
+// askMode is role's ask mode (ASKORUS_FAKE_ASK).
 func askMode(role string) (string, error) {
 	return pick(os.Getenv(EnvAsk), role, AskOK, func(v string) bool { return slices.Contains(AskModes, v) })
 }
@@ -314,7 +314,7 @@ func askText(role, prefix, prompt string) (string, error) {
 	return prefix + lines[len(lines)-1], nil
 }
 
-// SetAnswers writes the answers file for asks (ASKSEMBLE_FAKECLI_ANSWERS)
+// SetAnswers writes the answers file for asks (ASKORUS_FAKECLI_ANSWERS)
 // and points the fake at it, for the rest of the test.
 func SetAnswers(t testing.TB, texts map[string]string) {
 	t.Helper()

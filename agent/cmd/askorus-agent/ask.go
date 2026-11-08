@@ -10,12 +10,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/asksemble/asksemble/agent/internal/config"
-	"github.com/asksemble/asksemble/agent/internal/core"
-	"github.com/asksemble/asksemble/agent/internal/runs"
+	"github.com/heeo-dev/askorus/agent/internal/config"
+	"github.com/heeo-dev/askorus/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/runs"
 )
 
-// askCmd is `asksemble-agent ask`: the ask the phone sends (POST /v1/runs,
+// askCmd is `askorus-agent ask`: the ask the phone sends (POST /v1/runs,
 // mode ask), run from the PC terminal to try it. Answers print as each AI
 // finishes.
 func askCmd(dir string, args []string, out io.Writer) error {
@@ -28,8 +28,8 @@ func askCmd(dir string, args []string, out io.Writer) error {
 	}
 	question := strings.TrimSpace(strings.Join(fs.Args(), " "))
 	if question == "" {
-		return fail("usage: asksemble-agent ask [-agents A,B] [-tier T] [-follow ID,ID] QUESTION",
-			"사용법: asksemble-agent ask [-agents A,B] [-tier 단계] [-follow ID,ID] 질문")
+		return fail("usage: askorus-agent ask [-agents A,B] [-tier T] [-follow ID,ID] QUESTION",
+			"사용법: askorus-agent ask [-agents A,B] [-tier 단계] [-follow ID,ID] 질문")
 	}
 	if !core.ValidTier(*tier) {
 		return fail("tier must be quick, standard or deep", "단계는 quick, standard, deep 중 하나입니다")
@@ -74,7 +74,7 @@ func askCmd(dir string, args []string, out io.Writer) error {
 	for _, name := range want {
 		asker, ok := askers[name]
 		if !ok {
-			return fail("%s cannot answer on this PC (asksemble-agent info)", "%s는 이 PC에서 답할 수 없습니다 (asksemble-agent info)", name)
+			return fail("%s cannot answer on this PC (askorus-agent info)", "%s는 이 PC에서 답할 수 없습니다 (askorus-agent info)", name)
 		}
 		if slices.ContainsFunc(tasks, func(t runs.Task) bool { return t.Agent == name }) {
 			continue
@@ -89,7 +89,7 @@ func askCmd(dir string, args []string, out io.Writer) error {
 		}})
 	}
 	if len(tasks) == 0 {
-		return fail("no AI on this PC can answer (asksemble-agent info)", "이 PC에서 답할 수 있는 AI가 없습니다 (asksemble-agent info)")
+		return fail("no AI on this PC can answer (askorus-agent info)", "이 PC에서 답할 수 있는 AI가 없습니다 (askorus-agent info)")
 	}
 	if err := os.MkdirAll(folder, 0o700); err != nil {
 		return err

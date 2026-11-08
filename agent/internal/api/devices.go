@@ -3,7 +3,7 @@ package api
 import (
 	"net/http"
 
-	"github.com/asksemble/asksemble/agent/internal/devices"
+	"github.com/heeo-dev/askorus/agent/internal/devices"
 )
 
 // deviceRevoker is the part of the device store that can drop a device.

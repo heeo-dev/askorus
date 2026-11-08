@@ -16,12 +16,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/asksemble/asksemble/agent/internal/adapter/claude"
-	"github.com/asksemble/asksemble/agent/internal/adapter/opencode"
-	"github.com/asksemble/asksemble/agent/internal/config"
-	"github.com/asksemble/asksemble/agent/internal/core"
-	"github.com/asksemble/asksemble/agent/internal/devices"
-	"github.com/asksemble/asksemble/agent/internal/tailnet"
+	"github.com/heeo-dev/askorus/agent/internal/adapter/claude"
+	"github.com/heeo-dev/askorus/agent/internal/adapter/opencode"
+	"github.com/heeo-dev/askorus/agent/internal/config"
+	"github.com/heeo-dev/askorus/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/devices"
+	"github.com/heeo-dev/askorus/agent/internal/tailnet"
 )
 
 // Installing and running the agent on the PC (A5, design: PC 설치 흐름).
@@ -55,7 +55,7 @@ func startCmd(dir string, args []string, out io.Writer) error {
 		return err
 	}
 	if !controlSupported() {
-		return fail("start is only supported on Windows for now; run `asksemble-agent serve`", "start는 지금 Windows에서만 됩니다. `asksemble-agent serve`를 쓰세요")
+		return fail("start is only supported on Windows for now; run `askorus-agent serve`", "start는 지금 Windows에서만 됩니다. `askorus-agent serve`를 쓰세요")
 	}
 	cfg, err := config.Load(dir)
 	if err != nil {
@@ -83,8 +83,8 @@ func startCmd(dir string, args []string, out io.Writer) error {
 	if !waitListening(cfg.Port, true, 15*time.Second) {
 		return fail("the agent (pid %d) did not start listening; see %s", "에이전트(pid %d)가 열리지 않았습니다. %s를 보세요", pid, filepath.Join(dir, "logs", "background.out"))
 	}
-	say(out, m("the agent runs in the background on 127.0.0.1:%d (pid %d); stop it with: asksemble-agent shutdown",
-		"에이전트가 백그라운드에서 127.0.0.1:%d로 돕니다 (pid %d). 끄려면: asksemble-agent shutdown", cfg.Port, pid))
+	say(out, m("the agent runs in the background on 127.0.0.1:%d (pid %d); stop it with: askorus-agent shutdown",
+		"에이전트가 백그라운드에서 127.0.0.1:%d로 돕니다 (pid %d). 끄려면: askorus-agent shutdown", cfg.Port, pid))
 	return nil
 }
 
@@ -141,7 +141,7 @@ func statusCmd(dir string, out io.Writer) error {
 	if a := autostartGet(); a != "" {
 		say(out, m("starts at logon: %s", "로그인할 때 켜짐: %s", a))
 	} else {
-		say(out, m("does not start at logon (asksemble-agent autostart on)", "로그인할 때 켜지지 않음 (asksemble-agent autostart on)"))
+		say(out, m("does not start at logon (askorus-agent autostart on)", "로그인할 때 켜지지 않음 (askorus-agent autostart on)"))
 	}
 	return nil
 }
@@ -149,7 +149,7 @@ func statusCmd(dir string, out io.Writer) error {
 func autostartCmd(args []string, out io.Writer) error {
 	testPage := len(args) == 2 && args[0] == "on" && args[1] == "-test-page"
 	if !testPage && (len(args) != 1 || !slices.Contains([]string{"on", "off", "status"}, args[0])) {
-		return fail("usage: asksemble-agent autostart on [-test-page] | off | status", "사용법: asksemble-agent autostart on [-test-page] | off | status")
+		return fail("usage: askorus-agent autostart on [-test-page] | off | status", "사용법: askorus-agent autostart on [-test-page] | off | status")
 	}
 	switch args[0] {
 	case "on":
@@ -304,19 +304,19 @@ func checkCmd(dir string, out io.Writer) error {
 	if agentListening(cfg.Port) {
 		c.line("ok", m("the agent runs on 127.0.0.1:%d", "에이전트가 127.0.0.1:%d에서 돌고 있습니다", cfg.Port))
 	} else {
-		c.line("warn", m("the agent is not running: asksemble-agent start", "에이전트가 돌고 있지 않습니다: asksemble-agent start"))
+		c.line("warn", m("the agent is not running: askorus-agent start", "에이전트가 돌고 있지 않습니다: askorus-agent start"))
 	}
 	if controlSupported() {
 		if autostartGet() != "" {
 			c.line("ok", m("starts at logon", "로그인할 때 켜짐"))
 		} else {
-			c.line("warn", m("does not start at logon: asksemble-agent autostart on", "로그인할 때 켜지지 않습니다: asksemble-agent autostart on"))
+			c.line("warn", m("does not start at logon: askorus-agent autostart on", "로그인할 때 켜지지 않습니다: askorus-agent autostart on"))
 		}
 		if d, err := exeDir(); err == nil {
 			if userPathHas(d) {
 				c.line("ok", m("on this user's PATH: %s", "이 사용자의 PATH에 있음: %s", d))
 			} else {
-				c.line("warn", m("not on PATH, so terminals need the full path: asksemble-agent path on", "PATH에 없어 터미널에서 전체 경로로 실행해야 합니다: asksemble-agent path on"))
+				c.line("warn", m("not on PATH, so terminals need the full path: askorus-agent path on", "PATH에 없어 터미널에서 전체 경로로 실행해야 합니다: askorus-agent path on"))
 			}
 		}
 	}
@@ -325,12 +325,12 @@ func checkCmd(dir string, out io.Writer) error {
 		if list, _ := store.List(); len(list) > 0 {
 			c.line("ok", m("%d paired devices", "짝 맺은 기기 %d개", len(list)))
 		} else {
-			c.line("warn", m("no paired phone yet: asksemble-agent pair", "아직 짝 맺은 폰이 없습니다: asksemble-agent pair"))
+			c.line("warn", m("no paired phone yet: askorus-agent pair", "아직 짝 맺은 폰이 없습니다: askorus-agent pair"))
 		}
 	}
 
 	if len(cfg.Folders) == 0 {
-		c.line("warn", m("no folders for new sessions: asksemble-agent folders add PATH", "새 세션에 쓸 폴더가 없습니다: asksemble-agent folders add 경로"))
+		c.line("warn", m("no folders for new sessions: askorus-agent folders add PATH", "새 세션에 쓸 폴더가 없습니다: askorus-agent folders add 경로"))
 	}
 	for _, f := range cfg.Folders {
 		if info, err := os.Stat(f.Path); err != nil || !info.IsDir() {
@@ -517,7 +517,7 @@ func uninstallCmd(dir string, args []string, in io.Reader, out io.Writer) error 
 			return err
 		}
 	}
-	say(out, m("uninstalled; delete asksemble-agent.exe yourself", "지웠습니다. asksemble-agent.exe 파일은 직접 지우세요"))
+	say(out, m("uninstalled; delete askorus-agent.exe yourself", "지웠습니다. askorus-agent.exe 파일은 직접 지우세요"))
 	return nil
 }
 

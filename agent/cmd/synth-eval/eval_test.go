@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asksemble/asksemble/agent/internal/judge"
+	"github.com/heeo-dev/askorus/agent/internal/judge"
 )
 
 func writeFile(t *testing.T, dir, name, body string) string {
@@ -183,7 +183,7 @@ func TestARecordFromBeforeC6StillLoads(t *testing.T) {
 	if r.Compare.Ms != 3000 || r.Synth.Text != "old" || r.Task == nil || r.Task.Question != "상자의 가격은?" || len(r.Task.Answers) != 2 || r.Task.Answers[1].AI != "Codex" {
 		t.Fatalf("record %+v, task %+v", r, r.Task)
 	}
-	if p := judge.SynthPrompt(*r.Task, "0123456789abcdef"); !strings.HasPrefix(p, "[Asksemble synthesis v5.1]") || strings.Contains(p, "DIFFER") {
+	if p := judge.SynthPrompt(*r.Task, "0123456789abcdef"); !strings.HasPrefix(p, "[Askorus synthesis v5.1]") || strings.Contains(p, "DIFFER") {
 		t.Fatalf("prompt:\n%s", p)
 	}
 	again, _ := runDir("e2-again")

@@ -1,9 +1,9 @@
-// Asksemble test page. Everything is rendered with textContent; nothing
+// Askorus test page. Everything is rendered with textContent; nothing
 // from the server is ever parsed as HTML.
 "use strict";
 
 const $ = (id) => document.getElementById(id);
-const KEY = "asksemble-test-token";
+const KEY = "askorus-test-token";
 
 const badgeNames = { server: "폴더 서버", desktop: "데스크톱 앱", rc: "원격 켜짐", folder_missing: "폴더 없음" };
 const stateNames = { running: "실행 중", stopped: "멈춤", terminal: "터미널", history: "기록만", unknown: "알 수 없음" };
@@ -30,7 +30,7 @@ const errorNames = {
   session_folder_missing: "이 세션의 폴더가 PC에서 지워져 열 수 없습니다.",
 };
 
-const REQ = "asksemble-test-request";
+const REQ = "askorus-test-request";
 
 // localStorage, not sessionStorage: opening a session hands off to the
 // Claude app, and coming back can land in a new tab that would otherwise
@@ -43,7 +43,7 @@ function store(k, v) {
 }
 const token = () => load(KEY);
 const setToken = (t) => store(KEY, t);
-const DEV = "asksemble-test-device";
+const DEV = "askorus-test-device";
 
 function showWho() {
   if (load(DEV)) {
@@ -162,7 +162,7 @@ function when(iso) {
 // once with a job id; this asks for the result every second. A dropped
 // connection while asking is retried, and the job id is kept so a reload
 // picks the wait up again.
-const JOB = "asksemble-test-job";
+const JOB = "askorus-test-job";
 async function runJob(method, path, body, label) {
   const started = await call(method, path, body);
   store(JOB, JSON.stringify({ id: started.jobId, label }));
@@ -302,7 +302,7 @@ async function loadFolders() {
       o.value = f.id;
       sel.append(o);
     }
-    if (!r.folders.length) say($("newMsg"), "허용된 폴더가 없습니다. PC에서 asksemble-agent folders add 경로 로 더하세요.", true);
+    if (!r.folders.length) say($("newMsg"), "허용된 폴더가 없습니다. PC에서 askorus-agent folders add 경로 로 더하세요.", true);
   } catch (e) {
     say($("newMsg"), e.message, true);
   }
