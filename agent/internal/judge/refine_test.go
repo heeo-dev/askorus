@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/asksemble/asksemble/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/core"
 )
 
 var refineUpdate = flag.Bool("refine.update", false, "rewrite testdata/refine-v1.golden")
@@ -138,7 +138,7 @@ func TestAnswerTemplates(t *testing.T) {
 		}
 	}
 	q := RefinedQuestion("HTTP와 HTTPS 차이는?  \n", QuestionSpec{Kind: "compare", Depth: "short", Language: "ko"})
-	want := "HTTP와 HTTPS 차이는?\n\n답 형식 (Asksemble이 붙임. 질문한 사람이 쓴 글이 아닙니다)\n- 첫 문장에 결론을 한 줄로 쓰세요.\n- 비교는 Markdown 표로 쓰세요(행은 비교 기준, 열은 비교하는 것).\n- 끝에 고를 때 볼 점을 짧게 쓰세요.\n- 짧게 답하세요(3~5문장 안쪽)."
+	want := "HTTP와 HTTPS 차이는?\n\n답 형식 (Askorus이 붙임. 질문한 사람이 쓴 글이 아닙니다)\n- 첫 문장에 결론을 한 줄로 쓰세요.\n- 비교는 Markdown 표로 쓰세요(행은 비교 기준, 열은 비교하는 것).\n- 끝에 고를 때 볼 점을 짧게 쓰세요.\n- 짧게 답하세요(3~5문장 안쪽)."
 	if q != want {
 		t.Fatalf("got\n%s\nwant\n%s", q, want)
 	}

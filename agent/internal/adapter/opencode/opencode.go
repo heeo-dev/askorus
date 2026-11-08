@@ -21,8 +21,8 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/asksemble/asksemble/agent/internal/core"
-	"github.com/asksemble/asksemble/agent/internal/proc"
+	"github.com/heeo-dev/askorus/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/proc"
 )
 
 // Name is the agent name used in session ids ("opencode:ses_…").
@@ -42,13 +42,13 @@ const versionTTL = 5 * time.Minute
 // Everything is denied but the two web tools: with only edit and bash
 // denied, a subagent wrote a file (P0-7). OpenCode still lists its skill
 // tool, which only reads skill text and falls under "*" (P2-1 probe).
-const askAgent = "asksemble-ask"
+const askAgent = "askorus-ask"
 
 var askConfig = func() string {
 	b, _ := json.Marshal(map[string]any{"agent": map[string]any{askAgent: map[string]any{
-		"description": "Asksemble ask: answer the question only",
+		"description": "Askorus ask: answer the question only",
 		"mode":        "primary",
-		"prompt": "You answer one general question sent by the Asksemble app to several AIs at once. " +
+		"prompt": "You answer one general question sent by the Askorus app to several AIs at once. " +
 			"It is not a coding task. Answer only the question; do not add next-step suggestions or extra sections.",
 		"permission": map[string]string{"*": "deny", "webfetch": "allow", "websearch": "allow"},
 	}}})

@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asksemble/asksemble/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/core"
 )
 
 type launchEnv struct {
@@ -48,10 +48,10 @@ func newLaunchEnv(t *testing.T, entries []agentEntry) launchEnv {
 	state := filepath.Join(root, "state.json")
 	b, _ := json.Marshal(entries)
 	os.WriteFile(state, b, 0o600)
-	t.Setenv("ASKSEMBLE_FAKE_STATE", state)
-	t.Setenv("ASKSEMBLE_FAKE_PROJECTS", projects)
-	t.Setenv("ASKSEMBLE_FAKE_UNTRUSTED", "")
-	t.Setenv("ASKSEMBLE_FAKE_NOLINK", "")
+	t.Setenv("ASKORUS_FAKE_STATE", state)
+	t.Setenv("ASKORUS_FAKE_PROJECTS", projects)
+	t.Setenv("ASKORUS_FAKE_UNTRUSTED", "")
+	t.Setenv("ASKORUS_FAKE_NOLINK", "")
 	a := New(Options{ClaudeDir: root, ClaudePath: r.Path()})
 	a.linkWait, a.poll = 3*time.Second, 20*time.Millisecond
 	return launchEnv{a: a, argsFile: argsFile, state: state, projects: projects, folder: folder}
@@ -149,7 +149,7 @@ func TestOpenHistoryResumesWithRemoteControl(t *testing.T) {
 
 func TestOpenUntrustedFolder(t *testing.T) {
 	e := newLaunchEnv(t, nil)
-	t.Setenv("ASKSEMBLE_FAKE_UNTRUSTED", "1")
+	t.Setenv("ASKORUS_FAKE_UNTRUSTED", "1")
 	_, err := e.a.Open(context.Background(), id6)
 	if core.ErrorCode(err) != core.ErrCodeUntrusted {
 		t.Errorf("err = %v", err)
@@ -159,7 +159,7 @@ func TestOpenUntrustedFolder(t *testing.T) {
 func TestOpenLinkTimeout(t *testing.T) {
 	e := newLaunchEnv(t, nil)
 	e.a.linkWait = 300 * time.Millisecond
-	t.Setenv("ASKSEMBLE_FAKE_NOLINK", "1")
+	t.Setenv("ASKORUS_FAKE_NOLINK", "1")
 	_, err := e.a.Open(context.Background(), id6)
 	if core.ErrorCode(err) != core.ErrCodeLinkTimeout || !strings.Contains(err.Error(), "claude logs") {
 		t.Errorf("err = %v", err)
@@ -177,7 +177,7 @@ func TestOpenUnknownAndBadIDs(t *testing.T) {
 
 func TestOpenNeedsProcessList(t *testing.T) {
 	e := newLaunchEnv(t, nil)
-	t.Setenv("ASKSEMBLE_FAKE_EXIT", "1")
+	t.Setenv("ASKORUS_FAKE_EXIT", "1")
 	if _, err := e.a.Open(context.Background(), id6); core.ErrorCode(err) != core.ErrCodeStateUnknown {
 		t.Errorf("err = %v", err)
 	}
@@ -273,7 +273,7 @@ func TestDoneIsStillRunning(t *testing.T) {
 // it is stopped; removing it must still succeed (seen on a real PC).
 func TestRemoveWhenStopDropsTheSession(t *testing.T) {
 	e := newLaunchEnv(t, []agentEntry{runningEntry})
-	t.Setenv("ASKSEMBLE_FAKE_STOP_DROPS", "1")
+	t.Setenv("ASKORUS_FAKE_STOP_DROPS", "1")
 	if err := e.a.Remove(context.Background(), id1); err != nil {
 		t.Fatalf("Remove = %v", err)
 	}

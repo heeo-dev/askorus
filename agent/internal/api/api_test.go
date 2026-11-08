@@ -13,9 +13,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asksemble/asksemble/agent/internal/core"
-	"github.com/asksemble/asksemble/agent/internal/devices"
-	"github.com/asksemble/asksemble/agent/internal/logx"
+	"github.com/heeo-dev/askorus/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/devices"
+	"github.com/heeo-dev/askorus/agent/internal/logx"
 )
 
 type fakeAdapter struct {

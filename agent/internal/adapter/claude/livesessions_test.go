@@ -7,7 +7,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/asksemble/asksemble/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/core"
 )
 
 func TestReadLiveSessions(t *testing.T) {

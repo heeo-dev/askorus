@@ -13,13 +13,13 @@ import (
 
 // JudgeTitle is the title of the OpenCode adapter's one-off conversations
 // (a writer's, a moderator's), the judging days' title (spec part 8).
-const JudgeTitle = "asksemble-judge"
+const JudgeTitle = "askorus-judge"
 
 // ProjectID is the projectId of the sessions the fake saves.
 const ProjectID = "fakeproject0000000000000000000000000000"
 
-// opencodeMain plays opencode: run with --agent asksemble-synth is a
-// combined-answer writer (and asksemble-refine a moderator refining a
+// opencodeMain plays opencode: run with --agent askorus-synth is a
+// combined-answer writer (and askorus-refine a moderator refining a
 // question), any other run an ask; `session list --format json --standalone`
 // prints every saved session, whatever its folder, and `session delete
 // <id> --standalone` removes one.
@@ -38,7 +38,7 @@ func opencodeMain(c *Call) int {
 	return unexpected(RoleOpenCode)
 }
 
-// failing reports whether ASKSEMBLE_FAKECLI_FAIL names what.
+// failing reports whether ASKORUS_FAKECLI_FAIL names what.
 func failing(what string) bool {
 	return slices.Contains(strings.Split(os.Getenv(EnvFail), ","), what)
 }

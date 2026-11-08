@@ -10,9 +10,9 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/asksemble/asksemble/agent/internal/config"
-	"github.com/asksemble/asksemble/agent/internal/core"
-	"github.com/asksemble/asksemble/agent/internal/proc"
+	"github.com/heeo-dev/askorus/agent/internal/config"
+	"github.com/heeo-dev/askorus/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/proc"
 )
 
 // Combined answers (종합 답변, P2-3 S5b, spec part 20) run the locked-down

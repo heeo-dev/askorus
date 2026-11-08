@@ -20,16 +20,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asksemble/asksemble/agent/internal/adapter/claude"
-	"github.com/asksemble/asksemble/agent/internal/adapter/codex"
-	"github.com/asksemble/asksemble/agent/internal/adapter/opencode"
-	"github.com/asksemble/asksemble/agent/internal/api"
-	"github.com/asksemble/asksemble/agent/internal/compares"
-	"github.com/asksemble/asksemble/agent/internal/config"
-	"github.com/asksemble/asksemble/agent/internal/core"
-	"github.com/asksemble/asksemble/agent/internal/devices"
-	"github.com/asksemble/asksemble/agent/internal/fakecli"
-	"github.com/asksemble/asksemble/agent/internal/logx"
+	"github.com/heeo-dev/askorus/agent/internal/adapter/claude"
+	"github.com/heeo-dev/askorus/agent/internal/adapter/codex"
+	"github.com/heeo-dev/askorus/agent/internal/adapter/opencode"
+	"github.com/heeo-dev/askorus/agent/internal/api"
+	"github.com/heeo-dev/askorus/agent/internal/compares"
+	"github.com/heeo-dev/askorus/agent/internal/config"
+	"github.com/heeo-dev/askorus/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/devices"
+	"github.com/heeo-dev/askorus/agent/internal/fakecli"
+	"github.com/heeo-dev/askorus/agent/internal/logx"
 )
 
 func TestMain(m *testing.M) {

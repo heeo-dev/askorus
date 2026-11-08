@@ -11,14 +11,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/asksemble/asksemble/agent/internal/compares"
-	"github.com/asksemble/asksemble/agent/internal/core"
-	"github.com/asksemble/asksemble/agent/internal/fakecli"
-	"github.com/asksemble/asksemble/agent/internal/judge"
+	"github.com/heeo-dev/askorus/agent/internal/compares"
+	"github.com/heeo-dev/askorus/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/fakecli"
+	"github.com/heeo-dev/askorus/agent/internal/judge"
 )
 
 // templateMark starts the answer template in a Korean question.
-const templateMark = "답 형식 (Asksemble이 붙임"
+const templateMark = "답 형식 (Askorus이 붙임"
 
 func callsOfKind(t *testing.T, kind string) []fakecli.Call {
 	t.Helper()
@@ -56,7 +56,7 @@ func TestRefineAsksWithTheTemplateAndWritesV5(t *testing.T) {
 	}
 	// One refine call, by the moderator, with the refine prompt and nothing of the question in its arguments.
 	refines := callsOfKind(t, kindRefine)
-	if len(refines) != 1 || refines[0].Role != fakecli.RoleClaude || !strings.HasPrefix(refines[0].Stdin, "[Asksemble refine v1]") {
+	if len(refines) != 1 || refines[0].Role != fakecli.RoleClaude || !strings.HasPrefix(refines[0].Stdin, "[Askorus refine v1]") {
 		t.Fatalf("refine calls %+v", refines)
 	}
 	noContentIn(t, "refine arguments", strings.Join(refines[0].Args, "\x00"))
@@ -77,7 +77,7 @@ func TestRefineAsksWithTheTemplateAndWritesV5(t *testing.T) {
 	if s.Status != compares.SynthDone || len(writers) != 1 {
 		t.Fatalf("synth %+v, %d writer calls", s, len(writers))
 	}
-	if w := writers[0].Stdin; !strings.HasPrefix(w, "[Asksemble synthesis v5.1]") || strings.Contains(w, "\nSPEC: ") || strings.Contains(w, "\nFORM. ") ||
+	if w := writers[0].Stdin; !strings.HasPrefix(w, "[Askorus synthesis v5.1]") || strings.Contains(w, "\nSPEC: ") || strings.Contains(w, "\nFORM. ") ||
 		strings.Contains(w, templateMark) {
 		t.Errorf("writer prompt is not synth-v5 with the question as written: %q", w[:min(len(w), 200)])
 	}
@@ -136,7 +136,7 @@ func TestRefineIsOffInTheAgent(t *testing.T) {
 	c, _ := r.waitComparison(st.ComparisonID)
 	s := synthOf(t, c)
 	writers := callsOfKind(t, kindSynth)
-	if s.Status != compares.SynthDone || len(writers) != 1 || !strings.HasPrefix(writers[0].Stdin, "[Asksemble synthesis v5.1]") {
+	if s.Status != compares.SynthDone || len(writers) != 1 || !strings.HasPrefix(writers[0].Stdin, "[Askorus synthesis v5.1]") {
 		t.Fatalf("synth %+v, %d writer calls", s, len(writers))
 	}
 	// A moderator name that is no AI's is not refused either: the field is ignored.

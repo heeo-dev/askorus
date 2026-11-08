@@ -5,12 +5,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/asksemble/asksemble/agent/internal/api"
-	"github.com/asksemble/asksemble/agent/internal/compares"
-	"github.com/asksemble/asksemble/agent/internal/core"
-	"github.com/asksemble/asksemble/agent/internal/fakecli"
-	"github.com/asksemble/asksemble/agent/internal/judge"
-	"github.com/asksemble/asksemble/agent/internal/runs"
+	"github.com/heeo-dev/askorus/agent/internal/api"
+	"github.com/heeo-dev/askorus/agent/internal/compares"
+	"github.com/heeo-dev/askorus/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/fakecli"
+	"github.com/heeo-dev/askorus/agent/internal/judge"
+	"github.com/heeo-dev/askorus/agent/internal/runs"
 )
 
 // IT-20 (#29, 11-06): the conversation record through the whole agent and
@@ -117,7 +117,7 @@ func TestIT20ConversationRecord(t *testing.T) {
 	c2, b := r.waitComparison(st.ComparisonID)
 	s2 := synthOf(t, c2)
 	writes := calls(t, from, kindSynth, "")
-	if s2.Status != compares.SynthDone || len(writes) != 1 || !strings.HasPrefix(writes[0].Stdin, "[Asksemble synthesis v6]") {
+	if s2.Status != compares.SynthDone || len(writes) != 1 || !strings.HasPrefix(writes[0].Stdin, "[Askorus synthesis v6]") {
 		t.Fatalf("turn 2's combined answer: %s", b)
 	}
 	data := recordLines(t, "writer", writes[0].Stdin)
@@ -137,19 +137,19 @@ func TestIT20ConversationRecord(t *testing.T) {
 	for _, c := range calls(t, from, kindSynth, "") {
 		heads = append(heads, strings.SplitN(c.Stdin, "]", 2)[0]+"]")
 		switch {
-		case strings.HasPrefix(c.Stdin, "[Asksemble debate-plan v3]"):
+		case strings.HasPrefix(c.Stdin, "[Askorus debate-plan v3]"):
 			data := recordLines(t, "plan", c.Stdin)
 			if len(linesWith(data, "SETTLED: ")) != 1 || len(linesWith(data, "PREVIOUS")) != 0 || !strings.Contains(c.Stdin, "재검토:") {
 				t.Errorf("plan v3: %q", c.Stdin)
 			}
-		case strings.HasPrefix(c.Stdin, "[Asksemble synthesis debate-v5]"):
+		case strings.HasPrefix(c.Stdin, "[Askorus synthesis debate-v5]"):
 			data := recordLines(t, "after", c.Stdin)
 			if len(linesWith(data, "SETTLED: ")) != 1 || len(linesWith(data, "PREVIOUS ANSWER: ")) != 1 {
 				t.Errorf("debate-v5: %q", data)
 			}
 		}
 	}
-	if strings.Join(heads, ",") != "[Asksemble debate-plan v3],[Asksemble debate-check v1],[Asksemble debate-check v1],[Asksemble synthesis debate-v5]" {
+	if strings.Join(heads, ",") != "[Askorus debate-plan v3],[Askorus debate-check v1],[Askorus debate-check v1],[Askorus synthesis debate-v5]" {
 		t.Errorf("moderator calls %v", heads)
 	}
 	onlyAsksAndWriters(t)

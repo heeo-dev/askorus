@@ -6,11 +6,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asksemble/asksemble/agent/internal/api"
-	"github.com/asksemble/asksemble/agent/internal/compares"
-	"github.com/asksemble/asksemble/agent/internal/core"
-	"github.com/asksemble/asksemble/agent/internal/fakecli"
-	"github.com/asksemble/asksemble/agent/internal/judge"
+	"github.com/heeo-dev/askorus/agent/internal/api"
+	"github.com/heeo-dev/askorus/agent/internal/compares"
+	"github.com/heeo-dev/askorus/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/fakecli"
+	"github.com/heeo-dev/askorus/agent/internal/judge"
 )
 
 // IT-19 (P2-5 토론, #26): a debate through the whole agent and the three
@@ -81,7 +81,7 @@ func TestIT19Debate(t *testing.T) {
 			}
 			heads = append(heads, strings.SplitN(c.Stdin, "]", 2)[0]+"]")
 		}
-		if strings.Join(heads, ",") != "[Asksemble debate-plan v2],[Asksemble debate-check v1],[Asksemble debate-check v1],[Asksemble synthesis debate-v4]" {
+		if strings.Join(heads, ",") != "[Askorus debate-plan v2],[Askorus debate-check v1],[Askorus debate-check v1],[Askorus synthesis debate-v4]" {
 			t.Errorf("moderator calls %v", heads)
 		}
 		// The turns: the ask command, in the judge folder, the prompt on
@@ -91,7 +91,7 @@ func TestIT19Debate(t *testing.T) {
 			t.Fatalf("%d asks", len(asks))
 		}
 		for _, c := range asks {
-			if !strings.Contains(c.Stdin, "[Asksemble debate-turn v1]") || !strings.EqualFold(filepath.Clean(c.Dir), filepath.Clean(r.judge)) {
+			if !strings.Contains(c.Stdin, "[Askorus debate-turn v1]") || !strings.EqualFold(filepath.Clean(c.Dir), filepath.Clean(r.judge)) {
 				t.Errorf("turn %s in %q: %.120q", c.Role, c.Dir, c.Stdin)
 			}
 			for _, a := range c.Args {

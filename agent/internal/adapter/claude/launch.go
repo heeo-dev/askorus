@@ -11,7 +11,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/asksemble/asksemble/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/core"
 )
 
 // Launch rules (design: 실행 규칙).
@@ -164,7 +164,7 @@ func (a *Adapter) Open(ctx context.Context, id string) (core.OpenResult, error) 
 	if state == core.StateStopped {
 		args = []string{"--bg", "--resume", id}
 	} else {
-		title = sessionName(firstNonEmpty(t.Title, "asksemble "+id[:8]))
+		title = sessionName(firstNonEmpty(t.Title, "askorus "+id[:8]))
 		args = append([]string{"--bg", "--resume", id, "--remote-control", "-n", title}, a.modelArgs("", "")...)
 	}
 	if err := a.checkService(); err != nil {

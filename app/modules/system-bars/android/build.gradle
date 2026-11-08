@@ -3,11 +3,11 @@ plugins {
   id 'expo-module-gradle-plugin'
 }
 
-group = 'app.asksemble'
+group = 'app.askorus'
 version = '1.0.0'
 
 android {
-  namespace "app.asksemble.systembars"
+  namespace "app.askorus.systembars"
   defaultConfig {
     versionCode 1
     versionName '1.0.0'

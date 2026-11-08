@@ -20,13 +20,13 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/asksemble/asksemble/agent/internal/config"
+	"github.com/heeo-dev/askorus/agent/internal/config"
 )
 
 // FileName is the device file inside the agent directory.
 const FileName = "devices.json"
 
-// TokenPrefix marks Asksemble device tokens so they are easy to spot.
+// TokenPrefix marks Askorus device tokens so they are easy to spot.
 const TokenPrefix = "ask_"
 
 // Device is one paired phone.

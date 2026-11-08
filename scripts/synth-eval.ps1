@@ -6,8 +6,8 @@
 # no model call.
 #
 # It builds agent/cmd/synth-eval (-tags syntheval, never part of the agent)
-# into %LOCALAPPDATA%\Asksemble\synth-eval\bin and runs it with normal rights.
-# Runs go to %LOCALAPPDATA%\Asksemble\synth-eval\<run>, outside the repo. The
+# into %LOCALAPPDATA%\Askorus\synth-eval\bin and runs it with normal rights.
+# Runs go to %LOCALAPPDATA%\Askorus\synth-eval\<run>, outside the repo. The
 # AIs answer in the agent's ask folder (as for the phone); the writers and
 # the AIs that score run in its judge folder. It never touches the running
 # agent, Tailscale serve or the
@@ -57,7 +57,12 @@ Get-ChildItem env: | Where-Object { $_.Name -eq 'CLAUDECODE' -or $_.Name -eq 'CL
   Where-Object { $null -eq [Environment]::GetEnvironmentVariable($_.Name, 'User') -and $null -eq [Environment]::GetEnvironmentVariable($_.Name, 'Machine') } |
   ForEach-Object { Remove-Item "env:$($_.Name)" }
 
-$exe = Join-Path $env:LOCALAPPDATA 'Asksemble\synth-eval\bin\synth-eval.exe'
+# Before 11-08 (#31) the folder was Asksemble; the agent copies it to
+# Askorus on its first start. Until then the old one is used, as the agent
+# does, so this script must not make the new one first.
+$base = Join-Path $env:LOCALAPPDATA 'Askorus'
+if (-not (Test-Path $base) -and (Test-Path (Join-Path $env:LOCALAPPDATA 'Asksemble'))) { $base = Join-Path $env:LOCALAPPDATA 'Asksemble' }
+$exe = Join-Path $base 'synth-eval\bin\synth-eval.exe'
 Push-Location (Join-Path $root 'agent')
 go build -tags syntheval -o $exe ./cmd/synth-eval
 $code = $LASTEXITCODE

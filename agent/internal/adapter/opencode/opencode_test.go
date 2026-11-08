@@ -13,22 +13,22 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asksemble/asksemble/agent/internal/core"
-	"github.com/asksemble/asksemble/agent/internal/fakecli"
+	"github.com/heeo-dev/askorus/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/fakecli"
 )
 
-// The test binary doubles as a fake opencode: with ASKSEMBLE_FAKE_OPENCODE=1
-// it records {args, cwd, pwd, config, stdin} to ASKSEMBLE_FAKE_ARGS and
+// The test binary doubles as a fake opencode: with ASKORUS_FAKE_OPENCODE=1
+// it records {args, cwd, pwd, config, stdin} to ASKORUS_FAKE_ARGS and
 // prints what `opencode run --format json` prints. Sessions it makes are
-// kept in ASKSEMBLE_FAKE_SESSIONS for `session list`.
-// ASKSEMBLE_FAKE_MODE: "badmodel", "exit" (exit 1, nothing printed).
+// kept in ASKORUS_FAKE_SESSIONS for `session list`.
+// ASKORUS_FAKE_MODE: "badmodel", "exit" (exit 1, nothing printed).
 // The combined-answer, refine and cleanup tests use internal/fakecli
 // instead.
 func TestMain(m *testing.M) {
 	if fakecli.Active() {
 		os.Exit(fakecli.Main(os.Args[1:]))
 	}
-	if os.Getenv("ASKSEMBLE_FAKE_OPENCODE") == "1" {
+	if os.Getenv("ASKORUS_FAKE_OPENCODE") == "1" {
 		os.Exit(fakeOpenCode(os.Args[1:]))
 	}
 	os.Exit(m.Run())
@@ -55,15 +55,15 @@ func fakeOpenCode(args []string) int {
 	in, _ := io.ReadAll(os.Stdin)
 	cwd, _ := os.Getwd()
 	b, _ := json.Marshal(fakeCall{Args: args, Cwd: cwd, PWD: os.Getenv("PWD"), Config: os.Getenv("OPENCODE_CONFIG_CONTENT"), Stdin: string(in)})
-	if f, err := os.OpenFile(os.Getenv("ASKSEMBLE_FAKE_ARGS"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600); err == nil {
+	if f, err := os.OpenFile(os.Getenv("ASKORUS_FAKE_ARGS"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600); err == nil {
 		f.Write(append(b, '\n'))
 		f.Close()
 	}
 	var sessions []fakeSession
-	sb, _ := os.ReadFile(os.Getenv("ASKSEMBLE_FAKE_SESSIONS"))
+	sb, _ := os.ReadFile(os.Getenv("ASKORUS_FAKE_SESSIONS"))
 	json.Unmarshal(sb, &sessions)
 	if len(args) >= 2 && args[0] == "session" && args[1] == "list" {
-		switch os.Getenv("ASKSEMBLE_FAKE_MODE") {
+		switch os.Getenv("ASKORUS_FAKE_MODE") {
 		case "listexit":
 			return 1
 		case "listjunk":
@@ -84,9 +84,9 @@ func fakeOpenCode(args []string) int {
 	if !slices.ContainsFunc(sessions, func(s fakeSession) bool { return s.ID == id }) {
 		sessions = append(sessions, fakeSession{ID: id, Directory: os.Getenv("PWD")})
 		b, _ := json.Marshal(sessions)
-		os.WriteFile(os.Getenv("ASKSEMBLE_FAKE_SESSIONS"), b, 0o600)
+		os.WriteFile(os.Getenv("ASKORUS_FAKE_SESSIONS"), b, 0o600)
 	}
-	switch os.Getenv("ASKSEMBLE_FAKE_MODE") {
+	switch os.Getenv("ASKORUS_FAKE_MODE") {
 	case "badmodel":
 		fmt.Printf("{\"type\":\"error\",\"timestamp\":1,\"sessionID\":%q,\"error\":{\"type\":\"provider.no-route\",\"message\":\"Model unavailable: x\"}}\n", id)
 		return 1
@@ -117,10 +117,10 @@ func fakeAdapter(t *testing.T, tiers map[string]core.AskModel) (*Adapter, string
 		t.Fatal(err)
 	}
 	dir := t.TempDir()
-	t.Setenv("ASKSEMBLE_FAKE_OPENCODE", "1")
-	t.Setenv("ASKSEMBLE_FAKE_ARGS", filepath.Join(dir, "args.jsonl"))
-	t.Setenv("ASKSEMBLE_FAKE_SESSIONS", filepath.Join(dir, "sessions.json"))
-	t.Setenv("ASKSEMBLE_FAKE_MODE", "")
+	t.Setenv("ASKORUS_FAKE_OPENCODE", "1")
+	t.Setenv("ASKORUS_FAKE_ARGS", filepath.Join(dir, "args.jsonl"))
+	t.Setenv("ASKORUS_FAKE_SESSIONS", filepath.Join(dir, "sessions.json"))
+	t.Setenv("ASKORUS_FAKE_MODE", "")
 	folder := filepath.Join(dir, "ask")
 	os.MkdirAll(folder, 0o700)
 	return New(Options{Path: exe, Tiers: tiers}), filepath.Join(dir, "args.jsonl"), folder
@@ -180,7 +180,7 @@ func TestOneOffAndCutOffSessionsAreDeleted(t *testing.T) {
 	}
 
 	// A new ask that fails after its session started: deleted.
-	t.Setenv("ASKSEMBLE_FAKE_MODE", "badmodel")
+	t.Setenv("ASKORUS_FAKE_MODE", "badmodel")
 	n := len(calls(t, argsFile))
 	if _, err := a.Ask(context.Background(), core.AskRequest{Folder: folder, Prompt: "q", Tier: core.TierQuick}); err == nil || !isDelete(last()) || len(calls(t, argsFile)) != n+2 {
 		t.Errorf("failed new ask: %v, last call %q", err, last().Args)
@@ -192,7 +192,7 @@ func TestOneOffAndCutOffSessionsAreDeleted(t *testing.T) {
 	}
 
 	// A new ask that times out: deleted all the same.
-	t.Setenv("ASKSEMBLE_FAKE_MODE", "slow")
+	t.Setenv("ASKORUS_FAKE_MODE", "slow")
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	if _, err := a.Ask(ctx, core.AskRequest{Folder: folder, Prompt: "q", Tier: core.TierQuick}); core.ErrorCode(err) != core.ErrCodeAskTimeout || !isDelete(last()) {
@@ -208,7 +208,7 @@ func TestAskAndFollowUp(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := calls(t, argsFile)[0]
-	want := []string{"run", "--standalone", "--format", "json", "--agent", "asksemble-ask", "-m", "opencode-go/deepseek-v4.1-flash#high"}
+	want := []string{"run", "--standalone", "--format", "json", "--agent", "askorus-ask", "-m", "opencode-go/deepseek-v4.1-flash#high"}
 	if !reflect.DeepEqual(c.Args, want) || c.Stdin != prompt || c.PWD != folder {
 		t.Errorf("call = %+v", c)
 	}
@@ -221,8 +221,8 @@ func TestAskAndFollowUp(t *testing.T) {
 	if err := json.Unmarshal([]byte(c.Config), &cfg); err != nil {
 		t.Fatalf("config %q: %v", c.Config, err)
 	}
-	perm := cfg.Agent["asksemble-ask"].Permission
-	if cfg.Agent["asksemble-ask"].Mode != "primary" || !reflect.DeepEqual(perm, map[string]string{"*": "deny", "webfetch": "allow", "websearch": "allow"}) {
+	perm := cfg.Agent["askorus-ask"].Permission
+	if cfg.Agent["askorus-ask"].Mode != "primary" || !reflect.DeepEqual(perm, map[string]string{"*": "deny", "webfetch": "allow", "websearch": "allow"}) {
 		t.Errorf("agent config = %s", c.Config)
 	}
 	// The answer is the last step's text, not the lead-in before the search.
@@ -239,7 +239,7 @@ func TestAskAndFollowUp(t *testing.T) {
 	if got := cs[1].Args; !reflect.DeepEqual(got, []string{"session", "list", "--format", "json", "--standalone"}) || cs[1].PWD != folder {
 		t.Errorf("check = %+v", cs[1])
 	}
-	want = []string{"run", "--standalone", "--format", "json", "--agent", "asksemble-ask", "-m", "opencode-go/deepseek-v4-pro#high", "--session", res.SessionID}
+	want = []string{"run", "--standalone", "--format", "json", "--agent", "askorus-ask", "-m", "opencode-go/deepseek-v4-pro#high", "--session", res.SessionID}
 	if got := cs[2].Args; !reflect.DeepEqual(got, want) {
 		t.Errorf("follow-up args = %q", got)
 	}
@@ -257,14 +257,14 @@ func TestFollowUpNeedsAnAskSession(t *testing.T) {
 	// on as an ask either.
 	other := fakeSession{ID: "ses_e773ef84effedagCyC2bkvlOTHR", Directory: t.TempDir()}
 	b, _ := json.Marshal([]fakeSession{other})
-	os.WriteFile(os.Getenv("ASKSEMBLE_FAKE_SESSIONS"), b, 0o600)
+	os.WriteFile(os.Getenv("ASKORUS_FAKE_SESSIONS"), b, 0o600)
 	_, err = a.Ask(context.Background(), core.AskRequest{Folder: folder, Prompt: "q", Tier: core.TierStandard, Resume: other.ID})
 	if core.ErrorCode(err) != core.ErrCodeNotFound {
 		t.Fatalf("other folder's session: %v", err)
 	}
 	// When the list cannot be read, nothing runs.
 	for _, mode := range []string{"listexit", "listjunk"} {
-		t.Setenv("ASKSEMBLE_FAKE_MODE", mode)
+		t.Setenv("ASKORUS_FAKE_MODE", mode)
 		_, err = a.Ask(context.Background(), core.AskRequest{Folder: folder, Prompt: "q", Tier: core.TierStandard, Resume: other.ID})
 		if core.ErrorCode(err) != core.ErrCodeAskFailed {
 			t.Errorf("%s: %v", mode, err)
@@ -340,15 +340,15 @@ func TestAskErrors(t *testing.T) {
 		_, err := a.Ask(context.Background(), req)
 		return err
 	}
-	t.Setenv("ASKSEMBLE_FAKE_MODE", "badmodel")
+	t.Setenv("ASKORUS_FAKE_MODE", "badmodel")
 	if err := ask(core.AskRequest{Model: "opencode-go/nope"}); core.ErrorCode(err) != core.ErrCodeBadModel || !strings.Contains(err.Error(), "Model unavailable") {
 		t.Errorf("bad model: %v", err)
 	}
-	t.Setenv("ASKSEMBLE_FAKE_MODE", "exit")
+	t.Setenv("ASKORUS_FAKE_MODE", "exit")
 	if err := ask(core.AskRequest{}); core.ErrorCode(err) != core.ErrCodeAskFailed {
 		t.Errorf("exit 1: %v", err)
 	}
-	t.Setenv("ASKSEMBLE_FAKE_MODE", "")
+	t.Setenv("ASKORUS_FAKE_MODE", "")
 	n := len(calls(t, argsFile))
 	for name, req := range map[string]core.AskRequest{
 		"no provider":     {Model: "deepseek"},
@@ -374,7 +374,7 @@ func TestCheckArgs(t *testing.T) {
 		"auto":        append(slices.Clone(good), "--auto"),
 		"build agent": {"run", "--standalone", "--format", "json", "--agent", "build", "-m", "opencode-go/x"},
 		"no agent":    {"run", "--standalone", "--format", "json", "-m", "opencode-go/x"},
-		"service":     {"run", "--format", "json", "--agent", "asksemble-ask", "-m", "opencode-go/x"},
+		"service":     {"run", "--format", "json", "--agent", "askorus-ask", "-m", "opencode-go/x"},
 		"prompt arg":  append(slices.Clone(good), "hello"),
 		"share":       append(slices.Clone(good), "--share"),
 	} {

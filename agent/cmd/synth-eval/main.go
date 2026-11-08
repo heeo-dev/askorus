@@ -4,7 +4,7 @@
 // design C-9, #12). It asks a fixed set of questions the way the phone
 // does (POST /v1/runs with a comparison and a combined answer, made in
 // this process), keeps each question's answers, comparison and combined
-// answer under %LOCALAPPDATA%\Asksemble\synth-eval\<run>, and reports what
+// answer under %LOCALAPPDATA%\Askorus\synth-eval\<run>, and reports what
 // can be counted: times, the combined answer's shape, English mixed into a
 // Korean answer, extras left in. It uses the person's AI subscriptions, so
 // a run is started only when agreed, through scripts\synth-eval.ps1. It is
@@ -38,8 +38,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/asksemble/asksemble/agent/internal/adapter/claude"
-	"github.com/asksemble/asksemble/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/adapter/claude"
+	"github.com/heeo-dev/askorus/agent/internal/core"
 )
 
 const (

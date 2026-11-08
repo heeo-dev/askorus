@@ -1,9 +1,9 @@
-// Draws the brand PNGs (S5c): app icon B, the adaptive icon layers, the
+// Draws the brand PNGs: app icon I2-A, the adaptive icon layers, the
 // splash icon, the favicon, the mark and the wordmark used by the About
-// screen. The art lives in scripts/brand/icon.html and wordmark.html
-// (copied from the design boards F-Brand-Icon B and F-Brand-Wordmark);
-// headless Microsoft Edge screenshots them once on the PC and the PNGs are
-// committed, so the app needs no SVG library or font file (Expo Go).
+// screen and the launch cover. The art lives in scripts/brand/icon.html and
+// wordmark.html (copied from the masters in docs/brand, picked on 11-08,
+// #31); headless Microsoft Edge screenshots them once on the PC and the PNGs
+// are committed, so the app needs no SVG library or font file (Expo Go).
 //
 //   assets/icon.png                     1024, full-bleed apricot square, no alpha (iOS and stores mask it)
 //   assets/android-icon-background.png  1024, solid apricot, no alpha
@@ -18,9 +18,8 @@
 // board's art, transparent corners, nothing outside the safe zone) before
 // any file in assets is replaced; a failed check stops with exit code 1.
 //
-// Run: node scripts/render-brand.mjs   (EDGE and WORDMARK_FONT override the
-// Edge and font paths; the wordmark needs Noto Sans KR, which Windows ships
-// as C:\Windows\Fonts\NotoSansKR-VF.ttf.)
+// Run: node scripts/render-brand.mjs   (EDGE overrides the Edge path. The
+// wordmark is outlines, so no font file is needed.)
 
 import { execFile } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -32,7 +31,6 @@ import { crc32, deflateSync, inflateSync } from 'node:zlib';
 const app = join(dirname(fileURLToPath(import.meta.url)), '..');
 const templates = join(app, 'scripts', 'brand');
 const edge = process.env.EDGE || 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
-const fontFile = process.env.WORDMARK_FONT || 'C:\\Windows\\Fonts\\NotoSansKR-VF.ttf';
 const parallel = 4;
 // Edge does not draw a window smaller than this; smaller PNGs are cut out
 // of a larger screenshot.
@@ -63,21 +61,22 @@ const layers = {
   monochrome: '<rect x="-100" y="-100" width="300" height="300" fill="#FFFFFF" mask="url(#silhouette)"></rect>',
 };
 
-// Points of the board's art (viewBox units) and what must be there.
+// Points of the master's art (viewBox units) and what must be there.
 const markInk = [
-  [50, 33, 'ink'], // top circle, away from the rings
-  [30, 55, 'ink'], // left circle
-  [70, 55, 'ink'], // right circle
-  [29.5, 69.5, 'ink'], // the tail, outside the left circle's ring
+  [42, 35, 'ink'], // top circle, beside its mouth
+  [25, 55, 'ink'], // left circle, beside its mouth
+  [75, 55, 'ink'], // right circle, beside its mouth
+  [30, 70, 'ink'], // the tail, outside the left circle's ring
 ];
-const ring = [48.5, 51.5]; // the right circle's ring, where it parts the left circle
-const squircleChecks = [...markInk, [...ring, 'apricot'], [50, 88, 'apricot'], [6, 50, 'apricot'], [1.5, 1.5, 'clear'], [98.5, 98.5, 'clear']];
+const ring = [48, 55]; // the right circle's ring, where it parts the left circle
+const mouths = [[50, 33.5], [36, 56], [64, 56]]; // apricot, or cut out in the silhouette
+const squircleChecks = [...markInk, [...ring, 'apricot'], ...mouths.map(([u, v]) => [u, v, 'apricot']), [50, 88, 'apricot'], [6, 50, 'apricot'], [1.5, 1.5, 'clear'], [98.5, 98.5, 'clear']];
 
 const icons = [
-  { file: 'icon.png', px: 1024, viewBox: iconViewBox, layers: layers.square, opaque: true, checks: [...markInk, [...ring, 'apricot'], [0.2, 0.2, 'apricot'], [99.8, 99.8, 'apricot']] },
+  { file: 'icon.png', px: 1024, viewBox: iconViewBox, layers: layers.square, opaque: true, checks: [...markInk, [...ring, 'apricot'], ...mouths.map(([u, v]) => [u, v, 'apricot']), [0.2, 0.2, 'apricot'], [99.8, 99.8, 'apricot']] },
   { file: 'android-icon-background.png', px: 1024, viewBox: adaptiveViewBox, layers: layers.background, opaque: true, only: apricot },
-  { file: 'android-icon-foreground.png', px: 1024, viewBox: adaptiveViewBox, layers: layers.foreground, safe: true, checks: [...markInk, [...ring, 'apricot'], [50, 88, 'clear'], [-24, -24, 'clear'], [124, 124, 'clear']] },
-  { file: 'android-icon-monochrome.png', px: 1024, viewBox: adaptiveViewBox, layers: layers.monochrome, safe: true, only: white, checks: [...markInk.map(([u, v]) => [u, v, 'white']), [...ring, 'clear'], [50, 88, 'clear'], [-24, -24, 'clear']] },
+  { file: 'android-icon-foreground.png', px: 1024, viewBox: adaptiveViewBox, layers: layers.foreground, safe: true, checks: [...markInk, [...ring, 'apricot'], ...mouths.map(([u, v]) => [u, v, 'apricot']), [50, 88, 'clear'], [-24, -24, 'clear'], [124, 124, 'clear']] },
+  { file: 'android-icon-monochrome.png', px: 1024, viewBox: adaptiveViewBox, layers: layers.monochrome, safe: true, only: white, checks: [...markInk.map(([u, v]) => [u, v, 'white']), [...ring, 'clear'], ...mouths.map(([u, v]) => [u, v, 'clear']), [50, 88, 'clear'], [-24, -24, 'clear']] },
   { file: 'splash-icon.png', px: 1024, viewBox: iconViewBox, layers: layers.squircle, checks: squircleChecks },
   { file: 'favicon.png', px: 196, viewBox: iconViewBox, layers: layers.squircle, checks: squircleChecks },
   { file: 'brand/mark.png', px: 112, viewBox: iconViewBox, layers: layers.squircle, checks: squircleChecks },
@@ -85,13 +84,21 @@ const icons = [
   { file: 'brand/mark@3x.png', px: 336, viewBox: iconViewBox, layers: layers.squircle, checks: squircleChecks },
 ];
 
-// The wordmark: 36 px text at 1x (F-Brand-Splash-Final), dark and light.
+// The wordmark: the outlines were made at 120 units per em, so a 36 px
+// wordmark (as the old text one) is 0.3 px per unit. The box is the ink
+// (A's left edge to the last s, the k's top to the o's tail) plus 4 px all
+// round at 1x. Dark and light.
 const word = {
   fontSize: 36,
-  margin: 48, // around the text in the screenshot, per 1x
+  unitsPerEm: 120,
+  ink: { x0: 20, y0: 21.28, x1: 493.6, y1: 127.3 }, // in wordmark.html's viewBox units
+  pad: 4, // px at 1x
+  margin: 48, // around the drawing in the screenshot, per 1x
+  hole: [271.28, 83.2], // the middle of the o: see-through
+  tail: [256, 121], // inside the o's tail, outside its circle
   schemes: {
-    dark: { ask: '#FFAD85', semble: '#EDEBE7' },
-    light: { ask: '#DD5A26', semble: '#1D1A17' },
+    dark: { ask: '#FFAD85', rest: '#EDEBE7' },
+    light: { ask: '#DD5A26', rest: '#1D1A17' },
   },
 };
 
@@ -260,7 +267,7 @@ function inkBox(img) {
 // edgeRun starts Edge once, with a profile folder of its own that is
 // removed after. mode 'shot' writes a PNG, 'dom' returns the DOM.
 function edgeRun(html, w, h, mode, png) {
-  const dir = mkdtempSync(join(tmpdir(), 'asksemble-brand-'));
+  const dir = mkdtempSync(join(tmpdir(), 'askorus-brand-'));
   const file = join(dir, 'page.html');
   writeFileSync(file, html);
   const args = [
@@ -377,88 +384,65 @@ async function renderIcons(tmp, results) {
 // --- wordmark ----------------------------------------------------------
 
 async function renderWordmark(tmp, results) {
-  if (!existsSync(fontFile)) fail(`font not found at ${fontFile} (set WORDMARK_FONT)`);
-  const font = `data:font/ttf;base64,${readFileSync(fontFile).toString('base64')}`;
   const html = template('wordmark.html');
-  const page = (k, colours, at) => fill(html, { font, size: word.fontSize * k, ask: colours.ask, semble: colours.semble, left: at, top: at });
+  const unit = word.fontSize / word.unitsPerEm; // px per unit at 1x
+  const padU = word.pad / unit;
+  const vx = word.ink.x0 - padU;
+  const vy = word.ink.y0 - padU;
+  const W = Math.ceil((word.ink.x1 - word.ink.x0) * unit + 2 * word.pad);
+  const H = Math.ceil((word.ink.y1 - word.ink.y0) * unit + 2 * word.pad);
+  const viewBox = `${vx} ${vy} ${W / unit} ${H / unit}`;
+  const at = (k, [u, v]) => [Math.floor((u - vx) * unit * k), Math.floor((v - vy) * unit * k)];
 
-  // Pass 1: the text box at 1x, and proof that the font itself drew it.
-  const dom = await edgeRun(page(1, word.schemes.dark, 0), 600, 200, 'dom');
-  const m = /data-measure="([^"]*)"/.exec(dom);
-  if (!m) throw new Error('wordmark: the page did not report its measure');
-  const measure = JSON.parse(m[1].replace(/&quot;/g, '"').replace(/&amp;/g, '&'));
-  if (!(measure.faces >= 1) || measure.loaded !== true) throw new Error(`wordmark: Noto Sans KR 800 did not load (${JSON.stringify(measure)})`);
-  if (measure.width - measure.thinWidth < 3) throw new Error(`wordmark: weight 800 is no wider than 300; the variable font's weight was not applied (${JSON.stringify(measure)})`);
-  if (measure.width < word.fontSize * 4.5 || measure.width > word.fontSize * 6) throw new Error(`wordmark: width ${measure.width} at ${word.fontSize} px is not Noto Sans KR 800`);
-
-  // Pass 2: screenshots with room around the text.
-  const shots = {};
   await pool(
     Object.entries(word.schemes).flatMap(([scheme, colours]) =>
       [1, 2, 3].map((k) => async () => {
-        const at = word.margin * k;
-        const w = Math.ceil(measure.width * k) + 2 * at;
-        const h = Math.ceil(measure.height * k) + 2 * at;
-        shots[`${scheme}@${k}`] = { img: await shot(page(k, colours, at), w, h, tmp, `wordmark-${scheme}-${k}`), at, colours };
+        const name = `wordmark-${scheme}${k === 1 ? '' : `@${k}x`}.png`;
+        const m = word.margin * k;
+        const w = W * k;
+        const h = H * k;
+        const img = await shot(fill(html, { w, h, viewBox, ask: colours.ask, rest: colours.rest, left: m, top: m }), w + 2 * m, h + 2 * m, tmp, name);
+        // Nothing may be drawn outside the box.
+        const b = inkBox(img);
+        if (!b) throw new Error(`${name}: nothing drawn`);
+        if (b.x0 < m || b.y0 < m || b.x1 >= m + w || b.y1 >= m + h) throw new Error(`${name}: ink ${JSON.stringify(b)} lies outside the box ${m},${m} ${w}x${h}`);
+        const cut = crop(img, m, m, w, h);
+        // The pad is clear on every side: the ink box is the master's.
+        const c = inkBox(cut);
+        const padPx = Math.floor(word.pad * k) - 1;
+        if (c.x0 < padPx || c.y0 < padPx || c.x1 > w - 1 - padPx || c.y1 > h - 1 - padPx) throw new Error(`${name}: ink ${JSON.stringify(c)} reaches into the ${word.pad * k} px pad of ${w}x${h}`);
+        // Solid pixels are the two colours only, and both are there.
+        const ask = rgbOf(colours.ask);
+        const rest = rgbOf(colours.rest);
+        let nAsk = 0;
+        let nRest = 0;
+        for (let i = 0; i < cut.w * cut.h; i++) {
+          const p = [cut.rgba[i * 4], cut.rgba[i * 4 + 1], cut.rgba[i * 4 + 2], cut.rgba[i * 4 + 3]];
+          if (p[3] !== 255) continue;
+          if (near(p, ask)) nAsk++;
+          else if (near(p, rest)) nRest++;
+          else throw new Error(`${name}: solid pixel ${hex(p)} is neither ${colours.ask} nor ${colours.rest}`);
+        }
+        if (nAsk < 20 * k * k || nRest < 40 * k * k) throw new Error(`${name}: too few solid pixels (Ask ${nAsk}, orus ${nRest})`);
+        // The o is a ring with a tail: clear in the middle, ink in the tail.
+        const [hx, hy] = at(k, word.hole);
+        if (px(cut, hx, hy)[3] !== 0) throw new Error(`${name}: the o is not see-through at its middle (${hx}, ${hy})`);
+        const [tx, ty] = at(k, word.tail);
+        if (px(cut, tx, ty)[3] < 128) throw new Error(`${name}: no ink in the o's tail at (${tx}, ${ty})`);
+        results.push({ file: join('assets', 'brand', name), png: encode(cut, false), img: cut, opaque: false });
       }),
     ),
   );
 
-  // The 1x box: the layout box, grown to take in any ink that pokes out.
-  let x0 = 0;
-  let y0 = 0;
-  let x1 = Math.ceil(measure.width);
-  let y1 = Math.ceil(measure.height);
-  for (const scheme of Object.keys(word.schemes)) {
-    const { img, at } = shots[`${scheme}@1`];
-    const b = inkBox(img);
-    if (!b) throw new Error(`wordmark-${scheme}: nothing drawn`);
-    x0 = Math.min(x0, b.x0 - at);
-    y0 = Math.min(y0, b.y0 - at);
-    x1 = Math.max(x1, b.x1 + 1 - at);
-    y1 = Math.max(y1, b.y1 + 1 - at);
-  }
-  const W = x1 - x0;
-  const H = y1 - y0;
-
-  for (const [key, { img, at, colours }] of Object.entries(shots)) {
-    const [scheme, ks] = key.split('@');
-    const k = Number(ks);
-    const name = `wordmark-${scheme}${k === 1 ? '' : `@${k}x`}.png`;
-    const cx = at + x0 * k;
-    const cy = at + y0 * k;
-    const cut = crop(img, cx, cy, W * k, H * k);
-    // No ink may be left outside the cut.
-    const b = inkBox(img);
-    if (b.x0 < cx || b.y0 < cy || b.x1 >= cx + W * k || b.y1 >= cy + H * k) throw new Error(`${name}: ink ${JSON.stringify(b)} lies outside the cut ${cx},${cy} ${W * k}x${H * k}`);
-    // The drawn width matches the font's box (a fallback font would not).
-    const inkWidth = b.x1 + 1 - b.x0;
-    if (Math.abs(inkWidth - measure.width * k) > 3 * k) throw new Error(`${name}: ink is ${inkWidth} px wide, the font box ${measure.width * k}`);
-    // Solid pixels are the two colours only, and both are there.
-    const ask = rgbOf(colours.ask);
-    const semble = rgbOf(colours.semble);
-    let nAsk = 0;
-    let nSemble = 0;
-    for (let i = 0; i < cut.w * cut.h; i++) {
-      const p = [cut.rgba[i * 4], cut.rgba[i * 4 + 1], cut.rgba[i * 4 + 2], cut.rgba[i * 4 + 3]];
-      if (p[3] !== 255) continue;
-      if (near(p, ask)) nAsk++;
-      else if (near(p, semble)) nSemble++;
-      else throw new Error(`${name}: solid pixel ${hex(p)} is neither ${colours.ask} nor ${colours.semble}`);
-    }
-    if (nAsk < 20 * k * k || nSemble < 40 * k * k) throw new Error(`${name}: too few solid pixels (Ask ${nAsk}, semble ${nSemble})`);
-    results.push({ file: join('assets', 'brand', name), png: encode(cut, false), img: cut, opaque: false });
-  }
-
   const json = { fontSize: word.fontSize, width: W, height: H };
   results.push({ file: join('src', 'ui', 'wordmark-size.json'), text: JSON.stringify(json, null, 2) + '\n' });
-  return { measure, json };
+  return json;
 }
 
 // --- main --------------------------------------------------------------
 
 if (!existsSync(edge)) fail(`Edge not found at ${edge} (set EDGE)`);
-const tmp = mkdtempSync(join(tmpdir(), 'asksemble-brand-out-'));
+const tmp = mkdtempSync(join(tmpdir(), 'askorus-brand-out-'));
 try {
   const results = [];
   await renderIcons(tmp, results);
@@ -481,7 +465,7 @@ try {
       console.log(`render-brand: ${r.file.replace(/\\/g, '/')} ${r.img.w}x${r.img.h} ${r.opaque ? 'RGB' : 'RGBA'} ${r.png.length} bytes`);
     }
   }
-  console.log(`render-brand: wordmark font box ${wm.measure.width.toFixed(2)}x${wm.measure.height.toFixed(2)} at ${word.fontSize} px`);
+  console.log(`render-brand: wordmark box ${wm.width}x${wm.height} at ${word.fontSize} px`);
 } finally {
   rmSync(tmp, { recursive: true, force: true });
 }

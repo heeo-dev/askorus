@@ -4,9 +4,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/asksemble/asksemble/agent/internal/compares"
-	"github.com/asksemble/asksemble/agent/internal/core"
-	"github.com/asksemble/asksemble/agent/internal/judge"
+	"github.com/heeo-dev/askorus/agent/internal/compares"
+	"github.com/heeo-dev/askorus/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/judge"
 )
 
 // The conversation record (#29): context on /v1/runs, /v1/comparisons and
@@ -52,7 +52,7 @@ func TestRunContext(t *testing.T) {
 		t.Errorf("earlier questions: claude (a session) %v, codex (none) %v", strings.Contains(known[0].Prompt, "EARLIER"), strings.Contains(fresh[0].Prompt, "EARLIER"))
 	}
 	synths := cl.synthCalls()
-	if len(synths) != 1 || !strings.HasPrefix(synths[0].Prompt, "[Asksemble synthesis v6]") || !strings.Contains(synths[0].Prompt, "LAST-SECRET") {
+	if len(synths) != 1 || !strings.HasPrefix(synths[0].Prompt, "[Askorus synthesis v6]") || !strings.Contains(synths[0].Prompt, "LAST-SECRET") {
 		t.Fatalf("synthesis: %+v", synths)
 	}
 	e.idle(t, st.ComparisonID)
@@ -169,7 +169,7 @@ func TestComparisonAndDebateContext(t *testing.T) {
 		t.Fatalf("comparison = %+v", got.Comparison)
 	}
 	e.idle(t, c.ID)
-	if s := cx.synthCalls(); len(s) != 1 || !strings.HasPrefix(s[0].Prompt, "[Asksemble synthesis v6]") {
+	if s := cx.synthCalls(); len(s) != 1 || !strings.HasPrefix(s[0].Prompt, "[Askorus synthesis v6]") {
 		t.Errorf("combined answer: %+v", s)
 	}
 	body := debateBody("d1")
@@ -183,8 +183,8 @@ func TestComparisonAndDebateContext(t *testing.T) {
 	}
 	var plan, after bool
 	for _, s := range cl.synthCalls() {
-		plan = plan || (strings.HasPrefix(s.Prompt, "[Asksemble debate-plan v3]") && strings.Contains(s.Prompt, "TOPIC-SECRET") && !strings.Contains(s.Prompt, "LAST-SECRET"))
-		after = after || (strings.HasPrefix(s.Prompt, "[Asksemble synthesis debate-v5]") && strings.Contains(s.Prompt, "LAST-SECRET"))
+		plan = plan || (strings.HasPrefix(s.Prompt, "[Askorus debate-plan v3]") && strings.Contains(s.Prompt, "TOPIC-SECRET") && !strings.Contains(s.Prompt, "LAST-SECRET"))
+		after = after || (strings.HasPrefix(s.Prompt, "[Askorus synthesis debate-v5]") && strings.Contains(s.Prompt, "LAST-SECRET"))
 	}
 	if !plan || !after {
 		t.Errorf("plan v3 %v, after v5 %v", plan, after)

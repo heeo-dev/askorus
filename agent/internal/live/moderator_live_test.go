@@ -8,12 +8,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asksemble/asksemble/agent/internal/adapter/claude"
-	"github.com/asksemble/asksemble/agent/internal/adapter/codex"
-	"github.com/asksemble/asksemble/agent/internal/api"
-	"github.com/asksemble/asksemble/agent/internal/core"
-	"github.com/asksemble/asksemble/agent/internal/devices"
-	"github.com/asksemble/asksemble/agent/internal/logx"
+	"github.com/heeo-dev/askorus/agent/internal/adapter/claude"
+	"github.com/heeo-dev/askorus/agent/internal/adapter/codex"
+	"github.com/heeo-dev/askorus/agent/internal/api"
+	"github.com/heeo-dev/askorus/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/devices"
+	"github.com/heeo-dev/askorus/agent/internal/logx"
 )
 
 // LT-13 Asking the moderator (#25) with the real Claude Code on the quick

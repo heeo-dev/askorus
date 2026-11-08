@@ -5,8 +5,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/asksemble/asksemble/agent/internal/core"
-	"github.com/asksemble/asksemble/agent/internal/judge"
+	"github.com/heeo-dev/askorus/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/judge"
 )
 
 // Asking the moderator (사회자에게 묻기, #25, 11-07): POST /v1/runs with

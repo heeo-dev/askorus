@@ -7,8 +7,8 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/asksemble/asksemble/agent/internal/compares"
-	"github.com/asksemble/asksemble/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/compares"
+	"github.com/heeo-dev/askorus/agent/internal/core"
 )
 
 // Error codes for comparisons (P2-3), beside core's judge codes

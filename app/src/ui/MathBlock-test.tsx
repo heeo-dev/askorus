@@ -179,7 +179,7 @@ test('the WebView loads only its own page and hands no URL to another app', asyn
     'javascript:alert(1)',
     'data:text/html,<b>x</b>',
     'about:blank.example.com',
-    'asksemble://pair?x=1',
+    'askorus://pair?x=1',
   ]) {
     expect(allowLoad({ url })).toBe(false);
     expect(decide(url)).toBe(false);

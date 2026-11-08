@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asksemble/asksemble/agent/internal/core"
-	"github.com/asksemble/asksemble/agent/internal/fakecli"
-	"github.com/asksemble/asksemble/agent/internal/judge"
+	"github.com/heeo-dev/askorus/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/fakecli"
+	"github.com/heeo-dev/askorus/agent/internal/judge"
 )
 
 // specReply is a moderator's good reply, with the model asked for.

@@ -5,7 +5,7 @@ package main
 import (
 	"strings"
 
-	"github.com/asksemble/asksemble/agent/internal/judge"
+	"github.com/heeo-dev/askorus/agent/internal/judge"
 )
 
 // Drafts the quality experiments try (C4, E2 and E3). None is the
@@ -16,7 +16,7 @@ import (
 
 // c5ProductHead is the version tag the product prompt starts with,
 // synth-v5's; the drafts swap it for their own.
-const c5ProductHead = "[Asksemble synthesis v5.1]"
+const c5ProductHead = "[Askorus synthesis v5.1]"
 
 // synthC5Solo is the moderator alone with no list under the answer (#19,
 // 11-05, the person's call: a list of every difference is not better, many
@@ -36,7 +36,7 @@ func synthC5Solo(task judge.SynthTask, nonce string) string {
 	if p == "" || i < 0 || !strings.HasPrefix(p, c5ProductHead) {
 		return ""
 	}
-	return strings.Replace(p[:i+len(end)], c5ProductHead, "[Asksemble synthesis c5-solo-draft]", 1) + c5SoloTask
+	return strings.Replace(p[:i+len(end)], c5ProductHead, "[Askorus synthesis c5-solo-draft]", 1) + c5SoloTask
 }
 
 const c5SoloTask = `TASK. Write in the language of the QUESTION, in Markdown, for the person who asked it.
@@ -97,7 +97,7 @@ var c5SoloEdits = map[string][][2]string{
 }
 
 // c5SoloWith is c5-solo with the named c5SoloEdits made, in order, each
-// exactly once, under the head marker [Asksemble synthesis <name>-draft].
+// exactly once, under the head marker [Askorus synthesis <name>-draft].
 // It gives "" for every task when an edit does not apply.
 func c5SoloWith(name string, edits ...string) func(judge.SynthTask, string) string {
 	t := c5SoloTask
@@ -115,7 +115,7 @@ func c5SoloWith(name string, edits ...string) func(judge.SynthTask, string) stri
 		if t == "" || p == "" {
 			return ""
 		}
-		return strings.Replace(strings.Replace(p, "[Asksemble synthesis c5-solo-draft]", "[Asksemble synthesis "+name+"-draft]", 1), c5SoloTask, t, 1)
+		return strings.Replace(strings.Replace(p, "[Askorus synthesis c5-solo-draft]", "[Askorus synthesis "+name+"-draft]", 1), c5SoloTask, t, 1)
 	}
 }
 

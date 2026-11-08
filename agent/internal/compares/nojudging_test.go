@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/asksemble/asksemble/agent/internal/core"
-	"github.com/asksemble/asksemble/agent/internal/fakecli"
-	"github.com/asksemble/asksemble/agent/internal/runs"
+	"github.com/heeo-dev/askorus/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/fakecli"
+	"github.com/heeo-dev/askorus/agent/internal/runs"
 )
 
 // C6 (#19, 2026-11-05, the user's decision; the code with C6d, #24): a
@@ -41,7 +41,7 @@ func TestNoJudgingRun(t *testing.T) {
 		t.Fatalf("synth calls claude %d codex %d opencode %d", len(cl.synthCalls()), len(cx.synthCalls()), len(oc.synthCalls()))
 	}
 	p := cx.synthCalls()[0].Prompt
-	if !strings.HasPrefix(p, "[Asksemble synthesis v5.1] ") || strings.Contains(p, "COMPARED") || strings.Contains(p, "DIFFER: ") ||
+	if !strings.HasPrefix(p, "[Askorus synthesis v5.1] ") || strings.Contains(p, "COMPARED") || strings.Contains(p, "DIFFER: ") ||
 		strings.Count(p, "\nANSWER: ") != 3 || !strings.Contains(p, "NUM 2") {
 		t.Errorf("prompt:\n%s", p)
 	}

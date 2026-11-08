@@ -12,11 +12,12 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/asksemble/asksemble/agent/internal/judge"
+	"github.com/heeo-dev/askorus/agent/internal/config"
+	"github.com/heeo-dev/askorus/agent/internal/judge"
 )
 
 // A run keeps one file per question, q-<id>.json, in its folder under
-// %LOCALAPPDATA%\Asksemble\synth-eval: the question, the answers, the
+// %LOCALAPPDATA%\Askorus\synth-eval: the question, the answers, the
 // comparison and the combined answer, outside the repo (the person's own
 // questions and the AIs' answers).
 
@@ -150,7 +151,7 @@ var rootDir = func() (string, error) {
 	if base == "" {
 		return "", errors.New("LOCALAPPDATA is not set")
 	}
-	return filepath.Join(base, "Asksemble", "synth-eval"), nil
+	return filepath.Join(config.Under(base), "synth-eval"), nil
 }
 
 // runDir is the folder of the run name.

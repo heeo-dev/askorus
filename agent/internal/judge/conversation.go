@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/asksemble/asksemble/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/core"
 )
 
 // The conversation record (#29, 11-06; C11): what a follow-up's turn knows
@@ -121,12 +121,12 @@ func withConversation(p, nonce string, c *Conversation, rule, old, new string, e
 
 // Version labels the record changes.
 const (
-	synthLabel       = "[Asksemble synthesis v5.1]"
-	synthLabelV6     = "[Asksemble synthesis v6]"
-	afterLabel       = "[Asksemble synthesis debate-v4]"
-	afterLabelV5     = "[Asksemble synthesis debate-v5]"
-	planLabel        = "[Asksemble debate-plan v2]"
-	planLabelV3      = "[Asksemble debate-plan v3]"
+	synthLabel       = "[Askorus synthesis v5.1]"
+	synthLabelV6     = "[Askorus synthesis v6]"
+	afterLabel       = "[Askorus synthesis debate-v4]"
+	afterLabelV5     = "[Askorus synthesis debate-v5]"
+	planLabel        = "[Askorus debate-plan v2]"
+	planLabelV3      = "[Askorus debate-plan v3]"
 	SynthRulesWithC  = "synth-v6"
 	DebateRulesWithC = "debate-v5"
 )

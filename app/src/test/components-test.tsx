@@ -212,11 +212,11 @@ describe('lists and sheets', () => {
   test('a row always has an accessibility value, an empty one when it has none (R-40)', async () => {
     await render(
       <Group>
-        <Row title="Asksemble 0.1.0" subtitle="Not an official product of any AI company." onPress={() => undefined} chevron />
+        <Row title="Askorus 0.1.0" subtitle="Not an official product of any AI company." onPress={() => undefined} chevron />
         <Row title="Writer" accessibilityLabel="Writer" accessibilityValue={{ text: 'Claude' }} />
       </Group>,
     );
-    expect(screen.getByRole('button', { name: 'Asksemble 0.1.0, Not an official product of any AI company.' }).props.accessibilityValue).toEqual({ text: '' });
+    expect(screen.getByRole('button', { name: 'Askorus 0.1.0, Not an official product of any AI company.' }).props.accessibilityValue).toEqual({ text: '' });
     expect(screen.getByLabelText('Writer').props.accessibilityValue).toEqual({ text: 'Claude' });
   });
 

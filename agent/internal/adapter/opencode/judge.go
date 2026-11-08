@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/asksemble/asksemble/agent/internal/core"
-	"github.com/asksemble/asksemble/agent/internal/proc"
+	"github.com/heeo-dev/askorus/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/proc"
 )
 
 // The one-off command of the judging days (P2-3, spec part 8): one
@@ -32,7 +32,7 @@ const (
 	// judgeTitle is the title of every one-off conversation (a writer's, a
 	// moderator's and the judging days' judges'); CleanupJudge deletes only
 	// conversations with it.
-	judgeTitle = "asksemble-judge"
+	judgeTitle = "askorus-judge"
 	// judgeStale is how long a one-off conversation may stay unchanged
 	// before CleanupJudge deletes it although no ref names it: one a crash
 	// or a failed delete left behind. A running writer ends within

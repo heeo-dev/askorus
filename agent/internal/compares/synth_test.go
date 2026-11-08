@@ -12,11 +12,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asksemble/asksemble/agent/internal/core"
-	"github.com/asksemble/asksemble/agent/internal/fakecli"
-	"github.com/asksemble/asksemble/agent/internal/judge"
-	"github.com/asksemble/asksemble/agent/internal/logx"
-	"github.com/asksemble/asksemble/agent/internal/runs"
+	"github.com/heeo-dev/askorus/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/fakecli"
+	"github.com/heeo-dev/askorus/agent/internal/judge"
+	"github.com/heeo-dev/askorus/agent/internal/logx"
+	"github.com/heeo-dev/askorus/agent/internal/runs"
 )
 
 // ---- fakes ----------------------------------------------------------------
@@ -200,7 +200,7 @@ func TestSynthDirect(t *testing.T) {
 	// synth-v5: the question and every answer with its AI's name, nothing
 	// of the judging.
 	nonce := nonceOf(req.Prompt)
-	if !strings.HasPrefix(req.Prompt, "[Asksemble synthesis v5.1] ") {
+	if !strings.HasPrefix(req.Prompt, "[Askorus synthesis v5.1] ") {
 		t.Errorf("prompt head:\n%s", req.Prompt)
 	}
 	for _, want := range []string{
@@ -1140,7 +1140,7 @@ func TestSynthSnapshotAndLogs(t *testing.T) {
 		t.Errorf("snapshot JSON: %s", js)
 	}
 	for _, call := range cl.synthCalls() {
-		if strings.Contains(js, nonceOf(call.Prompt)) || strings.Contains(js, "Asksemble synthesis") {
+		if strings.Contains(js, nonceOf(call.Prompt)) || strings.Contains(js, "Askorus synthesis") {
 			t.Error("the snapshot holds the prompt or its nonce")
 		}
 	}

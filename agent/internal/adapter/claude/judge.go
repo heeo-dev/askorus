@@ -7,8 +7,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/asksemble/asksemble/agent/internal/core"
-	"github.com/asksemble/asksemble/agent/internal/proc"
+	"github.com/heeo-dev/askorus/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/proc"
 )
 
 // The one-off command of the judging days (P2-3 비교 판정, spec part 8):

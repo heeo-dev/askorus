@@ -10,15 +10,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asksemble/asksemble/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/core"
 )
 
 func newAskAdapter(t *testing.T, tiers map[string]core.AskModel) (*Adapter, string, string) {
 	t.Helper()
 	r, argsFile := fakeRunner(t)
 	root := t.TempDir()
-	t.Setenv("ASKSEMBLE_FAKE_PROJECTS", filepath.Join(root, "projects"))
-	t.Setenv("ASKSEMBLE_FAKE_ASK", "")
+	t.Setenv("ASKORUS_FAKE_PROJECTS", filepath.Join(root, "projects"))
+	t.Setenv("ASKORUS_FAKE_ASK", "")
 	folder := filepath.Join(root, "ask")
 	os.MkdirAll(folder, 0o700)
 	return New(Options{ClaudeDir: root, ClaudePath: r.Path(), AskTiers: tiers}), argsFile, folder
@@ -121,19 +121,19 @@ func TestAskErrors(t *testing.T) {
 		_, err := a.Ask(context.Background(), req)
 		return err
 	}
-	t.Setenv("ASKSEMBLE_FAKE_ASK", "badmodel")
+	t.Setenv("ASKORUS_FAKE_ASK", "badmodel")
 	if err := ask(core.AskRequest{Model: "nope"}); core.ErrorCode(err) != core.ErrCodeBadModel {
 		t.Errorf("bad model: %v", err)
 	}
-	t.Setenv("ASKSEMBLE_FAKE_ASK", "noresume")
+	t.Setenv("ASKORUS_FAKE_ASK", "noresume")
 	if err := ask(core.AskRequest{Resume: "12345678-1234-4234-8234-123456789abc"}); core.ErrorCode(err) != core.ErrCodeNotFound {
 		t.Errorf("unknown session: %v", err)
 	}
-	t.Setenv("ASKSEMBLE_FAKE_ASK", "garbage")
+	t.Setenv("ASKORUS_FAKE_ASK", "garbage")
 	if err := ask(core.AskRequest{}); core.ErrorCode(err) != core.ErrCodeAskFailed {
 		t.Errorf("no JSON: %v", err)
 	}
-	t.Setenv("ASKSEMBLE_FAKE_ASK", "")
+	t.Setenv("ASKORUS_FAKE_ASK", "")
 	n := len(recordedCalls(t, argsFile))
 	// Refused before claude runs.
 	for name, req := range map[string]core.AskRequest{
@@ -190,7 +190,7 @@ func TestAskFollowUpWaitsForNobody(t *testing.T) {
 // A slow claude is ended at the time limit.
 func TestAskTimeout(t *testing.T) {
 	a, _, folder := newAskAdapter(t, nil)
-	t.Setenv("ASKSEMBLE_FAKE_SLEEP", "20s")
+	t.Setenv("ASKORUS_FAKE_SLEEP", "20s")
 	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
 	defer cancel()
 	start := time.Now()

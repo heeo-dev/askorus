@@ -7,7 +7,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/asksemble/asksemble/agent/internal/judge"
+	"github.com/heeo-dev/askorus/agent/internal/judge"
 )
 
 // Metrics are what a record gives that can be counted without judging the

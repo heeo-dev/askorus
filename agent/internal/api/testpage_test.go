@@ -84,7 +84,7 @@ func TestTestPageBrand(t *testing.T) {
 		`<svg class="mark" width="32" height="32" viewBox="0 0 100 100" aria-hidden="true"`,
 		`<path d="M28 59.5L27 73L40 65.5Z" fill="#2A1408"/>`, // the bubble's tail: icon B
 		`<span class="ask">Ask</span><span class="semble">semble</span>`,
-		`aria-label="Asksemble 시험 페이지"`,
+		`aria-label="Askorus 시험 페이지"`,
 	} {
 		if !strings.Contains(html, want) {
 			t.Errorf("index.html lacks %q", want)

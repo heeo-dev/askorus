@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/asksemble/asksemble/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/core"
 )
 
 // Lines shaped like Claude Code's transcripts (types and blocks as seen in

@@ -10,9 +10,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/asksemble/asksemble/agent/internal/config"
-	"github.com/asksemble/asksemble/agent/internal/core"
-	"github.com/asksemble/asksemble/agent/internal/proc"
+	"github.com/heeo-dev/askorus/agent/internal/config"
+	"github.com/heeo-dev/askorus/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/proc"
 )
 
 // Asks (mode ask, Phase 2) run `claude -p` in the ask folder with the

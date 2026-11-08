@@ -26,13 +26,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asksemble/asksemble/agent/internal/adapter/claude"
-	"github.com/asksemble/asksemble/agent/internal/api"
-	"github.com/asksemble/asksemble/agent/internal/config"
-	"github.com/asksemble/asksemble/agent/internal/core"
-	"github.com/asksemble/asksemble/agent/internal/devices"
-	"github.com/asksemble/asksemble/agent/internal/hidden"
-	"github.com/asksemble/asksemble/agent/internal/logx"
+	"github.com/heeo-dev/askorus/agent/internal/adapter/claude"
+	"github.com/heeo-dev/askorus/agent/internal/api"
+	"github.com/heeo-dev/askorus/agent/internal/config"
+	"github.com/heeo-dev/askorus/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/devices"
+	"github.com/heeo-dev/askorus/agent/internal/hidden"
+	"github.com/heeo-dev/askorus/agent/internal/logx"
 )
 
 type liveEnv struct {
@@ -46,7 +46,7 @@ type liveEnv struct {
 // testFolder is the only folder these tests start anything in.
 func testFolder(t *testing.T) string {
 	t.Helper()
-	if f := os.Getenv("ASKSEMBLE_LIVE_FOLDER"); f != "" {
+	if f := os.Getenv("ASKORUS_LIVE_FOLDER"); f != "" {
 		return f
 	}
 	// .local is not in git, so a worktree has none: look upward from
@@ -59,7 +59,7 @@ func testFolder(t *testing.T) string {
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
-			t.Skip(".local/rc-test not found above the test (set ASKSEMBLE_LIVE_FOLDER)")
+			t.Skip(".local/rc-test not found above the test (set ASKORUS_LIVE_FOLDER)")
 		}
 		dir = parent
 	}
@@ -298,7 +298,7 @@ func TestLT03FolderServer(t *testing.T) {
 	if st := srv.ServerStatus(e.folder); st.State != core.ServeOff {
 		t.Skipf("a server already runs in %s (%s); not touching it", e.folder, st.State)
 	}
-	if err := srv.StartServer(e.folder, core.ServeOptions{Name: "asksemble live", Spawn: config.SpawnSameDir, Capacity: 2}); err != nil {
+	if err := srv.StartServer(e.folder, core.ServeOptions{Name: "askorus live", Spawn: config.SpawnSameDir, Capacity: 2}); err != nil {
 		t.Fatal(err)
 	}
 	deadline := time.Now().Add(45 * time.Second)

@@ -77,7 +77,7 @@ function turn(o: { parts?: RunPart[]; compare?: Partial<TurnCompare> | null; sna
 }
 
 const info = (): Info => ({
-  name: 'asksemble-agent',
+  name: 'askorus-agent',
   version: '0.1.0',
   apiVersion: 1,
   hostname: 'PC',

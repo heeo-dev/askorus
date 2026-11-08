@@ -13,12 +13,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asksemble/asksemble/agent/internal/adapter/claude"
-	"github.com/asksemble/asksemble/agent/internal/adapter/codex"
-	"github.com/asksemble/asksemble/agent/internal/adapter/opencode"
-	"github.com/asksemble/asksemble/agent/internal/config"
-	"github.com/asksemble/asksemble/agent/internal/core"
-	"github.com/asksemble/asksemble/agent/internal/judge"
+	"github.com/heeo-dev/askorus/agent/internal/adapter/claude"
+	"github.com/heeo-dev/askorus/agent/internal/adapter/codex"
+	"github.com/heeo-dev/askorus/agent/internal/adapter/opencode"
+	"github.com/heeo-dev/askorus/agent/internal/config"
+	"github.com/heeo-dev/askorus/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/judge"
 )
 
 // LT-09: each adapter refines one question with the real claude, codex and

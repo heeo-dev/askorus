@@ -11,7 +11,7 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	"github.com/asksemble/asksemble/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/core"
 )
 
 var synthUpdate = flag.Bool("synth.update", false, "rewrite testdata/synth-v5.1.golden")
@@ -133,7 +133,7 @@ func TestSynthPromptGolden(t *testing.T) {
 	}
 	synthGolden(t, synthGoldenFile, got)
 	synthCheckRead(t, task, got, synthGoldenNonce)
-	if !strings.HasPrefix(got, "[Asksemble synthesis v5.1] ") || strings.Contains(got, "COMPARED") || strings.Contains(got, "DIFFER") ||
+	if !strings.HasPrefix(got, "[Askorus synthesis v5.1] ") || strings.Contains(got, "COMPARED") || strings.Contains(got, "DIFFER") ||
 		strings.Contains(got, "CHECK") || strings.Contains(got, `"ais"`) || strings.Contains(got, "EARLIER") {
 		t.Errorf("not synth-v5:\n%s", got)
 	}

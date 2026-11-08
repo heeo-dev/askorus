@@ -128,7 +128,7 @@ test('the drawer shows the kept questions by day and reopens one', async () => {
   expect(screen.getByText(`${d.getMonth() + 1}/${d.getDate()}`)).toBeTruthy();
   expect(screen.getByRole('button', { name: 'How long do EV batteries last?' })).toBeSelected();
   expect(screen.getByText('Not an official product of any AI company.')).toBeTruthy();
-  expect(screen.getByText('Asksemble')).toBeTruthy();
+  expect(screen.getByText('Askorus')).toBeTruthy();
 
   await user.press(screen.getByRole('button', { name: 'How tall is Everest?' }));
   expect(await screen.findByText('open request: old')).toBeTruthy();

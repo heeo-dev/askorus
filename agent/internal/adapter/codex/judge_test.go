@@ -10,9 +10,9 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	"github.com/asksemble/asksemble/agent/internal/core"
-	"github.com/asksemble/asksemble/agent/internal/fakecli"
-	"github.com/asksemble/asksemble/agent/internal/proc"
+	"github.com/heeo-dev/askorus/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/fakecli"
+	"github.com/heeo-dev/askorus/agent/internal/proc"
 )
 
 // judgeAdapter is an adapter on the fake codex, with a schema folder that
@@ -20,7 +20,7 @@ import (
 func judgeAdapter(t *testing.T) (a *Adapter, schemaDir, folder string) {
 	t.Helper()
 	exe := fakecli.Use(t, fakecli.RoleCodex)
-	schemaDir = filepath.Join(t.TempDir(), "Asksemble")
+	schemaDir = filepath.Join(t.TempDir(), "Askorus")
 	return New(Options{Path: exe, SchemaDir: schemaDir}), schemaDir, t.TempDir()
 }
 
@@ -54,7 +54,7 @@ func TestSchemaWriteRetried(t *testing.T) {
 	exe := fakecli.Use(t, fakecli.RoleCodex)
 	folder := t.TempDir()
 	// A file where the agent folder should be: the first write fails.
-	schemaDir := filepath.Join(t.TempDir(), "Asksemble")
+	schemaDir := filepath.Join(t.TempDir(), "Askorus")
 	if err := os.WriteFile(schemaDir, []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}

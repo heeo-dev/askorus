@@ -14,32 +14,32 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asksemble/asksemble/agent/internal/fakecli"
+	"github.com/heeo-dev/askorus/agent/internal/fakecli"
 )
 
 // The test binary doubles as a fake claude executable: when
-// ASKSEMBLE_FAKE_CLAUDE=1 it records its arguments and acts like claude
+// ASKORUS_FAKE_CLAUDE=1 it records its arguments and acts like claude
 // instead of running tests.
 //
-//	ASKSEMBLE_FAKE_ARGS       file to append {args, cwd} to
-//	ASKSEMBLE_FAKE_AGENTS     file whose content `agents --json --all` prints
-//	ASKSEMBLE_FAKE_STATE      agents list the fake keeps up to date (--bg, stop, rm)
-//	ASKSEMBLE_FAKE_PROJECTS   projects folder where --bg writes remote links
-//	ASKSEMBLE_FAKE_UNTRUSTED  "1": --bg fails like an untrusted folder
-//	ASKSEMBLE_FAKE_NOLINK     "1": --bg never writes a remote link
-//	ASKSEMBLE_FAKE_STOP_DROPS "1": stop also drops the session from the list
-//	ASKSEMBLE_FAKE_RM_BUSY    file: while it exists, rm fails once (and deletes it)
-//	ASKSEMBLE_FAKE_EXIT       exit code
-//	ASKSEMBLE_FAKE_SLEEP      duration to sleep first
+//	ASKORUS_FAKE_ARGS       file to append {args, cwd} to
+//	ASKORUS_FAKE_AGENTS     file whose content `agents --json --all` prints
+//	ASKORUS_FAKE_STATE      agents list the fake keeps up to date (--bg, stop, rm)
+//	ASKORUS_FAKE_PROJECTS   projects folder where --bg writes remote links
+//	ASKORUS_FAKE_UNTRUSTED  "1": --bg fails like an untrusted folder
+//	ASKORUS_FAKE_NOLINK     "1": --bg never writes a remote link
+//	ASKORUS_FAKE_STOP_DROPS "1": stop also drops the session from the list
+//	ASKORUS_FAKE_RM_BUSY    file: while it exists, rm fails once (and deletes it)
+//	ASKORUS_FAKE_EXIT       exit code
+//	ASKORUS_FAKE_SLEEP      duration to sleep first
 //
 // Combined answers and refining (synth_test.go, refine_test.go) use the
 // shared fake of internal/fakecli instead,
-// which takes over when ASKSEMBLE_FAKECLI is set (fakecli.Use).
+// which takes over when ASKORUS_FAKECLI is set (fakecli.Use).
 func TestMain(m *testing.M) {
 	if fakecli.Active() {
 		os.Exit(fakecli.Main(os.Args[1:]))
 	}
-	if os.Getenv("ASKSEMBLE_FAKE_CLAUDE") == "1" {
+	if os.Getenv("ASKORUS_FAKE_CLAUDE") == "1" {
 		os.Exit(fakeClaude(os.Args[1:]))
 	}
 	os.Exit(m.Run())
@@ -57,7 +57,7 @@ func fakeClaude(args []string) int {
 		b, _ := io.ReadAll(os.Stdin)
 		stdin = string(b)
 	}
-	if p := os.Getenv("ASKSEMBLE_FAKE_ARGS"); p != "" {
+	if p := os.Getenv("ASKORUS_FAKE_ARGS"); p != "" {
 		cwd, _ := os.Getwd()
 		b, _ := json.Marshal(fakeCall{Args: args, Cwd: cwd, Stdin: stdin})
 		f, err := os.OpenFile(p, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
@@ -66,16 +66,16 @@ func fakeClaude(args []string) int {
 			f.Close()
 		}
 	}
-	if d, err := time.ParseDuration(os.Getenv("ASKSEMBLE_FAKE_SLEEP")); err == nil {
+	if d, err := time.ParseDuration(os.Getenv("ASKORUS_FAKE_SLEEP")); err == nil {
 		time.Sleep(d)
 	}
-	code, _ := strconv.Atoi(os.Getenv("ASKSEMBLE_FAKE_EXIT"))
+	code, _ := strconv.Atoi(os.Getenv("ASKORUS_FAKE_EXIT"))
 	switch {
 	case strings.Join(args, " ") == "--version":
 		fmt.Println("2.1.310 (Claude Code)")
 	case strings.Join(args, " ") == "agents --json --all":
 		out := "[]"
-		for _, env := range []string{"ASKSEMBLE_FAKE_STATE", "ASKSEMBLE_FAKE_AGENTS"} {
+		for _, env := range []string{"ASKORUS_FAKE_STATE", "ASKORUS_FAKE_AGENTS"} {
 			if p := os.Getenv(env); p != "" {
 				if b, err := os.ReadFile(p); err == nil {
 					out = string(b)
@@ -110,7 +110,7 @@ func fakeFlag(args []string, name string) string {
 
 func fakeBackground(args []string) int {
 	cwd, _ := os.Getwd()
-	if os.Getenv("ASKSEMBLE_FAKE_UNTRUSTED") == "1" {
+	if os.Getenv("ASKORUS_FAKE_UNTRUSTED") == "1" {
 		fmt.Fprintf(os.Stderr, "Workspace not trusted. Run claude in %s once and accept the trust prompt, then retry.\n", cwd)
 		return 1
 	}
@@ -139,7 +139,7 @@ func fakeBackground(args []string) int {
 		e.Name = name
 	}
 	fakeSaveState(state)
-	if os.Getenv("ASKSEMBLE_FAKE_NOLINK") != "1" {
+	if os.Getenv("ASKORUS_FAKE_NOLINK") != "1" {
 		fakeWriteLink(id, cwd, e.Name)
 	}
 	fmt.Printf("backgrounded · %s · %s (idle — send a prompt to start)\n", e.ID, e.Name)
@@ -147,14 +147,14 @@ func fakeBackground(args []string) int {
 }
 
 // fakeAsk acts like `claude -p --output-format json` with the prompt on
-// stdin: one result object, and a transcript in ASKSEMBLE_FAKE_PROJECTS.
+// stdin: one result object, and a transcript in ASKORUS_FAKE_PROJECTS.
 //
-//	ASKSEMBLE_FAKE_ASK "badmodel": an unknown model, "noresume": the
+//	ASKORUS_FAKE_ASK "badmodel": an unknown model, "noresume": the
 //	                   resumed session does not exist, "garbage": no JSON
 func fakeAsk(args []string, prompt string) int {
 	cwd, _ := os.Getwd()
 	id := fakeFlag(args, "--resume")
-	switch os.Getenv("ASKSEMBLE_FAKE_ASK") {
+	switch os.Getenv("ASKORUS_FAKE_ASK") {
 	case "noresume":
 		fmt.Fprintf(os.Stderr, "No conversation found with session ID: %s\n", id)
 		return 1
@@ -177,12 +177,12 @@ func fakeAsk(args []string, prompt string) int {
 		"modelUsage": map[string]any{model: map[string]float64{"costUSD": 0.01}},
 	}
 	code := 0
-	if os.Getenv("ASKSEMBLE_FAKE_ASK") == "badmodel" {
+	if os.Getenv("ASKORUS_FAKE_ASK") == "badmodel" {
 		fmt.Fprintf(os.Stderr, "[claude-code:unrecognized_model] {\"model\":%q}\n", fakeFlag(args, "--model"))
 		out["is_error"], out["result"], out["modelUsage"] = true, "There's an issue with the selected model.", map[string]any{}
 		out["api_error_status"], code = 404, 1
 	}
-	if root := os.Getenv("ASKSEMBLE_FAKE_PROJECTS"); root != "" {
+	if root := os.Getenv("ASKORUS_FAKE_PROJECTS"); root != "" {
 		dir := filepath.Join(root, "ask")
 		os.MkdirAll(dir, 0o700)
 		u, _ := json.Marshal(map[string]any{"type": "user", "message": map[string]string{"content": prompt},
@@ -201,7 +201,7 @@ func fakeAsk(args []string, prompt string) int {
 // fakeRemoteControl acts like `claude remote-control` in a terminal: it
 // draws a Connected screen and ends cleanly on Ctrl+C.
 //
-//	ASKSEMBLE_FAKE_SERVE_EXIT "1": end by itself after a moment (a crash)
+//	ASKORUS_FAKE_SERVE_EXIT "1": end by itself after a moment (a crash)
 func fakeRemoteControl(args []string) int {
 	cwd, _ := os.Getwd()
 	stop := make(chan os.Signal, 1)
@@ -220,7 +220,7 @@ func fakeRemoteControl(args []string) int {
 			}
 		}
 	}()
-	if os.Getenv("ASKSEMBLE_FAKE_UNTRUSTED") == "1" {
+	if os.Getenv("ASKORUS_FAKE_UNTRUSTED") == "1" {
 		// The real server asks in a terminal and waits for an answer.
 		fmt.Printf("Quick safety check: is this a project you created or one you trust?\r\n")
 		fmt.Printf("Trust %s? [y/N] \r\n", cwd)
@@ -245,7 +245,7 @@ func fakeRemoteControl(args []string) int {
 	fmt.Print("Continue coding in the Claude mobile app or https://claude.ai/code?environment=env_FAKE123\r\n")
 	fmt.Print("Or ask Claude to work in this folder from your projects on claude.ai\r\n")
 	fmt.Print("space to show QR code · w to toggle spawn mode\r\n")
-	if os.Getenv("ASKSEMBLE_FAKE_SERVE_EXIT") == "1" {
+	if os.Getenv("ASKORUS_FAKE_SERVE_EXIT") == "1" {
 		time.Sleep(200 * time.Millisecond)
 		return 3
 	}
@@ -267,18 +267,18 @@ func fakeRemoteControl(args []string) int {
 }
 
 func fakeStopRemove(verb, target string) int {
-	// ASKSEMBLE_FAKE_RM_BUSY names a file; while it exists, rm fails, like
+	// ASKORUS_FAKE_RM_BUSY names a file; while it exists, rm fails, like
 	// the Claude service settling a just-stopped job. The file holds how
 	// many more times to fail (empty: once); it is deleted on the last one.
-	// With ASKSEMBLE_FAKE_RM_SILENT=1 the failure prints nothing.
-	if busy := os.Getenv("ASKSEMBLE_FAKE_RM_BUSY"); verb == "rm" && busy != "" {
+	// With ASKORUS_FAKE_RM_SILENT=1 the failure prints nothing.
+	if busy := os.Getenv("ASKORUS_FAKE_RM_BUSY"); verb == "rm" && busy != "" {
 		if b, err := os.ReadFile(busy); err == nil {
 			if n, _ := strconv.Atoi(strings.TrimSpace(string(b))); n > 1 {
 				os.WriteFile(busy, []byte(strconv.Itoa(n-1)), 0o600)
 			} else {
 				os.Remove(busy)
 			}
-			if os.Getenv("ASKSEMBLE_FAKE_RM_SILENT") != "1" {
+			if os.Getenv("ASKORUS_FAKE_RM_SILENT") != "1" {
 				fmt.Fprintln(os.Stderr, "session is still settling")
 			}
 			return 1
@@ -290,7 +290,7 @@ func fakeStopRemove(verb, target string) int {
 	for _, e := range state {
 		if e.ID == target || e.SessionID == target || e.Name == target {
 			found = true
-			if verb == "rm" || os.Getenv("ASKSEMBLE_FAKE_STOP_DROPS") == "1" {
+			if verb == "rm" || os.Getenv("ASKORUS_FAKE_STOP_DROPS") == "1" {
 				continue
 			}
 			e.PID, e.Status, e.State = 0, "", "stopped"
@@ -308,7 +308,7 @@ func fakeStopRemove(verb, target string) int {
 
 func fakeLoadState() []agentEntry {
 	var state []agentEntry
-	if b, err := os.ReadFile(os.Getenv("ASKSEMBLE_FAKE_STATE")); err == nil {
+	if b, err := os.ReadFile(os.Getenv("ASKORUS_FAKE_STATE")); err == nil {
 		json.Unmarshal(b, &state)
 	}
 	return state
@@ -319,13 +319,13 @@ func fakeSaveState(state []agentEntry) {
 		state = []agentEntry{}
 	}
 	b, _ := json.Marshal(state)
-	os.WriteFile(os.Getenv("ASKSEMBLE_FAKE_STATE"), b, 0o600)
+	os.WriteFile(os.Getenv("ASKORUS_FAKE_STATE"), b, 0o600)
 }
 
 // fakeWriteLink appends a bridge_status line to the session's transcript,
 // creating it in a "fake" project folder when it does not exist.
 func fakeWriteLink(id, cwd, name string) {
-	root := os.Getenv("ASKSEMBLE_FAKE_PROJECTS")
+	root := os.Getenv("ASKORUS_FAKE_PROJECTS")
 	if root == "" {
 		return
 	}
@@ -360,8 +360,8 @@ func fakeRunner(t *testing.T) (*Runner, string) {
 		t.Fatal(err)
 	}
 	argsFile := t.TempDir() + string(os.PathSeparator) + "args.jsonl"
-	t.Setenv("ASKSEMBLE_FAKE_CLAUDE", "1")
-	t.Setenv("ASKSEMBLE_FAKE_ARGS", argsFile)
+	t.Setenv("ASKORUS_FAKE_CLAUDE", "1")
+	t.Setenv("ASKORUS_FAKE_ARGS", argsFile)
 	r, err := NewRunner(exe)
 	if err != nil {
 		t.Fatal(err)

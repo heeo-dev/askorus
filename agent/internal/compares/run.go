@@ -9,9 +9,9 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/asksemble/asksemble/agent/internal/core"
-	"github.com/asksemble/asksemble/agent/internal/judge"
-	"github.com/asksemble/asksemble/agent/internal/runs"
+	"github.com/heeo-dev/askorus/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/judge"
+	"github.com/heeo-dev/askorus/agent/internal/runs"
 )
 
 // A comparison's round, since the judging went (C6, #19; the code with

@@ -1,4 +1,4 @@
-module github.com/asksemble/asksemble/agent
+module github.com/heeo-dev/askorus/agent
 
 go 1.27.3
 

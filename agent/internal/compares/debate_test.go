@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asksemble/asksemble/agent/internal/core"
-	"github.com/asksemble/asksemble/agent/internal/judge"
+	"github.com/heeo-dev/askorus/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/judge"
 )
 
 // The debate (P2-5, #26): the moderator's plan, the turns and checks, the
@@ -21,10 +21,10 @@ const (
 	debateQuestion = "첫 배는 몇 시에 떠?"
 	debateCombined = "첫 배 시간은 AI마다 다릅니다: {{Claude}} 7시, {{Codex}}와 {{OpenCode}} 8시."
 	debateAfter    = "첫 배는 8시입니다."
-	planHead       = "[Asksemble debate-plan v2]"
-	checkHead      = "[Asksemble debate-check v1]"
-	afterHead      = "[Asksemble synthesis debate-v4]"
-	turnHead       = "[Asksemble debate-turn v1]"
+	planHead       = "[Askorus debate-plan v2]"
+	checkHead      = "[Askorus debate-check v1]"
+	afterHead      = "[Askorus synthesis debate-v4]"
+	turnHead       = "[Askorus debate-turn v1]"
 )
 
 // twoPointPlan debates p1 (a fact: Claude, then Codex) and p2 (a taste

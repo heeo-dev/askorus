@@ -5,9 +5,9 @@
 ## 1. 저장소 구조
 
 ```
-Asksemble/
+Askorus/
 ├─ agent/                     PC 에이전트 (Go 모듈, 단일 실행 파일)
-│  ├─ cmd/asksemble-agent/    main: serve · pair · sessions · info · devices · version (뒤에 check · uninstall)
+│  ├─ cmd/askorus-agent/    main: serve · pair · sessions · info · devices · version (뒤에 check · uninstall)
 │  ├─ internal/core/          Claude를 모르는 공통 타입: Session, State, Capability, Adapter 인터페이스
 │  ├─ internal/config/        설정 파일(허용 폴더, 포트, 기본 모델·노력 수준, 폴더별 열어 두기)
 │  ├─ internal/logx/          로그. 토큰·대화 내용 키는 지워서 남긴다
@@ -29,8 +29,8 @@ Asksemble/
 
 | 단계 | 할 일 | 관문 |
 | --- | --- | --- |
-| A1 | Go 모듈, 설정, 로그, HTTP 서버(`/v1/info`, `/v1/stream`=404), 세션 수집기(읽기만), `GET /v1/sessions` | 단위 테스트 통과. 실제 PC에서 `asksemble-agent sessions`가 1초 안에 목록을 낸다 **(완료)** |
-| A2 | 기기 토큰과 짝 맺기: `asksemble-agent pair`(5분 창, QR, 128비트 코드), `POST /v1/pair`, PC 화면 허용 확인, `devices`·`revoke`, 실패 횟수 제한, `Tailscale-User-Login` 검사 | 폰 브라우저나 curl로 짝 맺고 토큰으로 `/v1/info` 접근 **(PC 안 시험까지 완료. 폰에서 하는 시험은 serve 설정 뒤)** |
+| A1 | Go 모듈, 설정, 로그, HTTP 서버(`/v1/info`, `/v1/stream`=404), 세션 수집기(읽기만), `GET /v1/sessions` | 단위 테스트 통과. 실제 PC에서 `askorus-agent sessions`가 1초 안에 목록을 낸다 **(완료)** |
+| A2 | 기기 토큰과 짝 맺기: `askorus-agent pair`(5분 창, QR, 128비트 코드), `POST /v1/pair`, PC 화면 허용 확인, `devices`·`revoke`, 실패 횟수 제한, `Tailscale-User-Login` 검사 | 폰 브라우저나 curl로 짝 맺고 토큰으로 `/v1/info` 접근 **(PC 안 시험까지 완료. 폰에서 하는 시험은 serve 설정 뒤)** |
 | A3 | 실행기: 열기(실행 규칙 5가지), 새 세션, 멈추기, 지우기. 원격 링크 20초 대기, `Workspace not trusted` 잡기. 열기·새 세션은 작업 id 방식 | 가짜 claude 테스트 통과, 실제 PC에서 F3–F6 수동 시험 **(완료, 8절)** |
 | A4 | 서버 관리자(F10): 폴더별 `claude remote-control`, Ctrl+C 종료, 재시작 시 다시 띄우기, 서버 세션에 '서버' 배지 | 실제 PC에서 Claude 앱으로 그 폴더에 새 세션 생성 **(PC 쪽 시험 완료, 폰에서 새 세션 만들기는 사용자 확인 대기, 10절)** |
 | A5 | 설치 점검(`check`), serve 포트 고르기 안내, 자동 시작(일반 권한), `uninstall`, 관리자 권한 서비스 감지(A3에서 옮김, 2026-10-26) | **에이전트 관문:** 명령줄 요청만으로 F1–F6, F10 동작 + 확장 원칙 11개 **(만듦. 자동 시작 등록은 사용자 확인 대기, 11절)** |
@@ -83,7 +83,7 @@ Asksemble/
 2026-10-27부터 테스트 기준은 `docs/testing.md`다(단계, 회귀 규칙, 시나리오 목록, 회귀 표). 아래는 처음 계획이다.
 
 - **단위 테스트** (`go test ./...`): 설정 검증, 로그 가리기, Host 검사, 토큰 확인, 대화 기록 파서(`testdata/`의 가짜 기록), `agents --json` 파서, 상태 판정, 필터. 실제 대화 기록은 저장소에 넣지 않는다.
-- **가짜 `claude` 실행기 테스트**: 테스트 실행 파일이 `ASKSEMBLE_FAKE_CLAUDE=1`이면 가짜 `claude`로 동작한다(`internal/adapter/claude/fake_test.go`). 가짜는 받은 인자를 파일에 적고 정해 둔 출력·종료 코드를 낸다. 인자 배열, 금지 플래그 거부(거부되면 프로세스를 아예 띄우지 않음), 시간 초과, 종료 코드를 보고, A3에서 `Workspace not trusted` 처리를 더한다.
+- **가짜 `claude` 실행기 테스트**: 테스트 실행 파일이 `ASKORUS_FAKE_CLAUDE=1`이면 가짜 `claude`로 동작한다(`internal/adapter/claude/fake_test.go`). 가짜는 받은 인자를 파일에 적고 정해 둔 출력·종료 코드를 낸다. 인자 배열, 금지 플래그 거부(거부되면 프로세스를 아예 띄우지 않음), 시간 초과, 종료 코드를 보고, A3에서 `Workspace not trusted` 처리를 더한다.
 - **실제 PC 수동 시험**: 일반 권한 셸에서. A1은 읽기 명령(`claude agents --json --all`, `claude --version`)만. A3부터 실제 열기·새 세션은 사용자 확인 뒤 시험 폴더에서. Tailscale serve 설정은 사용자가 정한 포트로 사용자 확인 뒤에.
 
 ## 5. A1 결과 (2026-10-26)
@@ -93,8 +93,8 @@ Asksemble/
 만든 것:
 
 - `agent/` Go 모듈(`go 1.27.3`, 표준 라이브러리만).
-- `asksemble-agent serve`: 127.0.0.1에만 열고 Host 검사(127.0.0.1·localhost·::1·설정의 `serveHosts`), `Origin` 헤더·OPTIONS 거부(CORS 없음), 기기 토큰 확인, `Tailscale-User-Login`이 `tailscaleOwner`와 다르면 거부, `GET /v1/info`, `GET /v1/sessions?q=&folder=&state=&agent=`, `/v1/stream`은 404 `not_implemented`. 로그에는 시각·경로(쿼리 제외)·기기 id·상태 코드·걸린 시간만.
-- `asksemble-agent sessions [-state] [-q] [-folder] [-json]`, `info`, `devices list|add|revoke`(짝 맺기 전 임시 도구. A2에서 QR 짝 맺기로 바꾼다).
+- `askorus-agent serve`: 127.0.0.1에만 열고 Host 검사(127.0.0.1·localhost·::1·설정의 `serveHosts`), `Origin` 헤더·OPTIONS 거부(CORS 없음), 기기 토큰 확인, `Tailscale-User-Login`이 `tailscaleOwner`와 다르면 거부, `GET /v1/info`, `GET /v1/sessions?q=&folder=&state=&agent=`, `/v1/stream`은 404 `not_implemented`. 로그에는 시각·경로(쿼리 제외)·기기 id·상태 코드·걸린 시간만.
+- `askorus-agent sessions [-state] [-q] [-folder] [-json]`, `info`, `devices list|add|revoke`(짝 맺기 전 임시 도구. A2에서 QR 짝 맺기로 바꾼다).
 - 수집기: `custom-title` → `<uuid>/custom-title.json` → `agent-name` → `ai-title` 순 제목, 사이드체인 줄 제외, 마지막 `cwd`·`timestamp`·모델, 마지막 `bridge_status` 링크(`https://claude.ai/code/session_…`만 받음), 마지막 질문 앞 80자, 덧붙은 부분만 읽는 캐시.
 - 상태: `background`+살아 있는 pid → running, `background` 그 밖 → stopped, 그 밖의 kind+pid → terminal, 기록만 → history. `agents`를 못 읽으면 전부 unknown(잘못 '기록만'으로 보고 이미 열린 세션을 재개하지 않게).
 - 실행기: 셸 없이 인자 배열, 허용 목록(지금은 `--version`, `agents --json --all`만) + 권한 플래그 거부 목록, `.cmd`·`.bat` 등 스크립트 거부, 15초 시간 제한, Windows에서 콘솔 창 숨김.
@@ -112,8 +112,8 @@ Asksemble/
 
 만든 것:
 
-- `asksemble-agent pair`: 서버가 켜져 있는지 보고, `tailscale serve status`에서 에이전트 포트를 가리키는 HTTPS 주소를 찾아 5분짜리 짝 맺기 창을 연다. 터미널에 QR(어두운 배경 기준, `-light-terminal`로 바꿈)과 손으로 넣을 코드, 같은 QR의 PNG 경로를 보여 준다. serve가 아직 없으면 설정 명령을 안내만 하고 직접 바꾸지 않는다. `-host`·`-port`로 직접 줄 수도 있다.
-- QR 내용: `asksemble://pair?v=1&host=<MagicDNS 이름>&port=<serve HTTPS 포트>&code=<코드>`. 코드는 128비트 난수를 base32로 쓴 26자(A–Z, 2–7). 앱의 딥 링크로도 쓴다.
+- `askorus-agent pair`: 서버가 켜져 있는지 보고, `tailscale serve status`에서 에이전트 포트를 가리키는 HTTPS 주소를 찾아 5분짜리 짝 맺기 창을 연다. 터미널에 QR(어두운 배경 기준, `-light-terminal`로 바꿈)과 손으로 넣을 코드, 같은 QR의 PNG 경로를 보여 준다. serve가 아직 없으면 설정 명령을 안내만 하고 직접 바꾸지 않는다. `-host`·`-port`로 직접 줄 수도 있다.
+- QR 내용: `askorus://pair?v=1&host=<MagicDNS 이름>&port=<serve HTTPS 포트>&code=<코드>`. 코드는 128비트 난수를 base32로 쓴 26자(A–Z, 2–7). 앱의 딥 링크로도 쓴다.
 - `POST /v1/pair {code, deviceName}`(토큰 없이 받는 유일한 경로): `Tailscale-User-Login` 헤더가 있고 `X-Forwarded-For` 마지막 값이 Tailscale 주소(100.64.0.0/10, fd7a:115c:a1e0::/48)여야 하고, 로그인이 PC 주인 계정과 같아야 한다. 맞으면 바로 202와 요청 id를 돌려주고, PC의 `pair` 창에 "허용할까요? [y/N]"를 띄운다(PC 답은 최대 2분). 폰은 `POST /v1/pair/status {requestId}`를 1초마다 보내 결과를 묻는다. 허용되면 첫 응답에 256비트 토큰을 한 번만 담아 준다. 요청 id는 로그에 남지 않게 본문으로 보낸다. 허용 뒤 5분 안에 토큰을 가져가지 않으면 그 기기를 다시 지운다.
 - 처음에는 폰이 요청 하나를 열어 둔 채 PC 답을 기다렸다. 실제 폰 시험(2026-10-26)에서 브라우저를 벗어나자 그 요청이 18초 만에 끊겨(408) 지금 방식으로 바꿨다. 시험 페이지는 요청 id를 탭에 저장해 새로 고쳐도 이어서 묻는다.
 - 한 번만 쓰는 코드: 맞는 코드가 처음 들어오면 허용·거절·시간 초과와 상관없이 창이 닫힌다. 틀린 코드 5번이면 창이 닫힌다. 다른 기기가 짝 맺는 중이면 409.
@@ -139,9 +139,9 @@ Asksemble/
 
 ## 7. 정한 것 (2026-10-26, 사용자가 '제안대로'로 정함)
 
-1. Go 모듈 경로는 `github.com/asksemble/asksemble/agent`. GitHub 조직 이름이 바뀌면 같이 바꾼다.
-2. 실행 파일 이름은 `asksemble-agent`. 설계 문서의 `agent pair`·`agent devices`·`agent revoke`는 `asksemble-agent pair`·`asksemble-agent devices`·`asksemble-agent devices revoke`다.
-3. 설정 위치는 `os.UserConfigDir()/Asksemble`(Windows `%AppData%\Asksemble`). `agent.json`(설정), `devices.json`(토큰 해시), `logs\agent.log`. `ASKSEMBLE_AGENT_DIR`로 바꿀 수 있다.
+1. Go 모듈 경로는 `github.com/heeo-dev/askorus/agent`. GitHub 조직 이름이 바뀌면 같이 바꾼다.
+2. 실행 파일 이름은 `askorus-agent`. 설계 문서의 `agent pair`·`agent devices`·`agent revoke`는 `askorus-agent pair`·`askorus-agent devices`·`askorus-agent devices revoke`다.
+3. 설정 위치는 `os.UserConfigDir()/Askorus`(Windows `%AppData%\Askorus`). `agent.json`(설정), `devices.json`(토큰 해시), `logs\agent.log`. `ASKORUS_AGENT_DIR`로 바꿀 수 있다.
 4. 제목 순서는 `custom-title` → `<uuid>/custom-title.json` → `agent-name` → `ai-title`.
 5. 데스크톱 앱 세션(`entrypoint: claude-desktop`)도 목록에 넣고 `desktop` 배지를 단다.
 6. 목록의 `agents` 결과는 2초 동안 그대로, 1분까지는 먼저 돌려주고 뒤에서 새로 받는다. 에이전트가 상태를 바꾸면 바로 지운다.
@@ -154,7 +154,7 @@ Asksemble/
 
 정한 것(사용자):
 
-- **지우기(F5)**: `claude rm`으로 bg 목록에서 빼고, 에이전트의 숨김 목록(`hidden.json`)에 적어 우리 목록에서도 뺀다. 대화 기록 파일은 지우지 않는다. `asksemble-agent hidden unhide <id>`로 되돌린다.
+- **지우기(F5)**: `claude rm`으로 bg 목록에서 빼고, 에이전트의 숨김 목록(`hidden.json`)에 적어 우리 목록에서도 뺀다. 대화 기록 파일은 지우지 않는다. `askorus-agent hidden unhide <id>`로 되돌린다.
 - **모델·노력 수준**: 요청이나 설정(`defaultModel`·`defaultEffort`)에 값이 없으면 `--model`·`--effort`를 붙이지 않고 Claude Code 기본값을 쓴다.
 
 만든 것:
@@ -226,7 +226,7 @@ Asksemble/
 - **다른 서버가 있는 폴더**: `bridge-pointer.json`의 pid가 살아 있고 우리 서버가 아니면 `external`로 두고 건드리지 않는다.
 - **설정에 맞추기**: `agent.json`의 폴더별 `server.enabled`가 원하는 상태다. `serve`가 5초마다, 그리고 설정이 바뀌면 바로 서버를 켜고 끈다. 에이전트가 끝날 때 모든 서버에 Ctrl+C를 보낸다. 에이전트가 강제로 죽으면 가상 터미널이 닫히면서 서버도 함께 끝난다(고아 없음).
 - **API**: `PUT /v1/folders/{id}/server {enabled, spawn, capacity}`, `GET /v1/folders`에 실제 상태(`status`: off·starting·running·failed·untrusted·external, 세션 수, 환경 id)와 `isGit`. `worktree`는 git 저장소만.
-- **명령줄**: `asksemble-agent folders serve ID on|off [-spawn] [-capacity]`.
+- **명령줄**: `askorus-agent folders serve ID on|off [-spawn] [-capacity]`.
 - **서버 세션 표시**: 서버가 만든 세션은 서버 프로세스의 자식이다(실제로 `claude --print --sdk-url …`가 서버 아래에서 돈다). `claude agents`에는 `interactive`로 보이지만, 목록에서는 '실행 중' + `server` 배지로 보이고, 열기를 누르면 `/rc` 안내 대신 링크(없으면 `server_session` 안내)를 준다.
 - **capability**: Windows에서 `serve`를 알린다.
 - **시험 페이지**: '4. 폴더 열어 두기'에서 켜기·끄기와 상태.
@@ -265,7 +265,7 @@ Asksemble/
 - **관리자 권한 서비스 감지**(`adapter/claude/daemon.go`): `~/.claude/daemon.lock`의 pid가 살아 있고 그 프로세스가 관리자 권한이면, 열기·새 세션이 45초 기다리지 않고 바로 `service_elevated`(503)로 "관리자 터미널에서 `claude daemon stop --any`"를 안내한다. `/v1/info`에도 알림(`claude_service_elevated`)이 뜬다.
 - **관리자로 실행 거부(N3)**: `serve`는 관리자 권한이면 시작하지 않는다. 그 아래에서 켠 세션이 모두 관리자 권한을 갖게 되기 때문이다.
 - **백그라운드 실행**: `start`(창 없이 `serve`를 띄우고 끝남), `shutdown`(이름 붙은 이벤트로 멈춤 신호, 포트마다 따로. 에이전트가 폴더 서버를 Ctrl+C로 정리하고 끝날 때까지 기다림), `status`.
-- **자동 시작**: `autostart on|off|status`. 이 사용자의 `HKCU\…\Run`에 `"asksemble-agent.exe" start`를 넣는다. 관리자 권한이 필요 없고 일반 권한으로 켜진다. 관리자 터미널에서 켜려 하면 거부한다. 로그인할 때 콘솔 창이 잠깐 깜빡일 수 있다(콘솔 프로그램이라서).
+- **자동 시작**: `autostart on|off|status`. 이 사용자의 `HKCU\…\Run`에 `"askorus-agent.exe" start`를 넣는다. 관리자 권한이 필요 없고 일반 권한으로 켜진다. 관리자 터미널에서 켜려 하면 거부한다. 로그인할 때 콘솔 창이 잠깐 깜빡일 수 있다(콘솔 프로그램이라서).
 - **`check`**: 권한, Claude Code 버전, 관리자 서비스, Remote Control을 막는 환경 변수, Tailscale(로그인 계정, HTTPS 인증서, 에이전트를 가리키는 serve 포트(없으면 비어 있는 포트를 골라 실행할 명령을 보여 줌), Funnel), 에이전트 실행·자동 시작, 짝 맺은 폰, 폴더, 절전 설정, 한 번만 할 일(`claude --rc` 동의, 푸시 설정)을 본다. 읽기만 하고, 고칠 명령은 사람이 실행한다.
 - **`uninstall [-yes] [-all]`**: 묻고 나서 에이전트를 멈추고, 자동 시작을 지우고, 짝 맺은 폰을 끊고(`devices.json` 삭제), 에이전트를 가리키는 tailscale serve 포트 하나만 끈다(`tailscale serve --https=<포트> off`). 다른 serve 설정과 Claude Code는 건드리지 않는다. `-all`이면 설정 폴더도 지운다.
 - **실행 중 Funnel 점검**: 1분마다 확인해서, 에이전트 포트에 Funnel이 켜지면 멈춘다.
@@ -282,7 +282,7 @@ Asksemble/
 
 ## 12. 정한 것 (2026-10-27)
 
-- 이 PC에 자동 시작을 등록했다: `autostart on -test-page` → `"…\.local\bin\asksemble-agent.exe" start -test-page`. 폰 앱(B1)이 나오기 전까지 시험 페이지를 쓰려고 `autostart on`에 `-test-page`를 더했다.
+- 이 PC에 자동 시작을 등록했다: `autostart on -test-page` → `"…\.local\bin\askorus-agent.exe" start -test-page`. 폰 앱(B1)이 나오기 전까지 시험 페이지를 쓰려고 `autostart on`에 `-test-page`를 더했다.
 - 이 세션이 띄웠던 에이전트를 멈추고 A5 빌드를 `start -test-page`로 다시 켰다. 사설망 주소에서 시험 페이지 200, API는 토큰 없이 401. `check`는 주의 0개.
 
 ## 13. B1 계획 (2026-10-27)
@@ -292,7 +292,7 @@ Asksemble/
 | 단계 | 할 일 |
 | --- | --- |
 | B1-1 뼈대 | Expo 프로젝트, ko/en 문구, `/v1` 클라이언트(작업·짝 맺기 다시 묻기, 끊긴 요청 다시 묻기), 연결 목록(`kind: pc`, 토큰은 보안 저장소에 따로), 단위 테스트 |
-| B1-2 짝 맺기 | Tailscale 안내, QR 스캔(`expo-camera`), `asksemble://pair`와 시험 페이지 링크 둘 다 읽기, PC 허용 기다리기 |
+| B1-2 짝 맺기 | Tailscale 안내, QR 스캔(`expo-camera`), `askorus://pair`와 시험 페이지 링크 둘 다 읽기, PC 허용 기다리기 |
 | B1-3 세션 목록·상세 | 검색, 상태 필터, 배지, 당겨서 새로 고침. 상세 시트: 열기(작업 id), 멈추기, 지우기 재확인, 이어 보기 명령 복사, 터미널·서버 세션 안내 |
 | B1-4 새 세션·폴더·설정 | 폴더·이름·모델·노력 수준, 폴더 열어 두기(F10), PC 목록과 끊기, 연결 진단 |
 | B1-5 오류·마무리 | 원인별 오류 화면, 여러 PC(F7), '한 번에 묻기' 탭 자리(숨김), 공식 제품 아님 문구 |
@@ -311,7 +311,7 @@ B1-1 결과: `npx tsc --noEmit` 통과, `npx jest` 4개 묶음 40개 통과(클�
 - 화면 테스트(2026-10-27): `src/test/screens-test.tsx`가 실제 화면(`src/app`)을 Expo Router의 `renderRouter`로 띄우고, 가짜 에이전트(`src/test/fakeAgent.ts`)를 붙여 사람처럼 누른다. 첫 화면, 짝 맺기(붙여넣기·딥 링크·거절·잘못된 링크), 세션 목록·필터·검색, 열기→Claude 앱 링크, 멈추기, 지우기 확인, 폴더 없음, 짝 끊김을 본다(15개, 전체 62개 통과). 테스트 파일은 `src/app` 밖에 둔다(그 안의 파일은 화면이 된다). 실제 폰 조작은 adb 무선 디버깅으로 한다(platform-tools 37.0.1, Google 서명 확인, `%USERPROFILE%\sdk\platform-tools`).
 - B1-4(2026-10-27): 새 세션(`/pc/[id]/new`: 허용 폴더, 이름, 모델 기본값·opus·sonnet·haiku, 노력 수준 기본값·low…max, 시작하면 Claude 앱으로 넘김), 폴더(`/pc/[id]/folders`: 폴더마다 열어 두기 스위치, 상태·세션 수, 켜는 중이면 2초마다 1분까지 다시 묻기), 설정(`/settings`: PC 목록, 연결 진단, 끊기, 새 세션 기본값, 공식 제품 아님). 에이전트에 `DELETE /v1/devices/self`를 더했다(폰이 스스로 짝을 끊음, 다른 기기는 그대로). PC에 닿지 않을 때 끊으면 폰에서만 지우고 PC에서 지울 명령(`devices revoke <id>`)을 보여 준다. 화면 테스트 10개를 더해 전체 72개 통과, Go 테스트 모두 통과. Expo Router의 경로 타입 생성(typedRoutes)이 `src/app` 밖 파일까지 경로로 넣어 꺼 두었다. RNTL 14의 `fireEvent`는 Promise라 반드시 기다린다(안 기다리면 다음 테스트가 멈춤).
 - 기록 폴더(2026-10-27 사용자 결정, 설계 rev 61): 새 세션 폴더를 PC 허용 목록뿐 아니라 대화 기록이 있는 폴더에서도 고른다. 기본으로 켜 두고 `agent.json`의 `"historyFolders": false`로 끈다. 에이전트는 기록의 작업 폴더 중 지금 있는 것을 최근 순으로 30개까지 `GET /v1/folders`에 `source: "history"`로 더한다(`source`, `lastActive` 필드를 더함). 워크트리(`.claude/worktrees` 아래), 숨긴 폴더, 이미 허용된 폴더는 뺀다. id는 경로의 SHA-256 앞 12자리에 `h-`를 붙인 값이고, 폰은 이 id로만 고른다(경로를 보내면 404). 기록 폴더에서 열어 두기를 켜면 허용 목록에 저장(`AddFolder`)하고 서버를 켠다. 끄기는 아무것도 바꾸지 않는다. 앱의 새 세션 화면은 'PC에서 허용한 폴더'와 '최근 대화한 폴더'를 나눠 보여 주고, 폴더 화면에도 최근 폴더를 따로 둔다. 이 PC에서는 기록 폴더 5개(rc-test는 이미 허용돼 4개가 새로 보임). Go 테스트(설정·어댑터·API)와 앱 테스트 74개 통과.
-- B1-5(2026-10-27): 접속 실패를 원인으로 나눈다(`src/connections/reach.ts`). 401은 짝 끊김(다시 짝 맺기 버튼), 403 wrong_account는 다른 Tailscale 계정, serve가 대신 답한 502·503·504는 'PC는 켜져 있지만 에이전트가 꺼짐'(`asksemble-agent start`·`autostart on` 안내), 바로 실패한 연결은 폰 쪽(Tailscale·VPN)부터, 시간 초과는 PC 쪽(꺼짐·잠듦·PC의 Tailscale)부터 확인할 것을 번호로 보여 준다. 폰은 사설망 안을 볼 수 없어 추정이므로 나머지 원인도 같이 둔다. 세션 목록에 오류 상자와 '다시 시도', 첫 화면 카드에 한 줄, 설정의 연결 진단에 같은 안내. PC가 알리는 문제(`/v1/info`의 notices: 관리자 서비스, Remote Control을 막는 환경 변수 등)를 목록 위에 띄운다. 두 번째 입구 '한 번에 묻기'는 `src/app/ask.tsx` 자리만 두고 `features.ask=false`로 숨긴다(원칙 9). 여러 PC(F7)는 PC마다 토큰이 따로 쓰이는지 화면 테스트로 본다. 앱 테스트 83개 통과, expo-doctor 20/20.
+- B1-5(2026-10-27): 접속 실패를 원인으로 나눈다(`src/connections/reach.ts`). 401은 짝 끊김(다시 짝 맺기 버튼), 403 wrong_account는 다른 Tailscale 계정, serve가 대신 답한 502·503·504는 'PC는 켜져 있지만 에이전트가 꺼짐'(`askorus-agent start`·`autostart on` 안내), 바로 실패한 연결은 폰 쪽(Tailscale·VPN)부터, 시간 초과는 PC 쪽(꺼짐·잠듦·PC의 Tailscale)부터 확인할 것을 번호로 보여 준다. 폰은 사설망 안을 볼 수 없어 추정이므로 나머지 원인도 같이 둔다. 세션 목록에 오류 상자와 '다시 시도', 첫 화면 카드에 한 줄, 설정의 연결 진단에 같은 안내. PC가 알리는 문제(`/v1/info`의 notices: 관리자 서비스, Remote Control을 막는 환경 변수 등)를 목록 위에 띄운다. 두 번째 입구 '한 번에 묻기'는 `src/app/ask.tsx` 자리만 두고 `features.ask=false`로 숨긴다(원칙 9). 여러 PC(F7)는 PC마다 토큰이 따로 쓰이는지 화면 테스트로 본다. 앱 테스트 83개 통과, expo-doctor 20/20.
 
 ## 14. 재부팅 뒤 '보관됨' (2026-10-27)
 
@@ -342,21 +342,21 @@ B2-1 결과:
 - `npx expo prebuild`로 Android 프로젝트를 만들어(빌드는 하지 않고 확인 뒤 지움) 매니페스트를 봤다. Expo가 기본으로 넣는 저장소 읽기·쓰기, 다른 앱 위에 그리기, 진동 권한을 `blockedPermissions`로 뺐다. 남는 권한은 카메라와 인터넷이다.
 - prebuild가 `userInterfaceStyle`에는 `expo-system-ui`가 필요하다고 경고했다. 없으면 설치본은 늘 밝은 화면이다. Expo Go에서는 보이지 않던 문제라 `expo-system-ui`를 더하고 `src/config-test.ts`로 지킨다(R-14).
 - SDK 58의 새 패치(`expo` 58.0.20 등)로 맞췄다(expo-doctor 20/20).
-- 패키지 이름은 `app.asksemble`(2026-10-28 사용자 확정).
+- 패키지 이름은 `app.askorus`(2026-10-28 사용자 확정).
 
 B2-2(2026-10-28): `eas init`으로 `@heeodev/asksemble`을 만들었다. 첫 preview 빌드 때 EAS가 서명 키를 클라우드에서 만들었고(PC에 keytool 없음), versionCode는 1에서 시작한다. 올린 파일은 1.6MB다(`.local`·비밀값은 gitignore로 빠짐). 빌드는 19분 만에 끝났다(0.1.0, versionCode 1). 다음은 폰에 설치해 MT-01~08.
 - 개인정보처리방침 초안 `docs/privacy.md`(한국어·영어). 공개 주소는 아직 없다.
 
 ## 16. PATH (2026-10-28)
 
-`.local\bin`이 PATH에 없어 터미널에서 `asksemble-agent pair`가 안 됐다(사용자 지적). 이 PC는 사용자 PATH(HKCU)에 `.local\bin`을 넣었고, 배포판에서도 되도록 `path` 명령을 더했다. 설계의 'PC 설치 흐름' 5번과 지우기에 PATH를 더했다(rev 63).
+`.local\bin`이 PATH에 없어 터미널에서 `askorus-agent pair`가 안 됐다(사용자 지적). 이 PC는 사용자 PATH(HKCU)에 `.local\bin`을 넣었고, 배포판에서도 되도록 `path` 명령을 더했다. 설계의 'PC 설치 흐름' 5번과 지우기에 PATH를 더했다(rev 63).
 
-- `asksemble-agent path on|off|status`: 이 exe가 있는 폴더를 이 사용자의 PATH(`HKCU\Environment`의 `Path`)에 넣고 뺀다. 관리자 권한이 필요 없고 시스템 PATH는 건드리지 않는다. 다른 항목은 순서와 적힌 그대로 두고, 값의 종류(REG_SZ·REG_EXPAND_SZ)도 지킨다. 같은 폴더를 대소문자·끝의 `\`·따옴표·`%LOCALAPPDATA%`가 달라도 같은 것으로 본다. 바꾼 뒤 Windows에 알려(WM_SETTINGCHANGE) 새로 연 터미널부터 적용된다.
+- `askorus-agent path on|off|status`: 이 exe가 있는 폴더를 이 사용자의 PATH(`HKCU\Environment`의 `Path`)에 넣고 뺀다. 관리자 권한이 필요 없고 시스템 PATH는 건드리지 않는다. 다른 항목은 순서와 적힌 그대로 두고, 값의 종류(REG_SZ·REG_EXPAND_SZ)도 지킨다. 같은 폴더를 대소문자·끝의 `\`·따옴표·`%LOCALAPPDATA%`가 달라도 같은 것으로 본다. 바꾼 뒤 Windows에 알려(WM_SETTINGCHANGE) 새로 연 터미널부터 적용된다.
 - exe가 내려받기 폴더나 임시 폴더에 있으면 계속 둘 폴더로 옮기라고 알린다.
 - `check`는 PATH에 없으면 주의로 `path on`을 안내하고, `uninstall`은 PATH 항목도 뺀다.
-- 배포판 설치 순서(D 단계의 설치 문서에 쓴다): exe를 `%LOCALAPPDATA%\Programs\Asksemble`에 둔다 → `asksemble-agent.exe path on` → 새 터미널에서 `asksemble-agent autostart on`, `check`, `pair`. 나중에 winget(portable)으로 내면 winget이 PATH를 맡는다.
+- 배포판 설치 순서(D 단계의 설치 문서에 쓴다): exe를 `%LOCALAPPDATA%\Programs\Askorus`에 둔다 → `askorus-agent.exe path on` → 새 터미널에서 `askorus-agent autostart on`, `check`, `pair`. 나중에 winget(portable)으로 내면 winget이 PATH를 맡는다.
 - 시험: `pathenv_test.go`(문자열만, 실제 PATH는 안 건드림), uninstall 테스트는 PATH 빼기를 가짜로 바꾼다. 실제 PC에서 임시 폴더의 빌드로 on → on(이미 있음) → status → off를 돌려 PATH가 원래 값 그대로 돌아온 것을 봤다.
-- `.local\bin`에 배포(2026-10-28): 열어 둔 폴더 서버가 없는 것을 보고 `shutdown` → 교체 → `start -test-page`. `check` 주의 0개(PATH ok), Tailscale 주소의 `/v1/info`는 토큰 없이 401. 예전 빌드는 `asksemble-agent.prev.exe`로 남겼다.
+- `.local\bin`에 배포(2026-10-28): 열어 둔 폴더 서버가 없는 것을 보고 `shutdown` → 교체 → `start -test-page`. `check` 주의 0개(PATH ok), Tailscale 주소의 `/v1/info`는 토큰 없이 401. 예전 빌드는 `askorus-agent.prev.exe`로 남겼다.
 
 ## 17. 열어 두기를 꺼도 Claude 앱에 폴더가 남음 (2026-10-28, MT-06)
 

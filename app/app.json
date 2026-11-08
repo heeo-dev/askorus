@@ -1,10 +1,10 @@
 {
   "expo": {
-    "name": "Asksemble",
-    "slug": "asksemble",
+    "name": "Askorus",
+    "slug": "askorus",
     "owner": "heeodev",
     "version": "0.1.0",
-    "scheme": "asksemble",
+    "scheme": "askorus",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -13,7 +13,7 @@
       "infoPlist": {}
     },
     "android": {
-      "package": "app.asksemble",
+      "package": "app.askorus",
       "allowBackup": false,
       "adaptiveIcon": {
         "backgroundColor": "#FFAD85",
@@ -40,7 +40,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Asksemble uses the camera to scan the pairing QR code on your PC.",
+          "cameraPermission": "Askorus uses the camera to scan the pairing QR code on your PC.",
           "recordAudioAndroid": false
         }
       ],

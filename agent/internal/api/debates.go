@@ -5,8 +5,8 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/asksemble/asksemble/agent/internal/compares"
-	"github.com/asksemble/asksemble/agent/internal/judge"
+	"github.com/heeo-dev/askorus/agent/internal/compares"
+	"github.com/heeo-dev/askorus/agent/internal/judge"
 )
 
 // Debates (토론, P2-5, #26): POST /v1/debates starts one from the answers

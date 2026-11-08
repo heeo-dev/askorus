@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/asksemble/asksemble/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/core"
 )
 
 // Recent conversation preview (F8): the last question in a transcript and

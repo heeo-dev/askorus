@@ -22,7 +22,7 @@ func TestCapBufferHoldsThroughCopy(t *testing.T) {
 
 func TestRunnerVersionAndAgents(t *testing.T) {
 	r, argsFile := fakeRunner(t)
-	t.Setenv("ASKSEMBLE_FAKE_AGENTS", filepath.Join("testdata", "agents.json"))
+	t.Setenv("ASKORUS_FAKE_AGENTS", filepath.Join("testdata", "agents.json"))
 	ctx := context.Background()
 
 	v, err := r.Version(ctx)
@@ -45,12 +45,12 @@ func TestRunnerVersionAndAgents(t *testing.T) {
 
 func TestRunnerExitCodeAndTimeout(t *testing.T) {
 	r, _ := fakeRunner(t)
-	t.Setenv("ASKSEMBLE_FAKE_EXIT", "3")
+	t.Setenv("ASKORUS_FAKE_EXIT", "3")
 	if _, err := r.Run(context.Background(), "", "--version"); err == nil || !strings.Contains(err.Error(), "exit code 3") {
 		t.Errorf("err = %v", err)
 	}
-	t.Setenv("ASKSEMBLE_FAKE_EXIT", "")
-	t.Setenv("ASKSEMBLE_FAKE_SLEEP", "5s")
+	t.Setenv("ASKORUS_FAKE_EXIT", "")
+	t.Setenv("ASKORUS_FAKE_SLEEP", "5s")
 	r.timeout = 300 * time.Millisecond
 	start := time.Now()
 	if _, err := r.Run(context.Background(), "", "--version"); err == nil || !strings.Contains(err.Error(), "timed out") {

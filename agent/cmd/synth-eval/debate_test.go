@@ -9,7 +9,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/asksemble/asksemble/agent/internal/judge"
+	"github.com/heeo-dev/askorus/agent/internal/judge"
 )
 
 // The debate (C7): the moderator's plan and checks, the debaters' stances,
@@ -118,7 +118,7 @@ func TestAfterDebatePrompt(t *testing.T) {
 		Turns: []DebateTurn{{AI: "Claude", Ask: "근거?", Text: "8시가 맞네요", Stance: "change"}}, Result: "agreed", Line: "8시"}}
 	p := afterDebatePrompt(task, points, n)
 	v5 := judge.SynthPrompt(task, n)
-	if !strings.HasPrefix(p, "[Asksemble synthesis debate-v1] ") || !strings.Contains(p, `POINT: {"debated":true,`) ||
+	if !strings.HasPrefix(p, "[Askorus synthesis debate-v1] ") || !strings.Contains(p, `POINT: {"debated":true,`) ||
 		!strings.Contains(p, `"outcome":"agreed: 8시"`) || !strings.Contains(p, debateRule5) || strings.Contains(p, "5. For every place") {
 		t.Fatalf("prompt:\n%s", p)
 	}
@@ -146,14 +146,14 @@ func (f *fakeDebater) Write(_ context.Context, r writeReq) (writeRes, error) {
 	f.writes++
 	f.mu.Unlock()
 	switch {
-	case strings.HasPrefix(r.Prompt, "[Asksemble debate plan v1]"):
+	case strings.HasPrefix(r.Prompt, "[Askorus debate plan v1]"):
 		return writeRes{Agent: r.Agent, Output: synthJSON("POINT | p1 | fact | yes | 첫 배 시간\nSIDE | p1 | Claude | 7시\nSIDE | p1 | Codex, OpenCode | 8시\nGOAL | p1 | checked\nTURN | p1 | Claude | 근거는?\nTURN | p1 | Codex | 7시라는데?\nPOINT | p2 | taste | no | 말투\nSIDE | p2 | Claude | 존댓말\nSIDE | p2 | Codex | 영어")}, nil
-	case strings.HasPrefix(r.Prompt, "[Asksemble debate check v1]"):
+	case strings.HasPrefix(r.Prompt, "[Askorus debate check v1]"):
 		if strings.Contains(r.Prompt, "This is the last check") {
 			return writeRes{Agent: r.Agent, Output: synthJSON("DONE | agreed | 첫 배는 8시입니다.")}, nil
 		}
 		return writeRes{Agent: r.Agent, Output: synthJSON("NEXT | OpenCode | 출처는?")}, nil
-	case strings.HasPrefix(r.Prompt, "[Asksemble synthesis debate-v1]"):
+	case strings.HasPrefix(r.Prompt, "[Askorus synthesis debate-v1]"):
 		return writeRes{Agent: r.Agent, Output: synthJSON("첫 배는 8시입니다.")}, nil
 	}
 	return writeRes{}, nil
@@ -232,15 +232,15 @@ func (f *tasteDebater) Write(_ context.Context, r writeReq) (writeRes, error) {
 	f.writes = append(f.writes, r.Prompt)
 	f.mu.Unlock()
 	switch {
-	case strings.HasPrefix(r.Prompt, "[Asksemble debate plan v1]"):
-		return writeRes{Agent: r.Agent, Output: synthJSON("POINT | p1 | taste | yes | 이름\nSIDE | p1 | Claude | Panelist\nSIDE | p1 | Codex | Asksemble\nGOAL | p1 | the strongest options\nTURN | p1 | Claude | Asksemble은?\nTURN | p1 | Codex | Panelist는?")}, nil
-	case strings.HasPrefix(r.Prompt, "[Asksemble debate check v1]"):
+	case strings.HasPrefix(r.Prompt, "[Askorus debate plan v1]"):
+		return writeRes{Agent: r.Agent, Output: synthJSON("POINT | p1 | taste | yes | 이름\nSIDE | p1 | Claude | Panelist\nSIDE | p1 | Codex | Askorus\nGOAL | p1 | the strongest options\nTURN | p1 | Claude | Askorus은?\nTURN | p1 | Codex | Panelist는?")}, nil
+	case strings.HasPrefix(r.Prompt, "[Askorus debate check v1]"):
 		if strings.Contains(r.Prompt, "This is the last check") {
-			return writeRes{Agent: r.Agent, Output: synthJSON("DONE | kept | Moderai, Panelist, Asksemble")}, nil
+			return writeRes{Agent: r.Agent, Output: synthJSON("DONE | kept | Moderai, Panelist, Askorus")}, nil
 		}
 		return writeRes{Agent: r.Agent, Output: synthJSON("NEXT | Claude | 둘을 합쳐 주세요")}, nil
-	case strings.HasPrefix(r.Prompt, "[Asksemble synthesis debate-v"):
-		return writeRes{Agent: r.Agent, Output: synthJSON(r.Prompt[len("[Asksemble synthesis "):len("[Asksemble synthesis debate-v1")])}, nil
+	case strings.HasPrefix(r.Prompt, "[Askorus synthesis debate-v"):
+		return writeRes{Agent: r.Agent, Output: synthJSON(r.Prompt[len("[Askorus synthesis "):len("[Askorus synthesis debate-v1")])}, nil
 	}
 	return writeRes{}, nil
 }
@@ -281,7 +281,7 @@ func TestDebateRefine(t *testing.T) {
 	}
 	checks := 0
 	for _, p := range f.writes {
-		if strings.HasPrefix(p, "[Asksemble debate check v1]") && strings.Contains(p, "never 갈리다") {
+		if strings.HasPrefix(p, "[Askorus debate check v1]") && strings.Contains(p, "never 갈리다") {
 			checks++
 			if !strings.Contains(p, "This is the last check") && !strings.Contains(p, "combine the strongest options") {
 				t.Errorf("an r2 check without the refine ask:\n%s", p)
@@ -292,7 +292,7 @@ func TestDebateRefine(t *testing.T) {
 		t.Errorf("r2 checks = %d", checks)
 	}
 	task := judge.SynthTask{Question: "q", Answers: []judge.SynthAnswer{{AI: "Claude", Text: "a"}, {AI: "Codex", Text: "b"}}}
-	if p := afterDebatePromptOf(task, r2.Debate.Points, "0123456789abcdef", true); !strings.HasPrefix(p, "[Asksemble synthesis debate-v2] ") || !strings.Contains(p, debateRefineRule5) || strings.Contains(p, debateRule5) {
+	if p := afterDebatePromptOf(task, r2.Debate.Points, "0123456789abcdef", true); !strings.HasPrefix(p, "[Askorus synthesis debate-v2] ") || !strings.Contains(p, debateRefineRule5) || strings.Contains(p, debateRule5) {
 		t.Errorf("debate-v2:\n%s", p)
 	}
 }

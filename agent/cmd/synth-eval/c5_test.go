@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/asksemble/asksemble/agent/internal/judge"
+	"github.com/heeo-dev/askorus/agent/internal/judge"
 )
 
 // The moderator alone: the product prompt's head and data block with
@@ -19,8 +19,8 @@ func TestSynthC5Solo(t *testing.T) {
 	p := synthC5Solo(task, n)
 	product := judge.SynthPrompt(task, n)
 	end := "</data-" + n + ">\n"
-	if p == "" || product == "" || !strings.HasPrefix(p, "[Asksemble synthesis c5-solo-draft]") || strings.Count(p, `ANSWER: {"ai":`) != 2 ||
-		strings.Replace(p, "[Asksemble synthesis c5-solo-draft]", c5ProductHead, 1) != product[:strings.Index(product, end)+len(end)]+c5SoloTask {
+	if p == "" || product == "" || !strings.HasPrefix(p, "[Askorus synthesis c5-solo-draft]") || strings.Count(p, `ANSWER: {"ai":`) != 2 ||
+		strings.Replace(p, "[Askorus synthesis c5-solo-draft]", c5ProductHead, 1) != product[:strings.Index(product, end)+len(end)]+c5SoloTask {
 		t.Fatalf("prompt:\n%s", p)
 	}
 	for _, w := range []string{"COMPARED", "DIFFER", "CHECK", "the review", "verified", `"ais"`, "[[differ]]", "part 2"} {
@@ -50,7 +50,7 @@ func TestC5SoloWith(t *testing.T) {
 	solo := synthC5Solo(task, n)
 	for name, edits := range map[string][]string{"c5-sel": {"sel"}, "c5-nat": {"nat"}, "c5-sn": {"sel", "nat"}, "c5-sf": {"sel", "few"}, "c5-sfd": {"sel", "few", "nodup"}, "c5-si": {"sel", "inline"}, "c5-sq": {"sel", "quiet"}} {
 		p := c5SoloWith(name, edits...)(task, n)
-		if p == "" || p == solo || !strings.HasPrefix(p, "[Asksemble synthesis "+name+"-draft]") {
+		if p == "" || p == solo || !strings.HasPrefix(p, "[Askorus synthesis "+name+"-draft]") {
 			t.Errorf("%s:\n%s", name, p)
 		}
 		// A later edit may rewrite part of an earlier one's text (inline
@@ -77,7 +77,7 @@ func TestProductIsC5SQ(t *testing.T) {
 		task := judge.SynthTask{Question: "첫 배는?", Earlier: earlier, Answers: answers}
 		product := judge.SynthPrompt(task, n)
 		draft := c5SoloWith("c5-sq", "sel", "quiet")(task, n)
-		want := strings.Replace(strings.Replace(draft, "[Asksemble synthesis c5-sq-draft]", c5ProductHead, 1), v5LangLine, v5LangFirm, 1)
+		want := strings.Replace(strings.Replace(draft, "[Askorus synthesis c5-sq-draft]", c5ProductHead, 1), v5LangLine, v5LangFirm, 1)
 		if product == "" || judge.SynthRules != "synth-v5.1" || !strings.Contains(draft, v5LangLine) || want != product {
 			t.Errorf("earlier %v: the product prompt is not c5-sq:\n%s\n---\n%s", earlier, product, draft)
 		}

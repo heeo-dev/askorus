@@ -7,9 +7,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/asksemble/asksemble/agent/internal/core"
-	"github.com/asksemble/asksemble/agent/internal/judge"
-	"github.com/asksemble/asksemble/agent/internal/runs"
+	"github.com/heeo-dev/askorus/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/judge"
+	"github.com/heeo-dev/askorus/agent/internal/runs"
 )
 
 // Question refining (질문 정제; milestone C, design C-1..C-6 in "마일스톤 C"

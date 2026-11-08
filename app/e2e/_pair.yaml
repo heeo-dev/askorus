@@ -9,7 +9,7 @@ appId: host.exp.exponent
 - tapOn: "My PCs"
 - tapOn: "Pair with a PC"
 - tapOn: "Paste the link instead"
-- tapOn: "asksemble://pair?…"
+- tapOn: "askorus://pair?…"
 - inputText: ${MAESTRO_LINK}
 - tapOn: "Pair with this link"
 - extendedWaitUntil:

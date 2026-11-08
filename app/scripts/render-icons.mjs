@@ -44,7 +44,7 @@ function page(icon) {
 
 // run starts Edge once, with a profile folder of its own that is removed after.
 function run(html, png) {
-  const dir = mkdtempSync(join(tmpdir(), 'asksemble-icon-'));
+  const dir = mkdtempSync(join(tmpdir(), 'askorus-icon-'));
   const file = join(dir, 'icon.html');
   writeFileSync(file, html);
   const args = [
@@ -140,7 +140,7 @@ function check(png) {
 }
 
 async function one(name) {
-  const tmp = mkdtempSync(join(tmpdir(), 'asksemble-png-'));
+  const tmp = mkdtempSync(join(tmpdir(), 'askorus-png-'));
   const png = join(tmp, `${name}.png`);
   try {
     await run(page(icons[name]), png);

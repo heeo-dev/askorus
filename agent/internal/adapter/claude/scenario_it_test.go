@@ -19,13 +19,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asksemble/asksemble/agent/internal/api"
-	"github.com/asksemble/asksemble/agent/internal/config"
-	"github.com/asksemble/asksemble/agent/internal/core"
-	"github.com/asksemble/asksemble/agent/internal/devices"
-	"github.com/asksemble/asksemble/agent/internal/hidden"
-	"github.com/asksemble/asksemble/agent/internal/logx"
-	"github.com/asksemble/asksemble/agent/internal/pairing"
+	"github.com/heeo-dev/askorus/agent/internal/api"
+	"github.com/heeo-dev/askorus/agent/internal/config"
+	"github.com/heeo-dev/askorus/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/devices"
+	"github.com/heeo-dev/askorus/agent/internal/hidden"
+	"github.com/heeo-dev/askorus/agent/internal/logx"
+	"github.com/heeo-dev/askorus/agent/internal/pairing"
 )
 
 const (
@@ -65,7 +65,7 @@ func newPhone(t *testing.T, entries []agentEntry) *phone {
 	os.WriteFile(filepath.Join(env.projects, "blog", "77777777-7777-4777-8777-777777777777.jsonl"),
 		[]byte(`{"type":"user","message":{"content":"x"},"timestamp":"2026-10-21T00:00:00.000Z","cwd":`+jsonString(others)+`,"sessionId":"77777777-7777-4777-8777-777777777777"}`+"\n"), 0o600)
 
-	ask := filepath.Join(filepath.Dir(env.folder), "Asksemble", "ask") // made by the first ask
+	ask := filepath.Join(filepath.Dir(env.folder), "Askorus", "ask") // made by the first ask
 	allowed := []config.Folder{{ID: "work", Path: env.folder, Server: config.FolderServer{Spawn: config.SpawnSameDir, Capacity: 4}}}
 	h := api.New(api.Options{
 		Version: "it", Hostname: "PC", Adapters: []core.Adapter{env.a}, Devices: store,
@@ -282,7 +282,7 @@ func TestIT04RebootNoOldLink(t *testing.T) {
 	gone := agentEntry{ID: "11111111", Kind: kindBackground, SessionID: id1, Name: "job one", State: "done"}
 	p := newPhone(t, []agentEntry{gone})
 	p.pair()
-	t.Setenv("ASKSEMBLE_FAKE_NOLINK", "1")
+	t.Setenv("ASKORUS_FAKE_NOLINK", "1")
 	j := p.job("POST", "/v1/sessions/claude:"+id1+"/open", nil)
 	if code := failedCode(j); code != core.ErrCodeLinkTimeout {
 		t.Fatalf("open = %v, want remote_link_timeout instead of the old link", j)
@@ -351,11 +351,11 @@ func TestIT07Remove(t *testing.T) {
 func TestIT08Failures(t *testing.T) {
 	p := newPhone(t, nil)
 	p.pair()
-	t.Setenv("ASKSEMBLE_FAKE_UNTRUSTED", "1")
+	t.Setenv("ASKORUS_FAKE_UNTRUSTED", "1")
 	if code := failedCode(p.job("POST", "/v1/sessions/claude:"+id6+"/open", nil)); code != core.ErrCodeUntrusted {
 		t.Errorf("untrusted = %q", code)
 	}
-	t.Setenv("ASKSEMBLE_FAKE_UNTRUSTED", "")
+	t.Setenv("ASKORUS_FAKE_UNTRUSTED", "")
 	os.RemoveAll(p.env.folder)
 	s := p.sessions("")["claude:"+id6]
 	if modes := s["openModes"].([]any); len(modes) != 0 {

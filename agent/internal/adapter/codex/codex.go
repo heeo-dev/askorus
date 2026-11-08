@@ -28,9 +28,9 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/asksemble/asksemble/agent/internal/config"
-	"github.com/asksemble/asksemble/agent/internal/core"
-	"github.com/asksemble/asksemble/agent/internal/proc"
+	"github.com/heeo-dev/askorus/agent/internal/config"
+	"github.com/heeo-dev/askorus/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/proc"
 )
 
 // Name is the agent name used in session ids ("codex:<thread id>").
@@ -81,7 +81,7 @@ type Options struct {
 	// SchemaDir holds the combined-answer schema file synth-schema-v1.json
 	// and the refine schema file refine-schema-v1.json, which codex reads
 	// for --output-schema. Empty: the agent folder,
-	// config.Dir() (%APPDATA%\Asksemble). Tests give a temporary folder.
+	// config.Dir() (%APPDATA%\Askorus). Tests give a temporary folder.
 	SchemaDir string
 }
 

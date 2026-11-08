@@ -6,8 +6,8 @@
 
 | 항목 | 값 | 어디 |
 | --- | --- | --- |
-| 패키지 이름 | `app.asksemble` (2026-10-28 사용자 확정. Play에 처음 올리면 바꿀 수 없다) | `app/app.json` `android.package` |
-| Expo 프로젝트 | `@heeodev/asksemble`(개인 계정 owner) | `app/app.json` `owner`, `extra.eas.projectId` |
+| 패키지 이름 | `app.askorus` (2026-11-08 이름을 Askorus로 바꾸며 `app.asksemble`에서 바꿈, #31. Play에 처음 올리면 바꿀 수 없다) | `app/app.json` `android.package` |
+| Expo 프로젝트 | `@heeodev/asksemble`(개인 계정 owner). slug가 `askorus`로 바뀌어(#31) 다음 EAS 빌드 전에 새 프로젝트를 이어야 한다: 사용자가 연 PowerShell에서 `npx eas-cli@25.3.0 init`(새 `@heeodev/askorus`, `extra.eas.projectId`가 바뀜). 새 패키지라 서명 키도 새로 만들어진다 | `app/app.json` `owner`, `extra.eas.projectId` |
 | 보이는 버전 | `version` (지금 0.1.0) | `app/app.json` |
 | 빌드 번호(versionCode) | EAS가 보관하고 store 빌드마다 1씩 올린다 | `app/eas.json` `cli.appVersionSource: remote` |
 | 시험용 빌드 | `preview`: APK, 링크·QR로 폰에 바로 설치 | `npm run build:apk` |
@@ -21,7 +21,7 @@ Expo Go와 다른 점(스토어 빌드에서만 드러남, `src/config-test.ts`�
 
 - 다크 모드: `userInterfaceStyle: automatic`은 `expo-system-ui`가 있어야 적용된다. 없으면 늘 밝은 화면이다(R-14).
 - 평문 HTTP: 릴리스 빌드는 막는다. 앱은 Tailscale serve의 https 주소만 쓰므로 바꿀 것이 없다.
-- 딥 링크: `asksemble://pair`는 앱의 scheme으로 등록된다(Expo Go는 `exp://`).
+- 딥 링크: `askorus://pair`는 앱의 scheme으로 등록된다(Expo Go는 `exp://`).
 
 ## 2. 순서
 
@@ -32,7 +32,7 @@ Expo Go와 다른 점(스토어 빌드에서만 드러남, `src/config-test.ts`�
 | 3 | Claude | `npm run build:apk`: 클라우드에서 APK 빌드. 처음이라 서명 키를 EAS에 만든다 | 10~20분(무료 요금제는 대기열) |
 | 4 | 사용자 | 폰에서 빌드 링크를 열어 APK 설치('출처를 알 수 없는 앱' 허용), 짝 맺기부터 MT 목록 확인 | 10분 |
 | 5 | 사용자 | Google Play Console 개발자 등록(개인, 25달러 1회), 신원 확인 | 며칠 걸릴 수 있음 |
-| 6 | 사용자 | Play Console에서 앱 만들기(이름 Asksemble, 앱, 무료), 내부 테스트에 테스터(본인 Gmail) 추가 | 10분 |
+| 6 | 사용자 | Play Console에서 앱 만들기(이름 Askorus, 앱, 무료), 내부 테스트에 테스터(본인 Gmail) 추가 | 10분 |
 | 7 | 사용자 | Google Cloud 서비스 계정 키를 만들어 EAS 대시보드에 올림(Claude는 키 파일을 받지 않는다) | 15분 |
 | 8 | Claude | `npm run build:aab` → `npm run eas -- submit -p android`: 내부 테스트에 초안으로 올림 | 20분 |
 | 9 | 사용자 | Play Console에서 초안을 출시, 폰에서 테스트 참여 링크로 설치 | 10분 |
@@ -46,7 +46,7 @@ Expo Go와 다른 점(스토어 빌드에서만 드러남, `src/config-test.ts`�
 
 - **개인정보처리방침 URL**: 초안은 `docs/privacy.md`. 공개 주소가 필요하다(저장소를 공개하기 전이면 따로 올릴 곳을 정한다).
 - **데이터 보안 양식**: 개발자가 받는 데이터 없음. 앱은 데이터를 수집·공유하지 않는다. 짝 맺은 PC 주소와 기기 토큰은 폰의 보안 저장소에만 두고, 통신은 사용자의 Tailscale 망 안에서 사용자의 PC와만 한다. 카메라는 QR 읽기에만 쓰고 사진을 저장하거나 보내지 않는다.
-- **앱 이름·설명**: 이름은 Asksemble. 설명 끝에 '공식 Anthropic·Claude 제품이 아니다'를 적는다. 짧은 설명 예: 'Ask around, all at once' / '내 PC의 코딩 AI를 폰에서 켜고 이어 쓰기'.
+- **앱 이름·설명**: 이름은 Askorus. 설명 끝에 '공식 Anthropic·Claude 제품이 아니다'를 적는다. 짧은 설명 예: 'Ask around, all at once' / '내 PC의 코딩 AI를 폰에서 켜고 이어 쓰기'.
 - **아이콘**: 지금은 Expo 템플릿 아이콘이다. 스토어 등록 정보(512px)를 쓰기 전에 새로 만든다. Claude·Anthropic 로고나 이름은 쓰지 않는다.
 - **콘텐츠 등급·대상 연령·광고 없음**: 설문으로 답한다.
 

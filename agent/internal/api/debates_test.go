@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asksemble/asksemble/agent/internal/compares"
-	"github.com/asksemble/asksemble/agent/internal/core"
-	"github.com/asksemble/asksemble/agent/internal/judge"
+	"github.com/heeo-dev/askorus/agent/internal/compares"
+	"github.com/heeo-dev/askorus/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/judge"
 )
 
 // /v1/debates (P2-5, #26) and /v1/info's debate.
@@ -28,9 +28,9 @@ func (w debateWriter) Synthesize(ctx context.Context, req core.SynthRequest) (co
 	}
 	answer := "AFTER-TEXT"
 	switch {
-	case strings.HasPrefix(req.Prompt, "[Asksemble debate-plan v"):
+	case strings.HasPrefix(req.Prompt, "[Askorus debate-plan v"):
 		answer = apiPlan
-	case strings.HasPrefix(req.Prompt, "[Asksemble debate-check v1]"):
+	case strings.HasPrefix(req.Prompt, "[Askorus debate-check v1]"):
 		answer = "DONE | agreed | 8시입니다."
 	}
 	res.Output, _ = json.Marshal(map[string]string{"answer": answer})
@@ -107,7 +107,7 @@ func TestDebateAPI(t *testing.T) {
 	// The debaters asked in the judge folder.
 	for _, a := range []debateWriter{cl, cx} {
 		reqs := a.requests()
-		if len(reqs) != 1 || reqs[0].Folder != core.JudgeFolder(ask) || !strings.Contains(reqs[0].Prompt, "[Asksemble debate-turn v1]") {
+		if len(reqs) != 1 || reqs[0].Folder != core.JudgeFolder(ask) || !strings.Contains(reqs[0].Prompt, "[Askorus debate-turn v1]") {
 			t.Errorf("%s asks: %+v", a.name, reqs)
 		}
 	}

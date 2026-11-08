@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/asksemble/asksemble/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/core"
 )
 
 // fakePreviewer answers a preview with text that must never reach the log.

@@ -8,7 +8,7 @@ import { Platform } from 'react-native';
 
 const mockSet = jest.fn((_light: boolean) => Promise.resolve());
 let mockModule: unknown = null;
-jest.mock('expo', () => ({ requireOptionalNativeModule: (name: string) => (name === 'AsksembleSystemBars' ? mockModule : null) }));
+jest.mock('expo', () => ({ requireOptionalNativeModule: (name: string) => (name === 'AskorusSystemBars' ? mockModule : null) }));
 
 function load(): typeof import('./navigationBar') {
   let m: typeof import('./navigationBar') | undefined;

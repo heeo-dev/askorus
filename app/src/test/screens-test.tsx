@@ -71,7 +71,7 @@ describe('My PC', () => {
     const user = userEvent.setup();
     const r = await renderRouter(routes, { initialUrl: '/pcs' });
     expect(await screen.findByText('No PC is paired yet.')).toBeTruthy();
-    expect(screen.getByText(/asksemble-agent pair/)).toBeTruthy();
+    expect(screen.getByText(/askorus-agent pair/)).toBeTruthy();
     expect(screen.getByRole('tab', { name: 'My PCs' })).toBeSelected();
     await user.press(screen.getByRole('button', { name: 'Pair with a PC' }));
     await waitFor(() => expect(r.getPathname()).toBe('/pair'));
@@ -360,18 +360,18 @@ describe('pairing', () => {
     await renderRouter(routes, { initialUrl: '/pcs' });
     await user.press(await screen.findByRole('button', { name: 'Pair with a PC' }));
     expect(await screen.findByRole('header', { name: 'Pair with a PC' })).toBeTruthy();
-    expect(screen.getByText('asksemble-agent pair')).toBeTruthy();
+    expect(screen.getByText('askorus-agent pair')).toBeTruthy();
     expect(screen.getByText('Run this in a terminal on the PC')).toBeTruthy();
     expect(screen.getByText('Scan the QR on the PC')).toBeTruthy();
     // The link is the second way, behind a quiet button; there is no code entry.
-    expect(screen.queryByPlaceholderText('asksemble://pair?…')).toBeNull();
+    expect(screen.queryByPlaceholderText('askorus://pair?…')).toBeNull();
     expect(screen.queryByText(/enter.*code/i)).toBeNull();
     expect(screen.getByText('Not an official product of any AI company.')).toBeTruthy();
 
     await user.press(screen.getByRole('button', { name: 'Scan QR code' }));
     expect(await screen.findByText('The camera is needed to scan the QR code on the PC screen.')).toBeTruthy();
     await user.press(screen.getByRole('button', { name: 'Cancel' }));
-    expect(await screen.findByText('asksemble-agent pair')).toBeTruthy();
+    expect(await screen.findByText('askorus-agent pair')).toBeTruthy();
   });
 
   // The camera is dark in either theme; in the light one the status icons
@@ -392,7 +392,7 @@ describe('pairing', () => {
     const user = userEvent.setup();
     await renderRouter(routes, { initialUrl: '/pair' });
     await user.press(await screen.findByRole('button', { name: 'Copy command' }));
-    expect(Clipboard.setStringAsync).toHaveBeenCalledWith('asksemble-agent pair');
+    expect(Clipboard.setStringAsync).toHaveBeenCalledWith('askorus-agent pair');
     expect(await screen.findByText('Copied.')).toBeTruthy();
   });
 
@@ -446,7 +446,7 @@ describe('pairing', () => {
     expect(await screen.findByText('Is this your PC?')).toBeTruthy();
     expect(screen.getByText(HOST)).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Back' })).toBeNull();
-    expect(screen.getByRole('header', { name: 'Asksemble' })).toBeTruthy();
+    expect(screen.getByRole('header', { name: 'Askorus' })).toBeTruthy();
   });
 
   test('opened from My PC it can go back', async () => {
@@ -466,7 +466,7 @@ describe('pairing', () => {
     expect(screen.getByText("Couldn't pair")).toBeTruthy();
     expect(await new ConnectionStore().list()).toEqual([]);
     await user.press(screen.getByRole('button', { name: 'Start over' }));
-    expect(await screen.findByText('asksemble-agent pair')).toBeTruthy();
+    expect(await screen.findByText('askorus-agent pair')).toBeTruthy();
   });
 
   test('no answer on the PC in time is explained', async () => {

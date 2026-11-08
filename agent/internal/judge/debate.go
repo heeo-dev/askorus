@@ -191,7 +191,7 @@ func debateAnswers(b *strings.Builder, t SynthTask) {
 
 // ---- The plan ----
 
-const debatePlanHead = `[Asksemble debate-plan v2] Several AIs answered the same question, and a moderator AI combined their answers. You are the moderator of a short debate between the AIs that answered, held so the person gets a better answer than "the AIs differ". Use only what the data says.
+const debatePlanHead = `[Askorus debate-plan v2] Several AIs answered the same question, and a moderator AI combined their answers. You are the moderator of a short debate between the AIs that answered, held so the person gets a better answer than "the AIs differ". Use only what the data says.
 `
 
 const debatePlanTask = `TASK. Find the points where the answers differ on something the person would care about: a fact, a number, a pick or verdict, a recommendation, a step, a warning. Leave out other wording, order, numbers that differ only by rounding, and a point only one AI makes. Give at most 3 points, the most important first.
@@ -330,7 +330,7 @@ func Debated(plan []DebatePoint) bool {
 
 // ---- The check ----
 
-const debateCheckHead = `[Asksemble debate-check v1] You moderate a short debate between AIs that answered the same question, so the person gets a better answer. You do not decide who is right: the AIs' own reasons and changes of position do.
+const debateCheckHead = `[Askorus debate-check v1] You moderate a short debate between AIs that answered the same question, so the person gets a better answer. You do not decide who is right: the AIs' own reasons and changes of position do.
 `
 
 // DebateCheckPrompt asks the moderator whether p is settled after its
@@ -419,7 +419,7 @@ func DebateTurnPrompt(question, ai, own string, p DebatePoint, ask, nonce string
 		rule = debateRefineRule
 	}
 	var b strings.Builder
-	b.WriteString("[Asksemble debate-turn v1] You are " + ai + " in a short debate between AIs that answered the same question. A moderator AI runs it so the person gets a better answer.\n")
+	b.WriteString("[Askorus debate-turn v1] You are " + ai + " in a short debate between AIs that answered the same question. A moderator AI runs it so the person gets a better answer.\n")
 	b.WriteString(debateGuard(nonce))
 	b.WriteString("<data-" + nonce + ">\n")
 	debateLine(&b, "QUESTION", question)
@@ -474,7 +474,7 @@ const debateRule5 = `5. The AIs debated the POINT entries. Use what the debate r
 // constant empty.
 const debateRule5Two = ` When the debate settled on a combination or a single pick but the person asked for separate items, still give the separate items in the form asked, and put the combination in one line. In text the person will use as their own words (such as a greeting, a notice or a slogan), add no detail of their own situation that they did not give, such as their opening time or an offer a debater made up: leave a placeholder such as ○○ there. Keep every useful specific the answers or the debate give, such as links, prices and model names.`
 
-const debateAfterHead = "[Asksemble synthesis debate-v4] Several AIs answered the same question, then debated the points where they differed."
+const debateAfterHead = "[Askorus synthesis debate-v4] Several AIs answered the same question, then debated the points where they differed."
 
 // debateAfterTail is synth-v5.1's TASK with rule 5 replaced.
 var debateAfterTail = func() string {
@@ -507,12 +507,12 @@ func AfterDebatePrompt(t SynthTask, points []DebatePoint, nonce string) string {
 	p := SynthPrompt(t, nonce)
 	end := "</data-" + nonce + ">\n"
 	i := strings.LastIndex(p, end)
-	if p == "" || i < 0 || !strings.HasPrefix(p, "[Asksemble synthesis v5.1] Several AIs answered the same question.") {
+	if p == "" || i < 0 || !strings.HasPrefix(p, "[Askorus synthesis v5.1] Several AIs answered the same question.") {
 		return ""
 	}
 	var b strings.Builder
 	b.WriteString(debateAfterHead)
-	b.WriteString(p[len("[Asksemble synthesis v5.1] Several AIs answered the same question."):i])
+	b.WriteString(p[len("[Askorus synthesis v5.1] Several AIs answered the same question."):i])
 	for _, pt := range points {
 		x := map[string]any{"id": pt.ID, "topic": pt.Topic, "nature": pt.Nature, "debated": pt.Debate, "sides": pt.Sides}
 		var turns []map[string]string
