@@ -536,7 +536,7 @@ func TestTheIntentQuestionsLoad(t *testing.T) {
 func TestTheLightFormat(t *testing.T) {
 	r := taskRecord("g-1", 1)
 	rec := lightTemplate(judge.QuestionSpec{Kind: "recommend", Depth: "short", Language: "ko"})
-	if !strings.HasPrefix(rec, "답 형식 (Askorus이 붙임") || !strings.Contains(rec, "정하지 않았으면 몇 가지") || !strings.HasSuffix(rec, "- 질문이 정한 개수, 길이, 형식이 있으면 그대로 따르세요.") || strings.Contains(rec, "짧게 답하세요") {
+	if !strings.HasPrefix(rec, "답 형식 (Askorus가 붙임") || !strings.Contains(rec, "정하지 않았으면 몇 가지") || !strings.HasSuffix(rec, "- 질문이 정한 개수, 길이, 형식이 있으면 그대로 따르세요.") || strings.Contains(rec, "짧게 답하세요") {
 		t.Fatalf("light:\n%s", rec)
 	}
 	if lightTemplate(judge.QuestionSpec{Kind: "open", Language: "ko"}) != "" || !strings.HasPrefix(lightTemplate(judge.QuestionSpec{Kind: "fact", Language: "en"}), "Answer format (added by Askorus") {

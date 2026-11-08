@@ -12,7 +12,7 @@ import "strings"
 
 // templateHead is the heading of the block added to the question.
 var templateHead = map[string]string{
-	"ko": "답 형식 (Askorus이 붙임. 질문한 사람이 쓴 글이 아닙니다)",
+	"ko": "답 형식 (Askorus가 붙임. 질문한 사람이 쓴 글이 아닙니다)",
 	"en": "Answer format (added by Askorus, not written by the person asking)",
 }
 

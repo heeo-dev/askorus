@@ -18,7 +18,7 @@ import (
 )
 
 // templateMark starts the answer template in a Korean question.
-const templateMark = "답 형식 (Askorus이 붙임"
+const templateMark = "답 형식 (Askorus가 붙임"
 
 func callsOfKind(t *testing.T, kind string) []fakecli.Call {
 	t.Helper()

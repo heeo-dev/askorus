@@ -233,7 +233,7 @@ func (f *tasteDebater) Write(_ context.Context, r writeReq) (writeRes, error) {
 	f.mu.Unlock()
 	switch {
 	case strings.HasPrefix(r.Prompt, "[Askorus debate plan v1]"):
-		return writeRes{Agent: r.Agent, Output: synthJSON("POINT | p1 | taste | yes | 이름\nSIDE | p1 | Claude | Panelist\nSIDE | p1 | Codex | Askorus\nGOAL | p1 | the strongest options\nTURN | p1 | Claude | Askorus은?\nTURN | p1 | Codex | Panelist는?")}, nil
+		return writeRes{Agent: r.Agent, Output: synthJSON("POINT | p1 | taste | yes | 이름\nSIDE | p1 | Claude | Panelist\nSIDE | p1 | Codex | Askorus\nGOAL | p1 | the strongest options\nTURN | p1 | Claude | Askorus는?\nTURN | p1 | Codex | Panelist는?")}, nil
 	case strings.HasPrefix(r.Prompt, "[Askorus debate check v1]"):
 		if strings.Contains(r.Prompt, "This is the last check") {
 			return writeRes{Agent: r.Agent, Output: synthJSON("DONE | kept | Moderai, Panelist, Askorus")}, nil
