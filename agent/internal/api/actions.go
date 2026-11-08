@@ -28,6 +28,7 @@ const (
 	CodeNotSupported  = "not_supported"
 	CodeFolderUnknown = "folder_not_found"
 	CodeJobNotFound   = "job_not_found"
+	CodeTooManyJobs   = "too_many_jobs"
 	CodeNotGit        = "not_a_git_repository"
 )
 
@@ -170,7 +171,7 @@ func deviceOf(r *http.Request) string {
 }
 
 func (s *Server) startJob(w http.ResponseWriter, r *http.Request, kind, target string, fn func(ctx context.Context) (core.OpenResult, error)) {
-	j := s.jobs.Start(deviceOf(r), kind, target, func(ctx context.Context) (any, error) {
+	j, err := s.jobs.Start(deviceOf(r), kind, target, func(ctx context.Context) (any, error) {
 		res, err := fn(ctx)
 		if err != nil {
 			if s.o.Logger != nil {
@@ -189,6 +190,10 @@ func (s *Server) startJob(w http.ResponseWriter, r *http.Request, kind, target s
 		}
 		return res, nil
 	})
+	if errors.Is(err, jobs.ErrBusy) {
+		writeError(w, http.StatusTooManyRequests, CodeTooManyJobs, "the PC is still opening or starting other sessions")
+		return
+	}
 	writeJSON(w, http.StatusAccepted, JobStarted{JobID: j.ID, Kind: j.Kind, Status: string(j.State), PollAfterMs: jobPollMs})
 }
 

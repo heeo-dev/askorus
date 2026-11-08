@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/heeo-dev/askorus/agent/internal/core"
 )
@@ -422,9 +423,11 @@ func build(t Transcript, e agentEntry, hasEntry, agentsOK bool) core.Session {
 	}
 	switch s.State {
 	case core.StateRunning, core.StateStopped:
-		s.AttachCommand = "claude attach " + quoteArg(firstNonEmpty(e.Name, e.ID, t.SessionID))
+		s.AttachCommand = attachCommand(e.Name, e.ID, t.SessionID)
 	case core.StateHistory:
-		s.AttachCommand = "claude --resume " + t.SessionID
+		if plainID(t.SessionID) {
+			s.AttachCommand = "claude --resume " + t.SessionID
+		}
 	}
 	if t.Entrypoint == "claude-desktop" {
 		s.Badges = append(s.Badges, "desktop")
@@ -432,10 +435,75 @@ func build(t Transcript, e agentEntry, hasEntry, agentsOK bool) core.Session {
 	return s
 }
 
-// quoteArg quotes a value for display in a copyable command line.
-func quoteArg(s string) string {
-	if s != "" && !strings.ContainsAny(s, " \t\"'&|<>^%!;()$`") {
+// attachCommand is the copyable `claude attach` line for a running or
+// stopped session, or "" when nothing safe can be shown. The user pastes it
+// into cmd, PowerShell or a POSIX shell, and a session name can be anything
+// (the phone sends it, or the user named the session elsewhere). So the name
+// goes in only when every one of those shells reads it as plain text: inside
+// double quotes PowerShell still runs $(...) and `, cmd expands %VAR% and sh
+// expands $, `, \ and ! (security review 11-08, R-86). Any other name falls
+// back to the first plain id: claude attach takes the short id as well.
+func attachCommand(name string, ids ...string) string {
+	if a := shellArg(name); a != "" {
+		return "claude attach " + a
+	}
+	for _, id := range ids {
+		if plainID(id) {
+			return "claude attach " + id
+		}
+	}
+	return ""
+}
+
+// shellArg returns s as one argument every shell reads the same way: bare
+// when it holds letters, digits and _ . - only, in double quotes when it
+// also holds spaces or punctuation that stays literal inside double quotes
+// in cmd, PowerShell and sh. Anything else, and a leading - (read as an
+// option even when quoted), gives "".
+func shellArg(s string) string {
+	if s == "" || strings.HasPrefix(s, "-") {
+		return ""
+	}
+	bare := true
+	for _, r := range s {
+		switch {
+		case plainLetter(r), unicode.IsDigit(r), r == '_', r == '.', r == '-':
+		case r == ' ', strings.ContainsRune(",:+=@#()[]'&/", r):
+			bare = false
+		default:
+			return ""
+		}
+	}
+	if bare {
 		return s
 	}
-	return `"` + strings.ReplaceAll(s, `"`, `\"`) + `"`
+	return `"` + s + `"`
+}
+
+// plainLetter is a letter that no Windows code page conversion turns into
+// punctuation. A program that reads its command line through the ANSI
+// functions gets "best fit" characters: modifier letters (Lm, e.g. U+02BA
+// to ", U+02CB to `), combining marks (U+030E to ") and the Latin click
+// letters U+01C0–U+01C3 (to | and !) become shell punctuation there, so
+// they are left out (Codex cross-review 11-08). Hangul, kana, CJK and
+// ordinary Latin, Greek and Cyrillic letters stay.
+func plainLetter(r rune) bool {
+	if r >= 0x01C0 && r <= 0x01C3 {
+		return false
+	}
+	return unicode.In(r, unicode.Lu, unicode.Ll, unicode.Lt, unicode.Lo)
+}
+
+// plainID reports whether s is an id made of ASCII letters, digits, - and _
+// only, not starting with -: safe to show in a command line as it is.
+func plainID(s string) bool {
+	if s == "" || s[0] == '-' {
+		return false
+	}
+	for _, r := range s {
+		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_') {
+			return false
+		}
+	}
+	return true
 }

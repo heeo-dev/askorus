@@ -14,6 +14,8 @@ import (
 
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/registry"
+
+	"github.com/heeo-dev/askorus/agent/internal/logx"
 )
 
 // The background agent is controlled through a named event in this logon
@@ -54,8 +56,10 @@ const (
 )
 
 // startDetached starts exe with args without a window, outliving this
-// process. Its console output goes to logFile.
+// process. Its console output goes to logFile, which first rolls over when
+// it is past consoleMax (R-87), and it is told it runs detached.
 func startDetached(exe string, args []string, dir, logFile string) (int, error) {
+	_ = logx.RollOver(logFile, consoleMax)
 	out, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
 		return 0, err
@@ -63,6 +67,7 @@ func startDetached(exe string, args []string, dir, logFile string) (int, error) 
 	defer out.Close()
 	cmd := exec.Command(exe, args...)
 	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), detachedEnv+"=1")
 	cmd.Stdout, cmd.Stderr = out, out
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: createNoWindow | createNewProcessGroup}
 	if err := cmd.Start(); err != nil {

@@ -41,6 +41,7 @@
   "error.service_elevated": "The Claude background service runs as administrator. In an administrator terminal on the PC, run: claude daemon stop --any",
   "error.not_a_git_repository": "Only available for folders that are git repositories.",
   "error.job_not_found": "The task ended or the agent restarted.",
+  "error.too_many_jobs": "The PC is still opening or starting other sessions. Try again in a moment.",
   "pair.title": "Pair with a PC",
   "pair.tailscaleTitle": "Turn on Tailscale on this phone",
   "pair.tailscaleBody": "Sign in with the same Tailscale account as the PC and keep it connected. A phone runs one VPN at a time, so turn other VPNs off.",

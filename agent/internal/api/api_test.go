@@ -264,6 +264,21 @@ func TestLogHasNoToken(t *testing.T) {
 	}
 }
 
+// R-87 (security review 11-08): a refused request with a long path leaves
+// a short line, not the whole path.
+func TestLogCutsLongPaths(t *testing.T) {
+	e := newEnv(t, fakeAdapter{}, nil)
+	long := "/v1/" + strings.Repeat("a", 5000)
+	e.do("GET", long, map[string]string{"Authorization": "Bearer ask_guess"})
+	logs := e.logs.String()
+	if !strings.Contains(logs, `"status":401`) {
+		t.Fatalf("no request line: %s", logs)
+	}
+	if strings.Contains(logs, strings.Repeat("a", maxLogPath)) || !strings.Contains(logs, "…") {
+		t.Errorf("long path not cut: %d bytes of log", len(logs))
+	}
+}
+
 func TestListenLoopbackOnly(t *testing.T) {
 	ln, err := Listen(0)
 	if err == nil {

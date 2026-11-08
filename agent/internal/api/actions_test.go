@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -13,6 +14,7 @@ import (
 	"github.com/heeo-dev/askorus/agent/internal/config"
 	"github.com/heeo-dev/askorus/agent/internal/core"
 	"github.com/heeo-dev/askorus/agent/internal/hidden"
+	"github.com/heeo-dev/askorus/agent/internal/jobs"
 )
 
 // fakeLauncher is an adapter that records actions.
@@ -194,6 +196,43 @@ func TestStartSession(t *testing.T) {
 	}
 	if len(*starts) != 1 {
 		t.Errorf("bad requests started sessions: %+v", *starts)
+	}
+}
+
+// holdLauncher starts sessions that take until hold is closed.
+type holdLauncher struct {
+	fakeLauncher
+	hold chan struct{}
+}
+
+func (h holdLauncher) Start(ctx context.Context, req core.StartRequest) (core.OpenResult, error) {
+	select {
+	case <-h.hold:
+	case <-ctx.Done():
+	}
+	return core.OpenResult{Action: core.ActionStarted}, nil
+}
+
+// R-88 (security review 11-08): one device cannot start session after
+// session by changing the name; past the cap it gets 429 too_many_jobs.
+func TestStartSessionsAreCapped(t *testing.T) {
+	hold := make(chan struct{})
+	defer close(hold)
+	folders := []config.Folder{{ID: "app", Path: t.TempDir()}}
+	l := holdLauncher{fakeLauncher: fakeLauncher{calls: &[]string{}, starts: &[]core.StartRequest{}}, hold: hold}
+	e := newEnv(t, l, func(o *Options) { o.Folders = func() []config.Folder { return folders } })
+	for i := 0; i < jobs.MaxRunningPerOwner; i++ {
+		if w := e.doBody("POST", "/v1/sessions", fmt.Sprintf(`{"folder":"app","name":"s-%d"}`, i)); w.Code != 202 {
+			t.Fatalf("start %d = %d %s", i, w.Code, w.Body)
+		}
+	}
+	w := e.doBody("POST", "/v1/sessions", `{"folder":"app","name":"one more"}`)
+	if w.Code != 429 || !strings.Contains(w.Body.String(), CodeTooManyJobs) {
+		t.Fatalf("past the cap = %d %s, want 429 %s", w.Code, w.Body, CodeTooManyJobs)
+	}
+	// Opening is capped with starting.
+	if w := e.doBody("POST", "/v1/sessions/"+sid+"/open", ""); w.Code != 429 {
+		t.Errorf("open past the cap = %d %s", w.Code, w.Body)
 	}
 }
 

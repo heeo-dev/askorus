@@ -219,6 +219,10 @@ type reqInfoKey struct{}
 // queries or bodies here.
 type reqInfo struct{ device string }
 
+// maxLogPath is how much of a request path the log keeps (R-87). The
+// agent's own paths are far shorter.
+const maxLogPath = 200
+
 func (s *Server) logRequests(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
@@ -228,7 +232,9 @@ func (s *Server) logRequests(next http.Handler) http.Handler {
 		if s.o.Logger != nil {
 			s.o.Logger.Info("request",
 				"method", r.Method,
-				"path", r.URL.Path, // the query may hold search words, so it is left out
+				// The query may hold search words, so it is left out. The
+				// path is cut: a refused request can carry a long one (R-87).
+				"path", clip(r.URL.Path, maxLogPath),
 				"device", info.device,
 				"status", rw.status,
 				"ms", time.Since(start).Milliseconds(),
@@ -245,7 +251,7 @@ func (s *Server) recoverPanics(next http.Handler) http.Handler {
 					panic(v)
 				}
 				if s.o.Logger != nil {
-					s.o.Logger.Error("panic", "path", r.URL.Path)
+					s.o.Logger.Error("panic", "path", clip(r.URL.Path, maxLogPath))
 				}
 				writeError(w, http.StatusInternalServerError, CodeInternal, "internal error")
 			}
