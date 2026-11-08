@@ -122,7 +122,7 @@ test('app.json: no Android backup, and the SQLite plugin for the history', () =>
 
 test('app.json: icon I2-A in apricot, the adaptive and themed layers, the icon-only splash', () => {
   const { expo } = readJSON('app.json');
-  expect(expo.name).toBe('Asksemble');
+  expect(expo.name).toBe('Askorus');
   expect(expo.slug).toBe('asksemble');
   expect(`${expo.name} ${expo.slug}`).not.toMatch(/claude|anthropic/i);
   expect(expo.userInterfaceStyle).toBe('automatic');
@@ -285,7 +285,7 @@ test('Wordmark scales its box with the font size and takes a scheme; BrandMark i
       <BrandMark size={56} />
     </View>,
   );
-  const word = r.getByRole('image', { name: 'Asksemble' });
+  const word = r.getByRole('image', { name: 'Askorus' });
   expect(word.props.testID).toBe('wordmark-dark');
   expect(style(word)).toMatchObject({ width: box.width / 2, height: box.height / 2 });
   expect(r.queryByTestId('brand-mark')).toBeNull(); // hidden from screen readers
@@ -327,12 +327,12 @@ test('About shows the mark, the wordmark, the slogan, the description, the versi
   await user.press(await screen.findByRole('button', { name: 'About' }));
   await waitFor(() => expect(r.getPathname()).toBe('/about'));
 
-  const word = await screen.findByRole('image', { name: 'Asksemble' });
+  const word = await screen.findByRole('image', { name: 'Askorus' });
   expect(word.props.testID).toBe('wordmark-light');
   expect(style(word)).toMatchObject({ width: box.width, height: box.height });
   expect(style(screen.getByTestId('brand-mark', { includeHiddenElements: true }))).toMatchObject({ width: 112, height: 112 });
-  expect(screen.getByText('Ask, assemble.')).toBeTruthy();
-  expect(screen.getByText("Ask every AI at once. See where they agree, and where they don't.")).toBeTruthy();
+  expect(screen.getByText('You ask. The AIs debate.')).toBeTruthy();
+  expect(screen.getByText('Many AI answers, debated into a better one.')).toBeTruthy();
   expect(screen.getByText(`Version ${appVersion}`)).toBeTruthy();
   expect(screen.getByText('Not an official product of any AI company.')).toBeTruthy();
   expect(screen.queryByText(/Claude|Anthropic/)).toBeNull();
@@ -346,9 +346,9 @@ test('About reads in Korean, and Back with nothing behind it goes to the start',
   setLang('ko');
   const user = userEvent.setup();
   const r = await renderRouter(routes, { initialUrl: '/about' });
-  expect(await screen.findByRole('image', { name: 'Asksemble' })).toBeTruthy();
-  expect(screen.getByText('Ask, assemble.')).toBeTruthy();
-  expect(screen.getByText('한 번 물으면 여러 AI가 답하고, 같은 말과 다른 말을 한눈에 보여 줍니다.')).toBeTruthy();
+  expect(await screen.findByRole('image', { name: 'Askorus' })).toBeTruthy();
+  expect(screen.getByText('질문은 내가, 토론은 AI들이.')).toBeTruthy();
+  expect(screen.getByText('여러 AI의 답, 토론을 거쳐 더 나은 하나로.')).toBeTruthy();
   expect(screen.getByText(`버전 ${appVersion}`)).toBeTruthy();
   expect(screen.getByText('AI 회사의 공식 제품이 아닙니다.')).toBeTruthy();
 
@@ -361,7 +361,7 @@ test('About reads in Korean, and Back with nothing behind it goes to the start',
 test('About draws the dark wordmark on the dark theme', async () => {
   mockScheme.value = 'dark';
   await renderRouter(routes, { initialUrl: '/about' });
-  const word = await screen.findByRole('image', { name: 'Asksemble' });
+  const word = await screen.findByRole('image', { name: 'Askorus' });
   expect(word.props.testID).toBe('wordmark-dark');
 });
 

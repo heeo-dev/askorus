@@ -446,7 +446,7 @@ describe('pairing', () => {
     expect(await screen.findByText('Is this your PC?')).toBeTruthy();
     expect(screen.getByText(HOST)).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Back' })).toBeNull();
-    expect(screen.getByRole('header', { name: 'Asksemble' })).toBeTruthy();
+    expect(screen.getByRole('header', { name: 'Askorus' })).toBeTruthy();
   });
 
   test('opened from My PC it can go back', async () => {

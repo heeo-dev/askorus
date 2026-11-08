@@ -484,7 +484,7 @@ describe('settings', () => {
     const user = userEvent.setup();
     const r = await renderRouter(routes, { initialUrl: '/settings' });
     const version = Constants.expoConfig?.version ?? '';
-    const about = await screen.findByRole('button', { name: `Asksemble ${version}`.trim() + ', Not an official product of any AI company.' });
+    const about = await screen.findByRole('button', { name: `Askorus ${version}`.trim() + ', Not an official product of any AI company.' });
     await user.press(about);
     await waitFor(() => expect(r.getPathname()).toBe('/about'));
   });

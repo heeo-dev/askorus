@@ -55,15 +55,19 @@ test('the app name never names Claude or Anthropic', () => {
   }
 });
 
-// S5c (user decision): the not-official line names no company, the slogan
-// is the same in both languages.
+// S5c (user decision): the not-official line names no company. #31 (11-08):
+// the slogan and its one-line description, in each language, with no em dash.
 test('the not-official line is about AI companies, not one of them', () => {
   expect(ko['app.notOfficial']).toBe('AI 회사의 공식 제품이 아닙니다.');
   expect(en['app.notOfficial']).toBe('Not an official product of any AI company.');
   for (const table of [ko, en]) {
     expect(table['app.notOfficial']).not.toMatch(/claude|anthropic|openai/i);
-    expect(table['app.slogan']).toBe('Ask, assemble.');
+    expect(`${table['app.slogan']} ${table['app.tagline']}`).not.toMatch(/\u2014/);
   }
+  expect(ko['app.slogan']).toBe('질문은 내가, 토론은 AI들이.');
+  expect(en['app.slogan']).toBe('You ask. The AIs debate.');
+  expect(ko['app.tagline']).toBe('여러 AI의 답, 토론을 거쳐 더 나은 하나로.');
+  expect(en['app.tagline']).toBe('Many AI answers, debated into a better one.');
 });
 
 test('Korean phones get Korean, everything else English', () => {

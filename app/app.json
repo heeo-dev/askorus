@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Asksemble",
+    "name": "Askorus",
     "slug": "asksemble",
     "owner": "heeodev",
     "version": "0.1.0",
@@ -40,7 +40,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Asksemble uses the camera to scan the pairing QR code on your PC.",
+          "cameraPermission": "Askorus uses the camera to scan the pairing QR code on your PC.",
           "recordAudioAndroid": false
         }
       ],
