@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/heeo-dev/askorus/agent/internal/core"
 )
@@ -244,7 +245,16 @@ func MoveOldDirs() ([]Moved, error) {
 	return moved, errors.Join(errs...)
 }
 
+// staleCopy is how old a side folder must be before another start takes it
+// for one left by a copy that died. A copy of the agent's folders takes
+// seconds.
+const staleCopy = 10 * time.Minute
+
 // moveOld copies base/Asksemble to base/Askorus when only the old exists.
+// The side folder is also the lock: every agent command runs this at its
+// start (11-08: a status run next to a start removed the copy the start was
+// making), so the one that makes the side folder copies and the others go
+// on with the old folder.
 func moveOld(base string) (*Moved, error) {
 	from := filepath.Join(base, OldDirName)
 	to := filepath.Join(base, DirName)
@@ -255,8 +265,20 @@ func moveOld(base string) (*Moved, error) {
 		return nil, nil
 	}
 	side := to + ".copying"
-	if err := os.RemoveAll(side); err != nil {
-		return nil, err
+	if err := os.Mkdir(side, 0o700); err != nil {
+		if !errors.Is(err, os.ErrExist) {
+			return nil, err
+		}
+		fi, serr := os.Stat(side)
+		if serr != nil || time.Since(fi.ModTime()) < staleCopy {
+			return nil, nil // another start is copying: use the old folder meanwhile
+		}
+		if err := os.RemoveAll(side); err != nil {
+			return nil, err
+		}
+		if err := os.Mkdir(side, 0o700); err != nil {
+			return nil, nil
+		}
 	}
 	if err := copyTree(from, side); err != nil {
 		os.RemoveAll(side)

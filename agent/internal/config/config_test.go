@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/heeo-dev/askorus/agent/internal/core"
 )
@@ -326,5 +327,34 @@ func TestMoveOldDirsLeavesTestsAlone(t *testing.T) {
 	t.Setenv("ASKORUS_AGENT_DIR", t.TempDir())
 	if m, err := MoveOldDirs(); m != nil || err != nil {
 		t.Fatalf("MoveOldDirs with ASKORUS_AGENT_DIR set = %+v, %v", m, err)
+	}
+}
+
+// 11-08: two agent commands started together must not undo each other's copy.
+func TestMoveOldLeavesACopyInProgressAlone(t *testing.T) {
+	base := t.TempDir()
+	old := filepath.Join(base, "Asksemble")
+	os.MkdirAll(old, 0o700)
+	os.WriteFile(filepath.Join(old, "agent.json"), []byte("{}"), 0o600)
+	side := filepath.Join(base, "Askorus.copying")
+	os.MkdirAll(filepath.Join(side, "half"), 0o700)
+	if m, err := moveOld(base); m != nil || err != nil {
+		t.Fatalf("moveOld beside a copy in progress = %+v, %v", m, err)
+	}
+	if _, err := os.Stat(filepath.Join(side, "half")); err != nil {
+		t.Fatal("the other copy's side folder was touched")
+	}
+	// A side folder left long ago by a copy that died is taken over.
+	long := time.Now().Add(-time.Hour)
+	os.Chtimes(side, long, long)
+	m, err := moveOld(base)
+	if err != nil || m == nil {
+		t.Fatalf("moveOld over a stale side folder = %+v, %v", m, err)
+	}
+	if _, err := os.Stat(filepath.Join(m.To, "agent.json")); err != nil {
+		t.Error("agent.json was not copied")
+	}
+	if _, err := os.Stat(filepath.Join(m.To, "half")); !os.IsNotExist(err) {
+		t.Error("the stale half copy was kept")
 	}
 }
