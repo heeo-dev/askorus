@@ -1,0 +1,294 @@
+<title>Askorus 개인정보처리방침</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Askorus privacy policy / Askorus 개인정보처리방침">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800&display=swap">
+<style>
+/* Layout: one reading column (about 68ch). Brand line and language switch on top,
+   then "what goes where" as a table, then the full policy as short sections. */
+:root {
+  --bg: #FCFAF8;        /* the app's light background */
+  --surface: #F4F2EF;
+  --fg: #1D1A17;
+  --sub: #524D47;
+  --muted: #6B655E;
+  --line: #E6E1DB;
+  --accent: #B8461A;    /* deep apricot that reads as text on light */
+  --apricot: #FFAD85;   /* brand fill */
+  --ink: #2A1408;       /* text on apricot */
+  --chip: #FFE8DC;
+  --font: "Noto Sans KR", system-ui, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #151618; --surface: #1E1F22; --fg: #EDEBE7; --sub: #B4B1AB; --muted: #8E8B85;
+    --line: #2E3034; --accent: #FFAD85; --chip: #3D2A20; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #151618; --surface: #1E1F22; --fg: #EDEBE7; --sub: #B4B1AB; --muted: #8E8B85;
+  --line: #2E3034; --accent: #FFAD85; --chip: #3D2A20; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--font); font-size: 16px; line-height: 1.7;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 56px;
+}
+.wrap { max-width: 720px; margin: 0 auto; display: grid; gap: 28px; padding-top: 28px; }
+.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 20px; letter-spacing: -0.02em; }
+.brand svg { width: 36px; height: 36px; flex: none; }
+.brand .ask { color: var(--accent); }
+.lang { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; padding: 3px; gap: 2px; background: var(--surface); }
+.lang a { font-size: 14px; font-weight: 600; text-decoration: none; color: var(--sub); padding: 4px 12px; border-radius: 999px; }
+.lang a[aria-current="true"] { background: var(--bg); color: var(--fg); box-shadow: 0 0 0 1px var(--line); }
+.lang a:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+header.doc { display: grid; gap: 8px; }
+h1 { margin: 0; font-size: clamp(26px, 6vw, 34px); font-weight: 800; letter-spacing: -0.02em; line-height: 1.25; text-wrap: balance; }
+.meta { margin: 0; color: var(--muted); font-size: 14px; }
+.lead { margin: 0; color: var(--sub); }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; margin: 0; padding: 0; list-style: none; }
+.facts li { background: var(--surface); border-radius: 12px; padding: 12px 14px; font-size: 15px; line-height: 1.55; min-width: 0; }
+.facts b { display: block; font-size: 15px; }
+h2 { margin: 0 0 6px; font-size: 19px; font-weight: 700; letter-spacing: -0.01em; text-wrap: balance; }
+section { display: grid; gap: 6px; }
+section p { margin: 0; }
+section ul { margin: 0; padding-left: 1.2em; display: grid; gap: 4px; }
+.tbl { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; }
+table { border-collapse: collapse; width: 100%; min-width: 520px; font-size: 15px; line-height: 1.5; }
+th, td { text-align: left; vertical-align: top; padding: 10px 12px; border-top: 1px solid var(--line); }
+thead th { border-top: 0; background: var(--surface); font-size: 13px; color: var(--sub); font-weight: 700; }
+tbody th { font-weight: 700; white-space: nowrap; }
+.who { display: inline-block; background: var(--chip); border-radius: 6px; padding: 0 6px; }
+.none { color: var(--muted); }
+footer { border-top: 1px solid var(--line); padding-top: 14px; color: var(--muted); font-size: 14px; display: grid; gap: 4px; }
+footer p { margin: 0; }
+code { font-size: 0.92em; }
+</style>
+
+<div class="wrap">
+  <div class="top">
+    <div class="brand" aria-label="Askorus">
+      <svg viewBox="0 0 100 100" aria-hidden="true"><path d="M50 0C88 0 100 12 100 50S88 100 50 100S0 88 0 50S12 0 50 0Z" fill="#FFAD85"/><circle cx="50" cy="40" r="17" fill="#2A1408"/><circle cx="36" cy="55" r="16" fill="#2A1408" stroke="#FFAD85" stroke-width="3"/><circle cx="64" cy="55" r="16" fill="#2A1408" stroke="#FFAD85" stroke-width="3"/><path d="M29 63L28 73L41 66Z" fill="#2A1408"/><path d="M46 30.5H54Q54 37 50 37Q46 37 46 30.5ZM30.5 51.5H41.5Q41.5 61 36 61Q30.5 61 30.5 51.5ZM58.5 51.5H69.5Q69.5 61 64 61Q58.5 61 58.5 51.5Z" fill="#FFAD85"/></svg>
+      <span><span class="ask">Ask</span>orus</span>
+    </div>
+    <nav class="lang" aria-label="Language / 언어">
+      <a href="#ko" id="to-ko" lang="ko">한국어</a>
+      <a href="#en" id="to-en" lang="en">English</a>
+    </nav>
+  </div>
+
+  <!-- 한국어 -->
+  <article id="ko" lang="ko">
+    <div class="wrap" style="padding-top:0">
+      <header class="doc">
+        <h1>Askorus 개인정보처리방침</h1>
+        <p class="meta">초안 · 2026년 11월 8일 고침 · 시행일은 스토어에 올릴 때 적습니다</p>
+        <p class="lead">Askorus는 질문 하나를 여러 AI에게 한 번에 묻고, 사회자 AI가 답을 정리하며, 의견이 다른 곳은 AI끼리 토론하게 하는 앱입니다. 폰에서 내 PC의 코딩 AI 세션을 보고 켜는 기능도 있습니다. 묻고, 정리하고, 토론시키는 일은 사용자의 PC가 합니다.</p>
+      </header>
+
+      <ul class="facts" aria-label="요점">
+        <li><b>모으는 정보 없음</b>분석, 광고, 오류 보고 도구를 넣지 않았습니다.</li>
+        <li><b>개발자 서버 없음</b>폰은 Tailscale 망 안에서 사용자의 PC와만 통신합니다.</li>
+        <li><b>기록은 폰에</b>대화 기록은 앱 안에만 저장되고 Android 백업에서 빠집니다.</li>
+      </ul>
+
+      <section aria-labelledby="ko-flow">
+        <h2 id="ko-flow">무엇이 어디로 가나요</h2>
+        <p>질문과 답은 사용자의 PC에서, 사용자가 로그인해 둔 공식 AI 프로그램(Claude Code, Codex, OpenCode)이 각 AI 회사로 보냅니다. 개발자는 아무것도 받지 않습니다.</p>
+        <div class="tbl">
+          <table>
+            <thead><tr><th scope="col">언제</th><th scope="col">보내는 것</th><th scope="col">받는 곳</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">묻기</th><td>질문</td><td><span class="who">질문을 받은 AI의 회사</span></td></tr>
+              <tr><th scope="row">종합 답변</th><td>질문과 AI 이름이 붙은 모든 답</td><td><span class="who">사회자 AI의 회사</span>만</td></tr>
+              <tr><th scope="row">토론</th><td>질문, 다른 AI들의 답, 토론 발언 (토론하기를 누를 때만)</td><td><span class="who">답한 모든 AI의 회사</span></td></tr>
+              <tr><th scope="row">이어서 묻기</th><td>이 대화의 결론 기록 (설정에서 끌 수 있음)</td><td><span class="who">이어서 받는 AI들과 사회자의 회사</span></td></tr>
+              <tr><th scope="row">사회자에게 묻기</th><td>질문, 결론 기록, 앞 답들</td><td><span class="who">사회자 AI의 회사</span></td></tr>
+              <tr><th scope="row">웹 검색</th><td>AI가 고른 검색어</td><td>그 AI 회사의 검색, 또는 OpenCode가 고른 검색 제공자</td></tr>
+              <tr><th scope="row">개발자</th><td class="none">없음</td><td class="none">받는 것 없음</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section aria-labelledby="ko-phone">
+        <h2 id="ko-phone">폰에 저장하는 정보</h2>
+        <ul>
+          <li>짝 맺은 PC의 이름과 주소, PC가 준 기기 토큰(폰의 보안 저장소에 둡니다)</li>
+          <li>새 세션 기본값, 묻기 기본값(단계, 고른 PC, 끈 AI, AI별 모델과 노력 수준)</li>
+          <li>사회자 설정(종합 답변 쓰기, 사회자 AI, 사회자 모델, 이어서 물을 때 결론 이어 주기), 한 번 본 안내, 화면 테마</li>
+          <li>대화 기록(질문, 각 AI의 답, 종합 답변, 토론 발언과 토론 뒤 정리): 최근 100개(합쳐 약 20MB)까지 남고, 넘으면 오래된 것부터 지워집니다.</li>
+        </ul>
+        <p>대화는 서랍에서 길게 눌러 하나씩, 설정의 '기록 모두 지우기'로 전부 지울 수 있습니다. 폰에서만 지우며 PC의 각 AI 기록은 남습니다. 설정에서 PC를 끊으면 그 PC의 정보가, 앱을 지우면 모두가 지워집니다. 앱은 Android 백업에서 빠져 있어 기록이 Google 백업으로 나가지 않습니다.</p>
+      </section>
+
+      <section aria-labelledby="ko-pc">
+        <h2 id="ko-pc">PC에 보내는 정보</h2>
+        <p>짝 맺을 때 정한 폰 이름, 사용자가 누른 동작(목록 보기, 열기, 새 세션, 멈추기, 지우기, 폴더 열어 두기), 사용자가 쓴 질문, 종합 답변·토론·사회자에게 묻기 요청, 이어서 물을 때 그 대화의 결론 기록입니다. 통신은 사용자의 Tailscale 망 안에서 사용자의 PC와만 합니다.</p>
+      </section>
+
+      <section aria-labelledby="ko-ask">
+        <h2 id="ko-ask">한 번에 묻기</h2>
+        <p>질문은 사용자의 PC에서 사용자가 로그인해 둔 AI 프로그램이 각 회사로 보내며, 질문을 받은 AI의 회사만 그 질문을 받습니다. AI가 웹을 검색하면 검색어는 그 회사의 검색(Anthropic, OpenAI)이나 OpenCode가 고른 검색 제공자(예: Firecrawl, Exa)로 갑니다. 웹 페이지 읽기는 사용자의 PC에서 그 주소로 직접 접속합니다.</p>
+        <p>질문과 답은 각 AI 프로그램의 대화 기록으로 PC에 남고(이어서 물을 때 각 AI가 자기 앞 대화를 이어 받습니다), 사용자가 그 프로그램에 설정해 둔 확장(훅, 플러그인)에도 전해질 수 있습니다. 답은 PC 메모리에 하루 남습니다(에이전트를 다시 켜면 지워집니다).</p>
+      </section>
+
+      <section aria-labelledby="ko-mod">
+        <h2 id="ko-mod">종합 답변(사회자)</h2>
+        <p>답이 모이면 그 질문을 받은 AI 중 하나인 사회자(기본은 Claude, 설정에서 바꾸거나 끔)가 모든 답을 읽고 종합 답변을 씁니다. 이때 사회자 AI의 회사가 질문과 AI 이름이 붙은 모든 답을 받습니다. 다른 AI들은 서로의 답을 받지 않습니다.</p>
+        <p>사회자는 웹 검색을 끄고 파일 쓰기와 명령을 막은 일회성 명령으로 씁니다. Codex는 도구를 완전히 끌 수 없어 읽기 전용으로 두고, 도구를 쓰려 한 결과는 버립니다. Claude Code와 Codex는 이 대화를 기록으로 남기지 않지만 Codex는 자체 로그 파일을 남길 수 있습니다. OpenCode는 끝나면 대화를 지우지만 지운 글이 데이터 파일 안에 한동안 남을 수 있습니다. Claude Code와 Codex는 이때 사용자의 훅과 플러그인을 끄고, OpenCode에 설정한 확장에는 전해질 수 있습니다. 종합 답변은 PC 메모리에 하루, 폰에는 대화 기록 안에 남습니다.</p>
+      </section>
+
+      <section aria-labelledby="ko-debate">
+        <h2 id="ko-debate">토론</h2>
+        <p>'토론하기'를 누르면(처음 한 번 무엇이 어디로 가는지 안내합니다) 사회자가 의견이 다른 곳(쟁점)을 고르고, 답한 AI들이 차례로 발언하며, 사회자가 쟁점마다 결과를 정리하고 토론 뒤 정리를 씁니다. 이때 답한 모든 AI의 회사가 질문, 다른 AI들의 답과 토론 발언을 받습니다. 질문을 받지 않은 AI에는 아무것도 보내지 않습니다.</p>
+        <p>사회자의 계획, 확인, 정리는 종합 답변과 같은 일회성 명령이고, AI의 발언은 웹 검색과 읽기만 켠 일회성 묻기입니다. 발언 대화는 Claude Code와 Codex가 기록으로 남기지 않고, OpenCode는 끝나면 지웁니다. 토론은 PC 메모리에 하루, 폰에는 대화 기록 안에 남습니다.</p>
+      </section>
+
+      <section aria-labelledby="ko-record">
+        <h2 id="ko-record">이어서 묻기와 결론 기록</h2>
+        <p>이어서 물으면 PC는 그 질문을 받는 AI들과 종합 답변을 쓰는 사회자에게 이 대화의 결론 기록(토론에서 정한 것과 바로 앞 최종 답)을 함께 보내고, 그 AI들의 회사가 이것을 받습니다. 처음 한 번 안내하며 그때 '이번만 빼고 보내기'로 그 질문만 뺄 수 있고, 설정의 '이어서 물을 때 결론 이어 주기'로 끌 수 있습니다(기본은 켬).</p>
+      </section>
+
+      <section aria-labelledby="ko-askmod">
+        <h2 id="ko-askmod">사회자에게 묻기</h2>
+        <p>이어서 물을 상대로 사회자를 고르면 사회자 AI 혼자 답합니다. 사회자 AI의 회사가 질문, 결론 기록, 앞 답들을 받습니다(결론 이어 주기 설정과 상관없이). 웹 검색과 읽기만 켠 일회성 묻기라 그 대화는 남기지 않습니다.</p>
+      </section>
+
+      <section aria-labelledby="ko-other">
+        <h2 id="ko-other">그 밖의 것</h2>
+        <ul>
+          <li><b>카메라</b>: PC 화면의 짝 맺기 QR을 읽을 때만 씁니다. 사진을 저장하거나 보내지 않습니다.</li>
+          <li><b>다른 앱으로 넘기기</b>: 세션을 열면 Claude 앱이나 브라우저로 넘기며, 그다음은 그 서비스의 방침을 따릅니다. Askorus는 어떤 AI의 로그인 정보도 읽거나 옮기지 않습니다.</li>
+          <li><b>질문 정제</b>: 2026년 11월 4일부터 꺼져 있고 설정에도 없습니다. 다시 켜면 답을 받기 전에 사회자가 질문과 앞 질문 3개까지를 읽고 질문의 종류, 의도, 깊이, 언어를 정하며, 사회자 AI의 회사가 질문을 한 번 더 받습니다. 정한 종류에 맞는 답 형식이 질문 뒤에 붙어 모든 AI에게 갑니다.</li>
+          <li><b>어린이</b>: 어린이를 대상으로 하지 않습니다.</li>
+        </ul>
+      </section>
+
+      <footer>
+        <p>문의: 공개 전에 연락처를 적습니다.</p>
+        <p>Askorus는 Anthropic, OpenAI 같은 AI 회사의 공식 제품이 아닙니다.</p>
+      </footer>
+    </div>
+  </article>
+
+  <!-- English -->
+  <article id="en" lang="en" hidden>
+    <div class="wrap" style="padding-top:0">
+      <header class="doc">
+        <h1>Askorus Privacy Policy</h1>
+        <p class="meta">Draft · revised November 8, 2026 · the effective date is set when the app is published</p>
+        <p class="lead">Askorus asks one question to several AIs at once; a moderator AI sums up their answers, and where the AIs disagree, they debate. It also lets you see and start the coding AI sessions on your own PC from your phone. Your own PC does the asking, the summing up and the debating.</p>
+      </header>
+
+      <ul class="facts" aria-label="In short">
+        <li><b>No data collected</b>No analytics, ads or crash reporting.</li>
+        <li><b>No developer server</b>The phone talks only to your own PC, inside your Tailscale network.</li>
+        <li><b>History on your phone</b>Conversations stay in the app and are excluded from Android backup.</li>
+      </ul>
+
+      <section aria-labelledby="en-flow">
+        <h2 id="en-flow">What goes where</h2>
+        <p>Your PC sends questions and answers to each AI company through the official AI programs you signed in to there (Claude Code, Codex, OpenCode). The developer receives nothing.</p>
+        <div class="tbl">
+          <table>
+            <thead><tr><th scope="col">When</th><th scope="col">What is sent</th><th scope="col">Who receives it</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">Asking</th><td>The question</td><td><span class="who">The company of each AI you asked</span></td></tr>
+              <tr><th scope="row">Combined answer</th><td>The question and every answer, with the AIs' names</td><td><span class="who">The moderator AI's company</span> only</td></tr>
+              <tr><th scope="row">Debate</th><td>The question, the other AIs' answers and the debate turns (only when you tap Debate)</td><td><span class="who">The companies of all the AIs that answered</span></td></tr>
+              <tr><th scope="row">Follow-up</th><td>The conversation's record of conclusions (you can turn it off)</td><td><span class="who">The companies of the AIs you follow up with, and the moderator's</span></td></tr>
+              <tr><th scope="row">Asking the moderator</th><td>The question, the record of conclusions and the earlier answers</td><td><span class="who">The moderator AI's company</span></td></tr>
+              <tr><th scope="row">Web search</th><td>The search terms an AI picks</td><td>That AI company's search, or a search provider OpenCode picks</td></tr>
+              <tr><th scope="row">The developer</th><td class="none">Nothing</td><td class="none">Receives nothing</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section aria-labelledby="en-phone">
+        <h2 id="en-phone">Data kept on your phone</h2>
+        <ul>
+          <li>The name and address of each paired PC, and the device token the PC issued (kept in the phone's secure storage)</li>
+          <li>Your new-session defaults and asking defaults (tier, chosen PC, AIs turned off, per-AI models and effort)</li>
+          <li>Your moderator settings (write a combined answer, moderator AI, moderator model, carry conclusions into follow-ups), the notices you have seen once, and the theme</li>
+          <li>Your conversation history (questions, each AI's answers, combined answers, debate turns and the answer after a debate): up to the latest 100 conversations (about 20 MB in all); older ones are deleted.</li>
+        </ul>
+        <p>Delete one conversation by long-pressing it in the menu, or all of them with Delete all history in Settings. This deletes them from the phone only; each AI's own record on your PC stays. Disconnecting a PC in Settings removes that PC's data, and uninstalling the app removes everything. The app is excluded from Android backup, so the history does not go to Google backups.</p>
+      </section>
+
+      <section aria-labelledby="en-pc">
+        <h2 id="en-pc">Data sent to your PC</h2>
+        <p>The phone name you choose when pairing, the actions you take (list, open, new session, stop, remove, keep folder open), the questions you write, your requests for combined answers, debates and questions to the moderator, and, on follow-ups, the conversation's record of conclusions. Traffic goes only to your own PC inside your Tailscale network.</p>
+      </section>
+
+      <section aria-labelledby="en-ask">
+        <h2 id="en-ask">Asking all at once</h2>
+        <p>Your PC sends the question to each AI company through the AI programs you signed in to there, and only the companies of the AIs you asked receive it. When an AI searches the web, the search terms go to that company's search (Anthropic, OpenAI) or to a search provider OpenCode picks (for example Firecrawl or Exa). Reading a web page connects from your PC straight to that address.</p>
+        <p>Questions and answers stay on your PC in each AI program's conversation history (on a follow-up, each AI continues its own earlier conversation), and may also reach extensions (hooks, plugins) you set up in those programs. Answers stay in the PC's memory for a day (an agent restart clears them).</p>
+      </section>
+
+      <section aria-labelledby="en-mod">
+        <h2 id="en-mod">Combined answer (the moderator)</h2>
+        <p>When the answers are in, one of the AIs that got the question, the moderator (Claude by default; change it or turn it off in Settings), reads all the answers and writes one combined answer. The moderator AI's company then receives the question and every answer with the AIs' names. The other AIs do not receive each other's answers.</p>
+        <p>The moderator writes with a one-off command that has web search off and file writes and commands blocked. Codex cannot turn its tools off completely, so it runs read-only and a result that reaches for a tool is thrown away. Claude Code and Codex keep no history of this conversation, though Codex may keep its own log file. OpenCode deletes the conversation afterwards, but the deleted text may stay inside its data file for a while. Claude Code and Codex run it with your hooks and plugins turned off; extensions you set up in OpenCode may still receive it. The combined answer stays in the PC's memory for a day and in the conversation history on your phone.</p>
+      </section>
+
+      <section aria-labelledby="en-debate">
+        <h2 id="en-debate">Debate</h2>
+        <p>When you tap Debate (the first time, the app tells you what goes where), the moderator picks the points where the answers differ, the AIs that answered speak in turn, and the moderator sums up every point and writes the answer after the debate. The companies of all the AIs that answered then receive the question, the other AIs' answers and the debate turns. Nothing is sent to an AI that was not asked the question.</p>
+        <p>The moderator's planning, checks and summary use the same one-off command as the combined answer; an AI's turn is a one-off ask with only web search and reading on. Claude Code and Codex keep no history of the turns, and OpenCode deletes them afterwards. The debate stays in the PC's memory for a day and in the conversation history on your phone.</p>
+      </section>
+
+      <section aria-labelledby="en-record">
+        <h2 id="en-record">Follow-ups and the record of conclusions</h2>
+        <p>On a follow-up, your PC also sends the AIs it goes to, and the moderator writing the combined answer, the conversation's record of conclusions (what a debate settled and the latest final answer), and their companies receive it. The app tells you the first time, when Send without them this time leaves it out of that question; Carry conclusions into follow-ups in Settings turns it off (it is on by default).</p>
+      </section>
+
+      <section aria-labelledby="en-askmod">
+        <h2 id="en-askmod">Asking the moderator</h2>
+        <p>When you pick the moderator for a follow-up, the moderator AI answers alone. The moderator AI's company receives the question, the record of conclusions and the earlier answers (whatever the carry setting). It is a one-off ask with only web search and reading on, so the conversation is not kept.</p>
+      </section>
+
+      <section aria-labelledby="en-other">
+        <h2 id="en-other">Other things</h2>
+        <ul>
+          <li><b>Camera</b>: used only to scan the pairing QR code on your PC screen. No pictures are saved or sent.</li>
+          <li><b>Handing off to other apps</b>: opening a session hands you off to the Claude app or your browser, whose own policies then apply. Askorus never reads or moves the sign-in data of any AI.</li>
+          <li><b>Question refining</b>: off since November 4, 2026 and not in Settings. If turned on again, the moderator first reads the question, with up to three earlier questions, and sets its kind, intent, depth and language; the moderator AI's company receives the question once more, and an answer format of that kind is added after the question for every AI.</li>
+          <li><b>Children</b>: the app is not directed at children.</li>
+        </ul>
+      </section>
+
+      <footer>
+        <p>Contact: to be added before publishing.</p>
+        <p>Askorus is not an official product of any AI company, such as Anthropic or OpenAI.</p>
+      </footer>
+    </div>
+  </article>
+</div>
+
+<script>
+(function () {
+  var ko = document.getElementById('ko');
+  var en = document.getElementById('en');
+  var toKo = document.getElementById('to-ko');
+  var toEn = document.getElementById('to-en');
+  function pick() {
+    var h = (location.hash || '').replace('#', '');
+    var lang = h === 'en' || h === 'ko' ? h : ((navigator.language || 'en').toLowerCase().indexOf('ko') === 0 ? 'ko' : 'en');
+    ko.hidden = lang !== 'ko';
+    en.hidden = lang !== 'en';
+    toKo.setAttribute('aria-current', String(lang === 'ko'));
+    toEn.setAttribute('aria-current', String(lang === 'en'));
+    document.documentElement.lang = lang;
+    document.title = lang === 'ko' ? 'Askorus 개인정보처리방침' : 'Askorus Privacy Policy';
+  }
+  window.addEventListener('hashchange', pick);
+  pick();
+})();
+</script>
