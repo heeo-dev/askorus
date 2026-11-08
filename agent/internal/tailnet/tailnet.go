@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -118,12 +119,21 @@ func ParseStatus(b []byte) (Status, error) {
 }
 
 // ParseServe reads `tailscale serve status --json`. An empty output means
-// nothing is served.
+// nothing is served. The phones use the serve whose "/" handler proxies to
+// the agent (the lowest such port when there are several). Funnel is set
+// when ANY serve reaches the agent from the internet: a web handler on any
+// path or a TCP forward to the agent port, on any port with funnel on. Then
+// the port returned is that one, for the message that says what to turn
+// off. Before, only the first matching entry of the map was looked at, so
+// a funnel on a second one could go unseen (#34, found by Codex).
 func ParseServe(b []byte, localPort int) (Serve, bool, error) {
 	if len(strings.TrimSpace(string(b))) == 0 {
 		return Serve{}, false, nil
 	}
 	var v struct {
+		TCP map[string]struct {
+			TCPForward string
+		}
 		Web map[string]struct {
 			Handlers map[string]struct {
 				Proxy string
@@ -134,16 +144,13 @@ func ParseServe(b []byte, localPort int) (Serve, bool, error) {
 	if err := json.Unmarshal(b, &v); err != nil {
 		return Serve{}, false, fmt.Errorf("tailscale serve status: %w", err)
 	}
-	want := map[string]bool{}
-	for _, h := range []string{"127.0.0.1", "localhost"} {
-		p := strconv.Itoa(localPort)
-		want["http://"+h+":"+p] = true
-		want["http://"+h+":"+p+"/"] = true
+	var phone, funnel *Serve
+	pick := func(cur **Serve, s Serve) {
+		if *cur == nil || s.HTTPSPort < (*cur).HTTPSPort {
+			*cur = &s
+		}
 	}
 	for hostPort, web := range v.Web {
-		if !want[web.Handlers["/"].Proxy] {
-			continue
-		}
 		host, portStr, err := net.SplitHostPort(hostPort)
 		if err != nil {
 			continue
@@ -152,9 +159,66 @@ func ParseServe(b []byte, localPort int) (Serve, bool, error) {
 		if err != nil {
 			continue
 		}
-		return Serve{Host: strings.ToLower(host), HTTPSPort: port, Funnel: v.AllowFunnel[hostPort]}, true, nil
+		root, hit := false, false
+		for path, h := range web.Handlers {
+			if proxiesTo(h.Proxy, localPort) {
+				hit = true
+				root = root || path == "/"
+			}
+		}
+		s := Serve{Host: strings.ToLower(host), HTTPSPort: port, Funnel: v.AllowFunnel[hostPort]}
+		if hit && s.Funnel {
+			pick(&funnel, s)
+		}
+		if root {
+			pick(&phone, s)
+		}
+	}
+	for portStr, tcp := range v.TCP {
+		port, err := strconv.Atoi(portStr)
+		if err != nil || !forwardsTo(tcp.TCPForward, localPort) {
+			continue
+		}
+		for hostPort, on := range v.AllowFunnel {
+			if on && strings.HasSuffix(hostPort, ":"+portStr) {
+				host, _, _ := net.SplitHostPort(hostPort)
+				pick(&funnel, Serve{Host: strings.ToLower(host), HTTPSPort: port, Funnel: true})
+			}
+		}
+	}
+	switch {
+	case funnel != nil:
+		return *funnel, true, nil
+	case phone != nil:
+		return *phone, true, nil
 	}
 	return Serve{}, false, nil
+}
+
+// localHost reports whether host is this PC's loopback address.
+func localHost(host string) bool {
+	switch strings.ToLower(host) {
+	case "127.0.0.1", "localhost", "::1":
+		return true
+	}
+	return false
+}
+
+// proxiesTo reports whether a serve proxy target (e.g.
+// "http://127.0.0.1:8790" or "http://localhost:8790/x") is the agent port.
+func proxiesTo(proxy string, localPort int) bool {
+	u, err := url.Parse(proxy)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") {
+		return false
+	}
+	return localHost(u.Hostname()) && u.Port() == strconv.Itoa(localPort)
+}
+
+// forwardsTo reports whether a TCP forward target ("127.0.0.1:8790") is the
+// agent port.
+func forwardsTo(target string, localPort int) bool {
+	host, port, err := net.SplitHostPort(strings.TrimPrefix(target, "tcp://"))
+	return err == nil && localHost(host) && port == strconv.Itoa(localPort)
 }
 
 // ServePorts lists the HTTPS ports tailscale serve already uses, so a new

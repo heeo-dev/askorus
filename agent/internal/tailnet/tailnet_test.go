@@ -48,6 +48,84 @@ func TestParseServe(t *testing.T) {
 	}
 }
 
+// R-89 (#34, found by Codex): a funnel on any serve that reaches the agent
+// counts, whichever entry the map gives first.
+func TestParseServeSeesFunnelOnAnyEntry(t *testing.T) {
+	cases := map[string]struct {
+		json string
+		port int
+	}{
+		"second web port": {`{
+			"Web": {
+				"pc.example.ts.net:443": {"Handlers": {"/": {"Proxy": "http://127.0.0.1:8790"}}},
+				"pc.example.ts.net:8443": {"Handlers": {"/": {"Proxy": "http://localhost:8790/"}}}
+			},
+			"AllowFunnel": {"pc.example.ts.net:8443": true}
+		}`, 8443},
+		"a path that is not /": {`{
+			"Web": {
+				"pc.example.ts.net:443": {"Handlers": {"/": {"Proxy": "http://127.0.0.1:8790"}}},
+				"pc.example.ts.net:10000": {"Handlers": {"/api": {"Proxy": "http://127.0.0.1:8790/v1"}}}
+			},
+			"AllowFunnel": {"pc.example.ts.net:10000": true}
+		}`, 10000},
+		"a tcp forward": {`{
+			"TCP": {"443": {"HTTPS": true}, "10001": {"TCPForward": "127.0.0.1:8790"}},
+			"Web": {"pc.example.ts.net:443": {"Handlers": {"/": {"Proxy": "http://127.0.0.1:8790"}}}},
+			"AllowFunnel": {"pc.example.ts.net:10001": true}
+		}`, 10001},
+	}
+	for name, c := range cases {
+		for i := 0; i < 50; i++ { // map order changes from run to run
+			s, ok, err := ParseServe([]byte(c.json), 8790)
+			if err != nil || !ok || !s.Funnel || s.HTTPSPort != c.port {
+				t.Fatalf("%s (try %d) = %+v %v %v, want funnel on %d", name, i, s, ok, err, c.port)
+			}
+		}
+	}
+}
+
+// With no funnel the phones get the lowest port whose "/" is the agent,
+// every time; a funnel on another program's port does not count.
+func TestParseServePicksThePhonePort(t *testing.T) {
+	b := []byte(`{
+		"Web": {
+			"pc.example.ts.net:9443": {"Handlers": {"/": {"Proxy": "http://127.0.0.1:8790"}}},
+			"pc.example.ts.net:8443": {"Handlers": {"/": {"Proxy": "http://127.0.0.1:8790"}}},
+			"pc.example.ts.net:443": {"Handlers": {"/": {"Proxy": "http://127.0.0.1:45279"}}},
+			"pc.example.ts.net:7000": {"Handlers": {"/x": {"Proxy": "http://127.0.0.1:8790"}}}
+		},
+		"AllowFunnel": {"pc.example.ts.net:443": true}
+	}`)
+	for i := 0; i < 50; i++ {
+		s, ok, err := ParseServe(b, 8790)
+		if err != nil || !ok || s.Funnel || s.HTTPSPort != 8443 || s.Host != "pc.example.ts.net" {
+			t.Fatalf("try %d = %+v %v %v, want 8443 without funnel", i, s, ok, err)
+		}
+	}
+	// Only a path that is not / reaches the agent: phones cannot use it.
+	only := []byte(`{"Web": {"pc.example.ts.net:7000": {"Handlers": {"/x": {"Proxy": "http://127.0.0.1:8790"}}}}}`)
+	if _, ok, _ := ParseServe(only, 8790); ok {
+		t.Error("a serve without / counted as the phone port")
+	}
+}
+
+func TestProxiesTo(t *testing.T) {
+	for _, ok := range []string{"http://127.0.0.1:8790", "http://localhost:8790/", "http://LOCALHOST:8790/v1", "https://127.0.0.1:8790", "http://[::1]:8790"} {
+		if !proxiesTo(ok, 8790) {
+			t.Errorf("proxiesTo(%q) = false", ok)
+		}
+	}
+	for _, bad := range []string{"", "http://127.0.0.1:8791", "http://10.0.0.5:8790", "http://127.0.0.1", "file:///x", "http://127.0.0.1:87900"} {
+		if proxiesTo(bad, 8790) {
+			t.Errorf("proxiesTo(%q) = true", bad)
+		}
+	}
+	if !forwardsTo("127.0.0.1:8790", 8790) || !forwardsTo("tcp://localhost:8790", 8790) || forwardsTo("127.0.0.1:22", 8790) || forwardsTo("", 8790) {
+		t.Error("forwardsTo")
+	}
+}
+
 func TestParseServePortsAndHTTPS(t *testing.T) {
 	ports, err := ParseServePorts([]byte(`{"TCP":{"443":{"HTTPS":true},"8443":{"HTTPS":true}},"Web":{"pc.ts.net:8790":{}}}`))
 	if err != nil {
