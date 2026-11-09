@@ -56,6 +56,10 @@ jest.mock('react-native-webview', () => {
   return { __esModule: true, default: WebView, WebView };
 });
 
+// Screens are tested still: the phone 'asks for less motion', so the live
+// motions (ui/motion.tsx) show their final look and run no loops.
+jest.spyOn(require('react-native').AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(true);
+
 setLang('en');
 
 beforeEach(() => {

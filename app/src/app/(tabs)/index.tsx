@@ -41,6 +41,7 @@ import { features } from '@/ask/features';
 import { modelLabel, pickOf, runsWith } from '@/ask/models';
 import { aiStatus, askErrorText, metaLine, partViews, rowValue } from '@/ask/present';
 import { type AskPrefs, defaultAskPrefs, loadAskPrefs, saveAskPrefs } from '@/ask/prefs';
+import { debating } from '@/ask/debate';
 import { buildRecord, concluding, moderatorAnswers } from '@/ask/record';
 import {
   askers,
@@ -99,6 +100,10 @@ function oldAgent(info: Info): boolean {
   return info.agents.every((a) => a.agent === 'claude' && !a.ask);
 }
 
+// Within this many points of the end, the thread counts as followed: below
+// the debate there are only the answers by AI.
+const followGap = 400;
+
 export default function Ask() {
   const th = useTheme();
   const s = styles(th);
@@ -124,6 +129,15 @@ export default function Ask() {
   const scroll = useRef<ScrollViewInstance>(null);
   const stick = useRef(false);
   turnsRef.current = turns;
+  // #36: while a debate runs, the thread follows its newest turn unless the
+  // person has scrolled up to read; it starts following when a debate starts.
+  const atEnd = useRef(true);
+  const debateOn = turns.some(debating);
+  useEffect(() => {
+    if (!debateOn) return;
+    atEnd.current = true;
+    scroll.current?.scrollToEnd({ animated: true });
+  }, [debateOn]);
 
   // Prefs are saved one after another, each on what is stored, so a PC
   // picked on 내 PC is never written back over.
@@ -869,11 +883,20 @@ export default function Ask() {
         style={s.fill}
         contentContainerStyle={s.thread}
         keyboardShouldPersistTaps="handled"
+        scrollEventThrottle={100}
+        onScroll={(e) => {
+          const { contentOffset, layoutMeasurement, contentSize } = e.nativeEvent;
+          atEnd.current = contentOffset.y + layoutMeasurement.height >= contentSize.height - followGap;
+        }}
         onContentSizeChange={() => {
           // To the new question once it is sent.
-          if (!stick.current) return;
-          stick.current = false;
-          scroll.current?.scrollToEnd({ animated: true });
+          if (stick.current) {
+            stick.current = false;
+            scroll.current?.scrollToEnd({ animated: true });
+            return;
+          }
+          // A new turn or outcome in a running debate.
+          if (debateOn && atEnd.current) scroll.current?.scrollToEnd({ animated: true });
         }}
       >
         {reach}
