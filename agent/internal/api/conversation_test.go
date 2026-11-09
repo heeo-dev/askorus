@@ -12,6 +12,9 @@ import (
 // The conversation record (#29): context on /v1/runs, /v1/comparisons and
 // /v1/debates, and /v1/info's context.
 
+// koPreamble is the ask preamble for a Korean question (#39).
+var koPreamble = strings.Replace(core.AskPreamble, "in the same language as the question below", "in Korean, the language of the question below", 1)
+
 func contextBody() map[string]any {
 	return map[string]any{
 		"earlier": []string{"EARLIER-SECRET 첫 질문"},
@@ -42,7 +45,7 @@ func TestRunContext(t *testing.T) {
 		t.Fatalf("asks: %d, %d", len(known), len(fresh))
 	}
 	for _, p := range []string{known[0].Prompt, fresh[0].Prompt} {
-		if !strings.HasPrefix(p, core.AskPreamble) || !strings.HasSuffix(p, "The new question:\nQUESTION-SECRET 마지막 배는?") ||
+		if !strings.HasPrefix(p, koPreamble) || !strings.HasSuffix(p, "The new question:\nQUESTION-SECRET 마지막 배는?\n\n(Write the answer in Korean.)") ||
 			!strings.Contains(p, `SETTLED: {"topic":"TOPIC-SECRET","result":"agreed","line":"LINE-SECRET 8시입니다."}`) ||
 			!strings.Contains(p, `PREVIOUS QUESTION: "EARLIER-SECRET 첫 질문"`) || !strings.Contains(p, `PREVIOUS ANSWER: "LAST-SECRET 첫 배는 8시입니다."`) {
 			t.Errorf("ask prompt:\n%s", p)
@@ -152,7 +155,7 @@ func TestContextRefused(t *testing.T) {
 }
 
 // A comparison made again and a debate take the record: synth-v6, and
-// debate-plan v3 with debate-v5.
+// debate-plan v5 with debate-v7.
 func TestComparisonAndDebateContext(t *testing.T) {
 	cl, cx := debateAdapters()
 	e, _ := judgeEnv(t, nil, cl, cx)
@@ -183,13 +186,13 @@ func TestComparisonAndDebateContext(t *testing.T) {
 	}
 	var plan, after bool
 	for _, s := range cl.synthCalls() {
-		plan = plan || (strings.HasPrefix(s.Prompt, "[Askorus debate-plan v3]") && strings.Contains(s.Prompt, "TOPIC-SECRET") && !strings.Contains(s.Prompt, "LAST-SECRET"))
+		plan = plan || (strings.HasPrefix(s.Prompt, "[Askorus debate-plan v5]") && strings.Contains(s.Prompt, "TOPIC-SECRET") && !strings.Contains(s.Prompt, "LAST-SECRET"))
 		after = after || (strings.HasPrefix(s.Prompt, "[Askorus synthesis debate-v5]") && strings.Contains(s.Prompt, "LAST-SECRET"))
 	}
 	if !plan || !after {
 		t.Errorf("plan v3 %v, after v5 %v", plan, after)
 	}
-	if logs := e.logs.String(); strings.Contains(logs, "SECRET") || !strings.Contains(logs, `"rules":"debate-v5"`) {
+	if logs := e.logs.String(); strings.Contains(logs, "SECRET") || !strings.Contains(logs, `"rules":"debate-v7"`) {
 		t.Errorf("logs: %s", logs)
 	}
 }

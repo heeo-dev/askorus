@@ -57,7 +57,7 @@ func TestIT21ModeratorAsk(t *testing.T) {
 					t.Errorf("stdin lacks %q", part)
 				}
 			}
-			if !strings.HasSuffix(strings.TrimRight(c.Stdin, "\n"), "The new question:\n"+q) {
+			if !strings.HasSuffix(strings.TrimRight(c.Stdin, "\n"), "The new question:\n"+q+"\n\n(Write the answer in Korean.)") {
 				t.Errorf("stdin ends %q", c.Stdin[max(0, len(c.Stdin)-60):])
 			}
 			if nonce, opens, closes := nonceOf(c.Stdin); len(nonce) != 16 || opens != 1 || closes != 1 {

@@ -100,6 +100,9 @@ func TestConversationPrompts(t *testing.T) {
 	}
 }
 
+// koPreamble is the ask preamble for a Korean question (#39).
+var koPreamble = strings.Replace(core.AskPreamble, "in the same language as the question below", "in Korean, the language of the question below", 1)
+
 func TestAskWithConversation(t *testing.T) {
 	if got := AskWithConversation("q", nil, true); got != core.AskPrompt("q") {
 		t.Errorf("no record: %q", got)
@@ -108,7 +111,7 @@ func TestAskWithConversation(t *testing.T) {
 	known := AskWithConversation("그럼 마지막 배는?", c, false)
 	fresh := AskWithConversation("그럼 마지막 배는?", c, true)
 	for _, p := range []string{known, fresh} {
-		if !strings.HasPrefix(p, core.AskPreamble) || !strings.HasSuffix(p, "The new question:\n그럼 마지막 배는?") ||
+		if !strings.HasPrefix(p, koPreamble) || !strings.HasSuffix(p, "The new question:\n그럼 마지막 배는?\n\n(Write the answer in Korean.)") ||
 			!strings.Contains(p, `SETTLED: {"topic":"첫 배 시간","result":"agreed","line":"첫 배는 8시입니다."}`) || !strings.Contains(p, `PREVIOUS ANSWER: "첫 배는 8시입니다. 표는 터미널에서 삽니다."`) {
 			t.Errorf("ask:\n%s", p)
 		}

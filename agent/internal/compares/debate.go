@@ -841,7 +841,7 @@ func (m *Manager) turn(d *debate, cast debateCast, question string, i int, name,
 	if prompt == "" {
 		t.Status, t.Error = TurnFailed, debateFailure(core.ErrCodeInternal, "")
 	} else {
-		t = m.speak(d, ai.agent, prompt)
+		t = m.speak(d, ai.agent, core.QuestionLanguage(question), prompt)
 	}
 	if d.ctx.Err() != nil {
 		m.ctxEnd(d)
@@ -856,8 +856,9 @@ func (m *Manager) turn(d *debate, cast debateCast, question string, i int, name,
 }
 
 // speak asks agent one turn with the ask command in the judge folder, at
-// the debate's tier, within the ask's time limit and a process slot.
-func (m *Manager) speak(d *debate, agent, prompt string) DebateTurn {
+// the debate's tier, within the ask's time limit and a process slot. lang
+// is the question's (#39): the turn prompt holds answers in other languages.
+func (m *Manager) speak(d *debate, agent, lang, prompt string) DebateTurn {
 	failed := func(code string) DebateTurn { return DebateTurn{Status: TurnFailed, Error: debateFailure(code, "")} }
 	asker, ok := m.adapter(agent).(core.Asker)
 	if !ok {
@@ -885,7 +886,7 @@ func (m *Manager) speak(d *debate, agent, prompt string) DebateTurn {
 			}
 		}()
 		// One-off (11-06): a turn keeps no conversation on any AI.
-		return asker.Ask(ctx, core.AskRequest{Folder: m.o.Gate.Folder, Prompt: core.AskPrompt(prompt), Tier: d.spec.Tier, OneOff: true})
+		return asker.Ask(ctx, core.AskRequest{Folder: m.o.Gate.Folder, Prompt: core.AskPromptIn(lang, prompt), Tier: d.spec.Tier, OneOff: true})
 	}()
 	switch {
 	case err == nil && strings.TrimSpace(res.Answer) == "":

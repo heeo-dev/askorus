@@ -170,6 +170,10 @@ func fakeAsk(args []string, prompt string) int {
 	}
 	model := "claude-" + fakeFlag(args, "--model") + "-5-5"
 	lines := strings.Split(strings.TrimSpace(prompt), "\n")
+	// The ask prompt's last line may name the answer language (#39): the question is before it.
+	if n := len(lines); n >= 3 && strings.HasPrefix(lines[n-1], "(Write the answer in ") && lines[n-2] == "" {
+		lines = lines[:n-2]
+	}
 	out := map[string]any{
 		"type": "result", "subtype": "success", "is_error": false, "session_id": id,
 		"result":     "fake answer: " + lines[len(lines)-1],

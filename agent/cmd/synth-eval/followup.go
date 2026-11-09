@@ -214,7 +214,7 @@ func followupSide(ctx context.Context, d debater, r Record, q2 string, record bo
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			text, ms, err := d.AskOne(ctx, a.Agent, tier, followupAsk(ctxRec, r.Question.Text, a.Text, q2, record))
+			text, ms, err := d.AskOne(ctx, a.Agent, tier, core.QuestionLanguage(q2), followupAsk(ctxRec, r.Question.Text, a.Text, q2, record))
 			ar := AnswerRec{Agent: a.Agent, Status: "done", Ms: ms, Text: text}
 			if err != nil || strings.TrimSpace(text) == "" {
 				ar.Status, ar.Error = "failed", errCodeOf(err)

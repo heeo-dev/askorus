@@ -54,6 +54,14 @@
 #   answer must name both, the run part keeps no session and the judge
 #   folder lists none. 1 AI call, no Codex.
 #
+# LT-14, the question's language (#39, agent/internal/live/lang_live_test.go):
+#   the real claude on the standard tier gets an English question's debate
+#   prompts: the moderator's plan, its last check with English and with
+#   Korean turns, and a debater's turn whose own answer is Korean. No reply
+#   may have Korean letters. 4 AI calls (ASKORUS_LT14_N times each, default
+#   3: 12), no Codex; ASKORUS_LT14_OLD=1 also runs the pre-#39 prompts and
+#   reports them.
+#
 # One full run writes one combined answer with Codex (LT-08 1), refines
 # once with Codex (LT-09 1), asks Codex 4 times (LT-05 3, LT-12 1) and lets
 # Codex speak once or twice in a debate (LT-11).
@@ -64,6 +72,7 @@
 #   powershell -NoProfile -File scripts\test-live.ps1 -Run LT11    # only LT-11
 #   powershell -NoProfile -File scripts\test-live.ps1 -Run LT12    # only LT-12
 #   powershell -NoProfile -File scripts\test-live.ps1 -Run LT13    # only LT-13
+#   powershell -NoProfile -File scripts\test-live.ps1 -Run LT14    # only LT-14
 param([string]$Run)
 $go = Join-Path $env:USERPROFILE 'sdk\go1.27.3\bin'
 if (Test-Path $go) { $env:Path = "$go;" + $env:Path }

@@ -125,10 +125,10 @@ const (
 	synthLabelV6     = "[Askorus synthesis v6]"
 	afterLabel       = "[Askorus synthesis debate-v4]"
 	afterLabelV5     = "[Askorus synthesis debate-v5]"
-	planLabel        = "[Askorus debate-plan v2]"
-	planLabelV3      = "[Askorus debate-plan v3]"
+	planLabel        = "[Askorus debate-plan v4]" // v2 before #39
+	planLabelV3      = "[Askorus debate-plan v5]" // the plan with a record; v3 before #39
 	SynthRulesWithC  = "synth-v6"
-	DebateRulesWithC = "debate-v5"
+	DebateRulesWithC = "debate-v7" // debate-v5 before #39 (debate-v6 with the record)
 )
 
 // SynthRulesFor names the combined answer's prompt for task: synth-v6 with
@@ -172,5 +172,6 @@ func AskWithConversation(question string, c *Conversation, fresh bool) string {
 	conversationLines(&b, c, fresh, true)
 	b.WriteString("</data-" + n + ">\n\nThe new question:\n")
 	b.WriteString(question)
-	return core.AskPrompt(b.String())
+	// The record may be in another language than the new question (#39).
+	return core.AskPromptIn(core.QuestionLanguage(question), b.String())
 }

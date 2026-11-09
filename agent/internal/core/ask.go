@@ -4,6 +4,7 @@ import (
 	"context"
 	"regexp"
 	"slices"
+	"strings"
 )
 
 // Modes of POST /v1/runs (2026-10-29). Phase 2 builds ask; work and code
@@ -46,7 +47,20 @@ const AskPreamble = "[Askorus] This is a general question that another app sent 
 
 // AskPrompt is what an AI gets for one question or follow-up. The phone
 // keeps the question itself in its own history, without the preamble.
-func AskPrompt(question string) string { return AskPreamble + "\n\n" + question }
+func AskPrompt(question string) string { return AskPromptIn(QuestionLanguage(question), question) }
+
+// AskPromptIn is the ask prompt around body (a question, or a whole prompt
+// built around one) for a question in lang, as QuestionLanguage names it.
+// With a name the preamble says it and a line after body says it again
+// (#39: Claude now and then answered an English question in Korean); with
+// "" it is AskPreamble and body.
+func AskPromptIn(lang, body string) string {
+	if lang == "" {
+		return AskPreamble + "\n\n" + body
+	}
+	pre := strings.Replace(AskPreamble, "in the same language as the question below", "in "+lang+", the language of the question below", 1)
+	return pre + "\n\n" + body + "\n\n(Write the answer in " + lang + ".)"
+}
 
 // Asker is implemented by adapters that can answer one question in mode
 // ask: the answer only, with web search and reading but no file writes or

@@ -46,7 +46,7 @@ func TestRunModerator(t *testing.T) {
 		t.Errorf("request: folder %q oneOff %v resume %q model %q effort %q tier %q", r.Folder, r.OneOff, r.Resume, r.Model, r.Effort, r.Tier)
 	}
 	for _, part := range []string{
-		core.AskPreamble, "[Askorus moderator-ask v1]",
+		koPreamble, "[Askorus moderator-ask v1]",
 		`EARLIER QUESTIONS (context only, do not answer them): ["EARLIER-SECRET 첫 질문"]`,
 		`SETTLED: {"topic":"TOPIC-SECRET"`, `PREVIOUS ANSWER: "LAST-SECRET`,
 		`ANSWER: {"ai":"Claude","text":"ANSWER-SECRET 7시"}`, `ANSWER: {"ai":"Codex","text":"ANSWER-SECRET 8시"}`, `ANSWER: {"ai":"ChatGPT","text":"ANSWER-SECRET 9시"}`,
@@ -55,7 +55,7 @@ func TestRunModerator(t *testing.T) {
 			t.Errorf("prompt lacks %q", part)
 		}
 	}
-	if !strings.HasSuffix(r.Prompt, "The new question:\nQUESTION-SECRET AI들이 뭐가 달랐지?") {
+	if !strings.HasSuffix(r.Prompt, "The new question:\nQUESTION-SECRET AI들이 뭐가 달랐지?\n\n(Write the answer in Korean.)") {
 		t.Errorf("prompt ends %q", r.Prompt[max(0, len(r.Prompt)-80):])
 	}
 	logs := e.logs.String()

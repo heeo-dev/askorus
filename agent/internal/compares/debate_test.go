@@ -21,10 +21,10 @@ const (
 	debateQuestion = "첫 배는 몇 시에 떠?"
 	debateCombined = "첫 배 시간은 AI마다 다릅니다: {{Claude}} 7시, {{Codex}}와 {{OpenCode}} 8시."
 	debateAfter    = "첫 배는 8시입니다."
-	planHead       = "[Askorus debate-plan v2]"
-	checkHead      = "[Askorus debate-check v1]"
+	planHead       = "[Askorus debate-plan v4]"
+	checkHead      = "[Askorus debate-check v2]"
 	afterHead      = "[Askorus synthesis debate-v4]"
-	turnHead       = "[Askorus debate-turn v1]"
+	turnHead       = "[Askorus debate-turn v2]"
 )
 
 // twoPointPlan debates p1 (a fact: Claude, then Codex) and p2 (a taste
@@ -220,7 +220,7 @@ func TestDebateRuns(t *testing.T) {
 		for _, a := range r {
 			// One-off (11-06): no turn keeps a conversation on any AI.
 			if a.Folder != m.o.Gate.Folder || a.Tier != core.TierStandard || a.Resume != "" || !a.OneOff ||
-				!strings.HasPrefix(a.Prompt, core.AskPreamble+"\n\n"+turnHead) {
+				!strings.HasPrefix(a.Prompt, strings.Replace(core.AskPreamble, "in the same language as the question below", "in Korean, the language of the question below", 1)+"\n\n"+turnHead) || !strings.HasSuffix(a.Prompt, "\n\n(Write the answer in Korean.)") {
 				t.Errorf("ask: folder %q tier %q one-off %v prompt %.80q", a.Folder, a.Tier, a.OneOff, a.Prompt)
 			}
 		}

@@ -98,6 +98,10 @@ func fakeOpenCode(args []string) int {
 		return 0
 	}
 	lines := strings.Split(strings.TrimSpace(string(in)), "\n")
+	// The ask prompt's last line may name the answer language (#39): the question is before it.
+	if n := len(lines); n >= 3 && strings.HasPrefix(lines[n-1], "(Write the answer in ") && lines[n-2] == "" {
+		lines = lines[:n-2]
+	}
 	answer, _ := json.Marshal("fake: " + lines[len(lines)-1])
 	ev := func(s string) { fmt.Print(s + "\r\n") }
 	ev(fmt.Sprintf(`{"type":"step_start","timestamp":1,"sessionID":%q,"part":{"type":"step-start"}}`, id))

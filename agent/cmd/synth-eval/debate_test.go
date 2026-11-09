@@ -159,7 +159,7 @@ func (f *fakeDebater) Write(_ context.Context, r writeReq) (writeRes, error) {
 	return writeRes{}, nil
 }
 
-func (f *fakeDebater) AskOne(_ context.Context, agent, _, prompt string) (string, int64, error) {
+func (f *fakeDebater) AskOne(_ context.Context, agent, _, _, prompt string) (string, int64, error) {
 	f.mu.Lock()
 	f.ask++
 	f.asked = append(f.asked, agent+": "+prompt)
@@ -245,7 +245,7 @@ func (f *tasteDebater) Write(_ context.Context, r writeReq) (writeRes, error) {
 	return writeRes{}, nil
 }
 
-func (f *tasteDebater) AskOne(_ context.Context, agent, _, prompt string) (string, int64, error) {
+func (f *tasteDebater) AskOne(_ context.Context, agent, _, _, prompt string) (string, int64, error) {
 	f.mu.Lock()
 	f.asked = append(f.asked, prompt)
 	f.mu.Unlock()
@@ -318,7 +318,7 @@ func (f *noneDebater) Write(_ context.Context, r writeReq) (writeRes, error) {
 	return writeRes{Agent: r.Agent, Output: synthJSON("NONE")}, nil
 }
 
-func (f *noneDebater) AskOne(context.Context, string, string, string) (string, int64, error) {
+func (f *noneDebater) AskOne(context.Context, string, string, string, string) (string, int64, error) {
 	return "", 0, nil
 }
 
