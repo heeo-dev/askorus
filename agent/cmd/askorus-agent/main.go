@@ -519,6 +519,8 @@ func pair(dir string, args []string, in io.Reader, out io.Writer) error {
 			"에이전트가 127.0.0.1:%d에서 돌고 있지 않습니다. 먼저 `askorus-agent serve`를 실행하세요", cfg.Port)
 	}
 	conn.Close()
+	// A click in a classic console window must not freeze the question (#37).
+	defer holdConsole()()
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
@@ -614,7 +616,8 @@ func pair(dir string, args []string, in io.Reader, out io.Writer) error {
 func decide(ctx context.Context, dir, id string, req pairing.Request, lines <-chan string, out io.Writer) error {
 	say(out, m("Allow %q to connect? (Tailscale account %s, address %s)",
 		"%q 기기의 연결을 허용할까요? (Tailscale 계정 %s, 주소 %s)", req.DeviceName, req.Login, req.RemoteIP))
-	fmt.Fprint(out, "[y/N]: ")
+	yesNoPrompt(out, m("Type y and press Enter to allow it. Just Enter refuses.",
+		"허용하려면 y를 누르고 Enter, 거절하려면 그냥 Enter를 누르세요."))
 	var answer string
 	select {
 	case <-ctx.Done():
@@ -645,6 +648,16 @@ func decide(ctx context.Context, dir, id string, req pairing.Request, lines <-ch
 	}
 	return fail("the agent did not confirm; check `askorus-agent devices`",
 		"에이전트가 결과를 알려 주지 않았습니다. `askorus-agent devices`로 확인하세요")
+}
+
+// yesNoPrompt says how to answer on a line of its own first, then the
+// [y/N] the answer is typed after (#37): a line that does not end yet can
+// stay hidden when the output goes through a pipe, and the capital N
+// alone ('Enter means no') is a convention people outside the command
+// line do not know.
+func yesNoPrompt(out io.Writer, how msg) {
+	say(out, how)
+	fmt.Fprint(out, "[y/N]: ")
 }
 
 var (

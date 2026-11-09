@@ -469,7 +469,8 @@ func uninstallCmd(dir string, args []string, in io.Reader, out io.Writer) error 
 		fmt.Fprintf(out, "  - %s / %s\n", p.en, p.ko)
 	}
 	if !*yes {
-		fmt.Fprint(out, "[y/N]: ")
+		yesNoPrompt(out, m("Type y and press Enter to go ahead. Just Enter changes nothing.",
+			"진행하려면 y를 누르고 Enter, 그만두려면 그냥 Enter를 누르세요."))
 		line, _ := bufio.NewReader(in).ReadString('\n')
 		if !yesAnswers[normalizeAnswer(line)] {
 			say(out, m("nothing was changed", "아무것도 바꾸지 않았습니다"))
