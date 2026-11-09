@@ -72,5 +72,6 @@ func moderatorAskPrompt(question string, c *Conversation, answers []ModeratorAns
 	}
 	b.WriteString("\nThe new question:\n")
 	b.WriteString(question)
-	return core.AskPrompt(b.String())
+	// The answers may be in another language than the new question (#39).
+	return core.AskPromptIn(core.QuestionLanguage(question), b.String())
 }

@@ -30,7 +30,7 @@ func (w debateWriter) Synthesize(ctx context.Context, req core.SynthRequest) (co
 	switch {
 	case strings.HasPrefix(req.Prompt, "[Askorus debate-plan v"):
 		answer = apiPlan
-	case strings.HasPrefix(req.Prompt, "[Askorus debate-check v1]"):
+	case strings.HasPrefix(req.Prompt, "[Askorus debate-check v2]"):
 		answer = "DONE | agreed | 8시입니다."
 	}
 	res.Output, _ = json.Marshal(map[string]string{"answer": answer})
@@ -107,7 +107,7 @@ func TestDebateAPI(t *testing.T) {
 	// The debaters asked in the judge folder.
 	for _, a := range []debateWriter{cl, cx} {
 		reqs := a.requests()
-		if len(reqs) != 1 || reqs[0].Folder != core.JudgeFolder(ask) || !strings.Contains(reqs[0].Prompt, "[Askorus debate-turn v1]") {
+		if len(reqs) != 1 || reqs[0].Folder != core.JudgeFolder(ask) || !strings.Contains(reqs[0].Prompt, "[Askorus debate-turn v2]") {
 			t.Errorf("%s asks: %+v", a.name, reqs)
 		}
 	}

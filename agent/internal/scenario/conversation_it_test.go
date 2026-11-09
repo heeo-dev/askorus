@@ -100,7 +100,7 @@ func TestIT20ConversationRecord(t *testing.T) {
 	}
 	for _, c := range asks {
 		data := recordLines(t, c.Role, c.Stdin)
-		if !strings.HasSuffix(strings.TrimRight(c.Stdin, "\n"), "The new question:\n"+followUp) ||
+		if !strings.HasSuffix(strings.TrimRight(c.Stdin, "\n"), "The new question:\n"+followUp+"\n\n(Write the answer in Korean.)") ||
 			!strings.Contains(strings.Join(data, "\n"), "SETTLED: "+string(settledLine)) || !strings.Contains(strings.Join(data, "\n"), "PREVIOUS ANSWER: "+string(lastLine)) {
 			t.Errorf("%s's ask: %q", c.Role, c.Stdin)
 		}
@@ -137,7 +137,7 @@ func TestIT20ConversationRecord(t *testing.T) {
 	for _, c := range calls(t, from, kindSynth, "") {
 		heads = append(heads, strings.SplitN(c.Stdin, "]", 2)[0]+"]")
 		switch {
-		case strings.HasPrefix(c.Stdin, "[Askorus debate-plan v3]"):
+		case strings.HasPrefix(c.Stdin, "[Askorus debate-plan v5]"):
 			data := recordLines(t, "plan", c.Stdin)
 			if len(linesWith(data, "SETTLED: ")) != 1 || len(linesWith(data, "PREVIOUS")) != 0 || !strings.Contains(c.Stdin, "재검토:") {
 				t.Errorf("plan v3: %q", c.Stdin)
@@ -149,7 +149,7 @@ func TestIT20ConversationRecord(t *testing.T) {
 			}
 		}
 	}
-	if strings.Join(heads, ",") != "[Askorus debate-plan v3],[Askorus debate-check v1],[Askorus debate-check v1],[Askorus synthesis debate-v5]" {
+	if strings.Join(heads, ",") != "[Askorus debate-plan v5],[Askorus debate-check v2],[Askorus debate-check v2],[Askorus synthesis debate-v5]" {
 		t.Errorf("moderator calls %v", heads)
 	}
 	onlyAsksAndWriters(t)
@@ -161,7 +161,7 @@ func TestIT20ConversationRecord(t *testing.T) {
 			t.Errorf("the agent log holds %q", secret)
 		}
 	}
-	for _, line := range []string{`"rules":"synth-v6"`, `"rules":"debate-v5"`, `"settled":1`, `"lastBytes":`} {
+	for _, line := range []string{`"rules":"synth-v6"`, `"rules":"debate-v7"`, `"settled":1`, `"lastBytes":`} {
 		if !strings.Contains(logs, line) {
 			t.Errorf("the agent log lacks %s", line)
 		}

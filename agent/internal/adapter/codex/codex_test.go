@@ -69,6 +69,10 @@ func fakeCodex(args []string) int {
 		return 0
 	}
 	lines := strings.Split(strings.TrimSpace(string(in)), "\n")
+	// The ask prompt's last line may name the answer language (#39): the question is before it.
+	if n := len(lines); n >= 3 && strings.HasPrefix(lines[n-1], "(Write the answer in ") && lines[n-2] == "" {
+		lines = lines[:n-2]
+	}
 	fmt.Printf("{\"type\":\"thread.started\",\"thread_id\":%q}\r\n", thread)
 	fmt.Println(`{"type":"turn.started"}`)
 	fmt.Println(`{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"확인하겠습니다."}}`)

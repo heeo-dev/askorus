@@ -13,10 +13,10 @@ import (
 // prompts; the readers keep the limits; nothing an AI wrote leaves the
 // data block.
 
-var debateUpdate = flag.Bool("debate.update", false, "rewrite testdata/debate-v4.golden")
+var debateUpdate = flag.Bool("debate.update", false, "rewrite testdata/debate-v6.golden")
 
 const (
-	debateGoldenFile = "testdata/debate-v4.golden"
+	debateGoldenFile = "testdata/debate-v6.golden"
 	debateNonceA     = "5c2a9e7f1b3d8046"
 )
 
@@ -133,9 +133,10 @@ func TestDebatePromptsRefuseANonceInTheContent(t *testing.T) {
 func TestDebatePlanLanguage(t *testing.T) {
 	p := DebatePlanPrompt(debateTaskFixture(), debateNonceA)
 	for _, want := range []string{
-		"[Askorus debate-plan v2]",
-		"Write everything you write, the topics, the sides, the goals and your questions, in the language of the QUESTION.",
-		"TURN | p1 | <AI> | <your question to it, in the language of the QUESTION>",
+		"[Askorus debate-plan v4]",
+		"Write in Korean: the QUESTION is in Korean, whatever language the answers and the rest of the data are in.",
+		"Write everything you write, the topics, the sides, the goals and your questions, in Korean, the language of the QUESTION.",
+		"TURN | p1 | <AI> | <your question to it, in Korean, the language of the QUESTION>",
 	} {
 		if !strings.Contains(p, want) {
 			t.Errorf("plan lacks %q", want)
@@ -143,6 +144,49 @@ func TestDebatePlanLanguage(t *testing.T) {
 	}
 	if strings.Contains(p, "in English") {
 		t.Error("the plan still asks for English")
+	}
+}
+
+// #39 (11-09): on an English question Claude now and then wrote Korean: a
+// debater's turn, the plan's topics and questions, a point's outcome line.
+// The prompts name English, before the data and in the task, and carry no
+// Korean words; a Korean question keeps the Korean wording rule.
+func TestDebatePromptsNameEnglish(t *testing.T) {
+	task := debateTaskFixture()
+	task.Question = "Which season is best for a first trip to Japan? Pick one season."
+	plan := DebatePlanPrompt(task, debateNonceA)
+	p := DebatePoint{ID: "p1", Topic: "첫 여행 계절", Nature: NatureJudgment, Debate: true, Goal: "which season fits whom",
+		Sides: []DebateSide{{AIs: []string{"Claude"}, Says: "가을"}, {AIs: []string{"Codex"}, Says: "봄"}},
+		Turns: []DebateTurn{{AI: "Claude", Ask: "왜 가을?", Text: "단풍 때문입니다.", Stance: StanceKeep}}}
+	check := DebateCheckPrompt(task.Question, p, false, debateNonceA)
+	turn := DebateTurnPrompt(task.Question, "Codex", "봄이 가장 좋습니다.", p, "Why spring?", debateNonceA)
+	line := "Write in English: the QUESTION is in English, whatever language the answers and the rest of the data are in.\n"
+	for name, pr := range map[string]string{"plan": plan, "check": check, "turn": turn} {
+		if pr == "" || !strings.Contains(pr, line) || !strings.Contains(pr, "in English, the language of the QUESTION") {
+			t.Errorf("%s does not name English:\n%s", name, pr)
+		}
+		// The instructions only: the data block holds the AIs' Korean words.
+		open, end := strings.Index(pr, "<data-"), strings.LastIndex(pr, "</data-")
+		instr := pr
+		if open >= 0 && end > open {
+			instr = pr[:open] + pr[end:]
+		}
+		if strings.Contains(instr, "갈리다") || strings.Contains(instr, "다릅니다") {
+			t.Errorf("%s has the Korean wording rule on an English question", name)
+		}
+	}
+	if !strings.Contains(turn, "Reply to the moderator's question in English, the language of the QUESTION, even if YOUR ANSWER is in another language,") {
+		t.Errorf("turn task:\n%s", turn)
+	}
+	if !strings.Contains(check, "NEXT | <AI> | <your question to it, in English, the language of the QUESTION>") {
+		t.Errorf("check's NEXT line:\n%s", check)
+	}
+	// A Korean question keeps the Korean wording rule; one in no plain language too, with the general wording.
+	if ko := DebateCheckPrompt("첫 배는 몇 시에 떠?", p, true, debateNonceA); !strings.Contains(ko, "In Korean write 다르다 (다릅니다), never 갈리다.") || !strings.Contains(ko, "in Korean, the language of the QUESTION") {
+		t.Errorf("Korean check:\n%s", ko)
+	}
+	if de := DebateCheckPrompt("Wie geht es dir", p, true, debateNonceA); !strings.Contains(de, "In Korean write") || !strings.Contains(de, "one line for the person in the language of the QUESTION that") || strings.Contains(de, "Write in ") {
+		t.Errorf("check in no plain language:\n%s", de)
 	}
 }
 

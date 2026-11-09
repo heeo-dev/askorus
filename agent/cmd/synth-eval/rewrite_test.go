@@ -62,7 +62,7 @@ func (w *rewriteWriter) Write(_ context.Context, r writeReq) (writeRes, error) {
 	return writeRes{Agent: r.Agent, Output: synthJSON("짧은 글 " + v)}, nil
 }
 
-func (w *rewriteWriter) AskOne(context.Context, string, string, string) (string, int64, error) {
+func (w *rewriteWriter) AskOne(context.Context, string, string, string, string) (string, int64, error) {
 	return "", 0, nil
 }
 

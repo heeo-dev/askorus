@@ -90,7 +90,7 @@ var debateNatures = []string{"fact", "reasoning", "judgment", "taste"}
 // does (AskOne); tests give a fake.
 type debater interface {
 	writer
-	AskOne(ctx context.Context, agent, tier, prompt string) (string, int64, error)
+	AskOne(ctx context.Context, agent, tier, lang, prompt string) (string, int64, error)
 }
 
 var newDebater = func(ctx context.Context) (debater, func(), error) {
@@ -102,14 +102,15 @@ var newDebater = func(ctx context.Context) (debater, func(), error) {
 }
 
 // AskOne asks one AI one prompt in the ask folder at tier, in a new
-// session, with the ask preamble: what a debater gets.
-func (p *agentPipeline) AskOne(ctx context.Context, agent, tier, prompt string) (string, int64, error) {
+// session, with the ask preamble naming lang, the question's language
+// (#39): what a debater gets.
+func (p *agentPipeline) AskOne(ctx context.Context, agent, tier, lang, prompt string) (string, int64, error) {
 	a := p.askers[agent]
 	if a == nil {
 		return "", 0, fmt.Errorf("%s does not answer on this PC", agent)
 	}
 	start := time.Now()
-	res, err := a.Ask(ctx, core.AskRequest{Folder: p.folder, Prompt: core.AskPrompt(prompt), Tier: tier})
+	res, err := a.Ask(ctx, core.AskRequest{Folder: p.folder, Prompt: core.AskPromptIn(lang, prompt), Tier: tier})
 	return strings.TrimSpace(res.Answer), time.Since(start).Milliseconds(), err
 }
 
@@ -585,13 +586,13 @@ func stanceOf(text string) (string, string) {
 	return strings.TrimSpace(text), ""
 }
 
-func askTurn(ctx context.Context, d debater, answers []AnswerRec, tier, prompt string, t *DebateTurn) {
+func askTurn(ctx context.Context, d debater, answers []AnswerRec, tier, lang, prompt string, t *DebateTurn) {
 	a, ok := agentOf(answers, t.AI)
 	if !ok {
 		t.Error = "unknown_ai"
 		return
 	}
-	text, ms, err := d.AskOne(ctx, a.Agent, tier, prompt)
+	text, ms, err := d.AskOne(ctx, a.Agent, tier, lang, prompt)
 	t.Ms = ms
 	if err != nil {
 		t.Error = errCodeOf(err)
@@ -618,7 +619,7 @@ func debateChat(ctx context.Context, d debater, r Record, answers []AnswerRec, p
 		for _, t := range planned {
 			own, _ := agentOf(answers, t.AI)
 			prompt := debateTurnPrompt(r.Question.Text, t.AI, own, *p, t.Ask, refine)
-			askTurn(ctx, d, answers, tier, prompt, &t)
+			askTurn(ctx, d, answers, tier, core.QuestionLanguage(r.Question.Text), prompt, &t)
 			calls++
 			p.Turns = append(p.Turns, t)
 			if strings.Contains(t.Error, "usage_limit") {
@@ -645,7 +646,7 @@ func debateChat(ctx context.Context, d debater, r Record, answers []AnswerRec, p
 				break
 			}
 			own, _ := agentOf(answers, next.AI)
-			askTurn(ctx, d, answers, tier, debateTurnPrompt(r.Question.Text, next.AI, own, *p, next.Ask, refine), next)
+			askTurn(ctx, d, answers, tier, core.QuestionLanguage(r.Question.Text), debateTurnPrompt(r.Question.Text, next.AI, own, *p, next.Ask, refine), next)
 			calls++
 			p.Turns = append(p.Turns, *next)
 		}
@@ -759,7 +760,7 @@ func debateAtOnce(ctx context.Context, d debater, r Record, answers []AnswerRec,
 			}
 			fmt.Fprintf(&b, "\nReply in the language of the QUESTION. For each point, start a part with its id in brackets, like [%s], and say in at most 4 sentences whether you keep or change your position and why. %s End each part with a line exactly \"STANCE: keep\", \"STANCE: change\" or \"STANCE: partly\".", points[debated[0]].ID, debateTurnRule)
 			t := DebateTurn{AI: ai, Ask: "(all points at once)"}
-			askTurn(ctx, d, answers, tier, b.String(), &t)
+			askTurn(ctx, d, answers, tier, core.QuestionLanguage(r.Question.Text), b.String(), &t)
 			mu.Lock()
 			defer mu.Unlock()
 			calls++
