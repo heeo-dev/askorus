@@ -4,6 +4,7 @@ import type { Debate, Info } from '@/api/types';
 import { setLang } from '@/i18n';
 
 import {
+  currentPoint,
   debateCost,
   debateErrorText,
   debateOffered,
@@ -147,4 +148,26 @@ test('a folded turn reads as plain words', () => {
     "Mapo Dalbit Bakery's strongest point is Mapo; see the map and Claude.",
   );
   expect(foldText('## Pick\n__one__ of them')).toBe('Pick\none of them');
+});
+
+// #36: the live card says which point the PC is on.
+test('the point the debate is on: a turn running or being checked, else the latest with turns', () => {
+  const turnOf = (status: string) => ({ ai: 'claude', ask: 'q', status, ms: 1000 });
+  const point = (id: string, o: { turns?: string[]; checking?: boolean; result?: string } = {}) => ({
+    id,
+    topic: id,
+    nature: 'fact',
+    debate: true,
+    sides: [],
+    turns: (o.turns ?? []).map(turnOf),
+    checking: o.checking,
+    result: o.result,
+  });
+  expect(currentPoint([])).toBe(-1);
+  expect(currentPoint([point('p1'), point('p2')])).toBe(0); // nothing said yet
+  expect(currentPoint([point('p1', { turns: ['done', 'running'] }), point('p2')])).toBe(0);
+  expect(currentPoint([point('p1', { turns: ['done'], result: 'agreed' }), point('p2', { turns: ['running'] })])).toBe(1);
+  expect(currentPoint([point('p1', { turns: ['done'], result: 'agreed' }), point('p2', { turns: ['done'], checking: true })])).toBe(1);
+  // A check that failed leaves p1 without an outcome; the PC is on p2 all the same.
+  expect(currentPoint([point('p1', { turns: ['done', 'done'] }), point('p2', { turns: ['done'] })])).toBe(1);
 });

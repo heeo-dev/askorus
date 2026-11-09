@@ -168,6 +168,27 @@ test('stop the debate: what was said stays, no answer after it', async () => {
   expect(screen.queryByText('The debate was stopped. No answer after it was written.')).toBeNull();
 });
 
+// #36 (11-09): the offer says what a debate does; while the debate runs a
+// live card says where it is; with less motion (the test setup's phone
+// setting) the answering ring does not turn.
+test('the offer line, the live card while the debate runs, and less motion', async () => {
+  agent.debateReply = 'hold';
+  const user = await open({ debateNoticed: true });
+  await ask(user, 'When is the first ferry?');
+  await written();
+  expect(screen.getByText("The AIs read each other's answers and debate where they differ.")).toBeTruthy();
+  await user.press(screen.getByRole('button', { name: 'Debate' }));
+  expect(await screen.findByLabelText('Claude is answering… 3 s', {}, { timeout: 5000 })).toBeTruthy();
+  expect(screen.getByLabelText("Claude's turn. Point 1 of 1")).toBeTruthy();
+  expect(screen.getByText('Point 1 of 1')).toBeTruthy();
+  expect(screen.queryByTestId('avatar-ring-busy')).toBeNull();
+  // The offer line is gone while the debate runs, and so is the card once it stops.
+  expect(screen.queryByText("The AIs read each other's answers and debate where they differ.")).toBeNull();
+  await user.press(screen.getByRole('button', { name: 'Stop the debate' }));
+  expect(await screen.findByText('The debate was stopped. No answer after it was written.')).toBeTruthy();
+  expect(screen.queryByLabelText("Claude's turn. Point 1 of 1")).toBeNull();
+});
+
 test('no point worth a debate, a failed plan, and a PC busy with another debate', async () => {
   agent.debateReply = 'none';
   const user = await open({ debateNoticed: true });
@@ -257,6 +278,7 @@ test('in Korean the debate reads in Korean', async () => {
   await user.press(screen.getByRole('button', { name: t('ask.send') }));
   await written();
   expect(screen.getByText('AI를 약 10번 더 씁니다 · 2~3분')).toBeTruthy();
+  expect(screen.getByText('AI들이 서로의 답을 보고, 답이 다른 곳을 토론합니다.')).toBeTruthy();
   await user.press(screen.getByRole('button', { name: '토론하기' }));
   expect(await after()).toBeTruthy();
   for (const word of ['팩트', '유지', '바꿈', '합의', '토론하지 않음']) expect(screen.getByText(word)).toBeTruthy();

@@ -143,6 +143,20 @@ export function debating(turn: Turn): boolean {
   return !!v && (v.kind === 'starting' || v.kind === 'planning' || v.kind === 'running' || v.kind === 'writing');
 }
 
+/**
+ * currentPoint: which of the debated points the PC is on (#36, the live
+ * card): the one with a turn running or being checked, else the latest
+ * one with turns (the PC goes on to the next point even when a check
+ * fails, so the first point without an outcome is not it), else the
+ * first; -1 when there are none.
+ */
+export function currentPoint(debated: Debate['points']): number {
+  const active = debated.findIndex((p) => p.checking || p.turns.some((x) => x.status === 'running'));
+  if (active >= 0) return active;
+  for (let i = debated.length - 1; i >= 0; i--) if (debated[i].turns.length) return i;
+  return debated.length ? 0 : -1;
+}
+
 // ---- Words ----
 
 /** natureLabel: the point's nature chip (팩트 · 추론 · 판단 · 취향); an unknown one shows nothing. */
