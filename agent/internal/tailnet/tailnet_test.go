@@ -1,6 +1,9 @@
 package tailnet
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestParseStatus(t *testing.T) {
 	b := []byte(`{
@@ -157,6 +160,20 @@ func TestIsTailnetIP(t *testing.T) {
 	for _, ip := range []string{"127.0.0.1", "100.128.0.1", "192.168.0.10", "", "100.64.0.1, 1.2.3.4", "fd7a:115c:a1e1::1"} {
 		if IsTailnetIP(ip) {
 			t.Errorf("%q should not be a tailnet IP", ip)
+		}
+	}
+}
+
+// setup's serve (#37) adds one port that proxies to the agent on
+// 127.0.0.1, in the background, and refuses ports out of range.
+func TestServeOnArgs(t *testing.T) {
+	got, err := serveOnArgs(8790, 8790)
+	if err != nil || strings.Join(got, " ") != "serve --bg --https=8790 http://127.0.0.1:8790" {
+		t.Errorf("serveOnArgs = %q, %v", got, err)
+	}
+	for _, p := range [][2]int{{0, 8790}, {8790, 0}, {70000, 8790}, {8790, -1}} {
+		if _, err := serveOnArgs(p[0], p[1]); err == nil {
+			t.Errorf("serveOnArgs(%d, %d) took a bad port", p[0], p[1])
 		}
 	}
 }

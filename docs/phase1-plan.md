@@ -354,7 +354,7 @@ B2-2(2026-10-28): `eas init`으로 `@heeodev/asksemble`을 만들었다. 첫 pre
 - `askorus-agent path on|off|status`: 이 exe가 있는 폴더를 이 사용자의 PATH(`HKCU\Environment`의 `Path`)에 넣고 뺀다. 관리자 권한이 필요 없고 시스템 PATH는 건드리지 않는다. 다른 항목은 순서와 적힌 그대로 두고, 값의 종류(REG_SZ·REG_EXPAND_SZ)도 지킨다. 같은 폴더를 대소문자·끝의 `\`·따옴표·`%LOCALAPPDATA%`가 달라도 같은 것으로 본다. 바꾼 뒤 Windows에 알려(WM_SETTINGCHANGE) 새로 연 터미널부터 적용된다.
 - exe가 내려받기 폴더나 임시 폴더에 있으면 계속 둘 폴더로 옮기라고 알린다.
 - `check`는 PATH에 없으면 주의로 `path on`을 안내하고, `uninstall`은 PATH 항목도 뺀다.
-- 배포판 설치 순서(D 단계의 설치 문서에 쓴다): exe를 `%LOCALAPPDATA%\Programs\Askorus`에 둔다 → `askorus-agent.exe path on` → 새 터미널에서 `askorus-agent autostart on`, `check`, `pair`. 나중에 winget(portable)으로 내면 winget이 PATH를 맡는다.
+- 배포판 설치 순서(D 단계의 설치 문서에 쓴다): exe를 `%LOCALAPPDATA%\Programs\Askorus`에 둔다 → `askorus-agent.exe path on` → 새 터미널에서 `askorus-agent autostart on`, `check`, `pair`. 2026-11-09(#37): `scripts/install.ps1`(배포판의 `install.ps1`, `irm … | iex` 한 줄)이 exe를 받아 SHA-256을 보고 이 폴더에 둔 뒤 `askorus-agent setup`을 돌린다. setup은 위 순서를 묶은 것이다: 권한·폴더·PATH → Claude Code → Tailscale(HTTPS, serve가 안 됐으면 설정을 보이고 [y/N]으로 물어 y면 setup이 에이전트 포트 하나만 켬, 그냥 Enter면 직접 실행하고 Enter. 2026-11-09 사용자 결정) → 켜기·로그인할 때 켜기 → 짝 맺기(짝 맺은 기기가 없을 때). 다시 돌리면 된 단계는 건너뛴다. 스크립트를 다시 돌리면 업데이트(돌던 에이전트를 멈추고 바꾼 뒤 다시 켬, 옛 exe는 `askorus-agent.prev.exe`). 배포 파일은 `scripts/release.ps1`(판 번호, -trimpath, exe 안 경로 검사, `SHA256SUMS.txt`). 나중에 winget(portable)으로 내면 winget이 PATH를 맡는다.
 - 시험: `pathenv_test.go`(문자열만, 실제 PATH는 안 건드림), uninstall 테스트는 PATH 빼기를 가짜로 바꾼다. 실제 PC에서 임시 폴더의 빌드로 on → on(이미 있음) → status → off를 돌려 PATH가 원래 값 그대로 돌아온 것을 봤다.
 - `.local\bin`에 배포(2026-10-28): 열어 둔 폴더 서버가 없는 것을 보고 `shutdown` → 교체 → `start -test-page`. `check` 주의 0개(PATH ok), Tailscale 주소의 `/v1/info`는 토큰 없이 401. 예전 빌드는 `askorus-agent.prev.exe`로 남겼다.
 

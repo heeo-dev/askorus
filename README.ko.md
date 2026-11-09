@@ -18,6 +18,59 @@ Askorus(애스코러스)는 폰에서 질문 하나를 여러 AI에게 한 번�
 
 **상태:** 개발 중입니다. 안드로이드 앱과 Windows 에이전트가 처음부터 끝까지 동작하지만 아직 스토어에 내지 않았습니다.
 
+## PC 에이전트 설치
+
+지금은 Windows만 됩니다. macOS와 Linux는 나중에 나옵니다.
+
+PC에서 PowerShell을 열고(관리자 권한이 아닌 보통 창) 아래 한 줄을 붙여 넣으세요.
+
+```powershell
+irm https://github.com/heeo-dev/askorus/releases/latest/download/install.ps1 | iex
+```
+
+스크립트가 GitHub 배포판에서 에이전트를 받아 SHA-256을 확인하고, `%LOCALAPPDATA%\Programs\Askorus`에 둔 뒤 `askorus-agent setup`을 시작합니다. setup은 PATH, Claude Code, Tailscale(폰의 요청을 에이전트로 넘기는 설정은 켜기 전에 묻습니다), 로그인할 때 켜기, 앱으로 찍을 QR까지 차례로 안내합니다. 관리자 권한은 필요 없습니다. 업데이트할 때도 같은 줄을 다시 실행하면 됩니다. (첫 배포판부터 됩니다. 그전에는 [소스에서 빌드](#소스에서-빌드)하세요.)
+
+먼저 [필요한 것](#필요한-것)을 준비해 두세요: Tailscale과, 로그인해 둔 AI 프로그램 하나 이상.
+
+<details>
+<summary>실행하기 전에 스크립트 읽어 보기</summary>
+
+```powershell
+irm https://github.com/heeo-dev/askorus/releases/latest/download/install.ps1 -OutFile install.ps1
+notepad install.ps1
+powershell -ExecutionPolicy Bypass -File .\install.ps1
+```
+
+원본은 [scripts/install.ps1](scripts/install.ps1)입니다.
+</details>
+
+**초기 배포판에는 게시자 서명이 아직 없습니다.** Windows가 '알 수 없는 게시자'라고 알릴 수 있고, Windows 11에서 스마트 앱 컨트롤이 켜져 있으면 에이전트가 아예 실행되지 않을 수 있습니다. 받은 파일이 배포판의 SHA-256과 다르면 스크립트가 멈춥니다.
+
+### AI 에이전트에게 맡기기
+
+PC의 Claude Code나 Codex에 아래 글을 붙여 넣으세요. 스크립트를 먼저 읽어 보고, 내가 허락하면 읽은 그 파일로 설치하고, 빠진 것을 쉽게 설명해 줍니다.
+
+```text
+이 Windows PC에 Askorus PC 에이전트(https://github.com/heeo-dev/askorus) 설치를 도와줘.
+1. 설치 스크립트를 파일로 저장해 읽고, 무엇을 하는지 몇 줄로 알려 줘:
+   irm https://github.com/heeo-dev/askorus/releases/latest/download/install.ps1 -OutFile install.ps1
+   ASKORUS_로 시작하는 환경 변수가 이미 있으면 먼저 알려 줘.
+2. 내가 좋다고 하면, 다시 받지 말고 1에서 읽은 바로 그 파일을 관리자 권한이 아닌 보통 PowerShell에서 setup 단계 없이 실행해 줘:
+   $env:ASKORUS_NO_SETUP='1'; powershell -ExecutionPolicy Bypass -File .\install.ps1
+   끝나면 ASKORUS_NO_SETUP을 원래대로 되돌려 줘(없었으면 지우기).
+3. 그다음 명령은 모두 설치된 파일의 전체 경로로 실행해 줘:
+   & "$env:LOCALAPPDATA\Programs\Askorus\askorus-agent.exe" <명령>
+   "path on", "check" 순서로 실행하고, [X]와 [!] 줄마다 무슨 뜻인지와 내가 할 일을 쉬운 말로, [i] 줄 중 내가 직접 할 일(Remote Control 동의, 폴더 신뢰)도 알려 줘.
+4. check에 [X]가 없어지면 "start"와 "autostart on"을 실행해 줘.
+5. 마지막으로, 내 PowerShell 창에서 "askorus-agent pair"를 실행하고 Askorus 앱으로 QR을 찍은 뒤, 요청한 기기가 내 폰인지 보고 직접 허용하라고 알려 줘.
+지킬 것:
+- 위의 명령만 실행하고, 실행하기 전마다 나에게 물어 줘.
+- 관리자 권한으로 실행하지 말고, 너(AI)의 권한 확인이나 샌드박스를 건너뛰는 옵션은 절대 쓰지 마.
+- 어떤 AI 프로그램의 로그인 파일도 읽거나 옮기지 마(예: ~/.claude/.credentials.json).
+- Tailscale 설정, Claude 서비스·세션 끄기, 동의 질문은 내 몫이야. 할 일을 보여 주고 내가 하게 해 줘.
+- "setup"과 "pair"는 실행하지 마.
+```
+
 ## 이렇게 동작해요
 
 ```mermaid
@@ -50,19 +103,17 @@ flowchart LR
 - PC에 설치하고 로그인해 둔 공식 AI 프로그램 하나 이상: Claude Code, Codex, OpenCode. 이미 쓰는 구독과 무료 계정을 그대로 쓰며, 그 로그인 정보는 읽거나 옮기지 않습니다.
 - 안드로이드 폰 (iOS는 나중에)
 
-## 시작하기
+## 소스에서 빌드
 
-PC 에이전트는 Go 프로그램 하나입니다. 배포판이 나오기 전까지는 소스에서 빌드합니다(Go 1.27).
+PC 에이전트는 Go 프로그램 하나입니다(Go 1.27).
 
 ```powershell
 cd agent
-go build -o askorus-agent.exe ./cmd/askorus-agent
-.\askorus-agent.exe path on       # PATH에 넣기
-askorus-agent check               # 빠진 것과 고치는 방법
-askorus-agent start               # 백그라운드로 켜기(일반 권한)
-askorus-agent autostart on        # 로그인할 때 켜기
-askorus-agent pair                # QR을 띄우고 앱으로 찍기
+go build -trimpath -o askorus-agent.exe ./cmd/askorus-agent
+.\askorus-agent.exe setup         # PATH, 점검, 켜기, 로그인할 때 켜기, 짝 맺기를 차례로
 ```
+
+하나씩 하려면: `path on`(PATH에 넣기), `check`(빠진 것과 고치는 방법), `start`(백그라운드로 켜기, 일반 권한), `autostart on`(로그인할 때 켜기), `pair`(QR을 띄우고 앱으로 찍기). 배포 파일은 `scripts/release.ps1`이 만듭니다.
 
 앱은 React Native와 Expo로 만들었습니다(`app/`). 안드로이드 앱 빌드는 [docs/android-release.md](docs/android-release.md)를 보세요.
 

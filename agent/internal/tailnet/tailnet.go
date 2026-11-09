@@ -273,6 +273,43 @@ func (c *Client) ServeOff(ctx context.Context, httpsPort int) error {
 	return err
 }
 
+// ServeOn makes tailscale serve pass https://<this PC>:httpsPort on the
+// tailnet to the agent on 127.0.0.1:localPort, in the background so it
+// stays after a restart. The agent calls it only from `setup`, after the
+// person typed y (#37, 2026-11-09 decision); it adds this one port and no
+// other serve setting changes. A failure carries what tailscale printed:
+// the first serve on a tailnet can ask for Serve to be turned on in the
+// admin console, with a link.
+func (c *Client) ServeOn(ctx context.Context, httpsPort, localPort int) error {
+	args, err := serveOnArgs(httpsPort, localPort)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, c.exe, args...)
+	hideWindow(cmd)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		said := strings.TrimSpace(string(out))
+		if len(said) > 600 {
+			said = said[:600] + "…"
+		}
+		if said == "" {
+			return fmt.Errorf("tailscale %s: %w", strings.Join(args, " "), err)
+		}
+		return fmt.Errorf("tailscale %s: %w: %s", strings.Join(args, " "), err, said)
+	}
+	return nil
+}
+
+func serveOnArgs(httpsPort, localPort int) ([]string, error) {
+	if httpsPort < 1 || httpsPort > 65535 || localPort < 1 || localPort > 65535 {
+		return nil, errors.New("bad port")
+	}
+	return []string{"serve", "--bg", "--https=" + strconv.Itoa(httpsPort), "http://127.0.0.1:" + strconv.Itoa(localPort)}, nil
+}
+
 var (
 	cgnat = netip.MustParsePrefix("100.64.0.0/10")
 	tsULA = netip.MustParsePrefix("fd7a:115c:a1e0::/48")
