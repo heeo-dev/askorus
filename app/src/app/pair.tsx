@@ -3,6 +3,8 @@
 // check which PC it is, send the code and wait until the person at the PC
 // allows it. Opened from 내 PC, Settings, a PC's 'pair again', or by the
 // askorus://pair link itself. A newly paired PC becomes the current one.
+// A PC without the agent yet: the install line and the guide's address,
+// the same as the README's (#37).
 
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Clipboard from 'expo-clipboard';
@@ -10,13 +12,13 @@ import * as Device from 'expo-device';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Linking, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Linking, Platform, Pressable, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { CancelledError } from '@/api/client';
 import { cleanDeviceName, pairWithPC } from '@/connections/pair';
 import { type PairLink, parsePairLink } from '@/connections/pairLink';
 import { ConnectionStore } from '@/connections/store';
-import { errorText, t } from '@/i18n';
+import { currentLang, errorText, t } from '@/i18n';
 import { Button } from '@/ui/Button';
 import { Spinner } from '@/ui/controls';
 import { FormScroll } from '@/ui/FormScroll';
@@ -30,6 +32,14 @@ import { themed, useTheme } from '@/ui/theme';
 const store = new ConnectionStore();
 
 const pairCommand = 'askorus-agent pair';
+
+// The install line and the README's install section, in the app's language.
+const installCommand = 'irm https://github.com/heeo-dev/askorus/releases/latest/download/install.ps1 | iex';
+function installGuide(): string {
+  return currentLang() === 'ko'
+    ? 'https://github.com/heeo-dev/askorus/blob/main/README.ko.md#' + encodeURIComponent('pc-에이전트-설치')
+    : 'https://github.com/heeo-dev/askorus#install-the-pc-agent';
+}
 
 const tailscaleStore =
   Platform.OS === 'ios'
@@ -56,6 +66,8 @@ export default function Pair() {
   const [pasteError, setPasteError] = useState('');
   const [copied, setCopied] = useState(false);
   const [tailscaleOpen, setTailscaleOpen] = useState(false);
+  const [installOpen, setInstallOpen] = useState(false);
+  const [installCopied, setInstallCopied] = useState(false);
   const [deviceName, setDeviceName] = useState(() => cleanDeviceName(Device.deviceName ?? Device.modelName));
   const abort = useRef<AbortController | null>(null);
   // Back only when there is somewhere to go back to (not when the link opened
@@ -129,6 +141,11 @@ export default function Pair() {
     setCopied(true);
   };
 
+  const copyInstall = async () => {
+    await Clipboard.setStringAsync(installCommand);
+    setInstallCopied(true);
+  };
+
   if (step.kind === 'scan') return <Scanner onLink={accept} onCancel={() => setStep({ kind: 'start' })} />;
 
   return (
@@ -158,6 +175,16 @@ export default function Pair() {
                 </Text>
                 <Text style={s.intro}>{t('pair.intro')}</Text>
               </View>
+              <Pressable
+                onPress={() => setInstallOpen(true)}
+                accessibilityRole="button"
+                accessibilityLabel={t('pair.installNote')}
+                style={({ pressed }) => [s.installRow, pressed && s.pressed]}
+              >
+                <Icon name="terminal" size={18} color={th.text} />
+                <Text style={s.installText}>{t('pair.installNote')}</Text>
+                <Icon name="chevronRight" size={16} color={th.textSub} />
+              </Pressable>
             </View>
 
             <View style={s.steps}>
@@ -282,6 +309,28 @@ export default function Pair() {
           <Button variant="outline" icon="open" label={t('pair.tailscaleGet')} onPress={() => Linking.openURL(tailscaleStore).catch(() => undefined)} />
         </View>
       </Sheet>
+
+      <Sheet open={installOpen} onClose={() => setInstallOpen(false)} title={t('pair.installTitle')} testID="install-sheet">
+        <View style={s.sheetBody}>
+          <Text style={s.intro}>{t('pair.installBody')}</Text>
+          <View style={s.codeLong}>
+            <Text style={s.codeLongText} selectable>
+              {installCommand}
+            </Text>
+            <IconButton
+              name={installCopied ? 'check' : 'copy'}
+              label={t('sheet.copy')}
+              onPress={copyInstall}
+              size={20}
+              color={installCopied ? th.ok : th.textSub}
+            />
+          </View>
+          {installCopied ? <Text style={s.caption}>{t('sheet.copied')}</Text> : null}
+          <Text style={s.caption}>{t('pair.installWindows')}</Text>
+          <Button variant="outline" icon="open" label={t('pair.installOpen')} onPress={() => Linking.openURL(installGuide()).catch(() => undefined)} />
+          <Button variant="quiet" label={t('pair.installShare')} onPress={() => Share.share({ message: installGuide() }).catch(() => undefined)} />
+        </View>
+      </Sheet>
     </View>
   );
 }
@@ -374,6 +423,20 @@ const styles = themed((th) =>
     stepText: { flex: 1, fontSize: 15, fontWeight: '500', lineHeight: 21, color: th.text },
     code: { height: 52, flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 16, paddingRight: 4, borderRadius: 14, backgroundColor: th.surface },
     codeText: { flex: 1, minWidth: 0, fontFamily: mono, fontSize: 15, color: th.text },
+    // On the sheet, whose ground is the surface colour: one step up.
+    codeLong: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10, paddingLeft: 14, paddingRight: 4, borderRadius: 14, backgroundColor: th.raised },
+    codeLongText: { flex: 1, minWidth: 0, fontFamily: mono, fontSize: 13, lineHeight: 19, color: th.text },
+    installRow: {
+      minHeight: 48,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      paddingHorizontal: 14,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: th.border,
+    },
+    installText: { flex: 1, fontSize: 14, fontWeight: '500', lineHeight: 20, color: th.text },
     caption: { fontSize: 13, lineHeight: 19.5, color: th.caption },
     pasteBlock: { gap: 10, marginTop: -12 },
     center: { alignSelf: 'center' },
