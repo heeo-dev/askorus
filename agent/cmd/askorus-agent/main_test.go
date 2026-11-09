@@ -46,6 +46,18 @@ func TestNormalizeAnswer(t *testing.T) {
 	}
 }
 
+// R-90 (#37): the [y/N] question says how to answer on a whole line first,
+// so it shows even when the output goes through a pipe that holds a line
+// until it ends ("[y/N]: " itself has no line end, the answer follows it).
+func TestYesNoPromptSaysHowToAnswerFirst(t *testing.T) {
+	var b bytes.Buffer
+	yesNoPrompt(&b, m("Type y and press Enter to allow it. Just Enter refuses.", "허용하려면 y를 누르고 Enter, 거절하려면 그냥 Enter를 누르세요."))
+	want := "Type y and press Enter to allow it. Just Enter refuses.\n허용하려면 y를 누르고 Enter, 거절하려면 그냥 Enter를 누르세요.\n[y/N]: "
+	if got := b.String(); got != want {
+		t.Errorf("yesNoPrompt = %q, want %q", got, want)
+	}
+}
+
 func TestBilingualErrors(t *testing.T) {
 	var b bytes.Buffer
 	printError(&b, fail("code %s expired", "코드 %s가 만료됐습니다", "X"))

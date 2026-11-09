@@ -23,3 +23,4 @@ func keepAwake(bool)                                              {}
 func sleepAfterAC() int                                           { return -1 }
 func controlSupported() bool                                      { return false }
 func processRunning(int) bool                                     { return false }
+func holdConsole() (restore func())                               { return func() {} } // QuickEdit is a Windows console thing (#37)

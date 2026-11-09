@@ -86,6 +86,10 @@ func TestUninstallDeclined(t *testing.T) {
 	if !strings.Contains(out.String(), "아무것도 바꾸지 않았습니다") {
 		t.Errorf("output = %q", out.String())
 	}
+	// R-90 (#37): how to answer is a whole line before the [y/N].
+	if !strings.Contains(out.String(), "Just Enter changes nothing.\n진행하려면 y를 누르고 Enter, 그만두려면 그냥 Enter를 누르세요.\n[y/N]: ") {
+		t.Errorf("no answer line before [y/N]: %q", out.String())
+	}
 }
 
 // Saying no keeps the judge schema file and cleans no judge folder.
