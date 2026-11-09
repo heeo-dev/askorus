@@ -9,7 +9,7 @@ import { userEvent } from '@testing-library/react-native';
 import * as Clipboard from 'expo-clipboard';
 import { router } from 'expo-router';
 import { act, renderRouter, screen, waitFor, within } from 'expo-router/testing-library';
-import { Alert, Linking, Text, View } from 'react-native';
+import { Alert, Linking, Share, Text, View } from 'react-native';
 
 import TabsLayout from '@/app/(tabs)/_layout';
 import MyPC from '@/app/(tabs)/pcs';
@@ -514,5 +514,34 @@ describe('pairing', () => {
     expect(ts.getByText(/same Tailscale account as the PC/)).toBeTruthy();
     await user.press(ts.getByRole('button', { name: 'Get Tailscale' }));
     expect(open).toHaveBeenCalledWith(expect.stringContaining('tailscale'));
+  });
+
+  // #37: a PC without the agent yet. The line under the intro opens the
+  // install line (the README's, word for word), the guide and a way to send
+  // its address to the PC.
+  test('the install line opens a sheet with the install command, the guide and its address to send', async () => {
+    const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
+    const share = jest.spyOn(Share, 'share').mockResolvedValue({ action: 'sharedAction', activityType: undefined });
+    const user = userEvent.setup();
+    await renderRouter(routes, { initialUrl: '/pair' });
+    await user.press(await screen.findByRole('button', { name: 'First time? Install the agent on the PC first' }));
+    const sheet = within(await screen.findByTestId('install-sheet'));
+    const line = 'irm https://github.com/heeo-dev/askorus/releases/latest/download/install.ps1 | iex';
+    expect(sheet.getByText(line)).toBeTruthy();
+    expect(sheet.getByText(/normal window, not as administrator.*scan it here/)).toBeTruthy();
+    expect(sheet.getByText(/Windows only for now/)).toBeTruthy();
+    // Jest runs in app/: the READMEs are one folder up.
+    const { readFileSync } = require('fs') as { readFileSync: (path: string, encoding: 'utf8') => string };
+    for (const readme of ['../README.md', '../README.ko.md']) {
+      expect(readFileSync(readme, 'utf8')).toContain(line);
+    }
+
+    await user.press(sheet.getByRole('button', { name: 'Copy command' }));
+    expect(Clipboard.setStringAsync).toHaveBeenCalledWith(line);
+    expect(await sheet.findByText('Copied.')).toBeTruthy();
+    await user.press(sheet.getByRole('button', { name: 'Open the install guide' }));
+    expect(open).toHaveBeenCalledWith('https://github.com/heeo-dev/askorus#install-the-pc-agent');
+    await user.press(sheet.getByRole('button', { name: 'Send the address' }));
+    expect(share).toHaveBeenCalledWith({ message: 'https://github.com/heeo-dev/askorus#install-the-pc-agent' });
   });
 });
