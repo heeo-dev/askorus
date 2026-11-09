@@ -13,17 +13,18 @@
 // picked draft B with A's offer after S10 captures of eight drafts): the
 // offer is a soft apricot panel with one line on what a debate does and
 // the primary apricot button with the AIs' icon. While the debate runs a
-// dot breathes beside the title, a live card under it says where the
-// debate is (the step, the debating AIs, one bar segment per point), and
-// the AI whose turn it is shows in the flow as a bubble with the
-// answering ring, three dots and its seconds. Each new turn and outcome
-// rises in once. An outcome has its name above the line, with a green
-// edge and a check when the AIs agreed and an apricot edge when they
-// still differ. The thread follows the newest turn ((tabs)/index.tsx).
-// With less motion all of it stays still, the rings and spinners too.
+// dot breathes beside the title, a live card kept above the follow-up bar
+// (DebateDock, drawn by (tabs)/index.tsx) says where the debate is (the
+// step, the debating AIs, one bar segment per point; pressing it goes to
+// the newest turn), and the AI whose turn it is shows in the flow as a
+// bubble with the answering ring, three dots and its seconds. Each new
+// turn and outcome rises in once. An outcome has its name above the line,
+// with a green edge and a check when the AIs agreed and an apricot edge
+// when they still differ. The thread follows the newest turn. With less
+// motion all of it stays still, the rings and spinners too.
 
-import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { createContext, useContext, useState } from 'react';
+import { Pressable, StyleSheet, Text, View, type ViewInstance } from 'react-native';
 
 import { agentName } from '@/api/agents';
 import type { DebatePoint, DebateTurn, Info } from '@/api/types';
@@ -118,9 +119,8 @@ export function DebateSection({ turn, info, note, act }: { turn: Turn; info: Inf
         {running && turn.debate?.id ? <Button variant="quiet" label={t('debate.stop')} onPress={act.stop} /> : null}
       </View>
 
-      {running ? <LiveCard kind={view.kind} points={snap?.points ?? []} /> : null}
-
       {snap?.points.map((p) => <Point key={p.id} p={p} live={running} />)}
+      {running ? <EndMark /> : null}
 
       {view.kind === 'none' ? <Text style={s.caption}>{t('debate.none')}</Text> : null}
       {view.kind === 'stopped' ? <Text style={s.caption}>{t('debate.stopped')}</Text> : null}
@@ -166,12 +166,43 @@ function speakers(points: DebatePoint[]): string[] {
 }
 
 /**
- * LiveCard says where the debate is: the step (the moderator picking,
- * whose turn it is, the moderator checking, the answer being written),
- * the debating AIs and one bar segment per debated point. The ring and
- * the three dots stay on the turn's own bubble in the flow.
+ * DebateEnd is where the screen keeps the running debate's end mark: the
+ * thread follows that mark, not the thread's own end, since a debate can
+ * run on an earlier turn with a newer one under it (11-09: asked all, then
+ * the moderator alone, then debated the first turn).
  */
-function LiveCard({ kind, points }: { kind: string; points: DebatePoint[] }) {
+export const DebateEnd = createContext<((node: ViewInstance | null) => void) | null>(null);
+
+function EndMark() {
+  const mark = useContext(DebateEnd);
+  return <View ref={mark ?? undefined} collapsable={false} style={{ height: 1 }} testID="debate-end" />;
+}
+
+/**
+ * DebateDock keeps the live card above the follow-up bar while a debate
+ * runs (#36, 11-09: the thread follows the newest turn, so a card under
+ * the debate's title slid off the screen). Pressing it goes to the newest
+ * turn and follows again; nothing shows when no debate runs.
+ */
+export function DebateDock({ turn, onPress }: { turn: Turn; onPress: () => void }) {
+  const s = styles(useTheme());
+  const view = debateView(turn);
+  if (!view || !(view.kind === 'starting' || view.kind === 'planning' || view.kind === 'running' || view.kind === 'writing')) return null;
+  const snap = 'snap' in view ? view.snap : undefined;
+  return (
+    <View style={s.dock} testID="debate-dock">
+      <LiveCard kind={view.kind} points={snap?.points ?? []} onPress={onPress} />
+    </View>
+  );
+}
+
+/**
+ * LiveCard says where the debate is: the step (the moderator picking,
+ * whose turn it is with three dots, the moderator checking, the answer
+ * being written), the debating AIs and one bar segment per debated point.
+ * The answering ring and the seconds stay on the turn's own bubble.
+ */
+function LiveCard({ kind, points, onPress }: { kind: string; points: DebatePoint[]; onPress: () => void }) {
   const th = useTheme();
   const s = styles(th);
   const debated = points.filter((p) => p.debate);
@@ -188,10 +219,24 @@ function LiveCard({ kind, points }: { kind: string; points: DebatePoint[] }) {
   // Read out when the step changes (no seconds in it, so not every poll).
   const said = [step, where].filter(Boolean).join('. ');
   return (
-    <View style={s.live} accessible accessibilityLabel={said} accessibilityLiveRegion="polite">
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [s.live, pressed && { backgroundColor: th.raised }]}
+      accessibilityRole="button"
+      accessibilityLabel={said}
+      accessibilityHint={t('debate.dock.hint')}
+      accessibilityLiveRegion="polite"
+    >
       <View style={s.liveHead}>
         {speaking ? <Avatar agent={speaking.ai} /> : <Working size={16} />}
-        <Text style={s.liveStep}>{step}</Text>
+        <Text style={s.liveStep} numberOfLines={1}>
+          {step}
+        </Text>
+        {speaking ? <Dots /> : null}
+        <View style={s.liveGo}>
+          {/* ↓ to the newest turn: the send arrow turned round (a chevron read as 'fold', 11-09). */}
+          <Icon name="send" size={16} color={th.caption} style={s.down} />
+        </View>
       </View>
       {debated.length ? (
         <View style={s.liveFoot}>
@@ -209,7 +254,7 @@ function LiveCard({ kind, points }: { kind: string; points: DebatePoint[] }) {
           <Text style={s.livePoint}>{where || t('debate.live.point', { i: debated.length, n: debated.length })}</Text>
         </View>
       ) : null}
-    </View>
+    </Pressable>
   );
 }
 
@@ -330,9 +375,12 @@ const styles = themed((th) =>
     row: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
     notice: { gap: 8, padding: 12, borderRadius: 12, backgroundColor: th.soft, borderWidth: 1, borderColor: th.softLine },
     noticeTitle: { fontSize: 14, fontWeight: '600', lineHeight: 20, color: th.text },
-    live: { gap: 10, padding: 12, borderRadius: 14, backgroundColor: th.surface, borderWidth: 1, borderColor: th.divider },
+    dock: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 2, backgroundColor: th.bg },
+    live: { gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 14, backgroundColor: th.surface, borderWidth: 1, borderColor: th.divider },
     liveHead: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 28 },
     liveStep: { flexShrink: 1, fontSize: 14, fontWeight: '600', lineHeight: 20, color: th.text },
+    liveGo: { marginLeft: 'auto' },
+    down: { transform: [{ rotate: '180deg' }] },
     liveFoot: { flexDirection: 'row', alignItems: 'center', gap: 10 },
     liveAIs: { flexDirection: 'row', gap: 4 },
     segments: { flex: 1, flexDirection: 'row', gap: 4 },

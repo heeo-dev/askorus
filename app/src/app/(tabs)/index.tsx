@@ -30,7 +30,7 @@ import * as Clipboard from 'expo-clipboard';
 import * as Crypto from 'expo-crypto';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AppState, Keyboard, Linking, Pressable, ScrollView, type ScrollViewInstance, StyleSheet, Text, View } from 'react-native';
+import { AppState, Keyboard, Linking, Pressable, ScrollView, type ScrollViewInstance, StyleSheet, Text, View, type ViewInstance } from 'react-native';
 
 import { agentName } from '@/api/agents';
 import type { AgentClient } from '@/api/client';
@@ -65,6 +65,7 @@ import { AnswerSheet } from '@/ui/AnswerSheet';
 import { Button } from '@/ui/Button';
 import { Composer, FollowBar } from '@/ui/Composer';
 import { Spinner } from '@/ui/controls';
+import { DebateDock, DebateEnd } from '@/ui/Debate';
 import { Header } from '@/ui/Header';
 import { Icon, IconButton } from '@/ui/Icon';
 import { ModelSheet } from '@/ui/ModelSheet';
@@ -100,9 +101,11 @@ function oldAgent(info: Info): boolean {
   return info.agents.every((a) => a.agent === 'claude' && !a.ask);
 }
 
-// Within this many points of the end, the thread counts as followed: below
-// the debate there are only the answers by AI.
+// A drag that ends with the debate's end mark at most this many points below
+// the screen follows the debate again; when following, the mark sits this
+// many points above the screen's bottom.
 const followGap = 400;
+const endRoom = 24;
 
 export default function Ask() {
   const th = useTheme();
@@ -129,15 +132,41 @@ export default function Ask() {
   const scroll = useRef<ScrollViewInstance>(null);
   const stick = useRef(false);
   turnsRef.current = turns;
-  // #36: while a debate runs, the thread follows its newest turn unless the
-  // person has scrolled up to read; it starts following when a debate starts.
-  const atEnd = useRef(true);
-  const debateOn = turns.some(debating);
+  // #36: while a debate runs, the thread follows the debate's newest turn
+  // (its end mark: on an earlier turn the debate is not the thread's end,
+  // 11-09) unless the person drags away to read; it follows again when they
+  // come back near it, when a debate starts and when its live card above the
+  // follow-up bar (DebateDock) is pressed.
+  const following = useRef(true);
+  const debateEnd = useRef<ViewInstance | null>(null);
+  const viewH = useRef(0);
+  const offsetY = useRef(0);
+  const markDebateEnd = useCallback((node: ViewInstance | null) => {
+    debateEnd.current = node;
+  }, []);
+  // whereDebateEnds measures the end mark in the thread's content.
+  const whereDebateEnds = useCallback((then: (y: number) => void) => {
+    const end = debateEnd.current;
+    const inner = scroll.current?.getInnerViewRef();
+    if (!end || !inner) return false;
+    end.measureLayout(inner, (_x, y) => then(y), () => undefined);
+    return true;
+  }, []);
+  const toDebateEnd = useCallback(() => {
+    const found = whereDebateEnds((y) => scroll.current?.scrollTo({ y: Math.max(0, y - viewH.current + endRoom), animated: true }));
+    if (!found) scroll.current?.scrollToEnd({ animated: true });
+  }, [whereDebateEnds]);
+  const followAgainIfNear = () =>
+    whereDebateEnds((y) => {
+      if (y <= offsetY.current + viewH.current + followGap) following.current = true;
+    });
+  const liveDebate = turns.find(debating);
+  const debateOn = !!liveDebate;
   useEffect(() => {
     if (!debateOn) return;
-    atEnd.current = true;
-    scroll.current?.scrollToEnd({ animated: true });
-  }, [debateOn]);
+    following.current = true;
+    toDebateEnd();
+  }, [debateOn, toDebateEnd]);
 
   // Prefs are saved one after another, each on what is stored, so a PC
   // picked on 내 PC is never written back over.
@@ -216,21 +245,30 @@ export default function Ask() {
   prefsRef.current = prefs;
   const started = useRef(new Set<string>());
 
-  // A question that waited goes now, as it was written (#23), with the
-  // conversation record as it is now (#29): a debate it waited for is in.
-  const startQueued = useCallback(
-    (client: AgentClient | undefined, x: Turn) => {
-      if (started.current.has(x.id)) return;
-      started.current.add(x.id);
+  // A question goes now, as it was written (#23), timed from now, with the
+  // conversation record as it is now (#29): one that waited (a debate it
+  // waited for is in), or one that never went and is tried again (R-91,
+  // 11-09: its seconds counted from when it was written, '390 s' for an
+  // answer that took 27 s).
+  const sendNow = useCallback(
+    (client: AgentClient, x: Turn) => {
       const at = Date.now();
       const all = turnsRef.current;
       const i = all.findIndex((y) => y.id === x.id);
       const { req } = carry(x, i < 0 ? [] : all.slice(0, i), infoRef.current, prefsRef.current.carryRecord);
       deps.update(x.id, () => ({ queued: undefined, queuedFor: undefined, at, req }));
-      if (client) track(x.id, followRun(client, { ...x, queued: undefined, queuedFor: undefined, at, req }, deps));
-      else deps.update(x.id, () => ({ error: t('ask.notSent') }));
+      track(x.id, followRun(client, { ...x, queued: undefined, queuedFor: undefined, at, req }, deps));
     },
     [deps, track],
+  );
+  const startQueued = useCallback(
+    (client: AgentClient | undefined, x: Turn) => {
+      if (started.current.has(x.id)) return;
+      started.current.add(x.id);
+      if (client) sendNow(client, x);
+      else deps.update(x.id, () => ({ queued: undefined, queuedFor: undefined, error: t('ask.notSent') }));
+    },
+    [deps, sendNow],
   );
 
   // A conversation that ran in the background is done: it is kept as it
@@ -549,7 +587,10 @@ export default function Ask() {
     },
     retryRun: () => {
       const p = pcRef.current;
-      if (p) track(turn.id, followRun(p.client, turn, deps, turn.run?.runId));
+      if (!p) return;
+      // A run the PC has is picked up again; a question that never went goes now.
+      if (turn.run?.runId) track(turn.id, followRun(p.client, turn, deps, turn.run.runId));
+      else sendNow(p.client, turnsRef.current.find((y) => y.id === turn.id) ?? turn);
     },
     openAnswer: (agent) => setSheet({ kind: 'answer', turn: turn.id, agent }),
     openAIs: () => setSheet({ kind: 'ais', turn: turn.id }),
@@ -878,40 +919,59 @@ export default function Ask() {
   return (
     <View style={s.screen}>
       {header}
-      <ScrollView
-        ref={scroll}
-        style={s.fill}
-        contentContainerStyle={s.thread}
-        keyboardShouldPersistTaps="handled"
-        scrollEventThrottle={100}
-        onScroll={(e) => {
-          const { contentOffset, layoutMeasurement, contentSize } = e.nativeEvent;
-          atEnd.current = contentOffset.y + layoutMeasurement.height >= contentSize.height - followGap;
-        }}
-        onContentSizeChange={() => {
-          // To the new question once it is sent.
-          if (stick.current) {
-            stick.current = false;
-            scroll.current?.scrollToEnd({ animated: true });
-            return;
-          }
-          // A new turn or outcome in a running debate.
-          if (debateOn && atEnd.current) scroll.current?.scrollToEnd({ animated: true });
-        }}
-      >
-        {reach}
-        {turns.map((turn, i) => (
-          <TurnView
-            key={turn.id}
-            turn={turn}
-            info={info}
-            now={now}
-            only={i === turns.length - 1 ? one : null}
-            notes={notes}
-            act={actsFor(turn)}
-          />
-        ))}
-      </ScrollView>
+      <DebateEnd.Provider value={markDebateEnd}>
+        <ScrollView
+          ref={scroll}
+          style={s.fill}
+          contentContainerStyle={s.thread}
+          keyboardShouldPersistTaps="handled"
+          scrollEventThrottle={100}
+          onLayout={(e) => {
+            viewH.current = e.nativeEvent.layout.height;
+          }}
+          onScroll={(e) => {
+            offsetY.current = e.nativeEvent.contentOffset.y;
+            viewH.current = e.nativeEvent.layoutMeasurement.height;
+          }}
+          onScrollBeginDrag={() => {
+            following.current = false;
+          }}
+          onScrollEndDrag={followAgainIfNear}
+          onMomentumScrollEnd={followAgainIfNear}
+          onContentSizeChange={() => {
+            // To the new question once it is sent.
+            if (stick.current) {
+              stick.current = false;
+              scroll.current?.scrollToEnd({ animated: true });
+              return;
+            }
+            // A new turn or outcome in a running debate.
+            if (debateOn && following.current) toDebateEnd();
+          }}
+        >
+          {reach}
+          {turns.map((turn, i) => (
+            <TurnView
+              key={turn.id}
+              turn={turn}
+              info={info}
+              now={now}
+              only={i === turns.length - 1 ? one : null}
+              notes={notes}
+              act={actsFor(turn)}
+            />
+          ))}
+        </ScrollView>
+      </DebateEnd.Provider>
+      {liveDebate ? (
+        <DebateDock
+          turn={liveDebate}
+          onPress={() => {
+            following.current = true;
+            toDebateEnd();
+          }}
+        />
+      ) : null}
       {askRecord ? <RecordNotice onGo={() => sendWith('with')} onWithout={() => sendWith('without')} /> : null}
       <FollowBar
         value={text}
