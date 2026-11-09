@@ -71,6 +71,10 @@ Step 'agent: go vet syntheval (linux)' $agent 'go' @('vet', '-tags', 'syntheval'
 Remove-Item Env:GOOS
 Step 'agent: synth-eval tests' $agent 'go' @('test', '-tags', 'syntheval', '-count=1', './cmd/synth-eval/...') '^(ok|FAIL)'
 
+# The installer (#37): release files built into a temp folder, installed and
+# updated there with a test agent on a port of its own.
+Step 'install script' $root 'powershell' @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $PSScriptRoot 'test-install.ps1')) '^(ALL PASSED|   FAIL)'
+
 if (-not (Test-Path (Join-Path $app 'node_modules'))) { Step 'app: npm ci' $app 'npm' @('ci', '--no-audit', '--no-fund') }
 Step 'app: typecheck' $app 'npx' @('tsc', '--noEmit')
 Step 'app: unit + screen tests' $app 'npx' @('jest', '--silent') '^Tests:'

@@ -39,6 +39,20 @@ func listenStop(port int) <-chan struct{} {
 	return ch
 }
 
+// agentOnPort reports whether an agent of this logon session serves the
+// port: its stop event is there (a serve makes it, and it goes when that
+// process ends). A port that answers without it belongs to another program
+// (#37: setup must not pass that one to the tailnet).
+func agentOnPort(port int) bool {
+	name, _ := windows.UTF16PtrFromString(stopEventPrefix + strconv.Itoa(port))
+	h, err := windows.OpenEvent(windows.SYNCHRONIZE, false, name)
+	if err != nil {
+		return false
+	}
+	windows.CloseHandle(h)
+	return true
+}
+
 // signalStop asks a running agent to stop.
 func signalStop(port int) error {
 	name, _ := windows.UTF16PtrFromString(stopEventPrefix + strconv.Itoa(port))

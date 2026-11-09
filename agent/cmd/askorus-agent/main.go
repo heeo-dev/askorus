@@ -89,6 +89,9 @@ Usage / 사용법:
   askorus-agent hidden [list | unhide SESSION_ID]
       sessions removed from the list
       목록에서 지운 세션
+  askorus-agent setup
+      set up this PC step by step: PATH, Claude Code, Tailscale, start, logon, pairing
+      이 PC를 차례로 설정합니다: PATH, Claude Code, Tailscale, 켜기, 로그인할 때 켜기, 짝 맺기
   askorus-agent check
       check everything the agent needs and print fixes
       에이전트에 필요한 것을 점검하고 고칠 방법을 보여 줍니다
@@ -180,6 +183,8 @@ func run(args []string, in io.Reader, out io.Writer) error {
 		return autostartCmd(args[1:], out)
 	case "path":
 		return pathCmd(args[1:], out)
+	case "setup":
+		return setupCmd(dir, args[1:], in, out)
 	case "check":
 		return checkCmd(dir, out)
 	case "uninstall":

@@ -11,6 +11,7 @@ var errNotYet = errors.New("only supported on Windows for now")
 
 func listenStop(int) <-chan struct{}                              { return make(chan struct{}) }
 func signalStop(int) error                                        { return errNotYet }
+func agentOnPort(int) bool                                        { return false }
 func startDetached(string, []string, string, string) (int, error) { return 0, errNotYet }
 func autostartCommand(exe string, _ bool) string                  { return exe + " start" }
 func autostartSet(string, bool) error                             { return errNotYet }

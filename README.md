@@ -18,6 +18,59 @@ Developers can also see, start and continue the Claude Code sessions on their PC
 
 **Status:** in development. The Android app and the Windows agent work end to end; they are not in the stores yet.
 
+## Install the PC agent
+
+For now the agent is for Windows only; macOS and Linux come later.
+
+Open PowerShell on the PC (a normal window, not "Run as administrator") and paste:
+
+```powershell
+irm https://github.com/heeo-dev/askorus/releases/latest/download/install.ps1 | iex
+```
+
+The script downloads the agent from the GitHub release, checks its SHA-256, puts it in `%LOCALAPPDATA%\Programs\Askorus` and starts `askorus-agent setup`. Setup goes step by step: PATH, Claude Code, Tailscale (it asks before it lets Tailscale pass the phone's requests to the agent), starting at logon, and a QR code you scan with the app. It needs no administrator rights. Run the same line again to update. (This works from the first release on; until then, [build from source](#build-from-source).)
+
+Have [what you need](#what-you-need) ready first: Tailscale and at least one AI program, signed in.
+
+<details>
+<summary>Read the script before you run it</summary>
+
+```powershell
+irm https://github.com/heeo-dev/askorus/releases/latest/download/install.ps1 -OutFile install.ps1
+notepad install.ps1
+powershell -ExecutionPolicy Bypass -File .\install.ps1
+```
+
+The source is [scripts/install.ps1](scripts/install.ps1).
+</details>
+
+**The first releases are not signed** with a publisher certificate yet. Windows may say the publisher is unknown, and on Windows 11 with Smart App Control on it may not run the agent at all. The script stops if the download does not match the release's SHA-256.
+
+### Or let your AI agent help
+
+Paste this into Claude Code or Codex on the PC. It reads the script first, installs from that same file with your OK, and explains what is missing:
+
+```text
+Help me install the Askorus PC agent (https://github.com/heeo-dev/askorus) on this Windows PC.
+1. Save the install script to a file, read it, and tell me in a few lines what it does:
+   irm https://github.com/heeo-dev/askorus/releases/latest/download/install.ps1 -OutFile install.ps1
+   If any environment variable starting with ASKORUS_ is already set, tell me first.
+2. When I say yes, run that very file you read (do not download it again) in a normal PowerShell (not as administrator), without its setup step:
+   $env:ASKORUS_NO_SETUP='1'; powershell -ExecutionPolicy Bypass -File .\install.ps1
+   Afterwards, put ASKORUS_NO_SETUP back as it was (remove it if it was not set).
+3. From here on, run every command with the full path of the installed file:
+   & "$env:LOCALAPPDATA\Programs\Askorus\askorus-agent.exe" <command>
+   Run "path on", then "check". Explain each [X] and [!] line in plain words with what I should do, and the [i] lines that are mine to do (Remote Control consent, trusting a folder).
+4. When check has no [X] left, run "start" and "autostart on".
+5. Last, tell me to run "askorus-agent pair" in my own PowerShell window, scan the QR code with the Askorus app, check that the phone asking is mine, and allow it myself.
+Rules:
+- Run only the commands above, and ask me before each one.
+- Do not run anything as administrator, and never use options that skip your own (the AI's) permission prompts or sandbox.
+- Never read or copy the sign-in files of any AI program (for example ~/.claude/.credentials.json).
+- Tailscale settings, stopping Claude services or sessions, and consent prompts are mine: show me what to do and let me do it.
+- Do not run "setup" or "pair".
+```
+
 ## How it works
 
 ```mermaid
@@ -50,19 +103,17 @@ flowchart LR
 - At least one official AI program installed and signed in on the PC: Claude Code, Codex or OpenCode. Askorus uses the subscriptions and free accounts you already have; it never reads or moves their sign-in data.
 - An Android phone (iOS later)
 
-## Getting started
+## Build from source
 
-The PC agent is a single Go program. Until there are releases, build it from source (Go 1.27):
+The PC agent is a single Go program (Go 1.27):
 
 ```powershell
 cd agent
-go build -o askorus-agent.exe ./cmd/askorus-agent
-.\askorus-agent.exe path on       # put it on your PATH
-askorus-agent check               # what is missing and how to fix it
-askorus-agent start               # run it in the background (normal rights)
-askorus-agent autostart on        # start it at logon
-askorus-agent pair                # show a QR code; scan it with the app
+go build -trimpath -o askorus-agent.exe ./cmd/askorus-agent
+.\askorus-agent.exe setup         # PATH, checks, start, start at logon, pairing, step by step
 ```
+
+The steps one by one: `path on` (put it on your PATH), `check` (what is missing and how to fix it), `start` (run it in the background, normal rights), `autostart on` (start it at logon), `pair` (show a QR code to scan with the app). `scripts/release.ps1` builds the release files.
 
 The app is React Native with Expo (`app/`). See [docs/android-release.md](docs/android-release.md) for building the Android app.
 
