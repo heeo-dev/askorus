@@ -1,6 +1,6 @@
 // The combined answer's block (S5c, F-Ask-Comparing and F-Result-Expanded):
 // a header with the AIs that answered (a pile that opens the AI sheet),
-// the title and the times; while it is being made, its step (since C6
+// the title (a soft apricot chip, #36) and the times; while it is being made, its step (since C6
 // only 'Writing the combined answer…') over grey lines; then the body and
 // a footnote.
 
@@ -37,7 +37,7 @@ export function CombinedAnswerCard({
   const hasSteps = !!steps?.length;
   return (
     <View style={s.card}>
-      <View style={s.head}>
+      <View style={s.head} testID="combined-head">
         <Pressable
           onPress={pile.onPress}
           accessibilityRole="button"
@@ -47,9 +47,11 @@ export function CombinedAnswerCard({
           <AvatarPile agents={pile.agents} dim={pile.dim} ring={th.bg} />
           <Icon name="chevronDown" size={14} color={th.caption} />
         </Pressable>
-        <Text style={s.title} numberOfLines={1} accessibilityRole="header">
-          {title}
-        </Text>
+        <View style={s.titleChip}>
+          <Text style={s.title} numberOfLines={1} accessibilityRole="header">
+            {title}
+          </Text>
+        </View>
         {meta ? (
           // Two lines rather than cut ('answers 11 s · combine…' on a phone,
           // 11-05): each part keeps its words together, so a line breaks only
@@ -104,7 +106,9 @@ const styles = themed((th) =>
     head: { flexDirection: 'row', alignItems: 'center', gap: 8, marginVertical: -10 },
     pile: { height: 44, flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: -4, paddingHorizontal: 4, borderRadius: 22 },
     // The title keeps its room; the times give way, onto a second line (English 'answers 23 s · combined in 30 s' is long).
-    title: { flexShrink: 0, maxWidth: '60%', fontSize: 14, fontWeight: '600', lineHeight: 20, color: th.text },
+    // #36 (11-09, the person found '종합 답변' and '토론 뒤 정리' hard to spot): a soft apricot chip, apricot words in dark.
+    titleChip: { flexShrink: 0, maxWidth: '60%', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 12, backgroundColor: th.soft },
+    title: { fontSize: 14, fontWeight: '700', lineHeight: 20, color: th.accent },
     meta: { marginLeft: 'auto', flexShrink: 1, minWidth: 0, textAlign: 'right', fontSize: 13, lineHeight: 18, color: th.caption, fontVariant: ['tabular-nums'] },
     stepsRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 4 },
     steps: { flex: 1, minWidth: 0, gap: 2 },

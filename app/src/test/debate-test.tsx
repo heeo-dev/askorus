@@ -169,8 +169,8 @@ test('stop the debate: what was said stays, no answer after it', async () => {
 });
 
 // #36 (11-09): the offer says what a debate does; while the debate runs a
-// live card says where it is; with less motion (the test setup's phone
-// setting) the answering ring does not turn.
+// live card above the follow-up bar says where it is; with less motion
+// (the test setup's phone setting) the answering ring does not turn.
 test('the offer line, the live card while the debate runs, and less motion', async () => {
   agent.debateReply = 'hold';
   const user = await open({ debateNoticed: true });
@@ -179,14 +179,22 @@ test('the offer line, the live card while the debate runs, and less motion', asy
   expect(screen.getByText("The AIs read each other's answers and debate where they differ.")).toBeTruthy();
   await user.press(screen.getByRole('button', { name: 'Debate' }));
   expect(await screen.findByLabelText('Claude is answering… 3 s', {}, { timeout: 5000 })).toBeTruthy();
-  expect(screen.getByLabelText("Claude's turn. Point 1 of 1")).toBeTruthy();
-  expect(screen.getByText('Point 1 of 1')).toBeTruthy();
+  // The live card is kept above the follow-up bar, outside the thread, and goes to the newest turn when pressed.
+  const dock = screen.getByTestId('debate-dock');
+  const card = within(dock).getByRole('button', { name: "Claude's turn. Point 1 of 1" });
+  expect(card.props.accessibilityHint).toBe('Goes to the newest turn');
+  expect(within(dock).getByText('Point 1 of 1')).toBeTruthy();
+  // The thread follows the debate's end mark (not the thread's end: a newer turn may sit under it).
+  expect(screen.getByTestId('debate-end')).toBeTruthy();
+  await user.press(card);
   expect(screen.queryByTestId('avatar-ring-busy')).toBeNull();
   // The offer line is gone while the debate runs, and so is the card once it stops.
   expect(screen.queryByText("The AIs read each other's answers and debate where they differ.")).toBeNull();
   await user.press(screen.getByRole('button', { name: 'Stop the debate' }));
   expect(await screen.findByText('The debate was stopped. No answer after it was written.')).toBeTruthy();
   expect(screen.queryByLabelText("Claude's turn. Point 1 of 1")).toBeNull();
+  expect(screen.queryByTestId('debate-dock')).toBeNull();
+  expect(screen.queryByTestId('debate-end')).toBeNull();
 });
 
 test('no point worth a debate, a failed plan, and a PC busy with another debate', async () => {

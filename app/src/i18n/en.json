@@ -415,6 +415,7 @@
   "debate.lead": "The AIs read each other's answers and debate where they differ.",
   "debate.live.turn": "{name}'s turn",
   "debate.live.point": "Point {i} of {n}",
+  "debate.dock.hint": "Goes to the newest turn",
   "debate.again": "Debate again",
   "debate.more": "More",
   "debate.less": "Less",

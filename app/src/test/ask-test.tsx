@@ -422,6 +422,25 @@ test('a refused run says why, and trying again sends the same run', async () => 
   expect(screen.queryByText(/The PC is answering other questions/)).toBeNull();
 });
 
+// R-91 (11-09, S23): a question that never went and was tried again counted
+// its seconds from when it was written ('390 s' for an answer that took 27 s).
+test('trying again times the answers from then, not from when the question was written', async () => {
+  agent.enableSynth(); // the answering list with its seconds, as on the phone
+  agent.runError = { status: 429, code: 'too_many_runs' };
+  const { user } = await open();
+  await ask(user, 'q');
+  expect(await screen.findByText(/The PC is answering other questions/)).toBeTruthy();
+  await act(() => jest.advanceTimersByTimeAsync(300_000));
+  agent.runError = null;
+  agent.runLimit = 0; // the answers stay coming
+  await user.press(screen.getByRole('button', { name: 'Try again' }));
+  await waitFor(() => expect(agent.runRequests()).toHaveLength(2));
+  await act(() => jest.advanceTimersByTimeAsync(2000));
+  const row = await screen.findByTestId('answering-claude');
+  expect(row.props.accessibilityValue.text).toMatch(/^Answering, [0-9] s$/); // not 300 s
+  agent.runLimit = Infinity;
+});
+
 test("Claude's answer continues in the Claude app; any answer copies", async () => {
   const openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
   const { user } = await open();

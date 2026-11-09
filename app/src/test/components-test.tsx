@@ -399,7 +399,8 @@ describe('the combined answer', () => {
     expect(screen.getByText('answers 12 s')).toBeTruthy();
     expect(screen.getByTestId('skeleton', { includeHiddenElements: true })).toBeTruthy();
     // The title row has the pile alone to press (no details button since C6d).
-    const head = screen.getByRole('header', { name: 'Combined answer' }).parent!;
+    const head = screen.getByTestId('combined-head');
+    expect(within(head).getByRole('header', { name: 'Combined answer' })).toBeTruthy();
     expect(within(head).getAllByRole('button').map((b) => b.props.accessibilityLabel)).toEqual(['AIs that answered: 3 (Claude, Codex, OpenCode). Details']);
   });
 

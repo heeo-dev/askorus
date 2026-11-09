@@ -415,6 +415,7 @@
   "debate.lead": "AI들이 서로의 답을 보고, 답이 다른 곳을 토론합니다.",
   "debate.live.turn": "{name} 차례",
   "debate.live.point": "쟁점 {i}/{n}",
+  "debate.dock.hint": "최근 발언으로 갑니다",
   "debate.again": "다시 토론하기",
   "debate.more": "더 보기",
   "debate.less": "접기",
