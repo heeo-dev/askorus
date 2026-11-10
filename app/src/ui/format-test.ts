@@ -16,7 +16,7 @@ test('ago counts minutes, hours and days, then shows the date', () => {
 });
 
 test('folderName shows the last part of Windows and POSIX paths', () => {
-  expect(folderName('D:\\ClaudeHome\\Asksemble')).toBe('Asksemble');
+  expect(folderName('D:\\Work\\Askorus')).toBe('Askorus');
   expect(folderName('/home/me/project/')).toBe('project');
   expect(folderName('')).toBe('');
   expect(folderName(undefined)).toBe('');

@@ -120,16 +120,6 @@ Settings live in %s (override with ASKORUS_AGENT_DIR).
 var refineOn = false
 
 func main() {
-	// The agent was called Asksemble before 11-08 (#31): copy its folders once.
-	moved, err := config.MoveOldDirs()
-	for _, mv := range moved {
-		say(os.Stderr, m("copied %s to %s (the old folder stays; remove it when you no longer need it)",
-			"%s를 %s로 복사했습니다 (옛 폴더는 그대로 있습니다. 필요 없으면 지우세요)", mv.From, mv.To))
-	}
-	if err != nil {
-		say(os.Stderr, m("could not copy the old Asksemble folder, so it is used as it is: %v",
-			"옛 Asksemble 폴더를 복사하지 못해 그대로 씁니다: %v", err))
-	}
 	if err := run(os.Args[1:], os.Stdin, os.Stdout); err != nil {
 		printError(os.Stderr, err)
 		os.Exit(1)
