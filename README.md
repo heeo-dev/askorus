@@ -27,7 +27,7 @@ Developers can also list and start the Claude Code sessions on their PC from the
   <img src="docs/screenshots/en/demo.gif" width="320" alt="A real run, sped up: one question goes to Claude, Codex and OpenCode, the moderator writes a combined answer, and the AIs debate the point where they differ until it gets a result">
 </p>
 
-**Status:** in development. The Android app and the Windows agent work end to end, but neither is released yet: the agent has no release and the app is not on Google Play. To try it now, [build both from source](#build-from-source).
+**Status:** in development. The Android app and the Windows agent work end to end. The agent has its first release, 0.1.0 ([install it](#install-the-pc-agent) with one line). The app is not on Google Play yet: for now, [build it from source](#build-from-source).
 
 ## How it works
 
@@ -57,7 +57,7 @@ The moderator is one of the AIs you asked. The debate is optional.
 
 ## Install the PC agent
 
-For now the agent is for Windows only; macOS and Linux come later. The line below works from the first release on; until then, [build from source](#build-from-source).
+For now the agent is for Windows only; macOS and Linux come later.
 
 Open PowerShell on the PC (a normal window, not "Run as administrator") and paste:
 
