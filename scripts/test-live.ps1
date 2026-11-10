@@ -62,6 +62,15 @@
 #   3: 12), no Codex; ASKORUS_LT14_OLD=1 also runs the pre-#39 prompts and
 #   reports them.
 #
+# LT-15, no file through an "@path" (R-93, agent/internal/live/mention_live_test.go):
+#   the real claude on the quick tier. Claude Code attaches the file of an
+#   "@path" in a prompt whatever --tools says. A marker file sits outside
+#   the ask folder; through the adapter a question with @file, @file inside
+#   quoted data, @folder and a combined answer may not show the marker.
+#   Then each guard alone on the bare ask command (the Read deny rule, the
+#   zero-width space) must still stop it; the bare command without a guard
+#   is only reported. 7 AI calls, no Codex.
+#
 # One full run writes one combined answer with Codex (LT-08 1), refines
 # once with Codex (LT-09 1), asks Codex 4 times (LT-05 3, LT-12 1) and lets
 # Codex speak once or twice in a debate (LT-11).
@@ -73,6 +82,7 @@
 #   powershell -NoProfile -File scripts\test-live.ps1 -Run LT12    # only LT-12
 #   powershell -NoProfile -File scripts\test-live.ps1 -Run LT13    # only LT-13
 #   powershell -NoProfile -File scripts\test-live.ps1 -Run LT14    # only LT-14
+#   powershell -NoProfile -File scripts\test-live.ps1 -Run LT15    # only LT-15
 param([string]$Run)
 $go = Join-Path $env:USERPROFILE 'sdk\go1.27.3\bin'
 if (Test-Path $go) { $env:Path = "$go;" + $env:Path }

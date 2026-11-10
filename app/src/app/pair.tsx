@@ -2,7 +2,10 @@
 // scan the QR it shows (the main way) or paste the link printed with it,
 // check which PC it is, send the code and wait until the person at the PC
 // allows it. Opened from 내 PC, Settings, a PC's 'pair again', or by the
-// askorus://pair link itself. A newly paired PC becomes the current one.
+// askorus://pair link itself. The first PC paired becomes the current one;
+// a further PC is added to the list and the PC picker opens, so questions
+// never move to another PC without a pick (R-94). The confirm step warns
+// about links and QR codes that came from someone else.
 // A PC without the agent yet: the install line and the guide's address,
 // the same as the README's (#37).
 
@@ -94,7 +97,15 @@ export default function Pair() {
       code: params.code,
     });
     const link = parsePairLink(`askorus://pair?${q}`);
-    if (link) setStep({ kind: 'confirm', link });
+    if (link) {
+      setStep({ kind: 'confirm', link });
+      return;
+    }
+    // A link the app refuses (R-94: a server outside ts.net, a bad code)
+    // says so, and never leaves an earlier link's confirm step on the screen.
+    setStep({ kind: 'start' });
+    setPasteOpen(true);
+    setPasteError(t('pair.badLink'));
   }, [params.v, params.host, params.port, params.code]);
 
   useEffect(() => () => abort.current?.abort(), []);
@@ -112,9 +123,14 @@ export default function Pair() {
     abort.current = ctl;
     setStep({ kind: 'waiting', link });
     try {
+      const before = await store.list().catch(() => []);
       const saved = await pairWithPC(link, deviceName, { store }, { signal: ctl.signal });
-      await pickPC(saved.id).catch(() => undefined);
-      router.dismissTo('/pcs');
+      // The first PC, or the same PC paired again, is the current one. With
+      // another PC already paired the questions stay with the current PC until
+      // the person picks the new one: the PC picker opens with both (R-94).
+      const others = before.some((c) => c.id !== saved.id);
+      if (!others) await pickPC(saved.id).catch(() => undefined);
+      router.dismissTo(others ? { pathname: '/pcs', params: { pick: '1' } } : '/pcs');
     } catch (e) {
       if (e instanceof CancelledError) {
         setStep({ kind: 'confirm', link });
@@ -249,6 +265,10 @@ export default function Pair() {
               <Text style={s.caption}>{t('pair.pcAddress')}</Text>
               <Text style={s.host}>{step.link.host}</Text>
               <Text style={s.caption}>{t('pair.port', { port: step.link.port })}</Text>
+            </View>
+            <View style={s.warn} testID="pair-warn">
+              <Icon name="alert" size={18} color={th.danger} />
+              <Text style={s.warnText}>{t('pair.confirmWarn')}</Text>
             </View>
             <Text style={s.intro}>{t('pair.confirmBody')}</Text>
             <View style={s.field}>
@@ -458,6 +478,8 @@ const styles = themed((th) =>
     error: { fontSize: 15, lineHeight: 22.5, color: th.danger },
     card: { gap: 4, padding: 16, borderRadius: 14, backgroundColor: th.surface },
     host: { fontSize: 17, fontWeight: '600', lineHeight: 23, color: th.text },
+    warn: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, padding: 14, borderRadius: 14, borderWidth: 1, borderColor: th.danger },
+    warnText: { flex: 1, fontSize: 14, lineHeight: 20, color: th.text },
     field: { gap: 8 },
     waiting: { alignItems: 'center', gap: 16, paddingTop: 48 },
     waitTitle: { fontSize: 18, fontWeight: '600', lineHeight: 24, letterSpacing: -0.18, color: th.text, textAlign: 'center' },

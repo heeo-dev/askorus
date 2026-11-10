@@ -149,6 +149,10 @@ go build -trimpath -o askorus-agent.exe ./cmd/askorus-agent
 
 Askorus는 독립 프로젝트입니다. 어떤 AI 회사의 공식 제품도 아니며, Anthropic, OpenAI, Google 등과 제휴하거나 보증을 받지 않았습니다. Claude, Codex 등의 이름은 각 회사의 상표입니다.
 
+## 보안
+
+보안 문제를 찾으셨다면 비공개로 알려 주세요. [SECURITY.md](SECURITY.md)에 방법이 있습니다.
+
 ## 라이선스
 
-Apache-2.0. [LICENSE](LICENSE)를 보세요.
+Apache-2.0. [LICENSE](LICENSE)를 보세요. Askorus에 들어 있거나 Askorus를 만드는 데 쓰인 다른 사람의 저작물은 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)에 적었습니다.

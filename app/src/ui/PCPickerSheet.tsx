@@ -96,7 +96,12 @@ export function ReachLine({ reach, long, size = 8 }: { reach: Reach | undefined;
   );
 }
 
-/** PCRow is one PC: tile, name and state; selected marks the current one. */
+/**
+ * PCRow is one PC: tile, name and state; selected marks the current one. A
+ * long row (the PC picker) also shows the PC's address: the name comes from
+ * the PC itself, so two PCs can carry the same one, and the address is what
+ * the pairing screen showed (R-94).
+ */
 export function PCRow({
   conn,
   reach,
@@ -121,7 +126,7 @@ export function PCRow({
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`${conn.name}, ${v.text}`}
+      accessibilityLabel={long ? `${conn.name}, ${conn.host}, ${v.text}` : `${conn.name}, ${v.text}`}
       accessibilityState={{ selected: !!selected }}
       style={({ pressed }) => [s.row, tile === 32 ? s.rowSmall : s.rowBig, divided && s.divided, pressed && s.pressed]}
     >
@@ -130,6 +135,11 @@ export function PCRow({
         <Text style={s.name} numberOfLines={1}>
           {conn.name}
         </Text>
+        {long ? (
+          <Text style={s.host} numberOfLines={1} ellipsizeMode="middle">
+            {conn.host}
+          </Text>
+        ) : null}
         <ReachLine reach={reach} long={long} size={tile === 32 ? 7 : 8} />
       </View>
       {selected ? <Icon name="check" size={18} color={th.mark} /> : <Icon name="chevronRight" size={18} color={th.caption} />}
@@ -182,13 +192,14 @@ const styles = themed((th) =>
   StyleSheet.create({
     list: { paddingTop: 4 },
     row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingLeft: 20, paddingRight: 14 },
-    rowBig: { minHeight: 64 },
+    rowBig: { minHeight: 64, paddingVertical: 10 },
     rowSmall: { minHeight: 60, paddingLeft: 16, paddingRight: 12 },
     rowPair: { minHeight: 56 },
     divided: { borderTopWidth: 1, borderTopColor: th.divider },
     pressed: { backgroundColor: th.raised },
     names: { flex: 1, minWidth: 0, gap: 2 },
     name: { fontSize: 15, fontWeight: '500', lineHeight: 21, color: th.text },
+    host: { fontSize: 12, lineHeight: 17, color: th.caption },
     line: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     lineText: { flexShrink: 1, fontSize: 13, lineHeight: 18, color: th.textSub },
     plus: { width: 40, alignItems: 'center' },

@@ -143,7 +143,7 @@ func TestIT15Synthesis(t *testing.T) {
 	}
 	sc := synths[0]
 	wantArgs := []string{"-p", "--output-format", "json", "--model", "sonnet", "--effort", "medium",
-		"--tools", "", "--strict-mcp-config", "--no-session-persistence", "--safe-mode", "--json-schema", core.SynthSchemaV1}
+		"--tools", "", "--strict-mcp-config", "--settings", `{"permissions":{"deny":["Read"]}}`, "--no-session-persistence", "--safe-mode", "--json-schema", core.SynthSchemaV1}
 	if !slices.Equal(sc.Args, wantArgs) {
 		t.Errorf("claude synth args %q", sc.Args)
 	}

@@ -5,10 +5,11 @@
 
 import * as Clipboard from 'expo-clipboard';
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { agentName } from '@/api/agents';
 import { type AgentClient, CancelledError } from '@/api/client';
+import { openRemoteUrl } from '@/api/remoteUrl';
 import type { OpenResult, Preview, Session } from '@/api/types';
 import { errorText, has, label, t } from '@/i18n';
 
@@ -80,7 +81,7 @@ export function SessionSheet({
 
   const openLink = async (url: string) => {
     try {
-      await Linking.openURL(url);
+      await openRemoteUrl(url);
     } catch (e) {
       setNote({ text: errorText(e), error: true });
     }

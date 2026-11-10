@@ -26,7 +26,7 @@ func TestRefineArgsAndOutput(t *testing.T) {
 		t.Fatalf("calls = %+v", calls)
 	}
 	want := []string{"-p", "--output-format", "json", "--model", "haiku", "--effort", "low",
-		"--tools", "", "--strict-mcp-config", "--no-session-persistence", "--safe-mode",
+		"--tools", "", "--strict-mcp-config", "--settings", noFileReads, "--no-session-persistence", "--safe-mode",
 		"--json-schema", core.RefineSchemaV1}
 	if !slices.Equal(calls[0].Args, want) || calls[0].Stdin != p {
 		t.Fatalf("args %q", calls[0].Args)

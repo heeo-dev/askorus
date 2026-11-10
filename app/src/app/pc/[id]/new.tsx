@@ -5,9 +5,10 @@
 
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { type AgentClient, CancelledError } from '@/api/client';
+import { openRemoteUrl } from '@/api/remoteUrl';
 import type { Folder } from '@/api/types';
 import { connect } from '@/connections/open';
 import { efforts, loadPrefs, models } from '@/connections/prefs';
@@ -80,7 +81,7 @@ export default function NewSession() {
         { signal: ctl.signal },
       );
       if (r.remoteUrl) {
-        await Linking.openURL(r.remoteUrl).catch(() => undefined);
+        await openRemoteUrl(r.remoteUrl).catch(() => undefined);
       }
       router.back();
     } catch (e) {

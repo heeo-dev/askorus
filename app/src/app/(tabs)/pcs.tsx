@@ -50,6 +50,14 @@ export default function MyPC() {
   const s = styles(th);
   const { list, current, pick, reload } = usePCs();
   const [pickerOpen, setPickerOpen] = useState(false);
+  // Pairing a further PC comes back with pick=1: the picker opens with both
+  // PCs, and the current one stays until the person picks (R-94).
+  const { pick: wantPick } = useLocalSearchParams<{ pick?: string }>();
+  useEffect(() => {
+    if (wantPick !== '1') return;
+    setPickerOpen(true);
+    router.setParams({ pick: undefined });
+  }, [wantPick]);
 
   // Coming back from pairing (or Settings' unpair) shows the PCs as they are now.
   useFocusEffect(

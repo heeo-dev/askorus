@@ -149,6 +149,10 @@ Details: [docs/privacy.md](docs/privacy.md).
 
 Askorus is an independent project. It is not an official product of any AI company and is not affiliated with or endorsed by Anthropic, OpenAI, Google or others. Claude, Codex and other names are trademarks of their owners.
 
+## Security
+
+Found a security problem? Please report it in private: see [SECURITY.md](SECURITY.md).
+
 ## License
 
-Apache-2.0. See [LICENSE](LICENSE).
+Apache-2.0. See [LICENSE](LICENSE). The work of others that Askorus contains or is built from is listed in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).

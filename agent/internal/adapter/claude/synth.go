@@ -18,7 +18,8 @@ import (
 // Combined answers (종합 답변, P2-3 S5b, spec part 20) run the locked-down
 // one-off `claude -p` of the judging days (judge.go): the model is the
 // question's ask tier model, and --json-schema is core.SynthSchemaV1. No
-// tool, no MCP server, no saved conversation, --safe-mode, the prompt on
+// tool, no MCP server, no file read (--settings noFileReads and plainAt,
+// see ask.go: R-93), no saved conversation, --safe-mode, the prompt on
 // stdin, proc.Run with Runner.Path(); checkSynthArgs checks the exact
 // shape first. A question spec (질문 정제, milestone C) is the same command
 // with --json-schema core.RefineSchemaV1 and, by default, effort low.
@@ -51,12 +52,12 @@ func refineArgs(model, effort string) []string { return writerArgs(model, effort
 
 func writerArgs(model, effort, schema string) []string {
 	return []string{"-p", "--output-format", "json", "--model", model, "--effort", effort,
-		"--tools", "", "--strict-mcp-config", "--no-session-persistence", "--safe-mode",
+		"--tools", "", "--strict-mcp-config", "--settings", noFileReads, "--no-session-persistence", "--safe-mode",
 		"--json-schema", schema}
 }
 
 // synthArgCount is len(synthArgs(…)).
-const synthArgCount = 14
+const synthArgCount = 16
 
 // checkSynthArgs accepts exactly what synthArgs or refineArgs makes for a
 // valid model and effort, the synth or refine schema byte for byte: never
@@ -106,7 +107,7 @@ func (a *Adapter) Synthesize(ctx context.Context, req core.SynthRequest) (core.S
 	}
 	ctx, cancel := context.WithTimeout(ctx, synthTimeout)
 	defer cancel()
-	res, err := proc.Run(ctx, proc.Cmd{Exe: a.runner.Path(), Dir: req.Folder, Args: args, Stdin: req.Prompt})
+	res, err := proc.Run(ctx, proc.Cmd{Exe: a.runner.Path(), Dir: req.Folder, Args: args, Stdin: plainAt(req.Prompt)})
 	r := core.SynthResult{Model: model}
 	switch {
 	case errors.Is(err, proc.ErrTimeout), err != nil && ctx.Err() != nil:

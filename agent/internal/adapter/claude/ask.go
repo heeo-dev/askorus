@@ -23,8 +23,45 @@ import (
 // with create, update and delete) were offered to every ask and stopped
 // only by the lack of an allow rule (P2-1 probe, 2026-10-30).
 
+//
+// Claude Code also reads files by itself: an "@path" in the prompt (at the
+// start or after a space) is attached to the conversation before the model
+// runs, whatever --tools says. Without a guard a question, or text inside
+// another AI's answer, could pull any file of the PC into the answer (R-93,
+// found 2026-11-10 with the real claude: a file, a folder's listing, also
+// from inside quoted JSON, also in the combined-answer command). Two guards,
+// each enough alone in that test:
+//   - --settings noFileReads: a deny rule for Read. It only takes away; a
+//     deny rule wins over any allow rule of the user's settings.
+//   - plainAt: the prompt's "@" can no longer start a mention.
+
 // askWebTools is the only value --tools and --allowedTools may take.
 const askWebTools = "WebSearch,WebFetch"
+
+// noFileReads is the only value --settings may take: Claude Code refuses
+// every file read, so an "@path" in a prompt attaches nothing.
+const noFileReads = `{"permissions":{"deny":["Read"]}}`
+
+// plainAt returns the prompt with a zero-width space after every "@" that
+// could start a file mention, so Claude Code attaches no file for it. An
+// "@" right after an ASCII letter or digit (an e-mail address) stays as it
+// is: Claude Code starts no mention inside a word.
+func plainAt(prompt string) string {
+	if !strings.Contains(prompt, "@") {
+		return prompt
+	}
+	var b strings.Builder
+	b.Grow(len(prompt) + 8)
+	prev := rune(' ')
+	for _, r := range prompt {
+		b.WriteRune(r)
+		if r == '@' && !(prev >= 'a' && prev <= 'z' || prev >= 'A' && prev <= 'Z' || prev >= '0' && prev <= '9') {
+			b.WriteRune('​')
+		}
+		prev = r
+	}
+	return b.String()
+}
 
 // defaultAskTiers are the 2026-10-29 tier models (phase2-plan 4).
 var defaultAskTiers = map[string]core.AskModel{
@@ -66,7 +103,7 @@ func askArgs(model, effort, resume string, oneOff bool) []string {
 	if effort != "" {
 		args = append(args, "--effort", effort)
 	}
-	args = append(args, "--tools", askWebTools, "--allowedTools", askWebTools, "--strict-mcp-config")
+	args = append(args, "--tools", askWebTools, "--allowedTools", askWebTools, "--strict-mcp-config", "--settings", noFileReads)
 	switch {
 	case resume != "":
 		args = append(args, "--resume", resume)
@@ -77,8 +114,9 @@ func askArgs(model, effort, resume string, oneOff bool) []string {
 }
 
 // checkAskArgs accepts exactly the shape askArgs makes, so nothing else
-// (a permission flag, another tool, an MCP config, a prompt argument) can
-// reach claude through an ask.
+// (a permission flag, another tool, an MCP config, other settings, a prompt
+// argument) can reach claude through an ask, and no ask goes without the
+// file-read deny rule.
 func checkAskArgs(args []string) error {
 	if len(args) == 0 || args[0] != "-p" {
 		return fmt.Errorf("%w: an ask starts with -p", ErrArgRejected)
@@ -108,6 +146,8 @@ func checkAskArgs(args []string) error {
 			ok = config.ValidEffort(v)
 		case "--tools", "--allowedTools":
 			ok = v == askWebTools
+		case "--settings":
+			ok = v == noFileReads
 		case "--resume":
 			ok = ValidUUID(v)
 		}
@@ -115,7 +155,7 @@ func checkAskArgs(args []string) error {
 			return fmt.Errorf("%w: %s %q", ErrArgRejected, a, v)
 		}
 	}
-	for _, need := range []string{"--model", "--tools", "--allowedTools", "--strict-mcp-config"} {
+	for _, need := range []string{"--model", "--tools", "--allowedTools", "--strict-mcp-config", "--settings"} {
 		if !seen[need] {
 			return fmt.Errorf("%w: an ask needs %s", ErrArgRejected, need)
 		}
@@ -184,7 +224,7 @@ func (a *Adapter) Ask(ctx context.Context, req core.AskRequest) (core.AskResult,
 			return core.AskResult{}, core.Fail(core.ErrCodeBusy, "")
 		}
 	}
-	res, err := proc.Run(ctx, proc.Cmd{Exe: a.runner.Path(), Dir: req.Folder, Args: args, Stdin: req.Prompt})
+	res, err := proc.Run(ctx, proc.Cmd{Exe: a.runner.Path(), Dir: req.Folder, Args: args, Stdin: plainAt(req.Prompt)})
 	switch {
 	case errors.Is(err, proc.ErrTimeout):
 		return core.AskResult{}, core.Fail(core.ErrCodeAskTimeout, "")

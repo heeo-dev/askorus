@@ -38,7 +38,7 @@ func synthRequest(t *testing.T, folder string) (core.SynthRequest, string) {
 
 func wantSynthArgs(model, effort string) []string {
 	return []string{"-p", "--output-format", "json", "--model", model, "--effort", effort,
-		"--tools", "", "--strict-mcp-config", "--no-session-persistence", "--safe-mode",
+		"--tools", "", "--strict-mcp-config", "--settings", noFileReads, "--no-session-persistence", "--safe-mode",
 		"--json-schema", core.SynthSchemaV1}
 }
 
@@ -57,7 +57,7 @@ func TestSynthArgsAndStdin(t *testing.T) {
 	if !slices.Equal(c.Args, wantSynthArgs("sonnet", "medium")) {
 		t.Errorf("args = %q", c.Args)
 	}
-	if len(c.Args) != 14 || c.Args[8] != "" || c.Args[13] != core.SynthSchemaV1 {
+	if len(c.Args) != 16 || c.Args[8] != "" || c.Args[11] != noFileReads || c.Args[15] != core.SynthSchemaV1 {
 		t.Errorf("--tools or schema = %q", c.Args)
 	}
 	if c.Stdin != req.Prompt {
@@ -111,18 +111,21 @@ func TestCheckSynthArgsRefuses(t *testing.T) {
 	bad := map[string][]string{
 		"empty":                 nil,
 		"permission bypass":     add("--dangerously-skip-permissions"),
-		"bypass in place":       set(11, "--dangerously-skip-permissions"),
+		"bypass in place":       set(13, "--dangerously-skip-permissions"),
 		"permission mode":       add("--permission-mode", "bypassPermissions"),
 		"allowedTools":          add("--allowedTools", "WebSearch"),
 		"tools default":         set(8, "default"),
 		"web tools":             set(8, askWebTools),
-		"no safe mode":          drop(11),
+		"no safe mode":          drop(13),
+		"no read deny":          slices.Delete(slices.Clone(good), 10, 12),
+		"other settings":        set(11, `{"permissions":{"allow":["Read"]}}`),
+		"empty settings":        set(11, "{}"),
 		"no strict mcp":         set(9, "--bare"),
 		"resume":                add("--resume", "12345678-1234-4234-8234-123456789abc"),
 		"mcp config":            add("--mcp-config", "x.json"),
-		"refine schema twisted": set(13, strings.Replace(core.RefineSchemaV1, "intent", "intenT", 1)),
-		"schema one byte":       set(13, strings.Replace(core.SynthSchemaV1, "answer", "answeR", 1)),
-		"schema trailing space": set(13, core.SynthSchemaV1+" "),
+		"refine schema twisted": set(15, strings.Replace(core.RefineSchemaV1, "intent", "intenT", 1)),
+		"schema one byte":       set(15, strings.Replace(core.SynthSchemaV1, "answer", "answeR", 1)),
+		"schema trailing space": set(15, core.SynthSchemaV1+" "),
 		"prompt argument":       add("첫 배는 몇 시인가요?"),
 		"model as a flag":       synthArgs("--dangerously-skip-permissions", "medium"),
 		"unknown effort":        synthArgs("sonnet", "ultra"),
