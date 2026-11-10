@@ -5,10 +5,13 @@
 # install folder, the agent folder (ASKORUS_AGENT_DIR, with a port of its
 # own) and the ask folder are temp folders, and setup is not run
 # (ASKORUS_NO_SETUP). Exit code 0 only if all pass.
-#   powershell -NoProfile -File scripts\test-install.ps1 [-Keep]
+#   powershell -NoProfile -File scripts\test-install.ps1 [-Keep] [-Shell pwsh]
+# -Shell runs the installer and release.ps1 in another PowerShell, such as
+# PowerShell 7 (pwsh, or the full path of pwsh.exe). The default is Windows
+# PowerShell 5.1, which is what test-all runs.
 # Keep this file ASCII: Windows PowerShell 5.1 reads scripts without a BOM
 # as the ANSI code page.
-param([switch]$Keep)
+param([switch]$Keep, [string]$Shell = 'powershell')
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $install = Join-Path $PSScriptRoot 'install.ps1'
@@ -25,7 +28,7 @@ function Listening([int]$port) {
     try { $c.Connect('127.0.0.1', $port); return $true } catch { return $false } finally { $c.Close() }
 }
 
-# Runs install.ps1 in a new Windows PowerShell with the ASKORUS_ variables
+# Runs install.ps1 in a new PowerShell ($Shell) with the ASKORUS_ variables
 # given, through -File or, as `irm | iex` does, through Invoke-Expression.
 function Install([hashtable]$vars, [switch]$Iex) {
     $saved = @{}
@@ -33,9 +36,9 @@ function Install([hashtable]$vars, [switch]$Iex) {
     try {
         if ($Iex) {
             # As `irm | iex` in a window; $LASTEXITCODE afterwards is what the person or an AI sees.
-            $out = & powershell -NoProfile -ExecutionPolicy Bypass -Command "Get-Content -Raw -LiteralPath '$install' | Invoke-Expression; exit `$LASTEXITCODE" 2>&1 | ForEach-Object { "$_" }
+            $out = & $Shell -NoProfile -ExecutionPolicy Bypass -Command "Get-Content -Raw -LiteralPath '$install' | Invoke-Expression; exit `$LASTEXITCODE" 2>&1 | ForEach-Object { "$_" }
         } else {
-            $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $install 2>&1 | ForEach-Object { "$_" }
+            $out = & $Shell -NoProfile -ExecutionPolicy Bypass -File $install 2>&1 | ForEach-Object { "$_" }
         }
         return @{ code = $LASTEXITCODE; out = @($out); text = ($out -join "`n") }
     } finally {
@@ -57,9 +60,9 @@ try {
     Write-Output '== build two releases'
     $rel1 = Join-Path $T 'rel1'
     $rel2 = Join-Path $T 'rel2'
-    & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'release.ps1') -Version 0.0.1-test -Out $rel1 | Out-Null
+    & $Shell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'release.ps1') -Version 0.0.1-test -Out $rel1 | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'release.ps1 0.0.1-test failed' }
-    & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'release.ps1') -Version 0.0.2-test -Out $rel2 | Out-Null
+    & $Shell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'release.ps1') -Version 0.0.2-test -Out $rel2 | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'release.ps1 0.0.2-test failed' }
     $sums = Get-Content (Join-Path $rel1 'SHA256SUMS.txt')
     Check 'SHA256SUMS lists the exe and install.ps1' ($sums.Count -eq 2 -and $sums[0] -match '^[0-9a-f]{64}  askorus-agent-windows-amd64\.exe$' -and $sums[1] -match '^[0-9a-f]{64}  install\.ps1$') $sums
