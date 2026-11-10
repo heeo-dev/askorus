@@ -328,7 +328,7 @@ B1-1 결과: `npx tsc --noEmit` 통과, `npx jest` 4개 묶음 40개 통과(클�
 
 ## 15. B2 계획 (2026-10-28)
 
-설치 파일은 EAS 클라우드에서 빌드한다(PC에 Android SDK·JDK를 깔지 않음, 13절). 절차와 누가 무엇을 하는지는 `docs/android-release.md`에 있다.
+설치 파일은 EAS 클라우드에서 빌드한다(PC에 Android SDK·JDK를 깔지 않음, 13절). 빌드 설정과 출시 규칙은 `docs/android-release.md`에, 누가 무엇을 하는지는 작성자의 로컬 메모(`.local/play-console.md`)에 있다.
 
 | 단계 | 할 일 |
 | --- | --- |
@@ -375,7 +375,7 @@ B2-2(2026-10-28): `eas init`으로 `@heeodev/asksemble`을 만들었다. 첫 pre
 
 - 미룸: B2-2의 남은 확인(MT-05 재부팅, MT-08 기본 카메라 QR), B2-3 Play 등록·업로드, B2-4 1주일 사용 관문, C(iOS), D(macOS·Linux, 서명·공증), 공개.
 - 다음: E(2차: F8, F9, `tsnet`) → Phase 2.
-- 앱은 지금처럼 EAS preview APK를 폰에 바로 설치해 쓴다. Play 등록 절차와 개인 계정의 비공개 테스트 조건(12명, 14일)은 `docs/android-release.md`에 남겨 둔다.
+- 앱은 지금처럼 EAS preview APK를 폰에 바로 설치해 쓴다. 개인 계정의 비공개 테스트 조건(12명, 14일)은 `docs/android-release.md`에, Play 등록 절차는 작성자의 로컬 메모(`.local/play-console.md`)에 둔다(2026-11-10 나눔).
 - 테스트 단계(`docs/testing.md`)는 그대로 지킨다. MT는 단계를 마칠 때 실제 폰에서.
 
 ## 19. F8 최근 대화 미리보기 계획 (2026-10-28)
