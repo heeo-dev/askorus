@@ -12,9 +12,9 @@
 
 ---
 
-Askorus asks one question to several AIs at once, from your phone. A moderator AI reads every answer and writes one combined answer, and where the AIs disagree, they debate. Your own PC does the asking with the official AI programs you already use, so there is no server of ours in between.
+Askorus asks one question to several AIs at once, from your phone. One of the AIs you asked acts as moderator: it reads every answer and writes one combined answer, with where the AIs agree and where they differ. If you like, the AIs then debate the points where they differ. Your own PC does the asking with the official AI programs you already use, so there is no server of ours in between.
 
-Developers can also see, start and continue the Claude Code sessions on their PC from the same app.
+Developers can also list and start the Claude Code sessions on their PC from the same app, and open one to continue it in the Claude app or a browser.
 
 <p align="center">
   <picture><source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/en/1-ask-dark.png"><img src="docs/screenshots/en/1-ask.png" width="160" alt="Ask screen: one question, with the AIs it goes to"></picture>
@@ -23,11 +23,41 @@ Developers can also see, start and continue the Claude Code sessions on their PC
   <picture><source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/en/5-result-dark.png"><img src="docs/screenshots/en/5-result.png" width="160" alt="Debate result: which city fits which traveler"></picture>
 </p>
 
-**Status:** in development. The Android app and the Windows agent work end to end; they are not in the stores yet.
+<p align="center">
+  <img src="docs/screenshots/en/demo.gif" width="320" alt="A real run, sped up: one question goes to Claude, Codex and OpenCode, the moderator writes a combined answer, and the AIs debate the point where they differ until it gets a result">
+</p>
+
+**Status:** in development. The Android app and the Windows agent work end to end, but neither is released yet: the agent has no release and the app is not on Google Play. To try it now, [build both from source](#build-from-source).
+
+## How it works
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/how-it-works-en-dark.svg">
+  <img src="docs/images/how-it-works-en-light.svg" width="640" alt="How Askorus works, in four steps. 1. Ask once: one question goes from your phone to every AI you turned on. 2. Every AI answers: Claude Code, Codex and OpenCode answer on your PC, each on its own. 3. The moderator combines: one combined answer, with where the AIs agree and where they differ. 4. They debate the differences: each AI keeps or changes its view, and every point gets a result.">
+</picture>
+
+The moderator is one of the AIs you asked. The debate is optional.
+
+## Features
+
+- Ask several AIs at once, with follow-ups to everyone, to one AI or to the moderator only
+- A combined answer, with where the AIs agree and where they differ
+- AI debates with a result for every point (agreed, or depends on the situation)
+- Pick the model and how hard each AI thinks
+- Conversation history saved on your phone
+- For developers: Claude Code sessions on your PC, from your phone (list, start, open, stop, keep a folder open)
+- English and Korean, light and dark
+
+## What you need
+
+- A Windows PC (macOS later)
+- [Tailscale](https://tailscale.com) on the PC and the phone
+- At least one official AI program installed and signed in on the PC: Claude Code, Codex or OpenCode. With two or more you get combined answers and debates; My PCs (the Claude Code sessions) needs Claude Code. Askorus uses the subscriptions and free accounts you already have; it never reads or moves their sign-in data.
+- An Android phone (iOS later)
 
 ## Install the PC agent
 
-For now the agent is for Windows only; macOS and Linux come later.
+For now the agent is for Windows only; macOS and Linux come later. The line below works from the first release on; until then, [build from source](#build-from-source).
 
 Open PowerShell on the PC (a normal window, not "Run as administrator") and paste:
 
@@ -35,9 +65,9 @@ Open PowerShell on the PC (a normal window, not "Run as administrator") and past
 irm https://github.com/heeo-dev/askorus/releases/latest/download/install.ps1 | iex
 ```
 
-The script downloads the agent from the GitHub release, checks its SHA-256, puts it in `%LOCALAPPDATA%\Programs\Askorus` and starts `askorus-agent setup`. Setup goes step by step: PATH, Claude Code, Tailscale (it asks before it lets Tailscale pass the phone's requests to the agent), starting at logon, and a QR code you scan with the app. It needs no administrator rights. Run the same line again to update. (This works from the first release on; until then, [build from source](#build-from-source).)
+The script downloads the agent from the GitHub release, checks its SHA-256, puts it in `%LOCALAPPDATA%\Programs\Askorus` and starts `askorus-agent setup`. It needs no administrator rights. Run the same line again to update.
 
-Have [what you need](#what-you-need) ready first: Tailscale and at least one AI program, signed in.
+Setup goes step by step: it puts the agent on your PATH, checks the AI programs and Tailscale, starts the agent and makes it start at logon. It asks you before it lets Tailscale pass the phone's requests to the agent. Last, you scan a QR code with the app to pair the phone.
 
 <details>
 <summary>Read the script before you run it</summary>
@@ -55,7 +85,10 @@ The source is [scripts/install.ps1](scripts/install.ps1).
 
 ### Or let your AI agent help
 
-Paste this into Claude Code or Codex on the PC. It reads the script first, installs from that same file with your OK, and explains what is missing:
+Paste this into Claude Code or Codex on the PC. It reads the script first, installs from that same file with your OK, and explains what is missing.
+
+<details>
+<summary>The text to paste</summary>
 
 ```text
 Help me install the Askorus PC agent (https://github.com/heeo-dev/askorus) on this Windows PC.
@@ -78,31 +111,7 @@ Rules:
 - Do not run "setup" or "pair".
 ```
 
-## How it works
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/how-it-works-en-dark.svg">
-  <img src="docs/images/how-it-works-en-light.svg" width="640" alt="How Askorus works, in four steps. 1. Ask once: one question goes from your phone to every AI you turned on. 2. Every AI answers: Claude Code, Codex and OpenCode answer on your PC, each on its own. 3. The moderator combines: one combined answer, with where the AIs agree and where they differ. 4. They debate the differences: each AI keeps or changes its view, and every point gets a result.">
-</picture>
-
-The moderator is one of the AIs you asked. The debate is optional.
-
-## Features
-
-- Ask several AIs at once, with follow-ups to everyone, to one AI or to the moderator only
-- A combined answer, with where the AIs agree and where they differ
-- AI debates with a result for every point (agreed, or depends on the situation)
-- Pick the model and how hard each AI thinks
-- History kept on the phone only
-- For developers: Claude Code sessions on your PC, from your phone (list, start, open, stop, keep a folder open)
-- English and Korean, light and dark
-
-## What you need
-
-- A Windows PC (macOS later)
-- [Tailscale](https://tailscale.com) on the PC and the phone
-- At least one official AI program installed and signed in on the PC: Claude Code, Codex or OpenCode. Askorus uses the subscriptions and free accounts you already have; it never reads or moves their sign-in data.
-- An Android phone (iOS later)
+</details>
 
 ## Build from source
 
@@ -123,7 +132,7 @@ The app is React Native with Expo (`app/`). See [docs/android-release.md](docs/a
 - No server of ours, no analytics, no ads, no crash reporting.
 - Your question goes from your phone to your PC over Tailscale; the official AI programs on your PC send it to each AI company.
 - The moderator AI's company gets the question and all the answers; in a debate, the companies of the AIs that answered get each other's answers.
-- History is kept on your phone only.
+- The app keeps your conversation history on your phone. The AI programs on your PC may keep their own history, and the agent keeps answers in the PC's memory for a day.
 
 Details: [docs/privacy.md](docs/privacy.md).
 

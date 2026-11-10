@@ -24,6 +24,7 @@ type fakeSetup struct {
 	other                       bool // another program, not an agent, has the port
 	dir, auto                   string
 	claude                      core.AdapterInfo
+	others                      []namedInfo   // Codex, OpenCode
 	nets                        []tailnetInfo // one per look; the last repeats
 	paired                      int
 	pairIn                      string // what pair read
@@ -43,6 +44,7 @@ func (f *fakeSetup) env() setupEnv {
 			return true, nil
 		},
 		claude: func(context.Context) core.AdapterInfo { return f.claude },
+		others: func(context.Context) []namedInfo { return f.others },
 		tailnet: func(context.Context, int) tailnetInfo {
 			ti := f.nets[min(f.looks, len(f.nets)-1)]
 			f.looks++
@@ -80,13 +82,15 @@ func servedNet() tailnetInfo {
 		serve: tailnet.Serve{Host: "pc.example.ts.net", HTTPSPort: 8790}, served: true}
 }
 
-// newPC is a PC with Claude Code and Tailscale ready. Its exe folder is
-// only a name (setup refuses a temporary folder such as t.TempDir); the
-// fake writes nothing there.
+// newPC is a PC with Claude Code, Codex and Tailscale ready (no OpenCode).
+// Its exe folder is only a name (setup refuses a temporary folder such as
+// t.TempDir); the fake writes nothing there.
 func newPC(t *testing.T) *fakeSetup {
 	t.Helper()
 	dir := filepath.Join(string(filepath.Separator)+"Users", "someone", "AppData", "Local", "Programs", "Askorus")
-	return &fakeSetup{dir: dir, claude: core.AdapterInfo{Available: true, Version: "2.1.319"}, nets: []tailnetInfo{servedNet()}}
+	return &fakeSetup{dir: dir, claude: core.AdapterInfo{Available: true, Version: "2.1.319"},
+		others: []namedInfo{{name: "Codex", info: core.AdapterInfo{Available: true, Version: "0.163.0"}}, {name: "OpenCode"}},
+		nets:   []tailnetInfo{servedNet()}}
 }
 
 func runFake(f *fakeSetup, input string) (string, error) {
@@ -110,11 +114,52 @@ func TestSetupNewPC(t *testing.T) {
 	if f.pairIn != "y\n" {
 		t.Errorf("pair read %q; it must get the input setup did not read", f.pairIn)
 	}
-	for _, s := range []string{"[1/5] This PC / 이 PC", "[2/5] Claude Code\n", "[5/5] Pair the phone / 폰과 짝 맺기",
-		"claude --rc", "askorus-agent check", "설정을 마쳤습니다"} {
+	for _, s := range []string{"[1/5] This PC / 이 PC", "[2/5] AI programs / AI 프로그램", "Claude Code 2.1.319 found", "Codex 0.163.0 found (asks)",
+		"OpenCode not found (optional", "[5/5] Pair the phone / 폰과 짝 맺기", "claude --rc", "askorus-agent check", "설정을 마쳤습니다"} {
 		if !strings.Contains(out, s) {
 			t.Errorf("output lacks %q:\n%s", s, out)
 		}
+	}
+	if strings.Contains(out, "only one AI program") {
+		t.Errorf("two AIs, yet it warns of one:\n%s", out)
+	}
+}
+
+// Claude Code is not needed (2026-11-10 decision): without it setup goes on
+// with the other AIs, says that My PCs needs it, and leaves out the Claude
+// Code tips. With only one AI it says combined answers and debates need
+// two.
+func TestSetupWithoutClaudeCode(t *testing.T) {
+	for name, c := range map[string]struct {
+		others []namedInfo
+		one    bool
+	}{
+		"codex and opencode": {[]namedInfo{{name: "Codex", info: core.AdapterInfo{Available: true, Version: "0.163.0"}}, {name: "OpenCode", info: core.AdapterInfo{Available: true, Version: "2.1.3"}}}, false},
+		"codex only":         {[]namedInfo{{name: "Codex", info: core.AdapterInfo{Available: true, Version: "0.163.0"}}, {name: "OpenCode"}}, true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := newPC(t)
+			f.claude = core.AdapterInfo{}
+			f.others = c.others
+			out, err := runFake(f, "y\n")
+			if err != nil {
+				t.Fatalf("setup: %v\n%s", err, out)
+			}
+			if want := []string{"path on " + f.dir, "start", "autostart on askorus-agent.exe", "pair"}; !slices.Equal(f.calls, want) {
+				t.Errorf("calls = %q, want %q", f.calls, want)
+			}
+			for _, s := range []string{"Claude Code was not found", "My PCs", "'내 PC'", "Codex 0.163.0 found (asks)", "설정을 마쳤습니다"} {
+				if !strings.Contains(out, s) {
+					t.Errorf("output lacks %q:\n%s", s, out)
+				}
+			}
+			if strings.Contains(out, "claude --rc") || strings.Contains(out, "[X]") {
+				t.Errorf("Claude Code tips or a problem mark without Claude Code:\n%s", out)
+			}
+			if got := strings.Contains(out, "only one AI program"); got != c.one {
+				t.Errorf("one-AI warning shown = %v, want %v:\n%s", got, c.one, out)
+			}
+		})
 	}
 }
 
@@ -164,9 +209,11 @@ func TestSetupStops(t *testing.T) {
 		says  string
 		calls []string
 	}{
-		"administrator":  {func(f *fakeSetup) { f.elevated = true }, "관리자 권한", nil},
-		"temporary":      {func(f *fakeSetup) { f.dir = filepath.Join(os.TempDir(), "x") }, "looks temporary", nil},
-		"no claude":      {func(f *fakeSetup) { f.claude.Available = false }, "code.claude.com/docs/en/setup", []string{"path on"}},
+		"administrator": {func(f *fakeSetup) { f.elevated = true }, "관리자 권한", nil},
+		"temporary":     {func(f *fakeSetup) { f.dir = filepath.Join(os.TempDir(), "x") }, "looks temporary", nil},
+		"no AI at all": {func(f *fakeSetup) {
+			f.claude.Available, f.others = false, []namedInfo{{name: "Codex"}, {name: "OpenCode"}}
+		}, "Claude Code, Codex or OpenCode", []string{"path on"}},
 		"elevated svc":   {func(f *fakeSetup) { f.claude.Notices = []string{claude.NoticeServiceElevated} }, "claude daemon stop --any", []string{"path on"}},
 		"no tailscale":   {func(f *fakeSetup) { f.nets = []tailnetInfo{noNet} }, "tailscale.com/download", []string{"path on"}},
 		"no https":       {func(f *fakeSetup) { f.nets = []tailnetInfo{noHTTPS} }, "HTTPS Certificates", []string{"path on"}},

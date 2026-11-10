@@ -242,10 +242,29 @@ func checkCmd(dir string, out io.Writer) error {
 		return err
 	}
 	info := adapter.Info(ctx)
+	// The AIs that only answer questions are optional: a missing one is
+	// left out of asks. Claude Code is optional too (2026-11-10): without it
+	// asks go to the others, but My PCs (its sessions) does not work.
+	askOnly := askOnlyAdapters(cfg)
+	others := 0
+	for _, a := range askOnly {
+		if a.Info(ctx).Available {
+			others++
+		}
+	}
+	found := others
 	if info.Available {
+		found++
+	}
+	switch {
+	case info.Available:
 		c.line("ok", m("Claude Code %s found", "Claude Code %s 찾음", info.Version))
-	} else {
-		c.line("bad", m("Claude Code not found or not working: install it and sign in", "Claude Code를 찾지 못했거나 동작하지 않습니다. 설치하고 로그인하세요"))
+	case others > 0:
+		c.line("warn", m("Claude Code not found: asks go to the other AIs, but My PCs (Claude Code sessions) needs it",
+			"Claude Code를 찾지 못했습니다. 묻기는 다른 AI로 하지만, '내 PC'(Claude Code 세션)에는 Claude Code가 있어야 합니다"))
+	default:
+		c.line("bad", m("no AI program found: install and sign in to at least one of Claude Code, Codex or OpenCode",
+			"AI 프로그램을 찾지 못했습니다. Claude Code, Codex, OpenCode 중 하나 이상을 설치하고 로그인하세요"))
 	}
 	for _, n := range info.Notices {
 		switch n {
@@ -258,9 +277,6 @@ func checkCmd(dir string, out io.Writer) error {
 		}
 	}
 
-	// The AIs that only answer questions are optional: a missing one is
-	// left out of asks.
-	askOnly := askOnlyAdapters(cfg)
 	for _, a := range askOnly {
 		if ai := a.Info(ctx); ai.Available {
 			c.line("ok", m("%s %s found (asks)", "%s %s 찾음 (묻기)", a.Agent(), ai.Version))
@@ -355,8 +371,14 @@ func checkCmd(dir string, out io.Writer) error {
 		c.line("ok", m("the PC sleeps after %d minutes idle, but the agent keeps it awake while sessions run", "PC가 %d분 뒤 잠들지만, 세션이 도는 동안은 에이전트가 깨워 둡니다", s/60))
 	}
 
-	for _, tip := range setupTips(cfg) {
-		c.line("info", tip)
+	if info.Available { // the tips are all Claude Code's
+		for _, tip := range setupTips(cfg) {
+			c.line("info", tip)
+		}
+	}
+	if found == 1 {
+		c.line("warn", m("only one AI program: asks work, but combined answers and debates need two or more",
+			"AI 프로그램이 하나뿐입니다. 묻기는 되지만 종합 답변과 토론은 둘 이상일 때 나옵니다"))
 	}
 
 	fmt.Fprintln(out)

@@ -12,9 +12,9 @@
 
 ---
 
-Askorus(애스코러스)는 폰에서 질문 하나를 여러 AI에게 한 번에 묻는 앱입니다. 사회자 AI가 모든 답을 읽고 종합 답변을 쓰고, 의견이 다른 곳은 AI끼리 토론합니다. 질문은 내 PC가 이미 쓰고 있는 공식 AI 프로그램으로 묻기 때문에 중간에 우리 서버가 없습니다.
+Askorus(애스코러스)는 폰에서 질문 하나를 여러 AI에게 한 번에 묻는 앱입니다. 물어본 AI 중 하나가 사회자로 모든 답을 읽고 종합 답변을 쓰며, 의견이 같은 곳과 다른 곳을 보여 줍니다. 원하면 의견이 다른 곳을 AI끼리 토론하게 할 수 있습니다. 질문은 내 PC가 이미 쓰고 있는 공식 AI 프로그램으로 묻기 때문에 중간에 우리 서버가 없습니다.
 
-개발자는 같은 앱으로 내 PC의 Claude Code 세션을 보고, 새로 시작하고, 이어 쓸 수 있습니다.
+개발자는 같은 앱에서 내 PC의 Claude Code 세션을 보고 새로 시작할 수 있고, 세션을 열면 Claude 앱이나 브라우저에서 이어 씁니다.
 
 <p align="center">
   <picture><source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/ko/1-ask-dark.png"><img src="docs/screenshots/ko/1-ask.png" width="160" alt="질문하기 화면: 질문 하나와 그 질문을 받을 AI들"></picture>
@@ -23,11 +23,41 @@ Askorus(애스코러스)는 폰에서 질문 하나를 여러 AI에게 한 번�
   <picture><source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/ko/5-result-dark.png"><img src="docs/screenshots/ko/5-result.png" width="160" alt="토론 결과: 목적에 따라 경주와 전주 중 어디가 맞는지"></picture>
 </p>
 
-**상태:** 개발 중입니다. 안드로이드 앱과 Windows 에이전트가 처음부터 끝까지 동작하지만 아직 스토어에 내지 않았습니다.
+<p align="center">
+  <img src="docs/screenshots/ko/demo.gif" width="320" alt="실제로 돌린 화면을 빠르게 감은 것: 질문 하나가 Claude, Codex, OpenCode에 가고, 사회자가 종합 답변을 쓰고, 의견이 다른 곳을 AI끼리 토론해 쟁점마다 결과가 나옵니다">
+</p>
+
+**상태:** 개발 중입니다. 안드로이드 앱과 Windows 에이전트가 처음부터 끝까지 동작하지만, 아직 에이전트 배포판도 Google Play 앱도 없습니다. 지금 써 보려면 [둘 다 소스에서 빌드](#소스에서-빌드)하세요.
+
+## 이렇게 동작해요
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/how-it-works-ko-dark.svg">
+  <img src="docs/images/how-it-works-ko-light.svg" width="640" alt="Askorus가 동작하는 네 단계. 1. 한 번 묻기: 폰에서 질문 하나를 켜 둔 AI 모두에게 보냅니다. 2. AI마다 답하기: Claude Code, Codex, OpenCode가 내 PC에서 각자 답합니다. 3. 사회자가 종합: 종합 답변에 의견이 같은 곳과 다른 곳을 함께 보여 줍니다. 4. 다른 곳은 토론: AI마다 생각을 유지하거나 바꾸고, 쟁점마다 결과가 나옵니다.">
+</picture>
+
+사회자는 물어본 AI 중 하나이고, 토론은 원할 때만 합니다.
+
+## 기능
+
+- 여러 AI에게 한 번에 묻기, 모두에게·한 AI에게·사회자에게만 이어서 묻기
+- 종합 답변과 같은 곳·다른 곳 표시
+- AI끼리 토론, 쟁점마다 결과(합의, 상황에 따라 다름)
+- AI마다 모델과 생각 깊이 고르기
+- 대화 기록을 폰에 저장
+- 개발자용: 내 PC의 Claude Code 세션을 폰에서(목록, 새로 시작, 열기, 멈추기, 폴더 열어 두기)
+- 한국어와 영어, 밝은 화면과 어두운 화면
+
+## 필요한 것
+
+- Windows PC (macOS는 나중에)
+- PC와 폰에 [Tailscale](https://tailscale.com)
+- PC에 설치하고 로그인해 둔 공식 AI 프로그램 하나 이상: Claude Code, Codex, OpenCode. 둘 이상이면 종합 답변과 토론이 나오고, '내 PC'(Claude Code 세션)에는 Claude Code가 있어야 합니다. 이미 쓰는 구독과 무료 계정을 그대로 쓰며, 그 로그인 정보는 읽거나 옮기지 않습니다.
+- 안드로이드 폰 (iOS는 나중에)
 
 ## PC 에이전트 설치
 
-지금은 Windows만 됩니다. macOS와 Linux는 나중에 나옵니다.
+지금은 Windows만 됩니다. macOS와 Linux는 나중에 나옵니다. 아래 한 줄은 첫 배포판부터 됩니다. 그전에는 [소스에서 빌드](#소스에서-빌드)하세요.
 
 PC에서 PowerShell을 열고(관리자 권한이 아닌 보통 창) 아래 한 줄을 붙여 넣으세요.
 
@@ -35,9 +65,9 @@ PC에서 PowerShell을 열고(관리자 권한이 아닌 보통 창) 아래 한 
 irm https://github.com/heeo-dev/askorus/releases/latest/download/install.ps1 | iex
 ```
 
-스크립트가 GitHub 배포판에서 에이전트를 받아 SHA-256을 확인하고, `%LOCALAPPDATA%\Programs\Askorus`에 둔 뒤 `askorus-agent setup`을 시작합니다. setup은 PATH, Claude Code, Tailscale(폰의 요청을 에이전트로 넘기는 설정은 켜기 전에 묻습니다), 로그인할 때 켜기, 앱으로 찍을 QR까지 차례로 안내합니다. 관리자 권한은 필요 없습니다. 업데이트할 때도 같은 줄을 다시 실행하면 됩니다. (첫 배포판부터 됩니다. 그전에는 [소스에서 빌드](#소스에서-빌드)하세요.)
+스크립트가 GitHub 배포판에서 에이전트를 받아 SHA-256을 확인하고, `%LOCALAPPDATA%\Programs\Askorus`에 둔 뒤 `askorus-agent setup`을 시작합니다. 관리자 권한은 필요 없습니다. 업데이트할 때도 같은 줄을 다시 실행하면 됩니다.
 
-먼저 [필요한 것](#필요한-것)을 준비해 두세요: Tailscale과, 로그인해 둔 AI 프로그램 하나 이상.
+setup은 차례로 안내합니다. 에이전트를 PATH에 넣고, AI 프로그램과 Tailscale을 점검하고, 에이전트를 켜고 로그인할 때 켜지게 합니다. 폰의 요청을 에이전트로 넘기는 Tailscale 설정은 켜기 전에 묻습니다. 마지막으로 앱으로 QR을 찍어 폰과 짝을 맺습니다.
 
 <details>
 <summary>실행하기 전에 스크립트 읽어 보기</summary>
@@ -56,6 +86,9 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1
 ### AI 에이전트에게 맡기기
 
 PC의 Claude Code나 Codex에 아래 글을 붙여 넣으세요. 스크립트를 먼저 읽어 보고, 내가 허락하면 읽은 그 파일로 설치하고, 빠진 것을 쉽게 설명해 줍니다.
+
+<details>
+<summary>붙여 넣을 글</summary>
 
 ```text
 이 Windows PC에 Askorus PC 에이전트(https://github.com/heeo-dev/askorus) 설치를 도와줘.
@@ -78,31 +111,7 @@ PC의 Claude Code나 Codex에 아래 글을 붙여 넣으세요. 스크립트를
 - "setup"과 "pair"는 실행하지 마.
 ```
 
-## 이렇게 동작해요
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/how-it-works-ko-dark.svg">
-  <img src="docs/images/how-it-works-ko-light.svg" width="640" alt="Askorus가 동작하는 네 단계. 1. 한 번 묻기: 폰에서 질문 하나를 켜 둔 AI 모두에게 보냅니다. 2. AI마다 답하기: Claude Code, Codex, OpenCode가 내 PC에서 각자 답합니다. 3. 사회자가 종합: 종합 답변에 의견이 같은 곳과 다른 곳을 함께 보여 줍니다. 4. 다른 곳은 토론: AI마다 생각을 유지하거나 바꾸고, 쟁점마다 결과가 나옵니다.">
-</picture>
-
-사회자는 물어본 AI 중 하나이고, 토론은 원할 때만 합니다.
-
-## 기능
-
-- 여러 AI에게 한 번에 묻기, 모두에게·한 AI에게·사회자에게만 이어서 묻기
-- 종합 답변과 같은 곳·다른 곳 표시
-- AI끼리 토론, 쟁점마다 결과(합의, 상황에 따라 다름)
-- AI마다 모델과 생각 깊이 고르기
-- 대화 기록은 폰에만 저장
-- 개발자용: 내 PC의 Claude Code 세션을 폰에서(목록, 새로 시작, 열기, 멈추기, 폴더 열어 두기)
-- 한국어와 영어, 밝은 화면과 어두운 화면
-
-## 필요한 것
-
-- Windows PC (macOS는 나중에)
-- PC와 폰에 [Tailscale](https://tailscale.com)
-- PC에 설치하고 로그인해 둔 공식 AI 프로그램 하나 이상: Claude Code, Codex, OpenCode. 이미 쓰는 구독과 무료 계정을 그대로 쓰며, 그 로그인 정보는 읽거나 옮기지 않습니다.
-- 안드로이드 폰 (iOS는 나중에)
+</details>
 
 ## 소스에서 빌드
 
@@ -123,7 +132,7 @@ go build -trimpath -o askorus-agent.exe ./cmd/askorus-agent
 - 우리 서버, 분석, 광고, 오류 보고 도구가 없습니다.
 - 질문은 Tailscale로 폰에서 내 PC로 가고, PC의 공식 AI 프로그램이 각 AI 회사로 보냅니다.
 - 사회자 AI의 회사는 질문과 모든 답을 받고, 토론하면 답한 AI들의 회사가 서로의 답을 받습니다.
-- 대화 기록은 폰에만 저장됩니다.
+- 앱의 대화 기록은 폰에 저장됩니다. PC의 AI 프로그램에도 자체 기록이 남을 수 있고, 에이전트는 답을 PC 메모리에 하루 둡니다.
 
 자세히: [docs/privacy.md](docs/privacy.md)
 
