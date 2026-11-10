@@ -17,10 +17,10 @@ Askorus asks one question to several AIs at once, from your phone. A moderator A
 Developers can also see, start and continue the Claude Code sessions on their PC from the same app.
 
 <p align="center">
-  <img src="docs/screenshots/en/1-ask.png" width="200" alt="Ask screen: one question, with the AIs it goes to">
-  <img src="docs/screenshots/en/2-combined.png" width="200" alt="Combined answer: Paris for Codex and OpenCode, Rome for Claude">
-  <img src="docs/screenshots/en/4-debating.png" width="200" alt="Debate: the moderator asks OpenCode a question while it is OpenCode's turn">
-  <img src="docs/screenshots/en/5-result.png" width="200" alt="Debate result: which city fits which traveler">
+  <img src="docs/screenshots/en/1-ask.png" width="160" alt="Ask screen: one question, with the AIs it goes to">
+  <img src="docs/screenshots/en/2-combined.png" width="160" alt="Combined answer: Paris for Codex and OpenCode, Rome for Claude">
+  <img src="docs/screenshots/en/4-debating.png" width="160" alt="Debate: the moderator asks OpenCode a question while it is OpenCode's turn">
+  <img src="docs/screenshots/en/5-result.png" width="160" alt="Debate result: which city fits which traveler">
 </p>
 
 **Status:** in development. The Android app and the Windows agent work end to end; they are not in the stores yet.
