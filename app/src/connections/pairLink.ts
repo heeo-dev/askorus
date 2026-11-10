@@ -10,9 +10,12 @@ export type PairLink = {
   code: string;
 };
 
-// A MagicDNS name or a Tailscale address; nothing that could carry a path,
-// a user name or a different scheme.
-const hostRe = /^[a-z0-9]([a-z0-9-]{0,62})(\.[a-z0-9]([a-z0-9-]{0,62}))*$/i;
+// The PC's MagicDNS name, which `tailscale serve` answers on: a name under
+// ts.net and nothing else (R-94). A link someone sends could name any
+// server, and that server, not the person's own PC, would then "allow" the
+// pairing and get the questions. Nothing that could carry a path, a user
+// name or a different scheme either.
+const hostRe = /^[a-z0-9]([a-z0-9-]{0,62})(\.[a-z0-9]([a-z0-9-]{0,62}))*\.ts\.net$/i;
 const codeRe = /^[A-Z2-7]{16,64}$/;
 
 export function parsePairLink(text: string): PairLink | null {

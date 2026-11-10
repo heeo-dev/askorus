@@ -30,10 +30,11 @@ import * as Clipboard from 'expo-clipboard';
 import * as Crypto from 'expo-crypto';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AppState, Keyboard, Linking, Pressable, ScrollView, type ScrollViewInstance, StyleSheet, Text, View, type ViewInstance } from 'react-native';
+import { AppState, Keyboard, Pressable, ScrollView, type ScrollViewInstance, StyleSheet, Text, View, type ViewInstance } from 'react-native';
 
 import { agentName } from '@/api/agents';
 import type { AgentClient } from '@/api/client';
+import { openRemoteUrl } from '@/api/remoteUrl';
 import { type Info, type RunPart, type Tier, tiers } from '@/api/types';
 import { canSynthesize, polling, writerFor } from '@/ask/compare';
 import { conversations, recentQuestions, useConversations } from '@/ask/conversations';
@@ -560,7 +561,7 @@ export default function Ask() {
         note(key, { text: t(hintKey) });
       } else if (r.remoteUrl) {
         note(key, null);
-        await Linking.openURL(r.remoteUrl);
+        await openRemoteUrl(r.remoteUrl);
       } else {
         note(key, { text: errorText(new Error(r.action)), error: true });
       }

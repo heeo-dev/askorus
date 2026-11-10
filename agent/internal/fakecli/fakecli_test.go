@@ -270,7 +270,7 @@ func TestAskAnswersAndModes(t *testing.T) {
 func TestClaudeAsk(t *testing.T) {
 	exe := Use(t, RoleClaude)
 	dir := t.TempDir()
-	ask := []string{"-p", "--output-format", "json", "--model", "sonnet", "--tools", "WebSearch,WebFetch", "--allowedTools", "WebSearch,WebFetch", "--strict-mcp-config", "--resume", "12345678-1234-4234-8234-123456789abc"}
+	ask := []string{"-p", "--output-format", "json", "--model", "sonnet", "--tools", "WebSearch,WebFetch", "--allowedTools", "WebSearch,WebFetch", "--strict-mcp-config", "--settings", `{"permissions":{"deny":["Read"]}}`, "--resume", "12345678-1234-4234-8234-123456789abc"}
 	o := parseClaude(t, run(t, exe, dir, ask, "preamble\n대한민국의 수도는?", nil))
 	if o.Result != "fake answer: 대한민국의 수도는?" || o.SessionID != "12345678-1234-4234-8234-123456789abc" || o.Structured != nil {
 		t.Errorf("ask = %+v", o)
@@ -535,7 +535,7 @@ func TestSynthText(t *testing.T) {
 
 func claudeSynthArgs(model string) []string {
 	return []string{"-p", "--output-format", "json", "--model", model, "--effort", "medium", "--tools", "",
-		"--strict-mcp-config", "--no-session-persistence", "--safe-mode", "--json-schema", core.SynthSchemaV1}
+		"--strict-mcp-config", "--settings", `{"permissions":{"deny":["Read"]}}`, "--no-session-persistence", "--safe-mode", "--json-schema", core.SynthSchemaV1}
 }
 
 func TestClaudeSynth(t *testing.T) {

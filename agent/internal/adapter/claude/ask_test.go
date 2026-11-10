@@ -36,7 +36,7 @@ func TestAskSendsThePromptOnStdin(t *testing.T) {
 		t.Fatalf("calls = %+v", calls)
 	}
 	want := []string{"-p", "--output-format", "json", "--model", "opus", "--effort", "medium",
-		"--tools", "WebSearch,WebFetch", "--allowedTools", "WebSearch,WebFetch", "--strict-mcp-config"}
+		"--tools", "WebSearch,WebFetch", "--allowedTools", "WebSearch,WebFetch", "--strict-mcp-config", "--settings", noFileReads}
 	if !reflect.DeepEqual(calls[0].Args, want) {
 		t.Errorf("args = %q", calls[0].Args)
 	}
@@ -64,7 +64,7 @@ func TestAskSendsThePromptOnStdin(t *testing.T) {
 	}
 	got := recordedCalls(t, argsFile)[1].Args
 	want = []string{"-p", "--output-format", "json", "--model", "haiku", "--effort", "low",
-		"--tools", "WebSearch,WebFetch", "--allowedTools", "WebSearch,WebFetch", "--strict-mcp-config", "--resume", res.SessionID}
+		"--tools", "WebSearch,WebFetch", "--allowedTools", "WebSearch,WebFetch", "--strict-mcp-config", "--settings", noFileReads, "--resume", res.SessionID}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("follow-up args = %q", got)
 	}
@@ -221,14 +221,16 @@ func TestCheckAskArgs(t *testing.T) {
 		"permission bypass": append(slices.Clone(good), "--dangerously-skip-permissions"),
 		"permission mode":   append(slices.Clone(good), "--permission-mode", "bypassPermissions"),
 		"mcp config":        append(slices.Clone(good), "--mcp-config", "x.json"),
-		"settings":          append(slices.Clone(good), "--settings", "{}"),
+		"settings twice":    append(slices.Clone(good), "--settings", "{}"),
+		"other settings":    {"-p", "--output-format", "json", "--model", "sonnet", "--tools", "WebSearch,WebFetch", "--allowedTools", "WebSearch,WebFetch", "--strict-mcp-config", "--settings", `{"permissions":{"allow":["Read"]}}`},
+		"no read deny":      {"-p", "--output-format", "json", "--model", "sonnet", "--tools", "WebSearch,WebFetch", "--allowedTools", "WebSearch,WebFetch", "--strict-mcp-config"},
 		"prompt argument":   append(slices.Clone(good), "hello"),
-		"more tools":        {"-p", "--output-format", "json", "--model", "sonnet", "--tools", "WebSearch,WebFetch,Bash", "--allowedTools", "WebSearch,WebFetch", "--strict-mcp-config"},
-		"allow bash":        {"-p", "--output-format", "json", "--model", "sonnet", "--tools", "WebSearch,WebFetch", "--allowedTools", "Bash", "--strict-mcp-config"},
-		"no strict mcp":     {"-p", "--output-format", "json", "--model", "sonnet", "--tools", "WebSearch,WebFetch", "--allowedTools", "WebSearch,WebFetch"},
-		"no tools limit":    {"-p", "--output-format", "json", "--model", "sonnet", "--allowedTools", "WebSearch,WebFetch", "--strict-mcp-config"},
+		"more tools":        {"-p", "--output-format", "json", "--model", "sonnet", "--tools", "WebSearch,WebFetch,Bash", "--allowedTools", "WebSearch,WebFetch", "--strict-mcp-config", "--settings", noFileReads},
+		"allow bash":        {"-p", "--output-format", "json", "--model", "sonnet", "--tools", "WebSearch,WebFetch", "--allowedTools", "Bash", "--strict-mcp-config", "--settings", noFileReads},
+		"no strict mcp":     {"-p", "--output-format", "json", "--model", "sonnet", "--tools", "WebSearch,WebFetch", "--allowedTools", "WebSearch,WebFetch", "--settings", noFileReads},
+		"no tools limit":    {"-p", "--output-format", "json", "--model", "sonnet", "--allowedTools", "WebSearch,WebFetch", "--strict-mcp-config", "--settings", noFileReads},
 		"twice":             append(slices.Clone(good), "--model", "opus"),
-		"stream output":     {"-p", "--output-format", "stream-json", "--model", "sonnet", "--tools", "WebSearch,WebFetch", "--allowedTools", "WebSearch,WebFetch", "--strict-mcp-config"},
+		"stream output":     {"-p", "--output-format", "stream-json", "--model", "sonnet", "--tools", "WebSearch,WebFetch", "--allowedTools", "WebSearch,WebFetch", "--strict-mcp-config", "--settings", noFileReads},
 		"resume not uuid":   append(slices.Clone(good), "--resume", "--fork-session"),
 	}
 	for name, args := range bad {

@@ -315,7 +315,7 @@ Phase 3에서는 Codex·OpenCode 세션도 Claude처럼 목록·시작·재개·
 
 | AI | 첫 질문 | 후속 질문 | 막는 것 |
 | --- | --- | --- | --- |
-| Claude | `claude -p --output-format json --model M --effort E --tools "WebSearch,WebFetch" --allowedTools "WebSearch,WebFetch" --strict-mcp-config` | `+ --resume <session_id>` | 웹 도구 둘만 있고 둘만 허용, **MCP 서버를 싣지 않음**(claude.ai 커넥터 포함), 중립 폴더(CLAUDE.md 없음) |
+| Claude | `claude -p --output-format json --model M --effort E --tools "WebSearch,WebFetch" --allowedTools "WebSearch,WebFetch" --strict-mcp-config --settings '{"permissions":{"deny":["Read"]}}'` | `+ --resume <session_id>` | 웹 도구 둘만 있고 둘만 허용, **MCP 서버를 싣지 않음**(claude.ai 커넥터 포함), **파일 읽기 거부**(R-93, 11-10: 프롬프트의 `@경로` 첨부를 막음. stdin의 `@` 뒤에는 폭 없는 공백도 넣는다), 중립 폴더(CLAUDE.md 없음) |
 | Codex | `codex --search exec -s read-only --ignore-user-config --skip-git-repo-check --json -m M -c model_reasoning_effort="E" -` | `codex --search exec -s read-only resume --ignore-user-config --skip-git-repo-check --json -m M -c model_reasoning_effort="E" -c sandbox_mode="read-only" <thread_id> -` | 읽기 전용 + 사용자 설정(자동 승인·MCP) 뺌, 머리말(전역 AGENTS.md) |
 | OpenCode | `opencode.exe run --standalone --format json --agent askorus-ask -m M#변형`(npm `.cmd`가 아닌 실제 exe), 환경 `PWD`=묻기 폴더, `OPENCODE_CONFIG_CONTENT`=묻기 에이전트 | 먼저 `session list --format json --standalone`(같은 환경)로 묻기 폴더의 세션인지 확인, 그다음 `+ --session <sessionID>` | 묻기 에이전트(권한 `"*": "deny"`에 webfetch·websearch만 allow, 짧은 지시) |
 
@@ -357,6 +357,7 @@ POST /v1/runs
 | --- | --- | --- |
 | 셋 다 | 질문을 stdin으로 받는다(머리말의 줄바꿈·한국어 그대로) | 인자에 질문을 넣지 않음 |
 | Claude | `--strict-mcp-config` 없이는 claude.ai 커넥터의 MCP 도구(Claude Docs 만들기·고치기·지우기 등 8개)가 묻기에 들어온다. 지금은 허용 규칙이 없어 막히지만 사용자가 규칙을 더하면 열린다 | `--strict-mcp-config`(MCP를 싣지 않음, 도구를 줄이는 옵션)를 더함. 도구는 WebFetch·WebSearch 둘만 남음을 확인 |
+| Claude | (11-10, R-93) 프롬프트에 ` @<파일이나 폴더 경로>`가 있으면(글 처음이나 공백 뒤) Claude Code가 모델을 부르기 전에 그 파일 내용·폴더 목록을 대화에 붙인다. `--tools`와 무관하고(`--tools ""`의 종합 명령도 같음), JSON 문자열 안의 것도 붙으며, `--disallowedTools Read`로는 막히지 않는다. 질문이나 다른 AI의 답에 든 글 하나로 PC의 아무 파일이 답에 들어올 수 있었다. Codex·OpenCode는 붙이지 않는다(같은 질문으로 확인) | Claude로 가는 모든 명령(묻기·후속·일회성·종합·정제)에 `--settings '{"permissions":{"deny":["Read"]}}'`(Read 거부 규칙: 권한을 푸는 것이 아니라 줄이는 것이고, 사용자 설정의 허용 규칙보다 앞선다)를 더하고, stdin의 `@`(영문자·숫자 바로 뒤, 곧 메일 주소는 빼고) 뒤에 폭 없는 공백을 넣는다(`claude` `plainAt`). 둘 중 하나만으로도 막히는 것을 실제 claude로 확인(LT-15) |
 | Claude | 사용자 설정의 훅(Orca)이 묻기마다 모든 이벤트(PermissionRequest 포함)에서 돈다 | 도구가 둘뿐이라 훅이 승인해도 쓸 도구가 없다. 개인정보 문서에 '설정한 확장에도 전해질 수 있음'을 적음 |
 | Claude | 오류여도 `subtype`은 `success`다. `is_error`·`api_error_status`·stderr의 `[claude-code:unrecognized_model]`로 가른다. 이어 간 세션의 `total_cost_usd`·`modelUsage`는 세션 누적이다 | 이번 실행의 `usage`만 씀. 모델 이름은 `modelUsage` 키(`claude-sonnet-5-5`) |
 | Codex | `--search`는 `exec` 앞에만, `-s`는 `exec` 뒤·`resume` 앞에만 된다. `resume` 뒤에는 `-c sandbox_mode="read-only"`로 한 번 더 | 후속 명령 고정 |
@@ -554,7 +555,7 @@ type JudgeResult struct{ Output json.RawMessage; Model string; InputTokens, Outp
 
 | AI | 판정 명령(내용은 stdin) | 남는 것 |
 | --- | --- | --- |
-| Claude | `-p --output-format json --model M --effort E --tools "" --strict-mcp-config --no-session-persistence --safe-mode --json-schema <v1>` (`Runner.Path()`를 `proc.Run`으로; `Runner.Run`은 `--strict-mcp-config`를 거절) | 대화 없음. 도는 동안 `~/.claude/sessions/<pid>.json`(판정 폴더 숨김으로 가림) |
+| Claude | `-p --output-format json --model M --effort E --tools "" --strict-mcp-config --no-session-persistence --safe-mode --json-schema <v1>` (`Runner.Path()`를 `proc.Run`으로; `Runner.Run`은 `--strict-mcp-config`를 거절. 11-10 R-93부터 `--strict-mcp-config` 뒤에 `--settings '{"permissions":{"deny":["Read"]}}'`가 들어간다) | 대화 없음. 도는 동안 `~/.claude/sessions/<pid>.json`(판정 폴더 숨김으로 가림) |
 | Codex | `exec -s read-only --ignore-user-config --skip-git-repo-check --ephemeral --json -m M -c model_reasoning_effort="E" -c web_search="disabled" --output-schema %APPDATA%\Askorus\judge-schema-v1.json --disable <기능 18개> -`. 끄는 기능(11-01 결정): shell_tool, unified_exec, hooks, apps, plugins, remote_plugin, multi_agent, browser_use, browser_use_external, in_app_browser, computer_use, image_generation, view_image, goals, sleep_tool, tool_suggest, skill_search, skill_mcp_dependency_install | rollout 없음. 자체 `logs_2.sqlite`는 남을 수 있음 |
 | OpenCode | `run --standalone --format json --agent askorus-judge -m M#V --title askorus-judge`, 환경 `PWD`=판정 폴더, `OPENCODE_CONFIG_CONTENT`=`judgeConfig`(`{"*":"deny"}`, 묻기 `askConfig`와 따로) | 대화가 생기고 판정 뒤 지움 |
 

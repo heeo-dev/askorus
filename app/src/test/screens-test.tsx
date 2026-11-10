@@ -294,6 +294,22 @@ describe('session sheet', () => {
     expect(agent.callsTo('POST', '/v1/sessions/claude%3A2/open')).toHaveLength(1);
   });
 
+  // R-94: only a Remote Control session link is opened, whatever the PC sends.
+  test.each(['tel:+15550100', 'intent://evil#Intent;scheme=x;end', 'https://claude.ai.example.org/code/session_x', 'https://claude.ai/code/session_x?next=//evil'])(
+    'a link from the PC that is not a Claude session link is not opened: %s',
+    async (url) => {
+      const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
+      open.mockClear();
+      agent.remoteUrl = url;
+      const user = userEvent.setup();
+      await openPC();
+      await user.press(screen.getByText('Write release notes'));
+      await user.press(sheet().getByRole('button', { name: 'Open in the Claude app' }));
+      expect(await sheet().findByText(/bad_remote_url/)).toBeTruthy();
+      expect(open).not.toHaveBeenCalled();
+    },
+  );
+
   test('stop is offered only for running sessions', async () => {
     const user = userEvent.setup();
     await openPC();
@@ -430,15 +446,57 @@ describe('pairing', () => {
     expect(await screen.findByText('Is this your PC?')).toBeTruthy();
   });
 
-  test('a newly paired PC becomes the current one', async () => {
+  // R-94: questions never move to another PC without a pick.
+  test('a further PC is added without becoming the current one: the picker opens with both', async () => {
     const user = userEvent.setup();
-    await pairedPC('OLD-LAPTOP', 'old-laptop.tail0.ts.net');
+    const old = await pairedPC('OLD-LAPTOP', 'old-laptop.tail0.ts.net');
+    const r = await renderRouter(routes, { initialUrl: `/pair?v=1&host=${HOST}&port=${PORT}&code=${CODE}` });
+    await user.press(await screen.findByRole('button', { name: 'Pair' }));
+    const picker = within(await screen.findByTestId('pc-picker'));
+    expect(await picker.findByRole('button', { name: /^OLD-LAPTOP, old-laptop\.tail0\.ts\.net, / })).toBeSelected();
+    expect(await picker.findByRole('button', { name: `DESKTOP-TEST, ${HOST}, Connected · agent 0.1.0` })).not.toBeSelected();
+    expect(r.getPathname()).toBe('/pcs');
+    const [, added] = await new ConnectionStore().list();
+    expect(added).toMatchObject({ host: HOST, name: 'DESKTOP-TEST' });
+    expect((await loadAskPrefs()).pc).not.toBe(added.id);
+
+    // Picking it there is what makes it the current PC.
+    await user.press(picker.getByRole('button', { name: `DESKTOP-TEST, ${HOST}, Connected · agent 0.1.0` }));
+    await waitFor(async () => expect((await loadAskPrefs()).pc).toBe(added.id));
+    expect(old.id).not.toBe(added.id);
+  });
+
+  test('the same PC paired again stays the current one, with no picker', async () => {
+    const user = userEvent.setup();
+    const pc = await pairedPC();
     await renderRouter(routes, { initialUrl: `/pair?v=1&host=${HOST}&port=${PORT}&code=${CODE}` });
     await user.press(await screen.findByRole('button', { name: 'Pair' }));
-    expect(await screen.findByText('DESKTOP-TEST')).toBeTruthy();
-    expect(screen.queryByText('OLD-LAPTOP')).toBeNull();
-    const [, added] = await new ConnectionStore().list();
-    expect((await loadAskPrefs()).pc).toBe(added.id);
+    expect(await screen.findByText('Connected · agent 0.1.0')).toBeTruthy();
+    expect(screen.queryByTestId('pc-picker')).toBeNull();
+    expect(await new ConnectionStore().list()).toHaveLength(1);
+    expect((await loadAskPrefs()).pc).toBe(pc.id);
+  });
+
+  test('the confirm step warns about a link or QR from someone else', async () => {
+    await renderRouter(routes, { initialUrl: `/pair?v=1&host=${HOST}&port=${PORT}&code=${CODE}` });
+    const warn = within(await screen.findByTestId('pair-warn'));
+    expect(warn.getByText(/Pair only if this address matches the one on your own PC's screen\. Do not pair from a link or QR code someone sent you\./)).toBeTruthy();
+    expect(screen.getByText('When you tap Pair, your PC asks whether to allow this phone.')).toBeTruthy();
+    expect(agent.calls).toHaveLength(0);
+  });
+
+  test('a pairing link to a server outside ts.net opens no confirm step', async () => {
+    await renderRouter(routes, { initialUrl: `/pair?v=1&host=desktop-test.tail0.ts.net.example.org&port=443&code=${CODE}` });
+    expect(await screen.findByText('Not a pairing link. Paste the whole link shown on the PC.')).toBeTruthy();
+    expect(screen.queryByText('Is this your PC?')).toBeNull();
+
+    // A good link, then a refused one: the first link's confirm step does not stay.
+    await act(async () => router.navigate({ pathname: '/pair', params: { v: '1', host: HOST, port: String(PORT), code: CODE } }));
+    expect(await screen.findByText('Is this your PC?')).toBeTruthy();
+    await act(async () => router.navigate({ pathname: '/pair', params: { v: '1', host: 'evil.example.org', port: '443', code: CODE } }));
+    expect(await screen.findByText('Not a pairing link. Paste the whole link shown on the PC.')).toBeTruthy();
+    expect(screen.queryByText('Is this your PC?')).toBeNull();
+    expect(agent.calls).toHaveLength(0);
   });
 
   test('the pairing link itself opens the confirm step, with no back button', async () => {
@@ -503,6 +561,12 @@ describe('pairing', () => {
     await user.type(screen.getByLabelText('The link on the PC'), 'https://example.com/');
     await user.press(screen.getByRole('button', { name: 'Pair with this link' }));
     expect(await screen.findByText('Not a pairing link. Paste the whole link shown on the PC.')).toBeTruthy();
+    // R-94: a pairing link that names a server outside ts.net is refused the same way.
+    await user.clear(screen.getByLabelText('The link on the PC'));
+    await user.type(screen.getByLabelText('The link on the PC'), `askorus://pair?v=1&host=evil.example.org&port=443&code=${CODE}`);
+    await user.press(screen.getByRole('button', { name: 'Pair with this link' }));
+    expect(await screen.findByText('Not a pairing link. Paste the whole link shown on the PC.')).toBeTruthy();
+    expect(screen.queryByText('Is this your PC?')).toBeNull();
   });
 
   test('the Tailscale line opens a sheet with what to do and where to get it', async () => {
