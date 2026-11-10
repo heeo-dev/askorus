@@ -571,6 +571,9 @@ func pair(dir string, args []string, in io.Reader, out io.Writer) error {
 	if pngPath != "" {
 		fmt.Fprintf(out, "Image / 이미지:    %s\n", pngPath)
 	}
+	if clipboardSupported() {
+		fmt.Fprintf(out, "Copy / 복사:       type c, then Enter: the link goes to the clipboard / c를 누르고 Enter: 링크를 클립보드에 복사\n")
+	}
 	expires := w.ExpiresAt.Local().Format("15:04:05")
 	fmt.Fprintf(out, "Expires / 만료:    %s (Ctrl+C to cancel / Ctrl+C로 취소)\n\n", expires)
 
@@ -585,11 +588,21 @@ func pair(dir string, args []string, in io.Reader, out io.Writer) error {
 
 	tick := time.NewTicker(300 * time.Millisecond)
 	defer tick.Stop()
+	// Lines typed before a phone asks: "c" copies the link (R-95), anything
+	// else is dropped. An answer counts only once the question is on the
+	// screen, so a stray Enter while waiting no longer refuses the phone.
+	waiting := (<-chan string)(lines)
 	for {
 		select {
 		case <-ctx.Done():
 			say(out, m("cancelled", "취소했습니다"))
 			return nil
+		case line, ok := <-waiting:
+			if !ok {
+				waiting = nil // the input ended; decide still sees it ended
+			} else {
+				waitingLine(line, link, out)
+			}
 		case <-tick.C:
 		}
 		if req, ok := pairing.PendingRequest(dir, w.ID); ok {
@@ -606,6 +619,28 @@ func pair(dir string, args []string, in io.Reader, out io.Writer) error {
 			return fail("the code expired; run pair again", "코드가 만료됐습니다. pair를 다시 실행하세요")
 		}
 	}
+}
+
+// copyLink puts the pairing link on the clipboard; a variable so a test
+// can stand in for the clipboard.
+var copyLink = clipboardWrite
+
+// waitingLine handles one line typed while pair waits for a phone: "c" (or
+// the Korean keyboard's letter on that key) copies the link.
+func waitingLine(line, link string, out io.Writer) {
+	switch strings.ToLower(strings.TrimSpace(line)) {
+	case "c", "ㅊ":
+	default:
+		return
+	}
+	if !clipboardSupported() {
+		return
+	}
+	if err := copyLink(link); err != nil {
+		say(out, m("could not copy the link: %v", "링크를 복사하지 못했습니다: %v", err))
+		return
+	}
+	say(out, m("copied the link to the clipboard", "링크를 클립보드에 복사했습니다"))
 }
 
 func decide(ctx context.Context, dir, id string, req pairing.Request, lines <-chan string, out io.Writer) error {
