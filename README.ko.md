@@ -17,10 +17,10 @@ Askorus(애스코러스)는 폰에서 질문 하나를 여러 AI에게 한 번�
 개발자는 같은 앱으로 내 PC의 Claude Code 세션을 보고, 새로 시작하고, 이어 쓸 수 있습니다.
 
 <p align="center">
-  <img src="docs/screenshots/ko/1-ask.png" width="200" alt="질문하기 화면: 질문 하나와 그 질문을 받을 AI들">
-  <img src="docs/screenshots/ko/2-combined.png" width="200" alt="종합 답변: 경주는 Claude와 Codex, 전주는 OpenCode가 추천">
-  <img src="docs/screenshots/ko/4-debating.png" width="200" alt="토론: 사회자가 OpenCode에게 묻고 OpenCode가 답하는 중">
-  <img src="docs/screenshots/ko/5-result.png" width="200" alt="토론 결과: 목적에 따라 경주와 전주 중 어디가 맞는지">
+  <img src="docs/screenshots/ko/1-ask.png" width="160" alt="질문하기 화면: 질문 하나와 그 질문을 받을 AI들">
+  <img src="docs/screenshots/ko/2-combined.png" width="160" alt="종합 답변: 경주는 Claude와 Codex, 전주는 OpenCode가 추천">
+  <img src="docs/screenshots/ko/4-debating.png" width="160" alt="토론: 사회자가 OpenCode에게 묻고 OpenCode가 답하는 중">
+  <img src="docs/screenshots/ko/5-result.png" width="160" alt="토론 결과: 목적에 따라 경주와 전주 중 어디가 맞는지">
 </p>
 
 **상태:** 개발 중입니다. 안드로이드 앱과 Windows 에이전트가 처음부터 끝까지 동작하지만 아직 스토어에 내지 않았습니다.
