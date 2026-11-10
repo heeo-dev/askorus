@@ -1,0 +1,1181 @@
+{
+ "libraries": [
+  {
+   "n": "androidx.activity:activity",
+   "v": "1.8.1",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.activity:activity-ktx",
+   "v": "1.8.1",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.annotation:annotation",
+   "v": "1.9.1",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.annotation:annotation-experimental",
+   "v": "1.4.1",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.annotation:annotation-jvm",
+   "v": "1.9.1",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.appcompat:appcompat",
+   "v": "1.7.1",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.appcompat:appcompat-resources",
+   "v": "1.7.1",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.arch.core:core-common",
+   "v": "2.2.0",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.arch.core:core-runtime",
+   "v": "2.2.0",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.autofill:autofill",
+   "v": "1.3.0",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.biometric:biometric",
+   "v": "1.1.0",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.camera:camera-camera2",
+   "v": "1.6.0",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.camera:camera-camera2-pipe",
+   "v": "1.6.0",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.camera:camera-core",
+   "v": "1.6.0",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.camera:camera-extensions",
+   "v": "1.6.0",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.camera:camera-lifecycle",
+   "v": "1.6.0",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.camera:camera-mlkit-vision",
+   "v": "1.6.0",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.camera:camera-video",
+   "v": "1.6.0",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.camera:camera-view",
+   "v": "1.6.0",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.camera.featurecombinationquery:featurecombinationquery",
+   "v": "1.6.0",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.camera.viewfinder:viewfinder-core",
+   "v": "1.5.1",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.cardview:cardview",
+   "v": "1.0.0",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.collection:collection",
+   "v": "1.4.4",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.collection:collection-jvm",
+   "v": "1.4.4",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.collection:collection-ktx",
+   "v": "1.4.4",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.concurrent:concurrent-futures",
+   "v": "1.1.0",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.concurrent:concurrent-futures-ktx",
+   "v": "1.1.0",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.constraintlayout:constraintlayout",
+   "v": "2.1.0",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.constraintlayout:constraintlayout-core",
+   "v": "1.0.0",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.coordinatorlayout:coordinatorlayout",
+   "v": "1.2.0",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.core:core",
+   "v": "1.18.0",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.core:core-backported-fixes",
+   "v": "1.0.0",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.core:core-ktx",
+   "v": "1.18.0",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.core:core-splashscreen",
+   "v": "1.2.0",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.core:core-viewtree",
+   "v": "1.0.0",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.cursoradapter:cursoradapter",
+   "v": "1.0.0",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.customview:customview",
+   "v": "1.1.0",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.documentfile:documentfile",
+   "v": "1.1.0",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.drawerlayout:drawerlayout",
+   "v": "1.1.1",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.dynamicanimation:dynamicanimation",
+   "v": "1.1.0",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.emoji2:emoji2",
+   "v": "1.3.0",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.emoji2:emoji2-views-helper",
+   "v": "1.3.0",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.exifinterface:exifinterface",
+   "v": "1.4.2",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.fragment:fragment",
+   "v": "1.8.9",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.fragment:fragment-ktx",
+   "v": "1.8.9",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.graphics:graphics-shapes",
+   "v": "1.0.1",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.graphics:graphics-shapes-android",
+   "v": "1.0.1",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.interpolator:interpolator",
+   "v": "1.0.0",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.lifecycle:lifecycle-common",
+   "v": "2.6.2",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.lifecycle:lifecycle-livedata",
+   "v": "2.6.2",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.lifecycle:lifecycle-livedata-core",
+   "v": "2.6.2",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.lifecycle:lifecycle-livedata-core-ktx",
+   "v": "2.6.2",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.lifecycle:lifecycle-process",
+   "v": "2.6.2",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.lifecycle:lifecycle-runtime",
+   "v": "2.6.2",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.lifecycle:lifecycle-runtime-ktx",
+   "v": "2.6.2",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.lifecycle:lifecycle-viewmodel",
+   "v": "2.6.2",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.lifecycle:lifecycle-viewmodel-ktx",
+   "v": "2.6.2",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.lifecycle:lifecycle-viewmodel-savedstate",
+   "v": "2.6.2",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.loader:loader",
+   "v": "1.0.0",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.media3:media3-common",
+   "v": "1.9.0",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.media3:media3-container",
+   "v": "1.9.0",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.media3:media3-muxer",
+   "v": "1.9.0",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.profileinstaller:profileinstaller",
+   "v": "1.3.1",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.recyclerview:recyclerview",
+   "v": "1.2.1",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.resourceinspection:resourceinspection-annotation",
+   "v": "1.0.1",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.savedstate:savedstate",
+   "v": "1.2.1",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.savedstate:savedstate-ktx",
+   "v": "1.2.1",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.startup:startup-runtime",
+   "v": "1.1.1",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.swiperefreshlayout:swiperefreshlayout",
+   "v": "1.1.0",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.tracing:tracing",
+   "v": "1.3.0",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.tracing:tracing-android",
+   "v": "1.3.0",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.tracing:tracing-ktx",
+   "v": "1.3.0",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.transition:transition",
+   "v": "1.7.0",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.transition:transition-ktx",
+   "v": "1.7.0",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.vectordrawable:vectordrawable",
+   "v": "1.1.0",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.vectordrawable:vectordrawable-animated",
+   "v": "1.1.0",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.versionedparcelable:versionedparcelable",
+   "v": "1.1.1",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.viewpager:viewpager",
+   "v": "1.0.0",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.viewpager2:viewpager2",
+   "v": "1.0.0",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.webkit:webkit",
+   "v": "1.14.0",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.window:window",
+   "v": "1.5.1",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.window:window-core",
+   "v": "1.5.1",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "androidx.window:window-core-android",
+   "v": "1.5.1",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "com.facebook.device.yearclass:yearclass",
+   "v": "2.1.0",
+   "l": "BSD License",
+   "u": "https://github.com/facebook/device-year-class/blob/master/LICENSE"
+  },
+  {
+   "n": "com.facebook.fbjni:fbjni",
+   "v": "0.7.0",
+   "l": "Apache-2.0",
+   "u": "https://github.com/facebookincubator/fbjni/blob/main/LICENSE"
+  },
+  {
+   "n": "com.facebook.fresco:animated-base",
+   "v": "3.7.0",
+   "l": "MIT",
+   "u": "https://github.com/facebook/fresco/blob/main/LICENSE"
+  },
+  {
+   "n": "com.facebook.fresco:animated-drawable",
+   "v": "3.7.0",
+   "l": "MIT",
+   "u": "https://github.com/facebook/fresco/blob/main/LICENSE"
+  },
+  {
+   "n": "com.facebook.fresco:animated-gif",
+   "v": "3.7.0",
+   "l": "MIT",
+   "u": "https://github.com/facebook/fresco/blob/main/LICENSE"
+  },
+  {
+   "n": "com.facebook.fresco:animated-gif-lite",
+   "v": "3.7.0",
+   "l": "MIT",
+   "u": "https://github.com/facebook/fresco/blob/main/LICENSE"
+  },
+  {
+   "n": "com.facebook.fresco:drawee",
+   "v": "3.7.0",
+   "l": "MIT",
+   "u": "https://github.com/facebook/fresco/blob/main/LICENSE"
+  },
+  {
+   "n": "com.facebook.fresco:fbcore",
+   "v": "3.7.0",
+   "l": "MIT",
+   "u": "https://github.com/facebook/fresco/blob/main/LICENSE"
+  },
+  {
+   "n": "com.facebook.fresco:fresco",
+   "v": "3.7.0",
+   "l": "MIT",
+   "u": "https://github.com/facebook/fresco/blob/main/LICENSE"
+  },
+  {
+   "n": "com.facebook.fresco:imagepipeline",
+   "v": "3.7.0",
+   "l": "MIT",
+   "u": "https://github.com/facebook/fresco/blob/main/LICENSE"
+  },
+  {
+   "n": "com.facebook.fresco:imagepipeline-base",
+   "v": "3.7.0",
+   "l": "MIT",
+   "u": "https://github.com/facebook/fresco/blob/main/LICENSE"
+  },
+  {
+   "n": "com.facebook.fresco:imagepipeline-native",
+   "v": "3.7.0",
+   "l": "MIT",
+   "u": "https://github.com/facebook/fresco/blob/main/LICENSE"
+  },
+  {
+   "n": "com.facebook.fresco:imagepipeline-okhttp3",
+   "v": "3.7.0",
+   "l": "MIT",
+   "u": "https://github.com/facebook/fresco/blob/main/LICENSE"
+  },
+  {
+   "n": "com.facebook.fresco:memory-type-ashmem",
+   "v": "3.7.0",
+   "l": "MIT",
+   "u": "https://github.com/facebook/fresco/blob/main/LICENSE"
+  },
+  {
+   "n": "com.facebook.fresco:memory-type-java",
+   "v": "3.7.0",
+   "l": "MIT",
+   "u": "https://github.com/facebook/fresco/blob/main/LICENSE"
+  },
+  {
+   "n": "com.facebook.fresco:memory-type-native",
+   "v": "3.7.0",
+   "l": "MIT",
+   "u": "https://github.com/facebook/fresco/blob/main/LICENSE"
+  },
+  {
+   "n": "com.facebook.fresco:middleware",
+   "v": "3.7.0",
+   "l": "MIT",
+   "u": "https://github.com/facebook/fresco/blob/main/LICENSE"
+  },
+  {
+   "n": "com.facebook.fresco:nativeimagefilters",
+   "v": "3.7.0",
+   "l": "MIT",
+   "u": "https://github.com/facebook/fresco/blob/main/LICENSE"
+  },
+  {
+   "n": "com.facebook.fresco:nativeimagetranscoder",
+   "v": "3.7.0",
+   "l": "MIT",
+   "u": "https://github.com/facebook/fresco/blob/main/LICENSE"
+  },
+  {
+   "n": "com.facebook.fresco:soloader",
+   "v": "3.7.0",
+   "l": "MIT",
+   "u": "https://github.com/facebook/fresco/blob/main/LICENSE"
+  },
+  {
+   "n": "com.facebook.fresco:ui-common",
+   "v": "3.7.0",
+   "l": "MIT",
+   "u": "https://github.com/facebook/fresco/blob/main/LICENSE"
+  },
+  {
+   "n": "com.facebook.fresco:ui-core",
+   "v": "3.7.0",
+   "l": "MIT",
+   "u": "https://github.com/facebook/fresco/blob/main/LICENSE"
+  },
+  {
+   "n": "com.facebook.fresco:urimod",
+   "v": "3.7.0",
+   "l": "MIT",
+   "u": "https://github.com/facebook/fresco/blob/main/LICENSE"
+  },
+  {
+   "n": "com.facebook.fresco:vito-core",
+   "v": "3.7.0",
+   "l": "MIT",
+   "u": "https://github.com/facebook/fresco/blob/main/LICENSE"
+  },
+  {
+   "n": "com.facebook.fresco:vito-core-common-impl",
+   "v": "3.7.0",
+   "l": "MIT",
+   "u": "https://github.com/facebook/fresco/blob/main/LICENSE"
+  },
+  {
+   "n": "com.facebook.fresco:vito-core-impl",
+   "v": "3.7.0",
+   "l": "MIT",
+   "u": "https://github.com/facebook/fresco/blob/main/LICENSE"
+  },
+  {
+   "n": "com.facebook.fresco:vito-core-java-impl",
+   "v": "3.7.0",
+   "l": "MIT",
+   "u": "https://github.com/facebook/fresco/blob/main/LICENSE"
+  },
+  {
+   "n": "com.facebook.fresco:vito-drawee-support",
+   "v": "3.7.0",
+   "l": "MIT",
+   "u": "https://github.com/facebook/fresco/blob/main/LICENSE"
+  },
+  {
+   "n": "com.facebook.fresco:vito-options",
+   "v": "3.7.0",
+   "l": "MIT",
+   "u": "https://github.com/facebook/fresco/blob/main/LICENSE"
+  },
+  {
+   "n": "com.facebook.fresco:vito-provider",
+   "v": "3.7.0",
+   "l": "MIT",
+   "u": "https://github.com/facebook/fresco/blob/main/LICENSE"
+  },
+  {
+   "n": "com.facebook.fresco:vito-renderer",
+   "v": "3.7.0",
+   "l": "MIT",
+   "u": "https://github.com/facebook/fresco/blob/main/LICENSE"
+  },
+  {
+   "n": "com.facebook.fresco:vito-source",
+   "v": "3.7.0",
+   "l": "MIT",
+   "u": "https://github.com/facebook/fresco/blob/main/LICENSE"
+  },
+  {
+   "n": "com.facebook.fresco:webpsupport",
+   "v": "3.7.0",
+   "l": "MIT",
+   "u": "https://github.com/facebook/fresco/blob/main/LICENSE"
+  },
+  {
+   "n": "com.facebook.infer.annotation:infer-annotation",
+   "v": "0.18.0",
+   "l": "MIT",
+   "u": "https://github.com/facebook/infer/blob/master/LICENSE"
+  },
+  {
+   "n": "com.facebook.react:react-android",
+   "v": "0.88.1",
+   "l": "MIT",
+   "u": "https://github.com/facebook/react-native/blob/HEAD/LICENSE"
+  },
+  {
+   "n": "com.facebook.react:react-native",
+   "v": "com.facebook.react:react-android:0.88.1",
+   "l": "MIT"
+  },
+  {
+   "n": "com.facebook.soloader:annotation",
+   "v": "0.12.1",
+   "l": "Apache-2.0",
+   "u": "https://github.com/facebook/soloader/blob/main/LICENSE"
+  },
+  {
+   "n": "com.facebook.soloader:nativeloader",
+   "v": "0.12.1",
+   "l": "Apache-2.0",
+   "u": "https://github.com/facebook/soloader/blob/main/LICENSE"
+  },
+  {
+   "n": "com.facebook.soloader:soloader",
+   "v": "0.12.1",
+   "l": "Apache-2.0",
+   "u": "https://github.com/facebook/soloader/blob/main/LICENSE"
+  },
+  {
+   "n": "com.facebook.yoga:proguard-annotations",
+   "v": "1.19.0",
+   "l": "MIT",
+   "u": "https://github.com/facebook/yoga/blob/master/LICENSE"
+  },
+  {
+   "n": "com.google.android.datatransport:transport-api",
+   "v": "2.2.1",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "com.google.android.datatransport:transport-backend-cct",
+   "v": "2.3.3",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "com.google.android.datatransport:transport-runtime",
+   "v": "2.2.6",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "com.google.android.gms:play-services-base",
+   "v": "18.5.0",
+   "l": "Android Software Development Kit License",
+   "u": "https://developer.android.com/studio/terms.html"
+  },
+  {
+   "n": "com.google.android.gms:play-services-basement",
+   "v": "18.10.0",
+   "l": "Android Software Development Kit License",
+   "u": "https://developer.android.com/studio/terms.html"
+  },
+  {
+   "n": "com.google.android.gms:play-services-code-scanner",
+   "v": "16.1.0",
+   "l": "ML Kit Terms of Service",
+   "u": "https://developers.google.com/ml-kit/terms"
+  },
+  {
+   "n": "com.google.android.gms:play-services-mlkit-barcode-scanning",
+   "v": "18.3.1",
+   "l": "ML Kit Terms of Service",
+   "u": "https://developers.google.com/ml-kit/terms"
+  },
+  {
+   "n": "com.google.android.gms:play-services-mlkit-document-scanner",
+   "v": "16.0.0-beta1",
+   "l": "ML Kit Terms of Service",
+   "u": "https://developers.google.com/ml-kit/terms"
+  },
+  {
+   "n": "com.google.android.gms:play-services-tasks",
+   "v": "18.2.1",
+   "l": "Android Software Development Kit License",
+   "u": "https://developer.android.com/studio/terms.html"
+  },
+  {
+   "n": "com.google.android.material:material",
+   "v": "1.13.0",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "com.google.android.odml:image",
+   "v": "1.0.0-beta1",
+   "l": "Android Software Development Kit License",
+   "u": "https://developer.android.com/studio/terms.html"
+  },
+  {
+   "n": "com.google.auto.value:auto-value-annotations",
+   "v": "1.6.3",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "com.google.code.findbugs:jsr305",
+   "v": "3.0.2",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "com.google.code.gson:gson",
+   "v": "2.8.6",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "com.google.dagger:dagger",
+   "v": "2.59",
+   "l": "Apache-2.0",
+   "u": "https://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "com.google.errorprone:error_prone_annotations",
+   "v": "2.15.0",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "com.google.firebase:firebase-annotations",
+   "v": "16.0.0",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "com.google.firebase:firebase-components",
+   "v": "16.1.0",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "com.google.firebase:firebase-encoders",
+   "v": "16.1.0",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "com.google.firebase:firebase-encoders-json",
+   "v": "17.1.0",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "com.google.guava:failureaccess",
+   "v": "1.0.2",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "com.google.guava:guava",
+   "v": "33.3.1-android",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "com.google.guava:listenablefuture",
+   "v": "9999.0-empty-to-avoid-conflict-with-guava",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "com.google.mlkit:barcode-scanning",
+   "v": "17.3.0",
+   "l": "ML Kit Terms of Service",
+   "u": "https://developers.google.com/ml-kit/terms"
+  },
+  {
+   "n": "com.google.mlkit:barcode-scanning-common",
+   "v": "17.0.0",
+   "l": "ML Kit Terms of Service",
+   "u": "https://developers.google.com/ml-kit/terms"
+  },
+  {
+   "n": "com.google.mlkit:common",
+   "v": "18.11.0",
+   "l": "ML Kit Terms of Service",
+   "u": "https://developers.google.com/ml-kit/terms"
+  },
+  {
+   "n": "com.google.mlkit:vision-common",
+   "v": "17.3.0",
+   "l": "ML Kit Terms of Service",
+   "u": "https://developers.google.com/ml-kit/terms"
+  },
+  {
+   "n": "com.google.mlkit:vision-interfaces",
+   "v": "16.3.0",
+   "l": "ML Kit Terms of Service",
+   "u": "https://developers.google.com/ml-kit/terms"
+  },
+  {
+   "n": "com.parse.bolts:bolts-tasks",
+   "v": "1.4.0",
+   "l": "BSD License",
+   "u": "https://github.com/BoltsFramework/Bolts-Android/blob/master/LICENSE"
+  },
+  {
+   "n": "com.squareup.okhttp3:okhttp",
+   "v": "4.9.2",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "com.squareup.okhttp3:okhttp-urlconnection",
+   "v": "4.9.2",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "com.squareup.okio:okio",
+   "v": "3.16.0",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "com.squareup.okio:okio-jvm",
+   "v": "3.16.0",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "com.squareup.zstd:zstd-kmp",
+   "v": "0.4.0",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "com.squareup.zstd:zstd-kmp-android",
+   "v": "0.4.0",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "com.squareup.zstd:zstd-kmp-okio",
+   "v": "0.4.0",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "com.squareup.zstd:zstd-kmp-okio-android",
+   "v": "0.4.0",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "commons-codec:commons-codec",
+   "v": "1.10",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "commons-io:commons-io",
+   "v": "1.4",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "expo.modules.asset:expo.modules.asset",
+   "v": "58.0.20",
+   "l": "MIT"
+  },
+  {
+   "n": "expo.modules.router:expo.modules.router",
+   "v": "58.0.30",
+   "l": "MIT"
+  },
+  {
+   "n": "host.exp.exponent:expo.modules.camera",
+   "v": "58.0.14",
+   "l": "MIT"
+  },
+  {
+   "n": "host.exp.exponent:expo.modules.clipboard",
+   "v": "58.0.4",
+   "l": "MIT"
+  },
+  {
+   "n": "host.exp.exponent:expo.modules.crypto",
+   "v": "58.0.7",
+   "l": "MIT"
+  },
+  {
+   "n": "host.exp.exponent:expo.modules.device",
+   "v": "58.0.5",
+   "l": "MIT"
+  },
+  {
+   "n": "host.exp.exponent:expo.modules.filesystem",
+   "v": "58.0.13",
+   "l": "MIT"
+  },
+  {
+   "n": "host.exp.exponent:expo.modules.font",
+   "v": "58.0.11",
+   "l": "MIT"
+  },
+  {
+   "n": "host.exp.exponent:expo.modules.keepawake",
+   "v": "58.0.3",
+   "l": "MIT"
+  },
+  {
+   "n": "host.exp.exponent:expo.modules.linking",
+   "v": "58.0.16",
+   "l": "MIT"
+  },
+  {
+   "n": "host.exp.exponent:expo.modules.localization",
+   "v": "58.0.5",
+   "l": "MIT"
+  },
+  {
+   "n": "host.exp.exponent:expo.modules.securestore",
+   "v": "58.0.2",
+   "l": "MIT"
+  },
+  {
+   "n": "host.exp.exponent:expo.modules.splashscreen",
+   "v": "58.0.13",
+   "l": "MIT"
+  },
+  {
+   "n": "host.exp.exponent:expo.modules.sqlite",
+   "v": "58.0.15",
+   "l": "MIT"
+  },
+  {
+   "n": "host.exp.exponent:expo.modules.statusbar",
+   "v": "58.0.4",
+   "l": "MIT"
+  },
+  {
+   "n": "host.exp.exponent:expo.modules.systemui",
+   "v": "58.0.7",
+   "l": "MIT"
+  },
+  {
+   "n": "io.github.expo:expo-modules-v2-react",
+   "v": "0.2.7",
+   "l": "MIT",
+   "u": "https://opensource.org/license/mit"
+  },
+  {
+   "n": "io.github.expo.kolibri:kolibri-android",
+   "v": "0.2.4",
+   "l": "MIT",
+   "u": "https://opensource.org/license/mit"
+  },
+  {
+   "n": "io.github.expo.kolibri:runtime",
+   "v": "0.2.4",
+   "l": "MIT",
+   "u": "https://opensource.org/license/mit"
+  },
+  {
+   "n": "io.github.expo.pika:pika-api",
+   "v": "1.1.0",
+   "l": "MIT",
+   "u": "https://opensource.org/license/mit"
+  },
+  {
+   "n": "jakarta.inject:jakarta.inject-api",
+   "v": "2.0.1",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "javax.inject:javax.inject",
+   "v": "1",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "org.brotli:dec",
+   "v": "0.1.2",
+   "l": "MIT",
+   "u": "http://www.opensource.org/licenses/mit-license.php"
+  },
+  {
+   "n": "org.jetbrains:annotations",
+   "v": "23.0.0",
+   "l": "Apache-2.0",
+   "u": "https://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "org.jetbrains.kotlin:kotlin-annotations-jvm",
+   "v": "1.3.72",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "org.jetbrains.kotlin:kotlin-bom",
+   "v": "1.8.22",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "org.jetbrains.kotlin:kotlin-reflect",
+   "v": "2.2.10",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "org.jetbrains.kotlin:kotlin-stdlib",
+   "v": "2.2.20",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "org.jetbrains.kotlin:kotlin-stdlib-jdk7",
+   "v": "2.2.10",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "org.jetbrains.kotlin:kotlin-stdlib-jdk8",
+   "v": "1.8.22",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "org.jetbrains.kotlinx:atomicfu",
+   "v": "0.28.0",
+   "l": "Apache-2.0",
+   "u": "https://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "org.jetbrains.kotlinx:atomicfu-jvm",
+   "v": "0.28.0",
+   "l": "Apache-2.0",
+   "u": "https://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "org.jetbrains.kotlinx:kotlinx-coroutines-android",
+   "v": "1.10.2",
+   "l": "Apache-2.0",
+   "u": "https://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "org.jetbrains.kotlinx:kotlinx-coroutines-bom",
+   "v": "1.10.2",
+   "l": "Apache-2.0",
+   "u": "https://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "org.jetbrains.kotlinx:kotlinx-coroutines-core",
+   "v": "1.10.2",
+   "l": "Apache-2.0",
+   "u": "https://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm",
+   "v": "1.10.2",
+   "l": "Apache-2.0",
+   "u": "https://www.apache.org/licenses/LICENSE-2.0.txt"
+  },
+  {
+   "n": "org.jspecify:jspecify",
+   "v": "1.0.0",
+   "l": "Apache-2.0",
+   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+  }
+ ]
+}

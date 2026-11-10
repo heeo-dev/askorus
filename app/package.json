@@ -11,6 +11,7 @@
     "test": "jest",
     "typecheck": "tsc --noEmit",
     "katex-fonts": "node scripts/katex-fonts.mjs",
+    "licenses": "node scripts/licenses.mjs",
     "eas": "npx --yes eas-cli@25.3.0",
     "build:apk": "npx --yes eas-cli@25.3.0 build -p android --profile preview",
     "build:aab": "npx --yes eas-cli@25.3.0 build -p android --profile production"

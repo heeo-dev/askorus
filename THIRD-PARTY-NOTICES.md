@@ -49,6 +49,10 @@ The exact versions are in `agent/go.mod` and `agent/go.sum`.
 
 ### Phone app
 
+The installed app lists everything it is built from, with each license, under
+Settings > About > Open-source licenses (`app/src/licenses/licenses.json`, made
+by `app/scripts/licenses.mjs`).
+
 The app is built with React Native and Expo. The packages it is built from,
 with their exact versions, are in `app/package.json` and
 `app/package-lock.json`; each package carries its own license file. The

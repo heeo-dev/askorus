@@ -218,6 +218,7 @@ export default function Settings() {
               minHeight={64}
               onPress={() => router.push('/about')}
             />
+            <Row title={t('settings.licenses')} chevron onPress={() => router.push('/licenses')} />
           </Group>
         </Section>
       </ScrollView>

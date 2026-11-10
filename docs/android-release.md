@@ -26,6 +26,7 @@ Expo Go와 다른 점(스토어 빌드에서만 드러남, `src/config-test.ts`�
 ## 2. Play에 올리기
 
 - **첫 업로드는 직접**: Google Play API가 새 앱의 첫 업로드를 받지 않아서, 첫 AAB는 Play Console 웹에서 올린다(앱 서명은 기본값, Google이 만든 키). 두 번째부터 EAS submit으로 올리려면 Google Cloud 서비스 계정 키를 EAS에 올려 둔다([Expo 문서](https://docs.expo.dev/submit/android/)).
+- **오픈소스 라이선스 목록**(#32): 앱의 설정 › 정보 › 오픈소스 라이선스가 보여 주는 목록은 `app/src/licenses/licenses.json`이다. 패키지를 더하거나 올리면 `app`에서 `npm run licenses`로 다시 만든다(안 하면 `licenses-test`가 실패한다). Expo나 React Native를 올리면 안드로이드 라이브러리도 다시 뽑는다: `app/android`에서 `gradlew :app:dependencies --configuration releaseRuntimeClasspath --console=plain > deps.txt` 뒤 `node ../scripts/android-libs.mjs deps.txt <GRADLE_USER_HOME>`, 그리고 `npm run licenses`. APK나 AAB를 배포할 때 이 목록이 앱 안의 저작권 표시다. 저장소의 표시는 `THIRD-PARTY-NOTICES.md`.
 - **빌드 번호**: Play는 이미 올린 번호보다 큰 번호만 받는다. 로컬 빌드로 첫 AAB를 올렸으면 `npm run eas -- build:version:set -p android`로 EAS가 보관하는 번호를 Play에 올린 번호 이상으로 맞춘다.
 - **다시 서명**: Play가 배포용 키로 다시 서명하므로, APK로 깐 앱 위에 Play 앱을 덮어 깔 수 없다. APK 앱을 지우고(폰의 기록도 지워짐) 짝 맺기를 다시 한다.
 - **트랙**: 내부 테스트는 심사와 조건이 없다. 2023-11-13 뒤에 만든 개인 개발자 계정은 프로덕션 전에 비공개 테스트(테스터 12명이 14일 연속 참여)를 거쳐 '프로덕션 신청'을 하고, 심사는 보통 7일 안이다([Google 도움말](https://support.google.com/googleplay/android-developer/answer/14151465)).
