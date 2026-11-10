@@ -23,6 +23,10 @@ Askorus(애스코러스)는 폰에서 질문 하나를 여러 AI에게 한 번�
   <picture><source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/ko/5-result-dark.png"><img src="docs/screenshots/ko/5-result.png" width="160" alt="토론 결과: 목적에 따라 경주와 전주 중 어디가 맞는지"></picture>
 </p>
 
+<p align="center">
+  <img src="docs/screenshots/ko/demo.gif" width="320" alt="실제로 돌린 화면을 빠르게 감은 것: 질문 하나가 Claude, Codex, OpenCode에 가고, 사회자가 종합 답변을 쓰고, 의견이 다른 곳을 AI끼리 토론해 쟁점마다 결과가 나옵니다">
+</p>
+
 **상태:** 개발 중입니다. 안드로이드 앱과 Windows 에이전트가 처음부터 끝까지 동작하지만 아직 스토어에 내지 않았습니다.
 
 ## PC 에이전트 설치

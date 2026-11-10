@@ -23,6 +23,10 @@ Developers can also see, start and continue the Claude Code sessions on their PC
   <picture><source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/en/5-result-dark.png"><img src="docs/screenshots/en/5-result.png" width="160" alt="Debate result: which city fits which traveler"></picture>
 </p>
 
+<p align="center">
+  <img src="docs/screenshots/en/demo.gif" width="320" alt="A real run, sped up: one question goes to Claude, Codex and OpenCode, the moderator writes a combined answer, and the AIs debate the point where they differ until it gets a result">
+</p>
+
 **Status:** in development. The Android app and the Windows agent work end to end; they are not in the stores yet.
 
 ## Install the PC agent
