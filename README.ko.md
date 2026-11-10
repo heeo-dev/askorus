@@ -80,18 +80,12 @@ PC의 Claude Code나 Codex에 아래 글을 붙여 넣으세요. 스크립트를
 
 ## 이렇게 동작해요
 
-```mermaid
-flowchart LR
-  Q["질문<br/>한 번 묻기"] --> A["여러 답<br/>AI마다 각자"]
-  A --> M["사회자<br/>종합 답변,<br/>같은 곳과 다른 곳"]
-  M --> D["토론<br/>다른 곳을 놓고"]
-  D --> R["더 나은 답"]
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/how-it-works-ko-dark.svg">
+  <img src="docs/images/how-it-works-ko-light.svg" width="640" alt="Askorus가 동작하는 네 단계. 1. 한 번 묻기: 폰에서 질문 하나를 켜 둔 AI 모두에게 보냅니다. 2. AI마다 답하기: Claude Code, Codex, OpenCode가 내 PC에서 각자 답합니다. 3. 사회자가 종합: 종합 답변에 의견이 같은 곳과 다른 곳을 함께 보여 줍니다. 4. 다른 곳은 토론: AI마다 생각을 유지하거나 바꾸고, 쟁점마다 결과가 나옵니다.">
+</picture>
 
-1. **질문.** 폰에서 한 번 묻습니다.
-2. **여러 답.** 켜 둔 AI(Claude Code, Codex, OpenCode)가 내 PC에서 각자 답합니다.
-3. **사회자.** 그중 하나인 사회자가 모든 답을 읽고 종합 답변을 쓰며, AI들의 의견이 같은 곳과 다른 곳을 보여 줍니다.
-4. **토론.** 원하면 의견이 다른 곳을 놓고 AI끼리 토론합니다. 사회자가 쟁점을 고르고, AI마다 생각을 유지하거나 바꾸며, 쟁점마다 결과가 나옵니다.
+사회자는 물어본 AI 중 하나이고, 토론은 원할 때만 합니다.
 
 ## 기능
 

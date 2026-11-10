@@ -80,18 +80,12 @@ Rules:
 
 ## How it works
 
-```mermaid
-flowchart LR
-  Q["Question<br/>ask once"] --> A["Answers<br/>every AI on its own"]
-  A --> M["Moderator<br/>one combined answer,<br/>where they agree and differ"]
-  M --> D["Debate<br/>on the points they differ"]
-  D --> R["A better answer"]
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/how-it-works-en-dark.svg">
+  <img src="docs/images/how-it-works-en-light.svg" width="640" alt="How Askorus works, in four steps. 1. Ask once: one question goes from your phone to every AI you turned on. 2. Every AI answers: Claude Code, Codex and OpenCode answer on your PC, each on its own. 3. The moderator combines: one combined answer, with where the AIs agree and where they differ. 4. They debate the differences: each AI keeps or changes its view, and every point gets a result.">
+</picture>
 
-1. **Question.** You ask once, on your phone.
-2. **Answers.** Every AI you turned on (Claude Code, Codex, OpenCode) answers on its own, on your PC.
-3. **Moderator.** One of them, the moderator, reads all the answers, writes a combined answer and shows where the AIs agree and where they don't.
-4. **Debate.** If you like, the AIs debate the points where they differ: the moderator picks the points, each AI keeps or changes its view, and every point gets a result.
+The moderator is one of the AIs you asked. The debate is optional.
 
 ## Features
 
