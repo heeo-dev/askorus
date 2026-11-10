@@ -35,7 +35,7 @@ Open PowerShell on the PC (a normal window, not "Run as administrator") and past
 irm https://github.com/heeo-dev/askorus/releases/latest/download/install.ps1 | iex
 ```
 
-The script downloads the agent from the GitHub release, checks its SHA-256, puts it in `%LOCALAPPDATA%\Programs\Askorus` and starts `askorus-agent setup`. Setup goes step by step: PATH, Claude Code, Tailscale (it asks before it lets Tailscale pass the phone's requests to the agent), starting at logon, and a QR code you scan with the app. It needs no administrator rights. Run the same line again to update. (This works from the first release on; until then, [build from source](#build-from-source).)
+The script downloads the agent from the GitHub release, checks its SHA-256, puts it in `%LOCALAPPDATA%\Programs\Askorus` and starts `askorus-agent setup`. Setup goes step by step: PATH, the AI programs, Tailscale (it asks before it lets Tailscale pass the phone's requests to the agent), starting at logon, and a QR code you scan with the app. It needs no administrator rights. Run the same line again to update. (This works from the first release on; until then, [build from source](#build-from-source).)
 
 Have [what you need](#what-you-need) ready first: Tailscale and at least one AI program, signed in.
 
@@ -101,7 +101,7 @@ The moderator is one of the AIs you asked. The debate is optional.
 
 - A Windows PC (macOS later)
 - [Tailscale](https://tailscale.com) on the PC and the phone
-- At least one official AI program installed and signed in on the PC: Claude Code, Codex or OpenCode. Askorus uses the subscriptions and free accounts you already have; it never reads or moves their sign-in data.
+- At least one official AI program installed and signed in on the PC: Claude Code, Codex or OpenCode. With two or more you get combined answers and debates; My PCs (the Claude Code sessions) needs Claude Code. Askorus uses the subscriptions and free accounts you already have; it never reads or moves their sign-in data.
 - An Android phone (iOS later)
 
 ## Build from source

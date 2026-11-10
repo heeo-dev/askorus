@@ -40,12 +40,19 @@ func setupCmd(dir string, args []string, in io.Reader, out io.Writer) error {
 		return err
 	}
 	env := setupEnv{
-		elevated:  claude.SelfElevated,
-		exe:       os.Executable,
-		exeDir:    exeDir,
-		pathHas:   userPathHas,
-		pathAdd:   userPathAdd,
-		claude:    adapter.Info,
+		elevated: claude.SelfElevated,
+		exe:      os.Executable,
+		exeDir:   exeDir,
+		pathHas:  userPathHas,
+		pathAdd:  userPathAdd,
+		claude:   adapter.Info,
+		others: func(ctx context.Context) []namedInfo {
+			var out []namedInfo
+			for _, a := range askOnlyAdapters(cfg) {
+				out = append(out, namedInfo{name: displayName(a.Agent()), info: a.Info(ctx)})
+			}
+			return out
+		},
 		tailnet:   lookTailnet,
 		servePort: suggestServePort,
 		serveOn: func(ctx context.Context, httpsPort, localPort int) error {
@@ -83,6 +90,7 @@ type setupEnv struct {
 	pathHas   func(dir string) bool
 	pathAdd   func(dir string) (bool, error)
 	claude    func(ctx context.Context) core.AdapterInfo
+	others    func(ctx context.Context) []namedInfo // the AIs that only answer asks (Codex, OpenCode)
 	tailnet   func(ctx context.Context, port int) tailnetInfo
 	servePort func(ctx context.Context, port int) int
 	serveOn   func(ctx context.Context, httpsPort, localPort int) error
@@ -94,6 +102,12 @@ type setupEnv struct {
 	autoSet   func(exe string) error
 	paired    func() int
 	pair      func(in io.Reader, out io.Writer) error
+}
+
+// namedInfo is one AI program as setup shows it.
+type namedInfo struct {
+	name string // displayName
+	info core.AdapterInfo
 }
 
 const setupSteps = 5
@@ -140,25 +154,52 @@ func runSetup(ctx context.Context, cfg config.Config, env setupEnv, in io.Reader
 		c.line("ok", m("put %s on this user's PATH: new terminals find askorus-agent", "%s를 이 사용자의 PATH에 넣었습니다. 새 터미널에서 askorus-agent로 쓸 수 있습니다", dir))
 	}
 
-	step(2, m("Claude Code", "Claude Code"))
+	// Any of the AI programs will do (2026-11-10 decision): Claude Code is
+	// needed only for the PC's Claude Code sessions, and two or more AIs for
+	// combined answers and debates (a comparison needs two answers).
+	step(2, m("AI programs", "AI 프로그램"))
 	info := env.claude(ctx)
-	if !info.Available {
-		return stop(m("Claude Code was not found or does not work: install it (https://code.claude.com/docs/en/setup) and sign in (run claude once in a terminal)",
-			"Claude Code를 찾지 못했거나 동작하지 않습니다. 설치하고(https://code.claude.com/docs/en/setup) 설치하고 로그인하세요 (터미널에서 claude를 한 번 실행)"))
+	others := env.others(ctx)
+	found := 0
+	if info.Available {
+		found++
 	}
-	for _, n := range info.Notices {
-		switch n {
-		case claude.NoticeServiceElevated:
-			return stop(m("the Claude background service runs as administrator; in an administrator terminal run: claude daemon stop --any",
-				"Claude 백그라운드 서비스가 관리자 권한입니다. 관리자 터미널에서 실행하세요: claude daemon stop --any"))
-		case claude.NoticeRCDisabledEnv:
-			return stop(m("CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC or DISABLE_GROWTHBOOK is set, so Remote Control cannot work; remove it",
-				"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC 또는 DISABLE_GROWTHBOOK이 켜져 있어 Remote Control을 쓸 수 없습니다. 지우세요"))
+	for _, o := range others {
+		if o.info.Available {
+			found++
 		}
 	}
-	c.line("ok", m("Claude Code %s found", "Claude Code %s 찾음", info.Version))
-	c.line("info", m("Codex and OpenCode are optional: asks use them when they are installed (askorus-agent check lists them)",
-		"Codex와 OpenCode는 없어도 됩니다. 설치돼 있으면 묻기에 같이 씁니다 (askorus-agent check에서 보임)"))
+	if found == 0 {
+		return stop(m("no AI program was found: install at least one of Claude Code, Codex or OpenCode and sign in to it (two or more give combined answers and debates)",
+			"AI 프로그램을 찾지 못했습니다. Claude Code, Codex, OpenCode 중 하나 이상을 설치하고 로그인하세요 (둘 이상이면 종합 답변과 토론이 나옵니다)"))
+	}
+	if info.Available {
+		for _, n := range info.Notices {
+			switch n {
+			case claude.NoticeServiceElevated:
+				return stop(m("the Claude background service runs as administrator; in an administrator terminal run: claude daemon stop --any",
+					"Claude 백그라운드 서비스가 관리자 권한입니다. 관리자 터미널에서 실행하세요: claude daemon stop --any"))
+			case claude.NoticeRCDisabledEnv:
+				return stop(m("CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC or DISABLE_GROWTHBOOK is set, so Remote Control cannot work; remove it",
+					"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC 또는 DISABLE_GROWTHBOOK이 켜져 있어 Remote Control을 쓸 수 없습니다. 지우세요"))
+			}
+		}
+		c.line("ok", m("Claude Code %s found", "Claude Code %s 찾음", info.Version))
+	} else {
+		c.line("warn", m("Claude Code was not found: asks go to the other AIs, but My PCs (the PC's Claude Code sessions on the phone) needs it. To add it, install it (https://code.claude.com/docs/en/setup) and sign in (run claude once in a terminal)",
+			"Claude Code를 찾지 못했습니다. 묻기는 다른 AI로 하지만, '내 PC'(이 PC의 Claude Code 세션을 폰에서 쓰기)에는 Claude Code가 있어야 합니다. 쓰려면 설치하고(https://code.claude.com/docs/en/setup) 로그인하세요 (터미널에서 claude를 한 번 실행)"))
+	}
+	for _, o := range others {
+		if o.info.Available {
+			c.line("ok", m("%s %s found (asks)", "%s %s 찾음 (묻기)", o.name, o.info.Version))
+		} else {
+			c.line("info", m("%s not found (optional: asks use it when it is installed and signed in)", "%s 없음 (없어도 됩니다. 설치하고 로그인하면 묻기에 같이 씁니다)", o.name))
+		}
+	}
+	if found == 1 {
+		c.line("warn", m("only one AI program: asks work, but combined answers and debates need two or more",
+			"AI 프로그램이 하나뿐입니다. 묻기는 되지만 종합 답변과 토론은 둘 이상일 때 나옵니다"))
+	}
 
 	step(3, m("Tailscale (how the phone reaches this PC)", "Tailscale (폰이 이 PC에 닿는 길)"))
 	// Tailscale passes the phone's requests to this port: another program
@@ -268,10 +309,12 @@ func runSetup(ctx context.Context, cfg config.Config, env setupEnv, in io.Reader
 	}
 
 	fmt.Fprintln(out)
-	for _, tip := range setupTips(cfg) {
-		c.line("info", tip)
+	if info.Available { // the tips are all Claude Code's
+		for _, tip := range setupTips(cfg) {
+			c.line("info", tip)
+		}
+		fmt.Fprintln(out)
 	}
-	fmt.Fprintln(out)
 	say(out, m("Set up. Check everything any time with: askorus-agent check",
 		"설정을 마쳤습니다. 언제든 점검하려면: askorus-agent check"))
 	return nil

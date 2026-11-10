@@ -35,7 +35,7 @@ PC에서 PowerShell을 열고(관리자 권한이 아닌 보통 창) 아래 한 
 irm https://github.com/heeo-dev/askorus/releases/latest/download/install.ps1 | iex
 ```
 
-스크립트가 GitHub 배포판에서 에이전트를 받아 SHA-256을 확인하고, `%LOCALAPPDATA%\Programs\Askorus`에 둔 뒤 `askorus-agent setup`을 시작합니다. setup은 PATH, Claude Code, Tailscale(폰의 요청을 에이전트로 넘기는 설정은 켜기 전에 묻습니다), 로그인할 때 켜기, 앱으로 찍을 QR까지 차례로 안내합니다. 관리자 권한은 필요 없습니다. 업데이트할 때도 같은 줄을 다시 실행하면 됩니다. (첫 배포판부터 됩니다. 그전에는 [소스에서 빌드](#소스에서-빌드)하세요.)
+스크립트가 GitHub 배포판에서 에이전트를 받아 SHA-256을 확인하고, `%LOCALAPPDATA%\Programs\Askorus`에 둔 뒤 `askorus-agent setup`을 시작합니다. setup은 PATH, AI 프로그램, Tailscale(폰의 요청을 에이전트로 넘기는 설정은 켜기 전에 묻습니다), 로그인할 때 켜기, 앱으로 찍을 QR까지 차례로 안내합니다. 관리자 권한은 필요 없습니다. 업데이트할 때도 같은 줄을 다시 실행하면 됩니다. (첫 배포판부터 됩니다. 그전에는 [소스에서 빌드](#소스에서-빌드)하세요.)
 
 먼저 [필요한 것](#필요한-것)을 준비해 두세요: Tailscale과, 로그인해 둔 AI 프로그램 하나 이상.
 
@@ -101,7 +101,7 @@ PC의 Claude Code나 Codex에 아래 글을 붙여 넣으세요. 스크립트를
 
 - Windows PC (macOS는 나중에)
 - PC와 폰에 [Tailscale](https://tailscale.com)
-- PC에 설치하고 로그인해 둔 공식 AI 프로그램 하나 이상: Claude Code, Codex, OpenCode. 이미 쓰는 구독과 무료 계정을 그대로 쓰며, 그 로그인 정보는 읽거나 옮기지 않습니다.
+- PC에 설치하고 로그인해 둔 공식 AI 프로그램 하나 이상: Claude Code, Codex, OpenCode. 둘 이상이면 종합 답변과 토론이 나오고, '내 PC'(Claude Code 세션)에는 Claude Code가 있어야 합니다. 이미 쓰는 구독과 무료 계정을 그대로 쓰며, 그 로그인 정보는 읽거나 옮기지 않습니다.
 - 안드로이드 폰 (iOS는 나중에)
 
 ## 소스에서 빌드
