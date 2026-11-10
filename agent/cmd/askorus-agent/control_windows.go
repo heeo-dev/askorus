@@ -97,9 +97,6 @@ func startDetached(exe string, args []string, dir, logFile string) (int, error) 
 const (
 	runKey       = `Software\Microsoft\Windows\CurrentVersion\Run`
 	runValueName = "Askorus Agent"
-	// oldRunValueName is the value before 11-08 (#31). Setting or removing
-	// the autostart removes it too, so the old agent does not start as well.
-	oldRunValueName = "Asksemble Agent"
 )
 
 func autostartCommand(exe string, testPage bool) string {
@@ -116,13 +113,7 @@ func autostartSet(exe string, testPage bool) error {
 		return err
 	}
 	defer k.Close()
-	if err := k.SetStringValue(runValueName, autostartCommand(exe, testPage)); err != nil {
-		return err
-	}
-	if err := k.DeleteValue(oldRunValueName); err != nil && !errors.Is(err, registry.ErrNotExist) {
-		return err
-	}
-	return nil
+	return k.SetStringValue(runValueName, autostartCommand(exe, testPage))
 }
 
 func autostartRemove() error {
@@ -131,10 +122,8 @@ func autostartRemove() error {
 		return err
 	}
 	defer k.Close()
-	for _, name := range []string{runValueName, oldRunValueName} {
-		if err := k.DeleteValue(name); err != nil && !errors.Is(err, registry.ErrNotExist) {
-			return err
-		}
+	if err := k.DeleteValue(runValueName); err != nil && !errors.Is(err, registry.ErrNotExist) {
+		return err
 	}
 	return nil
 }

@@ -1,0 +1,7 @@
+# The guide files that AI coding tools read and follow: a change there can
+# plant instructions for whoever opens the branch with an AI, so the owner
+# reviews every change to them (#15). Turn on "Require review from Code
+# Owners" for main when the repository goes public.
+/CLAUDE.md @heeo-dev
+/AGENTS.md @heeo-dev
+/.github/ @heeo-dev

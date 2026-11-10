@@ -265,9 +265,9 @@ func TestTrustPromptRecognised(t *testing.T) {
 
 func TestProjectDirName(t *testing.T) {
 	cases := map[string]string{
-		`D:\ClaudeHome\Askorus\.local\rc-test`: "D--ClaudeHome-Askorus--local-rc-test",
-		`D:\ClaudeHome`:                        "D--ClaudeHome",
-		`D:\가나`:                                "D----",
+		`D:\Work\Askorus\.local\rc-test`: "D--Work-Askorus--local-rc-test",
+		`D:\Work`:                        "D--Work",
+		`D:\가나`:                          "D----",
 	}
 	for in, want := range cases {
 		if got := projectDirName(in); got != want && os.PathSeparator == '\\' {

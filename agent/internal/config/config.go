@@ -5,12 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
-	"time"
 
 	"github.com/heeo-dev/askorus/agent/internal/core"
 )
@@ -172,25 +170,11 @@ func Dir() (string, error) {
 }
 
 // DirName is the agent's folder under the user's config and cache folders.
-// OldDirName is its name before 11-08 (#31): MoveOldDirs copies a folder of
-// that name to DirName once, and until it has, the old folder is used.
-const (
-	DirName    = "Askorus"
-	OldDirName = "Asksemble"
-)
+const DirName = "Askorus"
 
-// Under returns base/Askorus, or base/Asksemble when only that one exists
-// (the copy has not happened yet, or it failed).
+// Under returns base/Askorus.
 func Under(base string) string {
-	cur := filepath.Join(base, DirName)
-	if _, err := os.Stat(cur); err == nil {
-		return cur
-	}
-	old := filepath.Join(base, OldDirName)
-	if fi, err := os.Stat(old); err == nil && fi.IsDir() {
-		return old
-	}
-	return cur
+	return filepath.Join(base, DirName)
 }
 
 // ConfigBase is the folder under the user's config folder (%APPDATA% on
@@ -211,127 +195,6 @@ func CacheBase() (string, error) {
 		return "", err
 	}
 	return Under(base), nil
-}
-
-// Moved is a folder MoveOldDirs copied.
-type Moved struct{ From, To string }
-
-// MoveOldDirs copies the old folders (Asksemble under the user's config and
-// cache folders) to the new name, once: only when the old folder exists and
-// the new one does not. The old folder stays as it was. The copy is made
-// in a side folder and renamed into place, so a failed copy leaves nothing
-// behind and the old folder goes on being used. agent.pid is not copied:
-// it belongs to the agent that wrote it. Nothing is done while
-// $ASKORUS_AGENT_DIR points the agent elsewhere (tests, a second agent).
-func MoveOldDirs() ([]Moved, error) {
-	if os.Getenv("ASKORUS_AGENT_DIR") != "" {
-		return nil, nil
-	}
-	var moved []Moved
-	var errs []error
-	for _, base := range []func() (string, error){os.UserConfigDir, os.UserCacheDir} {
-		b, err := base()
-		if err != nil {
-			errs = append(errs, err)
-			continue
-		}
-		m, err := moveOld(b)
-		if err != nil {
-			errs = append(errs, err)
-		} else if m != nil {
-			moved = append(moved, *m)
-		}
-	}
-	return moved, errors.Join(errs...)
-}
-
-// staleCopy is how old a side folder must be before another start takes it
-// for one left by a copy that died. A copy of the agent's folders takes
-// seconds.
-const staleCopy = 10 * time.Minute
-
-// moveOld copies base/Asksemble to base/Askorus when only the old exists.
-// The side folder is also the lock: every agent command runs this at its
-// start (11-08: a status run next to a start removed the copy the start was
-// making), so the one that makes the side folder copies and the others go
-// on with the old folder.
-func moveOld(base string) (*Moved, error) {
-	from := filepath.Join(base, OldDirName)
-	to := filepath.Join(base, DirName)
-	if fi, err := os.Stat(from); err != nil || !fi.IsDir() {
-		return nil, nil
-	}
-	if _, err := os.Lstat(to); err == nil || !errors.Is(err, os.ErrNotExist) {
-		return nil, nil
-	}
-	side := to + ".copying"
-	if err := os.Mkdir(side, 0o700); err != nil {
-		if !errors.Is(err, os.ErrExist) {
-			return nil, err
-		}
-		fi, serr := os.Stat(side)
-		if serr != nil || time.Since(fi.ModTime()) < staleCopy {
-			return nil, nil // another start is copying: use the old folder meanwhile
-		}
-		if err := os.RemoveAll(side); err != nil {
-			return nil, err
-		}
-		if err := os.Mkdir(side, 0o700); err != nil {
-			return nil, nil
-		}
-	}
-	if err := copyTree(from, side); err != nil {
-		os.RemoveAll(side)
-		return nil, fmt.Errorf("copy %s to %s: %w", from, to, err)
-	}
-	if err := os.Rename(side, to); err != nil {
-		os.RemoveAll(side)
-		return nil, fmt.Errorf("copy %s to %s: %w", from, to, err)
-	}
-	return &Moved{From: from, To: to}, nil
-}
-
-// copyTree copies the folder from to to (which must not exist): folders and
-// regular files, with their modes and times. Links and agent.pid are left
-// out.
-func copyTree(from, to string) error {
-	return filepath.Walk(from, func(path string, fi os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		rel, err := filepath.Rel(from, path)
-		if err != nil {
-			return err
-		}
-		dst := filepath.Join(to, rel)
-		switch {
-		case fi.IsDir():
-			return os.MkdirAll(dst, 0o700)
-		case !fi.Mode().IsRegular(), rel == "agent.pid":
-			return nil
-		}
-		if err := copyFile(path, dst, fi); err != nil {
-			return err
-		}
-		return os.Chtimes(dst, fi.ModTime(), fi.ModTime())
-	})
-}
-
-func copyFile(src, dst string, fi os.FileInfo) error {
-	in, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer in.Close()
-	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL, fi.Mode().Perm())
-	if err != nil {
-		return err
-	}
-	if _, err := io.Copy(out, in); err != nil {
-		out.Close()
-		return err
-	}
-	return out.Close()
 }
 
 // Load reads dir/agent.json. A missing file gives the defaults.
