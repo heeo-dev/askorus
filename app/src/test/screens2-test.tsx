@@ -11,6 +11,7 @@ import TabsLayout from '@/app/(tabs)/_layout';
 import MyPC from '@/app/(tabs)/pcs';
 import RootLayout from '@/app/_layout';
 import Pair from '@/app/pair';
+import Licenses from '@/app/licenses';
 import Folders from '@/app/pc/[id]/folders';
 import NewSession from '@/app/pc/[id]/new';
 import Settings from '@/app/settings';
@@ -33,6 +34,7 @@ const routes = {
   'pc/[id]/new': NewSession,
   'pc/[id]/folders': Folders,
   settings: Settings,
+  licenses: Licenses,
   pair: Pair,
   about: () => <Text>about screen</Text>,
 };
@@ -487,6 +489,28 @@ describe('settings', () => {
     const about = await screen.findByRole('button', { name: `Askorus ${version}`.trim() + ', Not an official product of any AI company.' });
     await user.press(about);
     await waitFor(() => expect(r.getPathname()).toBe('/about'));
+  });
+
+  // #32: the installed app carries the notices of what it is built from.
+  test('Open-source licenses lists what the app is built with, and an item shows its license text', async () => {
+    const user = userEvent.setup();
+    const r = await renderRouter(routes, { initialUrl: '/settings' });
+    await user.press(await screen.findByRole('button', { name: 'Open-source licenses' }));
+    await waitFor(() => expect(r.getPathname()).toBe('/licenses'));
+    expect(await screen.findByText('The open-source software Askorus is built with. Tap an item to read its license.')).toBeTruthy();
+    expect(screen.getByRole('header', { name: /^\d+ packages the app is built with$/ })).toBeTruthy();
+
+    // The first rows are drawn; a package's license text opens in a sheet.
+    const first = await screen.findByRole('button', { name: '@babel/code-frame, MIT' });
+    await user.press(first);
+    const sheet = within(await screen.findByTestId('license-sheet'));
+    expect(sheet.getByRole('header', { name: '@babel/code-frame' })).toBeTruthy();
+    expect(sheet.getByText(/Permission is hereby granted, free of charge/)).toBeTruthy();
+    await user.press(sheet.getByRole('button', { name: 'Close' }));
+    await waitFor(() => expect(screen.queryByTestId('license-sheet')).toBeNull());
+
+    await user.press(screen.getByRole('button', { name: 'Back' }));
+    await waitFor(() => expect(r.getPathname()).toBe('/settings'));
   });
 
   test('Pair with a PC opens pairing', async () => {
