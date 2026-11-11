@@ -313,8 +313,8 @@ func serve(dir string, args []string) error {
 	// it the API still works locally, but phones cannot pair.
 	ti := lookTailnet(ctx, cfg.Port)
 	if ti.served && ti.serve.Funnel {
-		return fail("tailscale funnel exposes this port to the internet; turn it off first (tailscale funnel --https=%d off)",
-			"tailscale funnel이 이 포트를 인터넷에 열어 두었습니다. 먼저 끄세요 (tailscale funnel --https=%d off)", ti.serve.HTTPSPort)
+		return fail("tailscale funnel exposes this port to the internet; turn it off first (%s funnel --https=%d off)",
+			"tailscale funnel이 이 포트를 인터넷에 열어 두었습니다. 먼저 끄세요 (%s funnel --https=%d off)", tsCmd, ti.serve.HTTPSPort)
 	}
 	owner := cfg.TailscaleOwner
 	if owner == "" {
@@ -527,8 +527,8 @@ func pair(dir string, args []string, in io.Reader, out io.Writer) error {
 			return ti.problem
 		}
 		if !ti.served {
-			return fail("tailscale serve does not point at the agent yet. Pick a free HTTPS port and run: tailscale serve --bg --https=<port> http://127.0.0.1:%d",
-				"tailscale serve가 아직 에이전트를 가리키지 않습니다. 빈 HTTPS 포트를 골라 실행하세요: tailscale serve --bg --https=<포트> http://127.0.0.1:%d", cfg.Port)
+			return fail("tailscale serve does not point at the agent yet. Pick a free HTTPS port and run: %s serve --bg --https=<port> http://127.0.0.1:%d",
+				"tailscale serve가 아직 에이전트를 가리키지 않습니다. 빈 HTTPS 포트를 골라 실행하세요: %s serve --bg --https=<포트> http://127.0.0.1:%d", tsCmd, cfg.Port)
 		}
 		if ti.serve.Funnel {
 			return fail("tailscale funnel is on for the agent port; turn it off first",

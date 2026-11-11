@@ -344,6 +344,15 @@ func (a *Adapter) inAgents(ctx context.Context, id string) bool {
 }
 
 func (a *Adapter) stopEntry(ctx context.Context, e agentEntry) error {
+	// The process to see end, taken from its session file before the stop.
+	// `claude stop` returns while the process still runs: on Linux it
+	// lived about 1.2 s longer, with no pid in `claude agents` and its
+	// session file already gone, and a wake in that gap forked a copy
+	// (#52, R-99). The file's start time pins the pid to this process.
+	var proc liveSession
+	if l, ok := a.live()[e.SessionID]; ok && l.PID > 0 && (e.PID == 0 || e.PID == l.PID) {
+		proc = l
+	}
 	res, err := a.runner.Run(ctx, "", "stop", firstNonEmpty(e.ID, e.SessionID))
 	a.Invalidate()
 	if err != nil {
@@ -358,7 +367,8 @@ func (a *Adapter) stopEntry(ctx context.Context, e agentEntry) error {
 		if ok {
 			cur, has := bestEntry(entries, e.SessionID)
 			_, stillLive := a.live()[e.SessionID]
-			if (!has || cur.PID == 0) && !stillLive {
+			stillRuns := proc.PID > 0 && a.alive(proc.PID, proc.ProcStart)
+			if (!has || cur.PID == 0) && !stillLive && !stillRuns {
 				return nil // the process is gone
 			}
 		}

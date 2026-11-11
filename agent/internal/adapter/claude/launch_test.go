@@ -237,6 +237,46 @@ func TestStopAndRemove(t *testing.T) {
 	}
 }
 
+// R-99 (#52, found by the live test on Linux): `claude stop` returns while
+// the session's process still runs, `claude agents` already shows it
+// without a pid and its session file is gone. A wake in that gap forks a
+// copy, so stop returns only once the process itself has ended.
+func TestStopWaitsForTheProcessToEnd(t *testing.T) {
+	e := newLaunchEnv(t, []agentEntry{runningEntry})
+	e.a.live = func() map[string]liveSession {
+		if len(e.launches(t)) > 0 {
+			return nil // gone as soon as claude stop has run
+		}
+		return map[string]liveSession{id1: {PID: runningEntry.PID, SessionID: id1, Kind: "bg", ProcStart: "777"}}
+	}
+	asked := 0
+	e.a.alive = func(pid int, procStart string) bool {
+		if pid != runningEntry.PID || procStart != "777" {
+			t.Errorf("asked about pid %d started %q", pid, procStart)
+		}
+		asked++
+		return asked <= 3 // it lives through three looks
+	}
+	s, err := e.a.Stop(context.Background(), id1)
+	if err != nil || s.State != core.StateStopped {
+		t.Fatalf("stop = %+v, %v", s, err)
+	}
+	if asked != 4 {
+		t.Errorf("stop returned after %d looks at the process, want 4 (three while it ran)", asked)
+	}
+
+	// A session without a session file (none was read before the stop) is
+	// not waited for by pid: nothing pins the pid to that process.
+	e = newLaunchEnv(t, []agentEntry{runningEntry})
+	e.a.alive = func(int, string) bool {
+		t.Error("looked at a process without a session file")
+		return false
+	}
+	if _, err := e.a.Stop(context.Background(), id1); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestRemoveRunningStopsFirst(t *testing.T) {
 	e := newLaunchEnv(t, []agentEntry{runningEntry})
 	if err := e.a.Remove(context.Background(), id1); err != nil {

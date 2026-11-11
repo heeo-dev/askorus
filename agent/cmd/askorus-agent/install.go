@@ -322,14 +322,14 @@ func checkCmd(dir string, out io.Writer) error {
 		}
 		switch {
 		case ti.served && ti.serve.Funnel:
-			c.line("bad", m("tailscale funnel exposes the agent port to the internet; turn it off: tailscale funnel --https=%d off",
-				"tailscale funnel이 에이전트 포트를 인터넷에 엽니다. 끄세요: tailscale funnel --https=%d off", ti.serve.HTTPSPort))
+			c.line("bad", m("tailscale funnel exposes the agent port to the internet; turn it off: %s funnel --https=%d off",
+				"tailscale funnel이 에이전트 포트를 인터넷에 엽니다. 끄세요: %s funnel --https=%d off", tsCmd, ti.serve.HTTPSPort))
 		case ti.served:
 			c.line("ok", m("phones reach the agent at https://%s:%d", "폰은 https://%s:%d로 에이전트에 닿습니다", ti.serve.Host, ti.serve.HTTPSPort))
 		default:
 			port := suggestServePort(ctx, cfg.Port)
-			c.line("bad", m("tailscale serve does not point at the agent yet; run: tailscale serve --bg --https=%d http://127.0.0.1:%d",
-				"tailscale serve가 아직 에이전트를 가리키지 않습니다. 실행하세요: tailscale serve --bg --https=%d http://127.0.0.1:%d", port, cfg.Port))
+			c.line("bad", m("tailscale serve does not point at the agent yet; run: %s serve --bg --https=%d http://127.0.0.1:%d",
+				"tailscale serve가 아직 에이전트를 가리키지 않습니다. 실행하세요: %s serve --bg --https=%d http://127.0.0.1:%d", tsCmd, port, cfg.Port))
 		}
 	}
 
@@ -546,8 +546,8 @@ func uninstallCmd(dir string, args []string, in io.Reader, out io.Writer) error 
 	if ti.served {
 		if c, err := tailnet.New(); err == nil {
 			if err := c.ServeOff(ctx, ti.serve.HTTPSPort); err != nil {
-				say(out, m("could not turn off tailscale serve (%v); run: tailscale serve --https=%d off",
-					"tailscale serve를 끄지 못했습니다 (%v). 직접 실행하세요: tailscale serve --https=%d off", err, ti.serve.HTTPSPort))
+				say(out, m("could not turn off tailscale serve (%v); run: %s serve --https=%d off",
+					"tailscale serve를 끄지 못했습니다 (%v). 직접 실행하세요: %s serve --https=%d off", err, tsCmd, ti.serve.HTTPSPort))
 			}
 		}
 	}

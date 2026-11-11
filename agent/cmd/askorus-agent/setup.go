@@ -227,8 +227,8 @@ func runSetup(ctx context.Context, cfg config.Config, env setupEnv, in io.Reader
 				"tailnet에 HTTPS 인증서가 꺼져 있습니다. Tailscale 관리 화면(DNS 쪽)에서 MagicDNS와 HTTPS Certificates를 켜세요"))
 		}
 		if ti.served && ti.serve.Funnel {
-			return stop(m("tailscale funnel opens the agent port to the internet; turn it off: tailscale funnel --https=%d off",
-				"tailscale funnel이 에이전트 포트를 인터넷에 엽니다. 끄세요: tailscale funnel --https=%d off", ti.serve.HTTPSPort))
+			return stop(m("tailscale funnel opens the agent port to the internet; turn it off: %s funnel --https=%d off",
+				"tailscale funnel이 에이전트 포트를 인터넷에 엽니다. 끄세요: %s funnel --https=%d off", tsCmd, ti.serve.HTTPSPort))
 		}
 		if ti.served {
 			c.line("ok", m("Tailscale connected as %s; phones reach the agent at https://%s:%d", "Tailscale 연결됨: %s. 폰은 https://%s:%d로 에이전트에 닿습니다",
@@ -238,7 +238,7 @@ func runSetup(ctx context.Context, cfg config.Config, env setupEnv, in io.Reader
 		port := env.servePort(ctx, cfg.Port)
 		c.line("warn", m("Tailscale is connected (account %s), but it does not pass the phone's requests to the agent yet. This Tailscale setting does it, once per PC:",
 			"Tailscale은 연결됐지만(계정 %s), 아직 폰의 요청을 에이전트로 넘기지 않습니다. 이 Tailscale 설정이 그 일을 합니다 (PC마다 한 번):", ti.status.OwnerLogin))
-		fmt.Fprintf(out, "\n      tailscale serve --bg --https=%d http://127.0.0.1:%d\n\n", port, cfg.Port)
+		fmt.Fprintf(out, "\n      %s serve --bg --https=%d http://127.0.0.1:%d\n\n", tsCmd, port, cfg.Port)
 		say(out, m("It passes https://%s:%d to the agent, for devices on your own tailnet only (not the internet). Your other serve settings stay as they are.",
 			"https://%s:%d로 오는 요청을 에이전트로 넘깁니다. 내 tailnet의 기기만 닿고 인터넷에는 열지 않습니다. 다른 serve 설정은 그대로입니다.", ti.status.DNSName, port))
 		yourself := triedServe

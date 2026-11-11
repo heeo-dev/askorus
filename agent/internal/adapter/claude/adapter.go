@@ -84,6 +84,9 @@ type Adapter struct {
 	// (~/.claude/sessions/<pid>.json, see livesessions.go).
 	live func() map[string]liveSession
 
+	// alive reports whether a process still runs (processAlive).
+	alive func(pid int, procStart string) bool
+
 	// serviceCheck reports an elevated Claude service (daemon.go).
 	serviceCheck func() (elevated bool, pid int)
 
@@ -127,6 +130,7 @@ func New(opts Options) *Adapter {
 		pointer: livePointer(projects),
 	}
 	sessionsDir := filepath.Join(opts.ClaudeDir, "sessions")
+	a.alive = processAlive
 	a.live = func() map[string]liveSession { return readLiveSessions(sessionsDir, processAlive) }
 	a.serviceCheck = func() (bool, int) { return serviceElevated(opts.ClaudeDir, processAlive, processElevated) }
 	a.folderExists = dirExists
