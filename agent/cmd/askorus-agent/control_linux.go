@@ -60,7 +60,7 @@ func unitQuote(s string) string {
 
 // unitText is the unit file. A value with a line break in it is left out
 // rather than written: it could add a line of its own to the file.
-func unitText(exe string, testPage bool, path string) string {
+func unitText(exe string, testPage bool, path, agentDir string) string {
 	exec := unitQuote(exe) + " serve"
 	if testPage {
 		exec += " -test-page"
@@ -73,6 +73,9 @@ func unitText(exe string, testPage bool, path string) string {
 	b.WriteString("Environment=" + unitQuote(detachedEnv+"=1") + "\n")
 	if path != "" && !strings.ContainsAny(path, "\r\n") {
 		b.WriteString("Environment=" + unitQuote("PATH="+path) + "\n")
+	}
+	if agentDir != "" && !strings.ContainsAny(agentDir, "\r\n") {
+		b.WriteString("Environment=" + unitQuote(agentDirEnv+"="+agentDir) + "\n")
 	}
 	b.WriteString("Restart=on-failure\nRestartSec=5\n\n[Install]\nWantedBy=default.target\n")
 	return b.String()
@@ -116,13 +119,19 @@ func autostartSet(exe string, testPage bool) error {
 	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 		return err
 	}
-	if err := os.WriteFile(p, []byte(unitText(exe, testPage, os.Getenv("PATH"))), 0o644); err != nil {
+	if err := os.WriteFile(p, []byte(unitText(exe, testPage, os.Getenv("PATH"), os.Getenv(agentDirEnv))), 0o644); err != nil {
 		return err
 	}
-	if err := systemctlUser("daemon-reload"); err != nil {
-		return err
+	err = systemctlUser("daemon-reload")
+	if err == nil {
+		err = systemctlUser("enable", unitName)
 	}
-	return systemctlUser("enable", unitName)
+	if err != nil {
+		// Not turned on: no file is left that says it is.
+		_ = os.Remove(p)
+		_ = systemctlUser("daemon-reload")
+	}
+	return err
 }
 
 func autostartRemove() error {

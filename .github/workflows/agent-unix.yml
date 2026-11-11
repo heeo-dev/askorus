@@ -1,15 +1,17 @@
-# The PC agent's tests on macOS and Linux (#52). The agent is developed on
-# Windows, where scripts/test-all.ps1 runs everything; this runs the Go
-# tests on the two other systems, with the pretend AI programs the tests
-# bring along. No real AI, no Tailscale and no secrets are used.
+# The PC agent on macOS and Linux (#52). The agent is developed on Windows,
+# where scripts/test-all.ps1 runs everything; this runs the Go tests on the
+# two other systems, with the pretend AI programs the tests bring along,
+# then the install script and the background commands (start, autostart,
+# path) for real on the runner. No real AI, no Tailscale and no secrets are
+# used.
 name: agent (macOS, Linux)
 
 on:
   push:
     branches: [main]
-    paths: ['agent/**', '.github/workflows/agent-unix.yml']
+    paths: ['agent/**', 'scripts/install.sh', 'scripts/test-install.sh', 'scripts/test-unix.sh', '.github/workflows/agent-unix.yml']
   pull_request:
-    paths: ['agent/**', '.github/workflows/agent-unix.yml']
+    paths: ['agent/**', 'scripts/install.sh', 'scripts/test-install.sh', 'scripts/test-unix.sh', '.github/workflows/agent-unix.yml']
   workflow_dispatch:
 
 permissions:
@@ -24,10 +26,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # macOS on both kinds of Mac. The Apple silicon runners are at times
-        # not handed out for a long while (the job is then cancelled, not
-        # failed); the Intel one usually still runs the macOS tests.
-        os: [ubuntu-latest, macos-latest, macos-26-intel]
+        # macOS runs on the Intel runner. The Apple silicon one (macos-latest) was
+        # not handed out in five runs on 2026-11-12: GitHub cancelled the job
+        # after 15 minutes each time. Put it back here when it is.
+        os: [ubuntu-latest, macos-26-intel]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     defaults:
@@ -48,3 +50,20 @@ jobs:
         run: go test ./...
       - name: build
         run: go build -trimpath -o "${RUNNER_TEMP}/askorus-agent" ./cmd/askorus-agent
+      - name: build for the other Mac and for Linux on ARM
+        run: |
+          GOOS=darwin GOARCH=arm64 go build -trimpath -o "${RUNNER_TEMP}/a1" ./cmd/askorus-agent
+          GOOS=darwin GOARCH=amd64 go build -trimpath -o "${RUNNER_TEMP}/a2" ./cmd/askorus-agent
+          GOOS=linux GOARCH=arm64 go build -trimpath -o "${RUNNER_TEMP}/a3" ./cmd/askorus-agent
+      - name: install script
+        working-directory: .
+        run: bash scripts/test-install.sh
+      # start, status, shutdown, path and autostart as a person runs them; on
+      # macOS the launch agent's file is loaded into launchd, on Linux the unit
+      # goes to this user's systemd when the runner has one.
+      - name: background commands on the real system
+        working-directory: .
+        env:
+          ASKORUS_TEST_LAUNCHD: '1'
+          ASKORUS_TEST_SYSTEMD: '1'
+        run: bash scripts/test-unix.sh

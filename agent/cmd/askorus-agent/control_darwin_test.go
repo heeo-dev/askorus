@@ -14,7 +14,7 @@ import (
 // #52: the launch agent's file must be XML that launchd reads, with the
 // agent's path and the terminal's PATH as text, never as markup.
 func TestPlistText(t *testing.T) {
-	got := plistText(`/Users/a b/<x>&"y"/askorus-agent`, true, "/opt/homebrew/bin:/usr/bin:/Users/a/R&D", "/Users/a/Library/Caches/Askorus/background.out")
+	got := plistText(`/Users/a b/<x>&"y"/askorus-agent`, true, "/opt/homebrew/bin:/usr/bin:/Users/a/R&D", "/Users/a/my <agent>", "/Users/a/Library/Caches/Askorus/background.out")
 	d := xml.NewDecoder(strings.NewReader(got))
 	d.Strict = true
 	var texts []string
@@ -39,6 +39,7 @@ func TestPlistText(t *testing.T) {
 		"RunAtLoad",
 		detachedEnv + "|1",
 		"PATH|/opt/homebrew/bin:/usr/bin:/Users/a/R&D",
+		agentDirEnv + "|/Users/a/my <agent>",
 		"StandardOutPath|/Users/a/Library/Caches/Askorus/background.out",
 	} {
 		if !strings.Contains(joined, want) {

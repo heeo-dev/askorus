@@ -55,7 +55,7 @@ func xmlText(s string) string {
 // plistText is the launch agent's file. The command in the comment has no
 // "--" in it (a comment cannot hold one): the agent's flags start with one
 // dash.
-func plistText(exe string, testPage bool, path, outFile string) string {
+func plistText(exe string, testPage bool, path, agentDir, outFile string) string {
 	args := []string{exe, "serve"}
 	if testPage {
 		args = append(args, "-test-page")
@@ -77,6 +77,9 @@ func plistText(exe string, testPage bool, path, outFile string) string {
 	b.WriteString("\t\t<key>" + detachedEnv + "</key>\n\t\t<string>1</string>\n")
 	if path != "" {
 		b.WriteString("\t\t<key>PATH</key>\n\t\t<string>" + xmlText(path) + "</string>\n")
+	}
+	if agentDir != "" {
+		b.WriteString("\t\t<key>" + agentDirEnv + "</key>\n\t\t<string>" + xmlText(agentDir) + "</string>\n")
 	}
 	b.WriteString("\t</dict>\n")
 	if outFile != "" {
@@ -102,7 +105,7 @@ func autostartSet(exe string, testPage bool) error {
 	if base, err := config.CacheBase(); err == nil && os.MkdirAll(base, 0o700) == nil {
 		outFile = filepath.Join(base, "background.out")
 	}
-	return os.WriteFile(p, []byte(plistText(exe, testPage, os.Getenv("PATH"), outFile)), 0o644)
+	return os.WriteFile(p, []byte(plistText(exe, testPage, os.Getenv("PATH"), os.Getenv(agentDirEnv), outFile)), 0o644)
 }
 
 func autostartRemove() error {

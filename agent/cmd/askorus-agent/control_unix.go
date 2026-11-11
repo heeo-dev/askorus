@@ -197,6 +197,11 @@ func keepAwake(on bool) {
 	}
 }
 
+// agentDirEnv names the agent's folder when it is not the usual one. An
+// agent started at logon gets none of the terminal's variables, so the
+// start file carries this one along, with the PATH.
+const agentDirEnv = "ASKORUS_AGENT_DIR"
+
 // goos is the system this agent was built for; the helpers take it as an
 // argument so the tests can ask about the other one.
 const goos = runtime.GOOS

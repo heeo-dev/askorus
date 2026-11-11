@@ -69,7 +69,7 @@ func TestServerRunsAndStopsCleanly(t *testing.T) {
 	}
 	calls := recordedCalls(t, argsFile)
 	want := []string{"remote-control", "--name", filepath.Base(dir), "--spawn", "same-dir", "--capacity", "3"}
-	if len(calls) != 1 || !slices.Equal(calls[0].Args, want) || !strings.EqualFold(calls[0].Cwd, dir) {
+	if len(calls) != 1 || !slices.Equal(calls[0].Args, want) || !sameFolder(calls[0].Cwd, dir) {
 		t.Fatalf("calls = %+v", calls)
 	}
 	if got := ss.ServerFolders(); len(got) != 1 {
