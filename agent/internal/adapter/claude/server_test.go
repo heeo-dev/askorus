@@ -141,6 +141,39 @@ func TestServerUntrustedIsNotRetried(t *testing.T) {
 	ss.StopServer(dir)
 }
 
+// #52, found with the real Claude Code on a new Linux account: before
+// Remote Control was ever turned on, the server asks "Enable Remote
+// Control? (y/n)" and waits. The agent never answers yes: it presses
+// Ctrl+C, says what the person has to do, and does not start it again and
+// again.
+func TestServerWithoutConsentSaysSoAndIsNotRetried(t *testing.T) {
+	ss, argsFile := newTestServers(t)
+	t.Setenv("ASKORUS_FAKE_NO_CONSENT", "1")
+	dir := t.TempDir()
+	ss.StartServer(dir, core.ServeOptions{Spawn: "same-dir", Capacity: 1})
+	st := waitState(t, ss, dir, core.ServeFailed)
+	if st.Error != consentHelp || st.Restarts != 0 {
+		t.Errorf("status = %+v", st)
+	}
+	time.Sleep(300 * time.Millisecond) // well past the 50 ms backoff
+	if n := len(recordedCalls(t, argsFile)); n != 1 {
+		t.Errorf("started %d times, want once", n)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "CONSENT-BY-AGENT")); err == nil {
+		t.Fatal("the agent answered yes to turning Remote Control on")
+	}
+	ss.StartServer(dir, core.ServeOptions{Spawn: "same-dir", Capacity: 1}) // the agent re-applies settings
+	if n := len(recordedCalls(t, argsFile)); n != 1 {
+		t.Errorf("retried at once: %d starts", n)
+	}
+	// After a minute it tries again, in case the person said yes meanwhile.
+	ss.now = func() time.Time { return time.Now().Add(untrustedRetry + time.Second) }
+	t.Setenv("ASKORUS_FAKE_NO_CONSENT", "")
+	ss.StartServer(dir, core.ServeOptions{Spawn: "same-dir", Capacity: 1})
+	waitState(t, ss, dir, core.ServeRunning)
+	ss.StopServer(dir)
+}
+
 func TestServerRestartsAfterCrash(t *testing.T) {
 	ss, argsFile := newTestServers(t)
 	t.Setenv("ASKORUS_FAKE_SERVE_EXIT", "1")

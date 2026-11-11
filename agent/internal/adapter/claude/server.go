@@ -54,6 +54,9 @@ var (
 	capacityRe = regexp.MustCompile(`Capacity:\s*(\d+)\s*/\s*(\d+)`)
 	// "Trust C:\…\folder? [y/N]" (Claude Code 2.1.310)
 	trustPromptRe = regexp.MustCompile(`^Trust .+\?\s*\[y/N\]`)
+	// The one question Claude Code asks before its first server on a PC (seen with
+	// 2.1.322 on a new Linux account, #52): "Enable Remote Control? (y/n)".
+	consentPromptRe = regexp.MustCompile(`^Enable Remote Control\?`)
 )
 
 // servers keeps the folder servers of one adapter.
@@ -80,6 +83,7 @@ type server struct {
 	st        core.ServeStatus
 	proc      serverProcess
 	untrusted bool
+	noConsent bool // Claude Code asked whether to turn Remote Control on
 	lines     []string
 }
 
@@ -144,6 +148,11 @@ func (ss *servers) StartServer(folder string, opts core.ServeOptions) error {
 	return nil
 }
 
+// consentHelp is what the app shows when Claude Code has not been allowed
+// to run Remote Control on this PC yet. Allowing it is the person's
+// decision: the agent never answers the question.
+const consentHelp = "Remote Control is not turned on in Claude Code on this PC yet. In a terminal on the PC run `claude remote-control`, answer y once, then stop it with Ctrl+C. It will not ask again."
+
 // untrustedRetry is how long an untrusted folder waits before the agent
 // tries again (the person may have trusted it on the PC meanwhile).
 const untrustedRetry = time.Minute
@@ -159,6 +168,9 @@ func (ss *servers) recheck(s *server) bool {
 		return true
 	case core.ServeUntrusted:
 		return ss.now().Sub(s.st.Since) >= untrustedRetry
+	case core.ServeFailed:
+		// Not allowed yet: tried again like an untrusted folder, in case the person said yes meanwhile.
+		return s.noConsent && ss.now().Sub(s.st.Since) >= untrustedRetry
 	}
 	return false
 }
@@ -195,11 +207,19 @@ func (ss *servers) supervise(s *server) {
 		}
 		s.mu.Lock()
 		untrusted := s.untrusted
+		noConsent := s.noConsent
 		detail := strings.Join(s.lines, " | ")
 		s.mu.Unlock()
 		if untrusted {
 			s.set(func(st *core.ServeStatus) {
 				*st = core.ServeStatus{State: core.ServeUntrusted, Since: ss.now().UTC(), Error: s.folder}
+			})
+			return
+		}
+		if noConsent {
+			// Starting it again would only ask again: it waits for the person, like an untrusted folder.
+			s.set(func(st *core.ServeStatus) {
+				*st = core.ServeStatus{State: core.ServeFailed, Since: ss.now().UTC(), Error: consentHelp, Capacity: s.opts.Capacity}
 			})
 			return
 		}
@@ -278,7 +298,7 @@ func (s *server) readScreen(r io.Reader) {
 				pending = pending[len(pending)-4096:]
 			}
 			// A prompt waits for an answer on the same line.
-			if p := strings.TrimSpace(pending); trustPromptRe.MatchString(p) {
+			if p := strings.TrimSpace(pending); trustPromptRe.MatchString(p) || consentPromptRe.MatchString(p) {
 				s.screenLine(p)
 				pending = ""
 			}
@@ -313,6 +333,15 @@ func (s *server) screenLine(line string) {
 	// and reports the folder as untrusted.
 	if trustPromptRe.MatchString(line) && !s.untrusted {
 		s.untrusted = true
+		if p := s.proc; p != nil {
+			go p.Interrupt()
+		}
+	}
+	// "Enable Remote Control? (y/n)": the same goes for turning Remote Control
+	// on for the first time. Left alone the server would wait at the question
+	// and the folder would show as starting for ever.
+	if consentPromptRe.MatchString(line) && !s.noConsent {
+		s.noConsent = true
 		if p := s.proc; p != nil {
 			go p.Interrupt()
 		}
