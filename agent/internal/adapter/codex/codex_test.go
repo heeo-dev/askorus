@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -444,6 +445,9 @@ func TestAskDisablesTheWriterFeatures(t *testing.T) {
 }
 
 func TestFindExePrefersTheRealExe(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("npm's codex.cmd and the exe behind it are a Windows matter; see TestFindExeOnPath")
+	}
 	if _, err := findExe(filepath.Join(t.TempDir(), "codex.cmd")); err == nil {
 		t.Error("a .cmd setting was accepted")
 	}
@@ -464,5 +468,32 @@ func TestFindExePrefersTheRealExe(t *testing.T) {
 	got, err := findExe("")
 	if proc.CheckExe(exe) == nil && (err != nil || got != exe) {
 		t.Errorf("findExe = %q, %v; want %q", got, err, exe)
+	}
+}
+
+// macOS and Linux (#52): codex is whatever is called codex on PATH (the
+// native program, or npm's launcher, which the system starts by its first
+// line without a shell). A setting that names a script by its ending is
+// still refused.
+func TestFindExeOnPath(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("on Windows the exe is looked for by its .exe name; see TestFindExePrefersTheRealExe")
+	}
+	if _, err := findExe(filepath.Join(t.TempDir(), "codex.sh")); err == nil {
+		t.Error("a .sh setting was accepted")
+	}
+	bin := t.TempDir()
+	exe := filepath.Join(bin, "codex")
+	if err := os.WriteFile(exe, []byte("#!/bin/sh\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin)
+	if got, err := findExe(""); err != nil || got != exe {
+		t.Errorf("findExe = %q, %v; want %q", got, err, exe)
+	}
+	// Not on PATH: not found, and nothing else is tried.
+	t.Setenv("PATH", t.TempDir())
+	if got, err := findExe(""); err == nil {
+		t.Errorf("findExe = %q with no codex on PATH", got)
 	}
 }

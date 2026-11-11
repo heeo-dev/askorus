@@ -61,6 +61,9 @@ if ($phoneWrites) {
 Step 'agent: go vet (windows)' $agent 'go' @('vet', './...')
 $env:GOOS = 'linux'
 Step 'agent: go vet (linux)' $agent 'go' @('vet', './...')
+# macOS (#52): the agent must keep building for it; its tests run on GitHub.
+$env:GOOS = 'darwin'
+Step 'agent: go vet (macos)' $agent 'go' @('vet', './...')
 Remove-Item Env:GOOS
 Step 'agent: unit + scenario tests' $agent 'go' @('test', '-count=1', './...') '^(ok|FAIL)'
 # synth-eval (agent/cmd/synth-eval, milestone C) is built only with -tags

@@ -96,7 +96,8 @@ func TestRunTimeLimit(t *testing.T) {
 }
 
 // A process the command started and left running, holding its output
-// open, neither keeps Run waiting nor outlives it (the job object).
+// open, neither keeps Run waiting nor outlives it (the job object on
+// Windows, the process group on macOS and Linux, #52).
 func TestRunLeavesNoChildren(t *testing.T) {
 	for _, limit := range []time.Duration{0, 20 * time.Second} {
 		pidFile := filepath.Join(t.TempDir(), "pid")
@@ -117,11 +118,6 @@ func TestRunLeavesNoChildren(t *testing.T) {
 		pid, _ := strconv.Atoi(string(b))
 		if pid == 0 {
 			t.Fatal("no child pid")
-		}
-		if runtime.GOOS != "windows" {
-			p, _ := os.FindProcess(pid)
-			p.Kill()
-			continue
 		}
 		if processRunning(pid) {
 			t.Errorf("child %d still runs after Run", pid)

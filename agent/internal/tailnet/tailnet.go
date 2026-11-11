@@ -47,13 +47,26 @@ func New() (*Client, error) {
 	if p, err := exec.LookPath("tailscale"); err == nil {
 		return &Client{exe: p}, nil
 	}
-	if runtime.GOOS == "windows" {
-		p := filepath.Join(os.Getenv("ProgramFiles"), "Tailscale", "tailscale.exe")
-		if _, err := os.Stat(p); err == nil {
+	for _, p := range usualPlaces(runtime.GOOS, os.Getenv("ProgramFiles")) {
+		if info, err := os.Stat(p); err == nil && !info.IsDir() {
 			return &Client{exe: p}, nil
 		}
 	}
 	return nil, ErrNotFound
+}
+
+// usualPlaces lists where the tailscale CLI is when it is not on PATH. On
+// macOS the Tailscale app carries it inside the app, and running that file
+// with arguments is the CLI (#52; from Tailscale's documentation, to be
+// confirmed on a real Mac).
+func usualPlaces(goos, programFiles string) []string {
+	switch goos {
+	case "windows":
+		return []string{filepath.Join(programFiles, "Tailscale", "tailscale.exe")}
+	case "darwin":
+		return []string{"/Applications/Tailscale.app/Contents/MacOS/Tailscale"}
+	}
+	return nil
 }
 
 // The only argument lists this package ever passes.

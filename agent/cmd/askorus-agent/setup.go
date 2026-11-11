@@ -29,7 +29,9 @@ func setupCmd(dir string, args []string, in io.Reader, out io.Writer) error {
 		return fail("usage: askorus-agent setup", "사용법: askorus-agent setup")
 	}
 	if !controlSupported() {
-		return fail("setup is only supported on Windows for now; see `askorus-agent help`", "setup은 지금 Windows에서만 됩니다. `askorus-agent help`를 보세요")
+		// macOS and Linux for now (#52): the steps setup would walk through, by hand.
+		return fail("setup is only supported on Windows for now. Here: run `askorus-agent check` and fix what it lists, keep `askorus-agent serve` running in a terminal, then run `askorus-agent pair` in another",
+			"setup은 지금 Windows에서만 됩니다. 여기서는 `askorus-agent check`가 알려 주는 것을 고치고, 터미널 하나에 `askorus-agent serve`를 켜 둔 채 다른 터미널에서 `askorus-agent pair`를 실행하세요")
 	}
 	cfg, err := config.Load(dir)
 	if err != nil {
