@@ -956,7 +956,6 @@ export default function Ask() {
         detail={load.text}
         onRetry={() => pcRef.current && loadInfo(pcRef.current)}
         pc={pcLine ? pcName : undefined}
-        os={pcs.current?.os}
         onPick={pcLine ? () => setPCPicker(true) : undefined}
       />
     ) : null;

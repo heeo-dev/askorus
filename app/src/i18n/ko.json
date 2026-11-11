@@ -182,7 +182,6 @@
   "reach.check.phone": "폰의 Tailscale이 켜져 있고 연결됐는지 보세요(다른 VPN은 끄기).",
   "reach.check.pc": "PC가 켜져 있고 잠들지 않았는지, PC의 Tailscale이 켜져 있는지 보세요.",
   "reach.check.agent": "PC에서 askorus-agent start로 에이전트를 켜세요. 로그인할 때 켜지게 하려면 askorus-agent autostart on.",
-  "reach.check.agentServe": "PC의 터미널에서 askorus-agent serve를 실행해 에이전트를 켜고, 그 창을 열어 두세요.",
   "reach.check.account": "폰의 Tailscale을 PC와 같은 계정으로 로그인하세요.",
   "reach.retry": "다시 시도",
   "tab.ask": "한 번에",

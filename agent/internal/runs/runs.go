@@ -90,6 +90,7 @@ type Run struct {
 
 	owner, key string
 	left       int // parts still running
+	telling    int // parts whose OnPart has not returned yet
 }
 
 // Spec describes a new run. Key is the phone's own id for the run: the
@@ -120,8 +121,8 @@ type Manager struct {
 	// prompt or answer text.
 	OnPart func(mode string, p Part)
 	// OnEnd is told once when a run has ended, with its final snapshot:
-	// after the last part's OnPart, from that part's goroutine, without
-	// the lock held (a run without parts gets it from a goroutine of
+	// after every part's OnPart, from the goroutine of the part whose
+	// OnPart returned last, without the lock held (a run without parts gets it from a goroutine of
 	// Start). The comparisons start there (P2-3). A panic in it is
 	// recovered. Set it before the first Start.
 	OnEnd func(r Run)
@@ -244,11 +245,10 @@ func (m *Manager) runPart(r *Run, i int, t Task) {
 	}
 	r.Parts[i] = p
 	r.left--
-	last := r.left == 0
-	if last {
+	if r.left == 0 {
 		r.finish(m.now())
 	}
-	final := r.snapshot()
+	r.telling++
 	m.mu.Unlock()
 	if m.OnPart != nil {
 		func() {
@@ -256,9 +256,17 @@ func (m *Manager) runPart(r *Run, i int, t Task) {
 			m.OnPart(r.Mode, p)
 		}()
 	}
-	if last {
-		// Only the part that ended the run gets here: left reached 0 once,
-		// under the lock.
+	// OnEnd comes after every part's OnPart, not only this one's: parts that
+	// end at the same moment tell in any order, and the one whose OnPart
+	// returns last, once none is left running, tells the end. (Told by the
+	// part that ended the run, OnEnd could come before another part's
+	// OnPart: seen once in the tests on a busy PC, 2026-11-12.)
+	m.mu.Lock()
+	r.telling--
+	end := r.left == 0 && r.telling == 0
+	final := r.snapshot()
+	m.mu.Unlock()
+	if end {
 		m.ended(final)
 	}
 }

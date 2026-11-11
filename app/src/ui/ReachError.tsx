@@ -2,8 +2,8 @@
 // (or pairing again when the PC dropped this phone). Used by 내 PC and the
 // Ask screen (S5c: a surface block with a danger title, as the boards'
 // tokens; the words and the order are unchanged). With several PCs (#53)
-// it names the PC it is about and offers picking another; how to start
-// the agent is said for that PC's system.
+// it names the PC it is about and offers picking another. How to start
+// the agent is the same on every system (#52: `askorus-agent start`).
 
 import { router } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
@@ -39,7 +39,6 @@ export function ReachError({
   detail,
   onRetry,
   pc,
-  os,
   onPick,
 }: {
   cause: Cause;
@@ -47,17 +46,13 @@ export function ReachError({
   onRetry?: () => void;
   /** The PC this is about, in words that tell it from the others; given while several are paired. */
   pc?: string;
-  /** That PC's system as its agent reported it (windows, linux, darwin). */
-  os?: string;
   /** Opens the PC picker; given while several are paired. */
   onPick?: () => void;
 }) {
   const th = useTheme();
   const s = styles(th);
-  // On macOS and Linux the agent is kept running with `serve` for now (#52); `start` is the Windows way.
-  const serve = os === 'linux' || os === 'darwin';
   const checks = causesToCheck(cause)
-    .map((c) => (c === 'agent_down' && serve ? 'reach.check.agentServe' : check[c]))
+    .map((c) => check[c])
     .filter((k): k is MessageKey => !!k);
   return (
     <View style={s.box} accessibilityRole="alert">

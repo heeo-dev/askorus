@@ -182,7 +182,7 @@ test('a question waits only for a conversation still running on the same PC', as
   expect(win.runRequests()).toHaveLength(1);
 });
 
-test('a PC that does not answer is named, told how to start for its system, and another can be picked from the card', async () => {
+test('a PC that does not answer is named, and another can be picked from the card', async () => {
   const user = userEvent.setup();
   await paired();
   await paired(wslHost);
@@ -200,10 +200,9 @@ test('a PC that does not answer is named, told how to start for its system, and 
   await user.press(screen.getByRole('button', { name: 'Open menu' }));
   await user.press(await within(await screen.findByTestId('drawer')).findByRole('button', { name: 'on linux' }));
   expect(await screen.findByText('The PC is on, but the agent is not running')).toBeTruthy();
-  // Which PC, and the way to start the agent there (serve, not the Windows start).
+  // Which PC, and the way to start the agent: the same on every system since #52.
   expect(screen.getByText(`My PC: ${wslLabel}`)).toBeTruthy();
-  expect(screen.getByText('Start the agent on the PC: run askorus-agent serve in a terminal there and leave it open.')).toBeTruthy();
-  expect(screen.queryByText(/askorus-agent start/)).toBeNull();
+  expect(screen.getByText(/Start the agent on the PC with askorus-agent start/)).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy();
   // The conversation is still there to read.
   expect(screen.getByText('opencode says: on linux')).toBeTruthy();

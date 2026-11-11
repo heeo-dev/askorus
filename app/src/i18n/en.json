@@ -182,7 +182,6 @@
   "reach.check.phone": "Check that Tailscale is on and connected on this phone (turn other VPNs off).",
   "reach.check.pc": "Check that the PC is on and awake, with Tailscale running there.",
   "reach.check.agent": "Start the agent on the PC with askorus-agent start. To start it at logon: askorus-agent autostart on.",
-  "reach.check.agentServe": "Start the agent on the PC: run askorus-agent serve in a terminal there and leave it open.",
   "reach.check.account": "Sign in to Tailscale on this phone with the same account as the PC.",
   "reach.retry": "Try again",
   "tab.ask": "All at once",

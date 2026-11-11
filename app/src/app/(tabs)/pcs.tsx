@@ -302,7 +302,7 @@ function Sessions({ conn, detail, onPick }: { conn: Connection; detail: string; 
       {pc === null ? <Text style={s.notice}>{t('sessions.gone')}</Text> : null}
       {load.state === 'error' ? (
         <View style={s.pad}>
-          <ReachError cause={load.cause} detail={load.text} onRetry={refresh} os={conn.os} />
+          <ReachError cause={load.cause} detail={load.text} onRetry={refresh} />
         </View>
       ) : null}
       {warnings.includes('claude_agents_unavailable') ? <Text style={s.warning}>{t('sessions.agentsUnavailable')}</Text> : null}
