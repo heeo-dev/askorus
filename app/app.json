@@ -10,7 +10,9 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "infoPlist": {}
+      "infoPlist": {
+        "NSCameraUsageDescription": "Askorus uses the camera to scan the pairing QR code on your PC."
+      }
     },
     "android": {
       "package": "app.askorus",
@@ -26,7 +28,9 @@
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.SYSTEM_ALERT_WINDOW",
-        "android.permission.VIBRATE"
+        "android.permission.VIBRATE",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT"
       ],
       "permissions": [
         "android.permission.CAMERA"
@@ -37,13 +41,6 @@
       "expo-status-bar",
       "expo-secure-store",
       "expo-localization",
-      [
-        "expo-camera",
-        {
-          "cameraPermission": "Askorus uses the camera to scan the pairing QR code on your PC.",
-          "recordAudioAndroid": false
-        }
-      ],
       [
         "expo-splash-screen",
         {

@@ -56,6 +56,17 @@ test('the packages the app is made of carry their license text', () => {
   expect(data.packages.filter((p) => p.k === 'npm' && !p.l).map((p) => p.n)).toEqual([]);
 });
 
+// #32: the app promises to collect nothing. ML Kit (which came with the camera
+// library) and the Google libraries around it send diagnostics and usage
+// numbers to Google, so none of them may come back into the build unnoticed:
+// this list is made from the release build's own dependency tree.
+test('no Android library in the build that reports to Google', () => {
+  const android = data.packages.filter((p) => p.k === 'android').map((p) => p.n);
+  expect(android.length).toBeGreaterThan(100);
+  const reporting = /^com\.google\.(mlkit|firebase|android\.gms|android\.datatransport|android\.odml|android\.play)[.:]|crashlytics|sentry|bugsnag|appcenter|amplitude|segment\.analytics/i;
+  expect(android.filter((n) => reporting.test(n))).toEqual([]);
+});
+
 test('the Android libraries of the build and the fonts and icon shapes are listed too', () => {
   const android = data.packages.filter((p) => p.k === 'android');
   expect(android.length).toBeGreaterThan(100);
@@ -63,10 +74,10 @@ test('the Android libraries of the build and the fonts and icon shapes are liste
   expect(lib('com.squareup.okhttp3:okhttp')?.l).toBe('Apache-2.0');
   expect(data.texts[lib('com.squareup.okhttp3:okhttp')?.t ?? -1]).toContain('Apache License');
   expect(data.texts[lib('com.facebook.react:react-android')?.t ?? -1]).toContain('Meta Platforms');
+  // The pairing QR is read by ZXing, on the phone (#32).
+  expect(lib('com.google.zxing:core')?.l).toBe('Apache-2.0');
   // A library under terms that are not a text to copy shows where they are.
-  const mlkit = lib('com.google.mlkit:barcode-scanning');
-  expect(mlkit?.t).toBeNull();
-  expect(mlkit?.u).toMatch(/^https:\/\//);
+  for (const p of android.filter((p) => p.t === null)) expect(p.u).toMatch(/^https?:\/\//);
   // No Android library is left without a license name.
   expect(android.filter((p) => !p.l).map((p) => p.n)).toEqual([]);
 

@@ -64,6 +64,13 @@ packages the app uses directly are all under the MIT License:
 - `react-native-webview`, `react-native-screens`, `react-native-safe-area-context`, by their contributors.
 - KaTeX (see above) and `marked`, Copyright (c) 2018+, MarkedJS and Copyright (c) 2011-2018, Christopher Jeffrey.
 
+The app's own QR scanner (`app/modules/qr-scanner`) reads the pairing code on
+the phone with two Android libraries under the Apache License 2.0 (the same
+license as Askorus, see [LICENSE](LICENSE)):
+
+- CameraX (`androidx.camera`), Copyright The Android Open Source Project.
+- ZXing (`com.google.zxing:core`), Copyright ZXing authors.
+
 ## License texts
 
 ### MIT License (KaTeX)

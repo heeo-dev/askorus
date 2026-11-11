@@ -23,6 +23,7 @@ import { ConnectionStore } from '@/connections/store';
 import * as tailnetCheck from '@/connections/tailnetCheck';
 import { CODE, FakeAgent, HOST, PAIR_LINK, PORT, TOKEN, session } from '@/test/fakeAgent';
 import { Header } from '@/ui/Header';
+import * as qrScanner from '@/ui/QrScanner';
 
 // The status bar shows its style as a test id.
 jest.mock('expo-status-bar', () => ({
@@ -394,7 +395,7 @@ describe('pairing', () => {
   // The camera is dark in either theme; in the light one the status icons
   // were dark on it and could not be seen (S10, 11-03).
   test('the scanner puts light status icons over the camera', async () => {
-    jest.spyOn(require('expo-camera'), 'useCameraPermissions').mockReturnValue([{ granted: true, canAskAgain: true }, jest.fn()]);
+    jest.spyOn(qrScanner, 'useCameraPermission').mockReturnValue([{ granted: true, canAskAgain: true }, jest.fn()]);
     const user = userEvent.setup();
     await renderRouter(routes, { initialUrl: '/pair' });
     expect(screen.queryByTestId('status-bar-light')).toBeNull();
@@ -403,6 +404,43 @@ describe('pairing', () => {
     expect(screen.getByTestId('status-bar-light')).toBeTruthy();
     await user.press(screen.getByRole('button', { name: 'Cancel' }));
     await waitFor(() => expect(screen.queryByTestId('status-bar-light')).toBeNull());
+  });
+
+  // #32: the app's own scanner reads the code on the phone (no ML Kit).
+  test('a scanned pairing QR goes to the confirm step; another QR says it is not one', async () => {
+    jest.spyOn(qrScanner, 'useCameraPermission').mockReturnValue([{ granted: true, canAskAgain: true }, jest.fn()]);
+    const user = userEvent.setup();
+    await renderRouter(routes, { initialUrl: '/pair' });
+    await user.press(await screen.findByRole('button', { name: 'Scan QR code' }));
+    const camera = await screen.findByTestId('qr-scanner');
+    await act(async () => camera.props.onScanned('https://example.com/menu'));
+    expect(await screen.findByText('This is not an Askorus pairing QR code.')).toBeTruthy();
+    await act(async () => camera.props.onScanned(PAIR_LINK));
+    expect(await screen.findByText('Is this your PC?')).toBeTruthy();
+    expect(screen.getByText(HOST)).toBeTruthy();
+    expect(screen.queryByTestId('qr-scanner')).toBeNull();
+  });
+
+  test('once Android will not ask for the camera again, the button opens Settings', async () => {
+    jest.spyOn(qrScanner, 'useCameraPermission').mockReturnValue([{ granted: false, canAskAgain: false }, jest.fn()]);
+    const open = jest.spyOn(Linking, 'openSettings').mockResolvedValue();
+    const user = userEvent.setup();
+    await renderRouter(routes, { initialUrl: '/pair' });
+    await user.press(await screen.findByRole('button', { name: 'Scan QR code' }));
+    expect(screen.queryByRole('button', { name: 'Allow camera' })).toBeNull();
+    await user.press(await screen.findByRole('button', { name: 'Allow the camera in Settings' }));
+    expect(open).toHaveBeenCalled();
+  });
+
+  test('a build without the scanner points to pasting the link', async () => {
+    jest.spyOn(qrScanner, 'scannerAvailable').mockReturnValue(false);
+    const user = userEvent.setup();
+    await renderRouter(routes, { initialUrl: '/pair' });
+    await user.press(await screen.findByRole('button', { name: 'Scan QR code' }));
+    expect(await screen.findByText('This build cannot scan QR codes. Go back and paste the link shown on the PC instead.')).toBeTruthy();
+    expect(screen.queryByTestId('qr-scanner')).toBeNull();
+    await user.press(screen.getByRole('button', { name: 'Cancel' }));
+    expect(await screen.findByText('askorus-agent pair')).toBeTruthy();
   });
 
   test('copy puts the command on the clipboard', async () => {

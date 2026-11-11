@@ -85,19 +85,7 @@
    "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
   },
   {
-   "n": "androidx.camera:camera-extensions",
-   "v": "1.6.0",
-   "l": "Apache-2.0",
-   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
-  },
-  {
    "n": "androidx.camera:camera-lifecycle",
-   "v": "1.6.0",
-   "l": "Apache-2.0",
-   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
-  },
-  {
-   "n": "androidx.camera:camera-mlkit-vision",
    "v": "1.6.0",
    "l": "Apache-2.0",
    "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
@@ -738,70 +726,10 @@
    "u": "https://github.com/facebook/yoga/blob/master/LICENSE"
   },
   {
-   "n": "com.google.android.datatransport:transport-api",
-   "v": "2.2.1",
-   "l": "Apache-2.0",
-   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
-  },
-  {
-   "n": "com.google.android.datatransport:transport-backend-cct",
-   "v": "2.3.3",
-   "l": "Apache-2.0",
-   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
-  },
-  {
-   "n": "com.google.android.datatransport:transport-runtime",
-   "v": "2.2.6",
-   "l": "Apache-2.0",
-   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
-  },
-  {
-   "n": "com.google.android.gms:play-services-base",
-   "v": "18.5.0",
-   "l": "Android Software Development Kit License",
-   "u": "https://developer.android.com/studio/terms.html"
-  },
-  {
-   "n": "com.google.android.gms:play-services-basement",
-   "v": "18.10.0",
-   "l": "Android Software Development Kit License",
-   "u": "https://developer.android.com/studio/terms.html"
-  },
-  {
-   "n": "com.google.android.gms:play-services-code-scanner",
-   "v": "16.1.0",
-   "l": "ML Kit Terms of Service",
-   "u": "https://developers.google.com/ml-kit/terms"
-  },
-  {
-   "n": "com.google.android.gms:play-services-mlkit-barcode-scanning",
-   "v": "18.3.1",
-   "l": "ML Kit Terms of Service",
-   "u": "https://developers.google.com/ml-kit/terms"
-  },
-  {
-   "n": "com.google.android.gms:play-services-mlkit-document-scanner",
-   "v": "16.0.0-beta1",
-   "l": "ML Kit Terms of Service",
-   "u": "https://developers.google.com/ml-kit/terms"
-  },
-  {
-   "n": "com.google.android.gms:play-services-tasks",
-   "v": "18.2.1",
-   "l": "Android Software Development Kit License",
-   "u": "https://developer.android.com/studio/terms.html"
-  },
-  {
    "n": "com.google.android.material:material",
    "v": "1.13.0",
    "l": "Apache-2.0",
    "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
-  },
-  {
-   "n": "com.google.android.odml:image",
-   "v": "1.0.0-beta1",
-   "l": "Android Software Development Kit License",
-   "u": "https://developer.android.com/studio/terms.html"
   },
   {
    "n": "com.google.auto.value:auto-value-annotations",
@@ -834,30 +762,6 @@
    "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
   },
   {
-   "n": "com.google.firebase:firebase-annotations",
-   "v": "16.0.0",
-   "l": "Apache-2.0",
-   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
-  },
-  {
-   "n": "com.google.firebase:firebase-components",
-   "v": "16.1.0",
-   "l": "Apache-2.0",
-   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
-  },
-  {
-   "n": "com.google.firebase:firebase-encoders",
-   "v": "16.1.0",
-   "l": "Apache-2.0",
-   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
-  },
-  {
-   "n": "com.google.firebase:firebase-encoders-json",
-   "v": "17.1.0",
-   "l": "Apache-2.0",
-   "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
-  },
-  {
    "n": "com.google.guava:failureaccess",
    "v": "1.0.2",
    "l": "Apache-2.0",
@@ -876,34 +780,10 @@
    "u": "http://www.apache.org/licenses/LICENSE-2.0.txt"
   },
   {
-   "n": "com.google.mlkit:barcode-scanning",
-   "v": "17.3.0",
-   "l": "ML Kit Terms of Service",
-   "u": "https://developers.google.com/ml-kit/terms"
-  },
-  {
-   "n": "com.google.mlkit:barcode-scanning-common",
-   "v": "17.0.0",
-   "l": "ML Kit Terms of Service",
-   "u": "https://developers.google.com/ml-kit/terms"
-  },
-  {
-   "n": "com.google.mlkit:common",
-   "v": "18.11.0",
-   "l": "ML Kit Terms of Service",
-   "u": "https://developers.google.com/ml-kit/terms"
-  },
-  {
-   "n": "com.google.mlkit:vision-common",
-   "v": "17.3.0",
-   "l": "ML Kit Terms of Service",
-   "u": "https://developers.google.com/ml-kit/terms"
-  },
-  {
-   "n": "com.google.mlkit:vision-interfaces",
-   "v": "16.3.0",
-   "l": "ML Kit Terms of Service",
-   "u": "https://developers.google.com/ml-kit/terms"
+   "n": "com.google.zxing:core",
+   "v": "3.5.3",
+   "l": "Apache-2.0",
+   "u": "https://www.apache.org/licenses/LICENSE-2.0.txt"
   },
   {
    "n": "com.parse.bolts:bolts-tasks",
@@ -979,11 +859,6 @@
   {
    "n": "expo.modules.router:expo.modules.router",
    "v": "58.0.30",
-   "l": "MIT"
-  },
-  {
-   "n": "host.exp.exponent:expo.modules.camera",
-   "v": "58.0.14",
    "l": "MIT"
   },
   {

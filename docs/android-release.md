@@ -13,7 +13,7 @@
 | 시험용 빌드 | `preview`: APK, 링크·QR로 폰에 바로 설치 | `npm run build:apk` |
 | 스토어 빌드 | `production`: AAB, Play 내부 테스트에 초안으로 올림 | `npm run build:aab`, `npm run eas -- submit -p android` |
 | 서명 키 | EAS가 처음 빌드 때 만들고 보관한다. Play에는 업로드 키로 쓰이고, Play가 배포용 키로 다시 서명한다 | EAS 계정 |
-| 권한 | 카메라(QR), 인터넷만(짝 맺기 전 주소 확인 #42도 인터넷 권한만 쓴다). Expo가 기본으로 넣는 저장소·다른 앱 위에 그리기·진동 권한은 뺀다 | `app/app.json` `blockedPermissions` |
+| 권한 | 카메라(QR), 인터넷, 네트워크 상태(CameraX가 끌어오는 media3의 일반 권한)뿐이다(짝 맺기 전 주소 확인 #42도 인터넷 권한만 쓴다). Expo가 기본으로 넣는 저장소·다른 앱 위에 그리기·진동 권한과, 보안 저장소 라이브러리가 넣는 생체 인증 권한 두 개(`USE_BIOMETRIC`, `USE_FINGERPRINT`)는 뺀다(2026-11-11, #32: 앱은 생체 인증으로 잠그는 저장을 쓰지 않는다. 쓰게 되면 먼저 다시 넣는다). 빌드한 파일의 권한은 `aapt2 dump badging <apk>`로 확인한다 | `app/app.json` `blockedPermissions` |
 
 EAS CLI는 전역 설치하지 않고 `npx eas-cli@25.3.0`으로 쓴다(`package.json` scripts). 올릴 때는 scripts의 버전 세 곳을 같이 바꾼다.
 
@@ -38,7 +38,7 @@ Expo Go와 다른 점(스토어 빌드에서만 드러남, `src/config-test.ts`�
 내부 테스트는 심사가 없어 대부분 나중에 채워도 되지만, 비공개·프로덕션 테스트 전에는 모두 필요하다.
 
 - **개인정보처리방침 URL**: 글의 기준은 `docs/privacy.md`, 웹페이지 원본은 `docs/privacy/index.html`. 공개 주소는 GitHub Pages의 `https://heeo-dev.github.io/askorus/privacy/`다(#40, main의 `/docs`). 시행일은 2026-11-11이고, 문의 연락처는 Play에 공개하는 개발자 이메일과 같은 주소를 쓴다(2026-11-11 적음). 글을 고치면 두 파일을 같이 고치고 시행일도 바꾼다.
-- **데이터 보안 양식**: 개발자가 받는 데이터 없음. 앱은 데이터를 수집·공유하지 않는다. 짝 맺은 PC 주소와 기기 토큰은 폰의 보안 저장소에만 두고, 통신은 사용자의 Tailscale 망 안에서 사용자의 PC와만 한다. 카메라는 QR 읽기에만 쓰고 사진을 저장하거나 보내지 않는다.
+- **데이터 보안 양식**: 개발자가 받는 데이터 없음. 앱은 데이터를 수집·공유하지 않는다. 이 답이 사실이려면 앱에 들어가는 라이브러리도 아무것도 보내지 않아야 한다: QR은 앱의 모듈(`app/modules/qr-scanner`, CameraX + ZXing)이 폰 안에서 읽고, Google ML Kit·Play 서비스·Firebase처럼 진단이나 사용 통계를 보내는 라이브러리는 넣지 않는다(2026-11-11, #32, R-97. `licenses-test`가 릴리스 빌드의 라이브러리 목록에서 지킨다). 패키지를 더할 때는 `app/android`에서 의존성 목록을 다시 뽑아(2절의 라이선스 목록과 같은 명령) 새로 들어온 라이브러리를 본다. 짝 맺은 PC 주소와 기기 토큰은 폰의 보안 저장소에만 두고, 통신은 사용자의 Tailscale 망 안에서 사용자의 PC와만 한다. 카메라는 QR 읽기에만 쓰고 사진을 저장하거나 보내지 않는다.
 - **앱 이름·설명**: 칸마다 넣을 글은 `docs/store/listing-ko.md`·`listing-en.md`. 설명 끝에 '공식 Anthropic·Claude 제품이 아니다'를 적는다.
 - **그림**: 아이콘·대표 그림·스크린숏은 `docs/store/README.md`의 체크 목록. Claude·Anthropic 로고나 이름은 쓰지 않는다.
 - **콘텐츠 등급·대상 연령·광고 없음**: 설문으로 답한다.

@@ -7,11 +7,11 @@
 // never move to another PC without a pick (R-94). The confirm step warns
 // about links and QR codes that came from someone else, and before the code
 // is sent the app checks that the PC is inside the person's own tailnet
-// (#42, connections/tailnetCheck).
+// (#42, connections/tailnetCheck). The QR is read by the app's own scanner
+// (ui/QrScanner): on the phone, with nothing sent anywhere (#32).
 // A PC without the agent yet: the install line and the guide's address,
 // the same as the README's (#37).
 
-import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Clipboard from 'expo-clipboard';
 import * as Device from 'expo-device';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -32,6 +32,7 @@ import { TopBar } from '@/ui/Header';
 import { Icon, IconButton } from '@/ui/Icon';
 import { useSafeInsets } from '@/ui/keyboard';
 import { Sheet } from '@/ui/Sheet';
+import { QrScanner, scannerAvailable, useCameraPermission } from '@/ui/QrScanner';
 import { pickPC } from '@/ui/shell/pcs';
 import { themed, useTheme } from '@/ui/theme';
 
@@ -387,9 +388,23 @@ function Scanner({ onLink, onCancel }: { onLink: (text: string) => boolean; onCa
   const th = useTheme();
   const s = styles(th);
   const insets = useSafeInsets();
-  const [permission, requestPermission] = useCameraPermissions();
+  const [permission, requestPermission] = useCameraPermission();
   const [wrong, setWrong] = useState(false);
   const done = useRef(false);
+
+  // A build without the scanner (Expo Go, iOS until its build): the link is the way.
+  if (!scannerAvailable()) {
+    return (
+      <View style={s.screen}>
+        <TopBar onBack={onCancel} />
+        <View style={s.cameraAsk}>
+          <Icon name="camera" size={28} color={th.textSub} />
+          <Text style={s.intro}>{t('pair.noScanner')}</Text>
+          <Button variant="outline" label={t('pair.cancel')} onPress={onCancel} />
+        </View>
+      </View>
+    );
+  }
 
   if (!permission) return <View style={s.screen} />;
 
@@ -416,11 +431,9 @@ function Scanner({ onLink, onCancel }: { onLink: (text: string) => boolean; onCa
       {/* The camera is dark in either theme: light status icons over it (a
           light theme's dark ones vanished on it, S10, R-66). */}
       <StatusBar style="light" />
-      <CameraView
+      <QrScanner
         style={StyleSheet.absoluteFill}
-        facing="back"
-        barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
-        onBarcodeScanned={({ data }) => {
+        onScanned={(data) => {
           if (done.current) return;
           if (onLink(data)) done.current = true;
           else setWrong(true);
