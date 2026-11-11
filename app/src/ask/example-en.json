@@ -1,9 +1,9 @@
 {
   "id": "example-en",
-  "question": "Which is better for a beginner, a mechanical or a membrane keyboard?",
+  "question": "For a first trip to Europe, is Paris or Rome the better pick? Pick one.",
   "req": {
     "mode": "ask",
-    "prompt": "Which is better for a beginner, a mechanical or a membrane keyboard?",
+    "prompt": "For a first trip to Europe, is Paris or Rome the better pick? Pick one.",
     "tier": "standard",
     "agents": [
       {
@@ -34,7 +34,7 @@
     "codex",
     "opencode"
   ],
-  "at": 1794398122260,
+  "at": 1794402319922,
   "compare": {
     "start": "auto",
     "judges": [
@@ -101,10 +101,10 @@
         "agent": "claude",
         "model": "claude-sonnet-5-5",
         "attempt": 1,
-        "ms": 7607,
-        "inputTokens": 4993,
-        "outputTokens": 712,
-        "text": "**It depends on your budget and noise needs.** A membrane keyboard is the cheaper, quieter choice. A mechanical keyboard is the better long-term buy if you type or game a lot.\n\n**Membrane**\n- It's cheap, often $10–30.\n- It's quieter, which suits shared spaces and offices.\n- It's usually lighter and slimmer.\n- There's nothing to learn or configure, and it costs little to try if you're unsure how much you'll type.\n- It's comfortable enough for everyday typing and gaming.\n- The keys can start to feel mushy over time, and the board may wear out sooner.\n\n**Mechanical**\n- Each key has its own switch, so the feel is more consistent and responsive.\n- It lasts longer. Switches are typically rated for 50–100 million keystrokes.\n- You can swap keycaps, and on many models the switches. A single failed key is easy to fix.\n- You can choose a switch type (linear, tactile or clicky). Beginners can start with a tactile or linear switch, such as a brown or red, rather than a clicky one.\n- It costs more, with decent boards usually starting around $40–60.\n- It can be loud, though red or silent switches and O-rings reduce the noise.\n- It isn't harder for a beginner to use. You only have a higher price and a switch choice to make.\n\n**Which to pick**\n- Choose membrane if your budget is tight, the keyboard is in a shared or quiet space, or you only type occasionally.\n- Choose mechanical if you'll use it daily for years and noise isn't an issue. Pick tactile or linear switches.\n- If you can, try both in person, because key feel is a matter of preference.\n\n**Where the AIs differ**\n- {{Claude}} recommends mechanical for most beginners, as long as budget and noise suit you.\n- {{Codex}} and {{OpenCode}} say membrane is the better or safer starting point for most beginners. {{OpenCode}} adds that mechanical is the better buy if you'll type or game for hours a day.",
+        "ms": 9636,
+        "inputTokens": 10530,
+        "outputTokens": 1144,
+        "text": "The AIs differ on this: {{Claude}} picks Rome, while {{Codex}} and {{OpenCode}} pick Paris.\n\n**Rome ({{Claude}})**\n- The Colosseum, Roman Forum, Pantheon and Vatican City sit in a compact, walkable area, so you get ancient history, Renaissance art and city life together.\n- It is more relaxed and less overwhelming, and the major sights can be covered on foot in a few days.\n- Pasta, pizza, gelato and espresso are affordable and good almost everywhere.\n- Florence, Naples, the Amalfi Coast and Tuscany are easy to reach by train.\n- Paris costs more and is better on a second visit.\n\n**Paris ({{Codex}} and {{OpenCode}})**\n- It has iconic sights, outstanding art, charming neighborhoods and plenty of cafés.\n- The core is compact and the metro is excellent, so there is less time lost on logistics.\n- Many city museums have free permanent collections.\n- Day trips such as Versailles, Giverny and Champagne are possible from one base.\n- More English is spoken in tourist areas, and onward connections to London, Amsterdam or the Loire are easy.\n- {{OpenCode}} says Rome's density of ancient sites and uneven streets make it more tiring and harder to pace for a first-timer, and that Rome is better as a second trip.\n\n**Bottom line:** Both are strong choices. Pick Rome if you want history, food and a relaxed pace. Pick Paris if you want easy logistics and broad variety from a single base.",
         "judged": false
       }
     }
@@ -114,35 +114,35 @@
     "mode": "ask",
     "tier": "standard",
     "status": "done",
-    "startedAt": "2026-11-11T11:55:22.2641603Z",
-    "finishedAt": "2026-11-11T11:55:48.1529987Z",
+    "startedAt": "2026-11-11T13:05:19.9254798Z",
+    "finishedAt": "2026-11-11T13:05:32.145816Z",
     "parts": [
       {
         "agent": "claude",
         "status": "done",
         "model": "claude-sonnet-5-5",
-        "answer": "For most beginners, a **mechanical keyboard** is the better pick, provided the budget and noise level suit you. A membrane keyboard is the better pick if you want the cheapest, quietest option.\n\n**Why mechanical usually wins**\n- **Typing feel:** Each key has its own switch, so keypresses are more consistent and responsive. Many people find this makes typing more comfortable and accurate.\n- **Durability:** Switches are typically rated for 50–100 million keystrokes. Membrane boards often wear out sooner, and the keys can start to feel mushy.\n- **Customization and repair:** You can swap keycaps, and on many models the switches too. A single failed key is easy to fix.\n- **Variety:** Switch types (linear, tactile, clicky) let you find a feel you like. Beginners can start with a tactile or linear switch, such as a brown or red.\n\n**Why membrane can still make sense**\n- **Price:** Membrane boards are very cheap, often $10–30. Decent mechanical boards usually start around $40–60.\n- **Noise:** Membrane keyboards are quieter, which helps in shared spaces or offices. Mechanical boards can be loud, though red or silent switches and O-rings reduce this.\n- **Weight and portability:** Membrane boards are usually lighter and slimmer.\n- **Low commitment:** If you're unsure how much you'll type, a membrane keyboard costs little to try.\n\n**Bottom line:** If you type or game regularly, spend a bit more on an entry-level mechanical keyboard with tactile or linear switches. If you need something cheap and quiet, or you only type occasionally, a membrane keyboard is fine.",
-        "ms": 8612,
-        "inputTokens": 4372,
-        "outputTokens": 552
+        "answer": "**Rome.**\n\nFor a first trip to Europe, Rome gives you the most concentrated \"this is why people come to Europe\" experience. Here is why:\n\n- **History you can touch:** The Colosseum, the Roman Forum, the Pantheon, and Vatican City are all within a compact, walkable area. You get ancient Rome, Renaissance art, and living city life in one place.\n- **Easier to enjoy:** Rome is more relaxed and less overwhelming than Paris. Its sights are spread out less, and you can get to the major ones on foot in a few days.\n- **Food:** Pasta, pizza, gelato, and espresso are affordable and excellent almost everywhere. Eating well doesn't take research or a big budget.\n- **Atmosphere:** Piazzas, fountains, and evening strolls make the city feel lively and welcoming, even when you have no plan.\n- **Good base:** Florence, Naples, the Amalfi Coast, and Tuscany are easy to reach by train if you want to extend the trip.\n\nParis is wonderful too. It tends to cost more, and it is better appreciated on a second visit, when you can slow down and enjoy its museums, cafés, and neighborhoods. For a first trip, Rome is the stronger choice.",
+        "ms": 7991,
+        "inputTokens": 4375,
+        "outputTokens": 415
       },
       {
         "agent": "codex",
         "status": "done",
         "model": "gpt-6.1-terra",
-        "answer": "For most beginners, a **membrane keyboard** is the better starting point: it’s usually cheaper, quieter, and comfortable enough for everyday typing and gaming.\n\nA **mechanical keyboard** is worth considering if you type a lot or want a more distinct key feel. Mechanical keyboards offer a choice of switches, but they tend to cost more and some are noisy.\n\nIf possible, try both in person—the feel of the keys is a matter of preference.",
-        "ms": 13483,
-        "inputTokens": 12776,
-        "outputTokens": 95
+        "answer": "**Paris.** It’s a great first taste of Europe: iconic sights, outstanding art, charming neighborhoods, and plenty of cafés to linger in. The [public transport network](https://www.iledefrance-mobilites.fr/en/dossiers/preparer-son-sejour-en-ile-de-france) makes it relatively easy to explore, and many of the city’s museums have [free permanent collections](https://www.paris.fr/en/pages/paris-museums-the-museums-of-the-city-of-paris-33509).",
+        "ms": 12076,
+        "inputTokens": 29632,
+        "outputTokens": 205
       },
       {
         "agent": "opencode",
         "status": "done",
         "model": "opencode-go/deepseek-v4.1-flash#high",
-        "answer": "For most beginners, a **membrane keyboard is the safer default** — it's cheaper, quieter, spill-tolerant, and there's nothing to learn or configure. If the person ends up typing or gaming for hours a day, a **mechanical keyboard with linear or tactile switches** (not clicky) is the better long-term buy: easier on the fingers, more consistent feel, and repairable/replaceable keycaps. The practical rule: buy membrane if budget is tight or the keyboard is shared/quiet-space; buy mechanical if the keyboard will be used daily for years and noise isn't an issue. Neither is \"harder\" for a beginner — mechanical keyboards require no skill, just a slightly higher price and a switch-type choice.",
-        "ms": 25888,
-        "inputTokens": 1334,
-        "outputTokens": 154
+        "answer": "**Paris** — for a first trip to Europe, it's the safer bet.\n\n- **Easier entry point:** compact core, excellent metro, and the classic sights (Eiffel Tower, Louvre, Notre-Dame, Montmartre) sit close together, so a first-timer wastes less time on logistics.\n- **Broader first impression:** world-class art, architecture, food, and day trips (Versailles, Giverny, Champagne) in one base — you get range without changing hotels.\n- **More forgiving:** Paris rewards wandering and short visits; Rome's density of ancient sites and uneven streets is more tiring and harder to pace if you're still learning how to travel in Europe.\n- **Practical edge:** more English spoken in tourist areas, more flexible transport, and easier connections onward to London, Amsterdam, or the Loire.\n\nRome wins on sheer historical weight and food culture — but it's a better *second* trip, once you've got European travel rhythms down. Pick Paris first.",
+        "ms": 12219,
+        "inputTokens": 1338,
+        "outputTokens": 211
       }
     ],
     "comparisonId": "example-comparison"
@@ -158,66 +158,89 @@
       "points": [
         {
           "id": "p1",
-          "topic": "Which keyboard type to recommend as the default for a beginner: mechanical or membrane",
+          "topic": "Which city suits a first trip to Europe better: Rome or Paris",
           "nature": "judgment",
           "debate": true,
-          "goal": "Make clear which option fits which situation, based on budget, noise tolerance, hours of daily use and how sure the person is about their needs.",
+          "goal": "Make clear which traveler situation fits Rome (history and food focus, relaxed pace, tighter budget) and which fits Paris (easy logistics, variety, onward connections).",
           "sides": [
             {
               "ais": [
                 "claude"
               ],
-              "says": "Mechanical is the better pick for most beginners, provided budget and noise suit them, because of its consistent feel, durability and repairability."
+              "says": "Rome is better for a first trip because of its walkable concentration of history, affordable food, relaxed atmosphere and easy train access to other regions; Paris is better as a second visit."
             },
             {
               "ais": [
                 "codex",
                 "opencode"
               ],
-              "says": "Membrane is the better or safer starting point for most beginners because it is cheaper, quieter and needs no setup; mechanical becomes the better buy only for heavy daily typing or gaming."
+              "says": "Paris is the better first trip because of its compact core, excellent metro, broad variety from one base and easier logistics; OpenCode adds that Rome is more tiring and better as a second trip."
             }
           ],
           "turns": [
             {
               "ai": "claude",
-              "ask": "Codex and OpenCode say membrane is the safer default for beginners because it costs less and is quiet. Why should a beginner who is unsure about their usage still start with mechanical? Under what budget, noise and usage conditions would you switch your pick to membrane?",
+              "ask": "OpenCode says Rome's dense ancient sites and uneven streets are tiring and hard to pace for a first-timer, and that Paris is easier logistically. What kind of traveler does your claim that Rome is easier and less overwhelming apply to, and where does it fail?",
               "status": "done",
-              "text": "A beginner who is unsure about their usage can still start with mechanical, because the cost gap is small and the benefits show up quickly. Entry-level mechanical boards are often $40–60, and they need no setup. They plug in and work like any other keyboard. The consistent key feel, the longer lifespan, and the ability to replace a single switch or keycap mean the extra money is often recovered over time. Membrane boards that last are not much cheaper once you replace a worn one.\n\nI would switch to membrane in three cases:\n- **Budget:** you can spend under about $30, or the keyboard is a temporary or shared machine.\n- **Noise:** you work in a shared room, office, or library, or you sleep near the keyboard. Quiet matters more than feel, and a membrane board is the simpler fix.\n- **Usage:** you type only occasionally, so durability and feel add little.\n\nOutside those cases, I still favor mechanical. I'm relying on general product knowledge here, not a new source.",
+              "text": "My claim that Rome is easier applies to travelers who want a low-planning trip. It suits people who are happy to walk, wander and eat well without a tight itinerary, and who care more about atmosphere and landmarks than about museum depth. Its center is also compact. The Colosseum, Forum, Pantheon, Trevi Fountain and Piazza Navona sit within a couple of miles, and the Vatican is a short ride away.\n\nOpenCode is right that it fails for some travelers. Rome is harder for people with mobility limits, because cobblestones, heat and long walks between sights add up. It is also harder for people who dislike crowds or who want to pack in many timed-entry sights, because the Vatican and Colosseum need advance booking. Rome's metro is also thinner than Paris's, so logistics are less smooth.\n\nParis is the better first trip for a traveler who prioritizes transit, museums, variety, or a trip with limited mobility. Rome suits someone who wants a relaxed, food-and-history-focused first visit. This is a judgment call, and I haven't searched for sources. The reasoning is enough to qualify my claim but not to reverse it.",
               "stance": "partly",
               "model": "claude-sonnet-5-5",
-              "ms": 7023
+              "ms": 7006
             },
             {
               "ai": "opencode",
-              "ask": "Claude says mechanical suits most beginners because it is more durable and consistent. At what daily usage level, budget and noise setting does mechanical become worth it over membrane, and why is membrane still the safer default below that level?",
+              "ask": "Claude says Rome is walkable, relaxed, cheaper for food and a good base for trains to Florence, Naples and Tuscany, and that Paris costs more. What kind of traveler would Rome suit better than Paris, and when does your Paris pick not hold?",
               "status": "done",
-              "text": "Mechanical becomes the better value once the keyboard is your main daily input—roughly two or more hours of typing or gaming most days—because that is where consistent feel and 50–100 million keystroke switch ratings versus roughly 5–10 million for membrane start to repay the extra cost (RTINGS, “Mechanical vs Membrane Keyboards”). Budget matters: under about $40–50, or for a shared or temporary machine, membrane remains the rational buy, while at $50–80 a beginner can get a decent mechanical board without much risk. Noise matters just as much: in a shared room, office, library, or bedroom, membrane—or a quiet linear/tactile mechanical with sound dampening—is the safer choice. Below that usage level, membrane is still the safer default because the upfront risk is lower, it is quiet and spill-tolerant, and the durability advantage is unlikely to be reached before the board is replaced or abandoned. So the practical split is light or uncertain use, tight budget, or a noise-sensitive space—membrane; sustained daily use for years, adequate budget, and a noise-tolerant or quiet-switch setup—mechanical. That is a refinement of my original position, not a change in it.",
+              "text": "Rome suits the traveler who treats a first trip as atmosphere rather than a checklist: someone happy to wander, eat well at moderate cost, skip heavy museum time, and use the city as a rail hub (Florence ~1h30, Naples ~1h10 by high-speed train) — and who can handle cobblestones, heat, and a thin three-line metro. My Paris pick fails when the traveler has limited mobility or stamina, is budget-driven on food, dislikes pre-booking timed entries (Colosseum, Vatican), or wants an Italy-centered itinerary where Rome is the natural base rather than a detour. It also fails if they've already done the Paris headline sights or actively want ancient-history density over range. That said, these are self-selecting niches; for the median first-timer — unsure of European travel rhythms, wanting variety from one hotel, valuing transit and English-language ease — Paris's 16-line metro and compact core still reduce the cost of mistakes, which is what \"better first trip\" should mean. Claude's concessions confirm the split is traveler-type dependent, not a reversal of the general ranking. So I keep Paris as the default, with Rome the better call for the slow, food-and-history-first, mobility-comfortable traveler.",
               "stance": "keep",
               "model": "opencode-go/deepseek-v4.1-flash#high",
-              "ms": 28192
+              "ms": 17372
             },
             {
               "ai": "codex",
-              "ask": "Given both positions, which concrete conditions (price, shared space, hours of typing or gaming) would make you recommend mechanical over membrane, and which the reverse?",
+              "ask": "You picked Paris with little reasoning. Given Claude's and OpenCode's arguments, which travelers and trip lengths would you recommend Paris for, and which would you send to Rome?",
               "status": "done",
-              "text": "I’d recommend **mechanical** if you can comfortably spend around $50–80, expect to type or game for a couple of hours most days, and prefer its key feel. In a shared space, choose a model with silent switches and check a sound test first.\n\nI’d recommend **membrane** if your budget is under about $30, your use is occasional or uncertain, or you need a quiet keyboard for a shared room. These prices and hours are rules of thumb, not hard thresholds: preference matters, and both types can suit daily use. Mechanical keyboards are generally more expensive and louder, while membrane keyboards are generally cheaper and quieter. [RTINGS](https://www.rtings.com/keyboard/learn/mechanical-vs-membrane)",
+              "text": "I’d still pick **Paris** as the default, especially for a four- to seven-day trip and travelers who want a mix of art, architecture, neighborhoods and day trips. Its extensive [public transport network](https://parisjetaime.com/eng/article/public-transport-a555) makes it easier to explore a variety of sights from one base. For a shorter two- to four-day trip, I’d recommend Rome to someone who prioritizes ancient history, food and wandering on foot: its historic center links major sights on a [walkable route](https://www.italia.it/en/lazio/rome/things-to-do/rome-the-eternal-city). Either city rewards a longer stay, but Rome’s uneven streets and summer heat can make walking more demanding; travelers with mobility needs should check accessible routes in either city.",
               "stance": "keep",
               "model": "gpt-6.1-terra",
-              "ms": 10632
+              "ms": 14720
             }
           ],
           "result": "conditional",
-          "line": "The AIs mostly agree on the split. Choose membrane if your budget is under about $30–40, you use it only occasionally or aren't sure yet, or you share a room and need quiet. Choose mechanical if you can spend about $50–80 and type or game a couple of hours most days. In a shared space, pick a mechanical board with silent switches. Claude still makes mechanical the default for beginners, while Codex and OpenCode make membrane the default when you're unsure. The thresholds are rules of thumb, not hard limits."
+          "line": "Paris is the default pick for most first-timers. It has easy transit, variety from one base, and fewer logistics mistakes, and Codex and OpenCode both say so. Rome is the better pick for a slow, food-and-history-first traveler who is comfortable walking, wants a lower food budget, or plans to use Rome as a rail base for Florence or Naples. Claude, who favored Rome, agreed that Paris suits travelers who need easy transit or have limited mobility."
+        },
+        {
+          "id": "p2",
+          "topic": "Whether Paris is more expensive than Rome",
+          "nature": "judgment",
+          "debate": false,
+          "goal": "No debate needed.",
+          "sides": [
+            {
+              "ais": [
+                "claude"
+              ],
+              "says": "Paris costs more than Rome."
+            },
+            {
+              "ais": [
+                "codex",
+                "opencode"
+              ],
+              "says": "They make no cost claim, other than Codex noting that many museums have free permanent collections."
+            }
+          ],
+          "turns": []
         }
       ],
       "after": {
-        "text": "**It depends on your budget, noise needs and how much you type.** Membrane is the safer pick if money is tight, use is occasional, or you need quiet. Mechanical is the better buy if you type or game daily and can spend a bit more. ({{Claude}} would make mechanical the default for most beginners. {{Codex}} and {{OpenCode}} would make membrane the default if you're unsure.)\n\n| | Membrane | Mechanical |\n|---|---|---|\n| Price | Cheap, often $10–30 | Decent boards usually start around $40–60; $50–80 gets a good entry-level one |\n| Noise | Quieter | Can be loud, though silent switches or O-rings help |\n| Feel | Comfortable for everyday typing and gaming | More consistent and responsive, with a choice of switches (linear, tactile, clicky) |\n| Durability | Rated roughly 5–10 million keystrokes; can feel mushy over time | Switches rated 50–100 million keystrokes; single switches and keycaps can be replaced |\n| Other | Lighter, slimmer, spill-tolerant, nothing to configure | Costs more, and you have to choose a switch type |\n\n**Choose membrane if:**\n- Your budget is under about $30–40.\n- You type only occasionally, or you aren't sure how much you'll use it.\n- You share a room or office and need quiet.\n- The keyboard is temporary or shared.\n\n**Choose mechanical if:**\n- You can spend about $50–80.\n- You type or game around two hours or more on most days.\n- You want a more distinct key feel and a board that lasts for years.\n\n**Tips for mechanical:**\n- Beginners should pick linear or tactile switches, such as red or brown, rather than clicky ones.\n- In a shared space, choose silent switches and check a sound test first.\n- Mechanical boards need no skill or setup. They plug in and work like any other keyboard.\n\nThese prices and hours are rules of thumb, not hard limits. If you can, try both in person, because key feel is a matter of preference.",
+        "text": "**Paris** is the better default for most first-time visitors to Europe. Rome is the better pick if you want a slow, food-and-history-focused trip.\n\n**Why Paris for most first-timers**\n- **Easy to get around:** the core is compact and the metro is extensive (16 lines), so you spend less time on logistics and mistakes cost less. Public transport info: https://www.iledefrance-mobilites.fr/en/dossiers/preparer-son-sejour-en-ile-de-france\n- **Variety from one base:** art, architecture, neighborhoods and cafés, plus day trips to Versailles, Giverny and Champagne without changing hotels. It suits a 4–7 day trip well.\n- **Forgiving:** the classic sights (Eiffel Tower, Louvre, Notre-Dame, Montmartre) sit close together. There is more English in tourist areas, and many city museums have [free permanent collections](https://www.paris.fr/en/pages/paris-museums-the-museums-of-the-city-of-paris-33509).\n- **Onward travel:** it connects easily to London, Amsterdam and the Loire.\n\n**When Rome is the better choice**\n- You want ancient history, food and wandering on foot, especially on a shorter 2–4 day trip.\n- You want lower food costs. Rome is generally cheaper to eat in, and Paris tends to cost more ({{Claude}} only).\n- You plan to use Rome as a rail base: Florence is about 1h30 and Naples about 1h10 by high-speed train.\n- Be aware of Rome's cobblestones, summer heat and a thin three-line metro. The Colosseum and Vatican need advance booking. Travelers with limited mobility should check accessible routes in either city, and Paris is usually easier for them.",
         "agent": "claude",
         "model": "claude-sonnet-5-5",
-        "ms": 6955
+        "ms": 10938
       },
       "calls": 6,
-      "ms": 65600
+      "ms": 62765
     }
   }
 }
