@@ -63,6 +63,8 @@
   "pair.waitingBody": "PC 터미널에서 y를 눌러 허용하세요. 2분까지 기다립니다.",
   "pair.cancel": "취소",
   "pair.failedTitle": "짝 맺기를 못 했습니다",
+  "pair.notTailnet": "이 주소는 내 Tailscale 안의 PC로 확인되지 않아 짝 맺기 요청을 보내지 않았습니다. 폰의 Tailscale이 켜져 있고 PC와 같은 계정인지 확인하세요. 다른 사람이 보낸 링크나 QR이면 쓰지 마세요.",
+  "pair.noAddress": "PC 주소를 찾지 못해 짝 맺기 요청을 보내지 않았습니다. 폰의 Tailscale이 켜져 있고 PC와 같은 계정인지, PC가 켜져 있는지 확인하세요.",
   "pair.retry": "처음부터 다시",
   "pair.cameraWhy": "PC 화면의 QR을 찍으려면 카메라 권한이 필요합니다.",
   "pair.cameraAllow": "카메라 허용",

@@ -13,7 +13,7 @@
 | 시험용 빌드 | `preview`: APK, 링크·QR로 폰에 바로 설치 | `npm run build:apk` |
 | 스토어 빌드 | `production`: AAB, Play 내부 테스트에 초안으로 올림 | `npm run build:aab`, `npm run eas -- submit -p android` |
 | 서명 키 | EAS가 처음 빌드 때 만들고 보관한다. Play에는 업로드 키로 쓰이고, Play가 배포용 키로 다시 서명한다 | EAS 계정 |
-| 권한 | 카메라(QR), 인터넷만. Expo가 기본으로 넣는 저장소·다른 앱 위에 그리기·진동 권한은 뺀다 | `app/app.json` `blockedPermissions` |
+| 권한 | 카메라(QR), 인터넷만(짝 맺기 전 주소 확인 #42도 인터넷 권한만 쓴다). Expo가 기본으로 넣는 저장소·다른 앱 위에 그리기·진동 권한은 뺀다 | `app/app.json` `blockedPermissions` |
 
 EAS CLI는 전역 설치하지 않고 `npx eas-cli@25.3.0`으로 쓴다(`package.json` scripts). 올릴 때는 scripts의 버전 세 곳을 같이 바꾼다.
 

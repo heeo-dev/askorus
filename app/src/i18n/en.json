@@ -63,6 +63,8 @@
   "pair.waitingBody": "Press y in the terminal on the PC. Waiting up to 2 minutes.",
   "pair.cancel": "Cancel",
   "pair.failedTitle": "Couldn't pair",
+  "pair.notTailnet": "This address could not be confirmed as a PC inside your Tailscale network, so no pairing request was sent. Check that Tailscale is on on this phone, with the same account as the PC. If the link or QR code came from someone else, do not use it.",
+  "pair.noAddress": "The PC's address could not be found, so no pairing request was sent. Check that Tailscale is on on this phone, with the same account as the PC, and that the PC is on.",
   "pair.retry": "Start over",
   "pair.cameraWhy": "The camera is needed to scan the QR code on the PC screen.",
   "pair.cameraAllow": "Allow camera",
