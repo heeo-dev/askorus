@@ -23,7 +23,7 @@ import { type AskPrefs, defaultAskPrefs, loadAskPrefs, saveAskPrefs, synthWriter
 import { type Asker, askers } from '@/ask/thread';
 import { loadPrefs, type Prefs, savePrefs } from '@/connections/prefs';
 import { pcDetail, pcLabel } from '@/connections/label';
-import type { Connection } from '@/connections/store';
+import { type Connection, ConnectionStore } from '@/connections/store';
 import { t } from '@/i18n';
 import { PillChoice, Segment, SwitchRow } from '@/ui/controls';
 import { DefaultsSheet, settingsLine } from '@/ui/DefaultsSheet';
@@ -85,6 +85,12 @@ export default function Settings() {
     setNote(leftOnPC ? t('settings.leftOnPC', { id: c.deviceId }) : '');
   };
 
+  // Every conversation goes, and with them what was kept of unpaired PCs to carry their
+  // conversations on (#53, docs/privacy.md).
+  const clearHistory = async () => {
+    await conversations.removeAll();
+    await new ConnectionStore().forgetGone();
+  };
   // The open PC as the list has it now: its system may have just been read, or its name changed (#53).
   const shownPC = pcOpen ? (list?.find((c) => c.id === pcOpen.id) ?? pcOpen) : null;
   const defaults = settingsLine(prefs.model, prefs.effort);
@@ -201,7 +207,7 @@ export default function Settings() {
                 onPress={() =>
                   Alert.alert(t('settings.historyClearTitle'), t('settings.historyClearBody', { n: kept }), [
                     { text: t('sheet.cancel'), style: 'cancel' },
-                    { text: t('drawer.remove'), style: 'destructive', onPress: () => void conversations.removeAll() },
+                    { text: t('drawer.remove'), style: 'destructive', onPress: () => void clearHistory() },
                   ])
                 }
               />

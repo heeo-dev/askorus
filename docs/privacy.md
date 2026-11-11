@@ -1,11 +1,11 @@
 # Askorus 개인정보처리방침
 
-시행일: 2026년 11월 11일
+시행일: 2026년 11월 12일
 
 Askorus는 질문 하나를 여러 AI에게 한 번에 묻고, 사회자 AI가 답을 정리하며, 의견이 다른 곳은 AI끼리 토론하게 하는 앱이다. 폰에서 사용자 PC의 코딩 AI 세션을 보고 켜는 기능도 있다. AI에게 묻고, 정리하고, 토론시키는 일은 사용자의 PC가 한다. 개발자는 서버를 두지 않고, 사용자의 데이터를 받지 않는다.
 
 - **모으는 정보**: 없다. 분석·광고·오류 보고 도구를 넣지 않는다.
-- **폰에 저장하는 정보**: 짝 맺은 PC의 이름과 주소, PC가 준 기기 토큰, 새 세션 기본값, 묻기 기본값(단계, 고른 PC, 끈 AI, AI별 모델과 노력 수준), 사회자 설정(종합 답변 쓰기, 사회자 AI, 사회자 모델, 이어서 물을 때 결론 이어 주기), 한 번 본 안내, 화면 테마. 기기 토큰은 폰의 보안 저장소에 둔다. 앱을 지우면 모두 지워지고, 설정에서 PC를 끊으면 그 PC의 정보가 지워진다. 대화 기록(질문, 각 AI의 답, 종합 답변, 토론 발언과 토론 뒤 정리)은 앱 안의 저장소에 최근 100개(합쳐 약 20MB)까지 남고, 넘으면 오래된 것부터 지워진다. 서랍에서 대화를 길게 눌러 하나를, 설정의 '기록 모두 지우기'로 전부를 지울 수 있다(폰에서만 지우고 PC의 각 AI 기록은 남는다). 앱은 Android 백업에서 빠져 있어 기록이 Google 백업으로 나가지 않는다.
+- **폰에 저장하는 정보**: 짝 맺은 PC의 이름, 운영체제와 주소, PC가 준 기기 토큰, 새 세션 기본값, 묻기 기본값(단계, 고른 PC, 끈 AI, AI별 모델과 노력 수준), 사회자 설정(종합 답변 쓰기, 사회자 AI, 사회자 모델, 이어서 물을 때 결론 이어 주기), 한 번 본 안내, 화면 테마. 기기 토큰은 폰의 보안 저장소에 둔다. 앱을 지우면 모두 지워진다. 설정에서 PC를 끊으면 그 PC의 이름과 토큰이 지워지고 주소만 남는다(최근에 끊은 20대까지). 같은 PC와 다시 짝 맺었을 때 그 PC에서 물은 대화를 이어 가기 위한 것이고, 설정의 '기록 모두 지우기'를 하면 같이 지워진다. 대화 기록(질문, 각 AI의 답, 종합 답변, 토론 발언과 토론 뒤 정리)은 앱 안의 저장소에 최근 100개(합쳐 약 20MB)까지 남고, 넘으면 오래된 것부터 지워진다. 서랍에서 대화를 길게 눌러 하나를, 설정의 '기록 모두 지우기'로 전부를 지울 수 있다(폰에서만 지우고 PC의 각 AI 기록은 남는다). 앱은 Android 백업에서 빠져 있어 기록이 Google 백업으로 나가지 않는다.
 - **PC에 보내는 정보**: 짝 맺을 때 사용자가 정한 폰 이름, 사용자가 누른 동작(목록 보기, 열기, 새 세션, 멈추기, 지우기, 폴더 열어 두기), 사용자가 쓴 질문, 종합 답변·토론·사회자에게 묻기 요청, 이어서 물을 때 그 대화의 결론 기록. 통신은 사용자의 Tailscale 망 안에서 사용자의 PC와만 한다.
 - **카메라**: PC 화면의 짝 맺기 QR을 읽을 때만 쓴다. 사진을 저장하거나 보내지 않는다.
 - **다른 앱으로 넘기기**: 세션을 열면 Claude 앱이나 브라우저로 넘긴다. 그다음은 그 서비스의 방침을 따른다. Askorus는 어떤 AI의 로그인 정보도 읽거나 옮기지 않는다.
@@ -25,12 +25,12 @@ Askorus는 Anthropic, OpenAI 같은 AI 회사의 공식 제품이 아니다.
 
 # Askorus Privacy Policy
 
-Effective date: November 11, 2026
+Effective date: November 12, 2026
 
 Askorus asks one question to several AIs at once; a moderator AI sums up their answers, and where the AIs disagree, they debate. It also lets you see and start the coding AI sessions on your own PC from your phone. Your own PC does the asking, the summing up and the debating. The developer runs no server and receives none of your data.
 
 - **Data we collect**: none. The app has no analytics, ads, or crash reporting.
-- **Data kept on your phone**: the name and address of each paired PC, the device token the PC issued, your new-session defaults, your asking defaults (tier, chosen PC, AIs turned off, per-AI models and effort), your moderator settings (write a combined answer, moderator AI, moderator model, carry conclusions into follow-ups), the notices you have seen once, and the theme. The device token stays in the phone's secure storage. Uninstalling the app removes all of it, and disconnecting a PC in Settings removes that PC's data. Your conversation history (questions, each AI's answers, combined answers, debate turns and the answer after a debate) is kept in the app's own storage, up to the latest 100 conversations (about 20 MB in all); older ones are deleted. You can delete one conversation by long-pressing it in the menu, or all of them with Delete all history in Settings (this deletes them from the phone only; each AI's own record on your PC stays). The app is excluded from Android backup, so the history does not go to Google backups.
+- **Data kept on your phone**: the name, operating system and address of each paired PC, the device token the PC issued, your new-session defaults, your asking defaults (tier, chosen PC, AIs turned off, per-AI models and effort), your moderator settings (write a combined answer, moderator AI, moderator model, carry conclusions into follow-ups), the notices you have seen once, and the theme. The device token stays in the phone's secure storage. Uninstalling the app removes all of it. Disconnecting a PC in Settings removes that PC's name and token; its address alone is kept (for the last 20 PCs you disconnected), so that conversations asked on that PC can be carried on if you pair with it again. Delete all history in Settings removes these addresses too. Your conversation history (questions, each AI's answers, combined answers, debate turns and the answer after a debate) is kept in the app's own storage, up to the latest 100 conversations (about 20 MB in all); older ones are deleted. You can delete one conversation by long-pressing it in the menu, or all of them with Delete all history in Settings (this deletes them from the phone only; each AI's own record on your PC stays). The app is excluded from Android backup, so the history does not go to Google backups.
 - **Data sent to your PC**: the phone name you choose when pairing, the actions you take (list, open, new session, stop, remove, keep folder open), the questions you write, your requests for combined answers, debates and questions to the moderator, and, on follow-ups, the conversation's record of conclusions. Traffic goes only to your own PC inside your Tailscale network.
 - **Camera**: used only to scan the pairing QR code on your PC screen. No pictures are saved or sent.
 - **Handing off to other apps**: opening a session hands you off to the Claude app or your browser, whose own policies then apply. Askorus never reads or moves the sign-in data of any AI.

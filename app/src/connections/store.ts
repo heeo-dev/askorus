@@ -108,6 +108,11 @@ export class ConnectionStore {
     await this.kv.set(goneKey, JSON.stringify([{ id, host: c.host, port: c.port }, ...gone].slice(0, maxGone)));
   }
 
+  /** forgetGone drops what is kept of unpaired PCs; clearing the whole history does this (docs/privacy.md). */
+  async forgetGone(): Promise<void> {
+    await this.kv.remove(goneKey);
+  }
+
   private async gone(): Promise<Gone[]> {
     try {
       const v = JSON.parse((await this.kv.get(goneKey)) ?? '[]');

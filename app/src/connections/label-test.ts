@@ -133,4 +133,7 @@ test('a PC that was unpaired takes its id back when it is paired again at the sa
   // Only the last twenty unpaired PCs are remembered.
   for (let i = 0; i < 25; i++) await store.remove((await store.add({ ...fresh, host: `h${i}.tail0.ts.net` }, 't')).id);
   expect(JSON.parse((await kv.get('connections.gone.v1')) ?? '[]')).toHaveLength(20);
+  // Clearing the whole history forgets them (docs/privacy.md).
+  await store.forgetGone();
+  expect(await kv.get('connections.gone.v1')).toBeNull();
 });
