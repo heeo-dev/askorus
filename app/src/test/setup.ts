@@ -42,10 +42,19 @@ jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn(async () => true), 
 // The theme sets the window's background (S5c); tests can read what it set.
 jest.mock('expo-system-ui', () => ({ setBackgroundColorAsync: jest.fn(async () => undefined), getBackgroundColorAsync: jest.fn(async () => null) }));
 
-jest.mock('expo-camera', () => ({
-  CameraView: () => null,
-  useCameraPermissions: () => [{ granted: false, canAskAgain: true }, jest.fn()],
-}));
+// The app's QR scanner (a native view): a plain View stands in and keeps its
+// props, so a test can hand it a scanned text with onScanned. The camera is
+// not allowed yet unless a test says so.
+jest.mock('@/ui/QrScanner', () => {
+  const { createElement } = require('react');
+  const { View } = require('react-native');
+  return {
+    __esModule: true,
+    scannerAvailable: () => true,
+    useCameraPermission: () => [{ granted: false, canAskAgain: true }, async () => undefined],
+    QrScanner: (props: Record<string, unknown>) => createElement(View, { ...props, testID: 'qr-scanner' }),
+  };
+});
 
 // Display math (MathBlock) draws in a WebView: a plain View stands in and
 // keeps its props, so tests can read source.html and call onMessage.

@@ -69,6 +69,7 @@
   "pair.cameraWhy": "The camera is needed to scan the QR code on the PC screen.",
   "pair.cameraAllow": "Allow camera",
   "pair.cameraSettings": "Allow the camera in Settings",
+  "pair.noScanner": "This build cannot scan QR codes. Go back and paste the link shown on the PC instead.",
   "time.now": "just now",
   "time.minutes": "{n} min ago",
   "time.hours": "{n} h ago",

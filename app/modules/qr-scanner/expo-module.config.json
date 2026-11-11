@@ -1,0 +1,6 @@
+{
+  "platforms": ["android"],
+  "android": {
+    "modules": ["app.askorus.qrscanner.QrScannerModule"]
+  }
+}
