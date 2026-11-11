@@ -2,8 +2,9 @@
 // AI, a PC whose AIs do not write, or a turn of two AIs kept from before C6.
 // Its avatar, name, model and time, the answer drawn from its Markdown
 // (selectable), and what can be done with it: copy, ask only this AI next,
-// and carry Claude's conversation on in the Claude app. The same actions
-// are in AnswerActions for the answer sheet. What an AI adds at the end of
+// and carry Claude's conversation on in the Claude app, and behind '...'
+// share and report (#50, AnswerMore). The same actions are in AnswerActions
+// for the answer sheet. What an AI adds at the end of
 // an answer (#4: messages to send next, an offer) is folded under it, as
 // the combined answer leaves it out.
 
@@ -12,11 +13,14 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { splitExtras } from '@/ask/extras';
 import { type PartView, tenths } from '@/ask/present';
+import type { ReportSubject } from '@/ask/report';
 import { t } from '@/i18n';
 
+import { AnswerMore } from './AnswerMore';
 import { Avatar } from './Avatar';
 import { Button } from './Button';
 import { Spinner } from './controls';
+import { IconButton } from './Icon';
 import { Markdown } from './Markdown';
 import { themed, useTheme } from './theme';
 
@@ -27,6 +31,8 @@ export type AnswerActionsProps = {
   onOnly?: () => void;
   /** Continue in the Claude app (Claude answers only). */
   onContinue?: () => void;
+  /** Share and report, behind '...': the answer's text, who wrote it and the question. */
+  more?: ReportSubject;
   note?: { text: string; error?: boolean };
 };
 
@@ -34,6 +40,11 @@ export type AnswerActionsProps = {
 export function answerMeta(p: PartView): string {
   if (p.state === 'answering') return [p.model, t('ask.answering')].filter(Boolean).join(' · ');
   return [p.model, p.part.ms !== undefined ? tenths(p.part.ms) : ''].filter(Boolean).join(' · ');
+}
+
+/** answerBy: who wrote an answer, for a report: 'Claude sonnet' ('Claude' when the model is not known). */
+export function answerBy(p: PartView): string {
+  return [p.name, p.model].filter(Boolean).join(' ');
 }
 
 /** AnswerBody: the answer, a spinner while it comes, or why there is none. */
@@ -74,10 +85,15 @@ export function AnswerBody({ p }: { p: PartView }) {
   );
 }
 
-/** AnswerActions: copy, only this AI, continue in the Claude app, and what the last one said. */
-export function AnswerActions({ onCopy, onOnly, onContinue, note }: AnswerActionsProps) {
-  const s = styles(useTheme());
-  const any = onCopy || onOnly || onContinue;
+/** AnswerActions: copy, only this AI, continue in the Claude app, '...' (share, report), and what the last one said. */
+export function AnswerActions({ onCopy, onOnly, onContinue, more, note }: AnswerActionsProps) {
+  const th = useTheme();
+  const s = styles(th);
+  const [moreOpen, setMoreOpen] = useState(false);
+  // What share or report said last (the mail app was opened): shown until the screen says something newer.
+  const [said, setSaid] = useState<{ text: string; over?: string } | null>(null);
+  const any = onCopy || onOnly || onContinue || more;
+  const line = note && note.text !== said?.over ? note : said ? { text: said.text } : note;
   return (
     <>
       {any ? (
@@ -85,9 +101,11 @@ export function AnswerActions({ onCopy, onOnly, onContinue, note }: AnswerAction
           {onCopy ? <Button variant="quiet" icon="copy" label={t('ask.copy')} onPress={onCopy} style={s.action} /> : null}
           {onOnly ? <Button variant="quiet" label={t('ask.onlyThis')} onPress={onOnly} style={s.action} /> : null}
           {onContinue ? <Button variant="quiet" icon="open" label={t('ask.continue')} onPress={onContinue} style={s.action} /> : null}
+          {more ? <IconButton name="more" label={t('ask.more')} onPress={() => setMoreOpen(true)} size={20} color={th.textSub} /> : null}
         </View>
       ) : null}
-      {note ? <Text style={note.error ? s.error : s.caption}>{note.text}</Text> : null}
+      {line ? <Text style={'error' in line && line.error ? s.error : s.caption}>{line.text}</Text> : null}
+      {more && moreOpen ? <AnswerMore subject={more} onClose={() => setMoreOpen(false)} onSaid={(text) => setSaid({ text, over: note?.text })} /> : null}
     </>
   );
 }

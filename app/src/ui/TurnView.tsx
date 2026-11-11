@@ -15,13 +15,13 @@ import { StyleSheet, Text, View } from 'react-native';
 import { agentName } from '@/api/agents';
 import type { Info, RunPart } from '@/api/types';
 import { plainNames } from '@/ask/aiNames';
-import { answered, compareErrorText, compareState, synthErrorText, synthState } from '@/ask/compare';
+import { answered, compareErrorText, compareState, synthBy, synthErrorText, synthState } from '@/ask/compare';
 import { answeredAgents, blockTitle, cardPreview, metaLine, type PartView, partViews, steps, synthExpected } from '@/ask/present';
 import type { Turn } from '@/ask/thread';
 import { t } from '@/i18n';
 
 import { AICardStrip } from './AICardStrip';
-import { AnswerActions, AnswerBlock } from './AnswerBlock';
+import { AnswerActions, AnswerBlock, answerBy } from './AnswerBlock';
 import { AnsweringList } from './AnsweringList';
 import { Button } from './Button';
 import { CombinedAnswerCard } from './CombinedAnswer';
@@ -106,6 +106,7 @@ export function TurnView({
                 // A question to the moderator (#25): its one card is the moderator's.
                 p={turn.moderator ? { ...p, name: t('ask.moderatorName', { name: p.name }) } : p}
                 onCopy={() => act.copy(`${turn.id}/${p.agent}`, p.part.answer ?? '')}
+                more={{ ai: answerBy(p), text: p.part.answer ?? '', question: turn.question }}
                 onOnly={turn.moderator ? undefined : act.only(p.agent)}
                 onContinue={turn.moderator ? undefined : act.carryOn(`${turn.id}/${p.agent}`, p.part)}
                 note={notes[`${turn.id}/${p.agent}`]}
@@ -227,7 +228,11 @@ function Result({
         return (
           <View style={s.synth}>
             <Markdown text={synth.text} size="synth" ais={answeredList} />
-            <AnswerActions onCopy={() => act.copy(`${turn.id}/synth`, plainNames(synth.text))} note={notes[`${turn.id}/synth`]} />
+            <AnswerActions
+              onCopy={() => act.copy(`${turn.id}/synth`, plainNames(synth.text))}
+              more={{ ai: t('report.by.synth', { name: synthBy({ agent: synth.agent, model: synth.model }) }), text: plainNames(synth.text), question: turn.question }}
+              note={notes[`${turn.id}/synth`]}
+            />
           </View>
         );
       default:

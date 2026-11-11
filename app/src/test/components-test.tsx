@@ -192,7 +192,7 @@ describe('buttons and icons', () => {
 
   test('every icon has a picture, and an icon button is named', async () => {
     const user = userEvent.setup();
-    expect(iconNames).toHaveLength(31);
+    expect(iconNames).toHaveLength(34);
     await render(
       <>
         {iconNames.map((n) => (

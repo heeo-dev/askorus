@@ -38,7 +38,10 @@ export type IconName =
   | 'alert'
   | 'sliders'
   | 'settings'
-  | 'pending';
+  | 'pending'
+  | 'more'
+  | 'share'
+  | 'flag';
 
 const sources: Record<IconName, ImageSourcePropType> = {
   menu: require('../../assets/icons/menu.png'),
@@ -72,6 +75,9 @@ const sources: Record<IconName, ImageSourcePropType> = {
   sliders: require('../../assets/icons/sliders.png'),
   settings: require('../../assets/icons/settings.png'),
   pending: require('../../assets/icons/pending.png'),
+  more: require('../../assets/icons/more.png'),
+  share: require('../../assets/icons/share.png'),
+  flag: require('../../assets/icons/flag.png'),
 };
 
 export const iconNames = Object.keys(sources) as readonly IconName[];
