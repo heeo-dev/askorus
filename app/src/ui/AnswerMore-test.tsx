@@ -9,6 +9,7 @@ import type { PartView } from '@/ask/present';
 import { reportAddress } from '@/ask/report';
 
 import { AnswerActions, AnswerBlock } from './AnswerBlock';
+import { SheetEnd } from './Sheet';
 
 const view: PartView = {
   agent: 'claude',
@@ -172,4 +173,40 @@ test("what the screen says after the report gives way to the screen's next line 
   await rerender(<AnswerActions more={more} note={{ text: 'Could not open the Claude app.', error: true }} />);
   expect(screen.getByText('Could not open the Claude app.')).toBeTruthy();
   expect(screen.queryByText('The report is sent when you press Send in your mail app.')).toBeNull();
+});
+
+test('inside a sheet, a line that appears under the actions is brought into view; one already there is not', async () => {
+  jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
+  const toEnd = jest.fn();
+  const user = userEvent.setup();
+  const { rerender } = await render(
+    <SheetEnd.Provider value={toEnd}>
+      <AnswerActions more={more} note={{ text: 'Copied.' }} />
+    </SheetEnd.Provider>,
+  );
+  // The sheet opened with that line: it stays where the person is reading.
+  expect(toEnd).not.toHaveBeenCalled();
+
+  await user.press(screen.getByRole('button', { name: 'Share or report' }));
+  await user.press(within(screen.getByTestId('answer-more')).getByRole('button', { name: 'Report' }));
+  await user.press(within(screen.getByTestId('answer-report')).getByRole('radio', { name: 'Self-harm' }));
+  await user.press(within(screen.getByTestId('answer-report')).getByRole('button', { name: 'Open mail app' }));
+  expect(screen.getByText('The report is sent when you press Send in your mail app.')).toBeTruthy();
+  expect(toEnd).toHaveBeenCalledTimes(1);
+
+  // The same for the screen's own lines (a copy made in the answer sheet).
+  await rerender(
+    <SheetEnd.Provider value={toEnd}>
+      <AnswerActions more={more} note={{ text: 'Could not open the Claude app.', error: true }} />
+    </SheetEnd.Provider>,
+  );
+  expect(toEnd).toHaveBeenCalledTimes(2);
+  // When the screen's line goes, the report's line is back: a line again.
+  await rerender(
+    <SheetEnd.Provider value={toEnd}>
+      <AnswerActions more={more} />
+    </SheetEnd.Provider>,
+  );
+  expect(screen.getByText('The report is sent when you press Send in your mail app.')).toBeTruthy();
+  expect(toEnd).toHaveBeenCalledTimes(3);
 });

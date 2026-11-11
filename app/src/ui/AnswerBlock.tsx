@@ -8,7 +8,7 @@
 // an answer (#4: messages to send next, an offer) is folded under it, as
 // the combined answer leaves it out.
 
-import { useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { splitExtras } from '@/ask/extras';
@@ -22,6 +22,7 @@ import { Button } from './Button';
 import { Spinner } from './controls';
 import { IconButton } from './Icon';
 import { Markdown } from './Markdown';
+import { SheetEnd } from './Sheet';
 import { themed, useTheme } from './theme';
 
 /** What can be done with an answer; a missing one is not offered. */
@@ -94,6 +95,16 @@ export function AnswerActions({ onCopy, onOnly, onContinue, more, note }: Answer
   const [said, setSaid] = useState<{ text: string; over?: string } | null>(null);
   const any = onCopy || onOnly || onContinue || more;
   const line = note && note.text !== said?.over ? note : said ? { text: said.text } : note;
+  // In a sheet the actions are the last thing, so a line that appears under
+  // them would sit below the sheet's edge: bring it into view. Not for a
+  // line that was already there when the sheet opened.
+  const toEnd = useContext(SheetEnd);
+  const shown = useRef(line?.text);
+  useEffect(() => {
+    if (line?.text === shown.current) return;
+    shown.current = line?.text;
+    if (line?.text) toEnd?.();
+  }, [line?.text, toEnd]);
   return (
     <>
       {any ? (

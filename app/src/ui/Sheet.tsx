@@ -4,8 +4,8 @@
 // dimmed screen darkens where it is, and only the sheet slides up (#2: a
 // Modal that slides carried the dark screen up from the bottom with it).
 
-import { type ReactNode, useEffect, useRef } from 'react';
-import { Animated, Easing, Modal, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View, type ViewProps } from 'react-native';
+import { createContext, type ReactNode, useCallback, useEffect, useRef } from 'react';
+import { Animated, Easing, Modal, Pressable, ScrollView, type ScrollViewInstance, StyleSheet, Text, useWindowDimensions, View, type ViewProps } from 'react-native';
 
 import { t } from '@/i18n';
 
@@ -23,6 +23,14 @@ type SheetProps = {
   scroll?: boolean;
   testID?: string;
 };
+
+/**
+ * SheetEnd, inside a sheet that scrolls, brings the sheet's end into view:
+ * for a line that appears under the last thing in the sheet (what an
+ * answer's actions say, #50), which would otherwise sit below the edge.
+ * Outside a sheet it is null.
+ */
+export const SheetEnd = createContext<(() => void) | null>(null);
 
 export function Sheet(props: SheetProps) {
   // The open sheet is its own component, so each opening starts its slide
@@ -55,6 +63,19 @@ function OpenSheet({ onClose, title, subtitle, children, scroll = true, testID }
   const th = useTheme();
   const s = styles(th);
   const insets = useSafeInsets();
+  const scroller = useRef<ScrollViewInstance>(null);
+  const later = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // After the new line has been laid out.
+  const toEnd = useCallback(() => {
+    if (later.current) clearTimeout(later.current);
+    later.current = setTimeout(() => scroller.current?.scrollToEnd({ animated: true }), 80);
+  }, []);
+  useEffect(
+    () => () => {
+      if (later.current) clearTimeout(later.current);
+    },
+    [],
+  );
   return (
     <Modal
       transparent
@@ -87,8 +108,8 @@ function OpenSheet({ onClose, title, subtitle, children, scroll = true, testID }
             <IconButton name="close" label={t('sheet.close')} onPress={onClose} size={22} />
           </View>
           {scroll ? (
-            <ScrollView style={s.scroll} keyboardShouldPersistTaps="handled">
-              {children}
+            <ScrollView ref={scroller} style={s.scroll} keyboardShouldPersistTaps="handled">
+              <SheetEnd.Provider value={toEnd}>{children}</SheetEnd.Provider>
             </ScrollView>
           ) : (
             children
