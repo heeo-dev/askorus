@@ -2,7 +2,10 @@
 
 package claude
 
-import "errors"
+import (
+	"errors"
+	"os"
+)
 
 // Folder servers need a pseudo terminal; macOS and Linux come with the
 // agents for those systems (plan step D).
@@ -16,4 +19,6 @@ func processParents() map[int]int { return nil }
 
 func processElevated(pid int) (elevated, known bool) { return false, false }
 
-func selfElevated() bool { return false }
+// selfElevated: on macOS and Linux the administrator is root (#52). The
+// agent is meant to run as the person, with the person's AI sign-ins.
+func selfElevated() bool { return os.Geteuid() == 0 }

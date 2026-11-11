@@ -254,6 +254,13 @@ func sleepAfterAC() int {
 
 func controlSupported() bool { return true }
 
+// exeName is how the agent's program file is called in what the agent
+// says, and installFolderHint the folder the install script uses.
+const (
+	exeName           = "askorus-agent.exe"
+	installFolderHint = `%LOCALAPPDATA%\Programs\Askorus`
+)
+
 // processRunning reports whether pid is still running.
 func processRunning(pid int) bool {
 	h, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, uint32(pid))

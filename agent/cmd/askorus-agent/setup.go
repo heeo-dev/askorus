@@ -28,11 +28,6 @@ func setupCmd(dir string, args []string, in io.Reader, out io.Writer) error {
 	if len(args) != 0 {
 		return fail("usage: askorus-agent setup", "사용법: askorus-agent setup")
 	}
-	if !controlSupported() {
-		// macOS and Linux for now (#52): the steps setup would walk through, by hand.
-		return fail("setup is only supported on Windows for now. Here: run `askorus-agent check` and fix what it lists, keep `askorus-agent serve` running in a terminal, then run `askorus-agent pair` in another",
-			"setup은 지금 Windows에서만 됩니다. 여기서는 `askorus-agent check`가 알려 주는 것을 고치고, 터미널 하나에 `askorus-agent serve`를 켜 둔 채 다른 터미널에서 `askorus-agent pair`를 실행하세요")
-	}
 	cfg, err := config.Load(dir)
 	if err != nil {
 		return err
@@ -144,8 +139,8 @@ func runSetup(ctx context.Context, cfg config.Config, env setupEnv, in io.Reader
 		return err
 	}
 	if looksTemporary(dir) {
-		return stop(m("askorus-agent.exe is in %s, which looks temporary; move it to a folder you keep (the install script uses %%LOCALAPPDATA%%\\Programs\\Askorus)",
-			"askorus-agent.exe가 임시 폴더로 보이는 %s에 있습니다. 계속 둘 폴더로 옮기세요 (설치 스크립트는 %%LOCALAPPDATA%%\\Programs\\Askorus에 둡니다)", dir))
+		return stop(m("%s is in %s, which looks temporary; move it to a folder you keep (the install script uses %s)",
+			"%s가 임시 폴더로 보이는 %s에 있습니다. 계속 둘 폴더로 옮기세요 (설치 스크립트는 %s에 둡니다)", exeName, dir, installFolderHint))
 	}
 	if env.pathHas(dir) {
 		c.line("ok", m("on this user's PATH: %s", "이 사용자의 PATH에 있음: %s", dir))
