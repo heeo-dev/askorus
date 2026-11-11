@@ -15,6 +15,7 @@ type State = { list: Connection[] | null; currentId: string | null };
 
 let state: State = { list: null, currentId: null };
 let gen = 0;
+let osWrites: Promise<void> = Promise.resolve();
 const subs = new Set<() => void>();
 
 function set(next: State) {
@@ -45,6 +46,28 @@ export async function pickPC(id: string): Promise<void> {
   set({ ...state, currentId: id });
   const p = await loadAskPrefs();
   await saveAskPrefs({ ...p, pc: id });
+}
+
+/**
+ * rememberOS keeps the system a PC's agent just reported, so the lists can
+ * tell the PCs apart (#53). PCs paired before the app kept it get it the
+ * first time they answer.
+ */
+export function rememberOS(id: string, os: string | undefined): Promise<void> {
+  if (!os || !state.list?.some((c) => c.id === id && c.os !== os)) return Promise.resolve();
+  // One after the other: the store rewrites the whole list, and two PCs
+  // answering at the same moment would each write the list without the other's system.
+  const next = osWrites.then(async () => {
+    if (await new ConnectionStore().setOS(id, os)) await reloadPCs();
+  });
+  osWrites = next.catch(() => undefined);
+  return next;
+}
+
+/** renamePC gives a PC the name the person typed and reads the list again. */
+export async function renamePC(id: string, name: string): Promise<void> {
+  await new ConnectionStore().rename(id, name);
+  await reloadPCs();
 }
 
 /** currentPCId is the current PC as last read (null before the first read or with no PC). */

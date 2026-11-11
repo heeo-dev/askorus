@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AgentClient, baseUrl, CancelledError } from '@/api/client';
+import { osName } from '@/connections/label';
 import { type Cause, cause } from '@/connections/reach';
 import { type Connection, ConnectionStore } from '@/connections/store';
 import { t } from '@/i18n';
@@ -14,6 +15,7 @@ import { t } from '@/i18n';
 import { StatusDot, type StatusKind } from './controls';
 import { Icon } from './Icon';
 import { reachTitle } from './ReachError';
+import { rememberOS } from './shell/pcs';
 import { Sheet } from './Sheet';
 import { themed, useTheme } from './theme';
 
@@ -39,7 +41,9 @@ export function useReach(list: Connection[] | null, again = 0): Record<string, R
         const client = new AgentClient(baseUrl(c.host, c.port), { token: token ?? undefined });
         let r: Reach;
         try {
-          r = { state: 'ok', version: (await client.info(ctl.signal)).version };
+          const info = await client.info(ctl.signal);
+          r = { state: 'ok', version: info.version };
+          rememberOS(c.id, info.os).catch(() => undefined);
         } catch (e) {
           if (e instanceof CancelledError || ctl.signal.aborted) return;
           r = { state: 'error', cause: cause(e) };
@@ -100,7 +104,10 @@ export function ReachLine({ reach, long, size = 8 }: { reach: Reach | undefined;
  * PCRow is one PC: tile, name and state; selected marks the current one. A
  * long row (the PC picker) also shows the PC's address: the name comes from
  * the PC itself, so two PCs can carry the same one, and the address is what
- * the pairing screen showed (R-94).
+ * the pairing screen showed (R-94). `detail` is what else tells the PC apart
+ * while several are paired (#53): in a long row the system, put before the
+ * address; in a short one pcDetail (the system, and the first part of the
+ * address when another PC has the same name).
  */
 export function PCRow({
   conn,
@@ -110,6 +117,7 @@ export function PCRow({
   onPress,
   tile = 40,
   divided,
+  detail,
 }: {
   conn: Connection;
   reach: Reach | undefined;
@@ -118,15 +126,17 @@ export function PCRow({
   onPress: () => void;
   tile?: 32 | 40;
   divided?: boolean;
+  detail?: string;
 }) {
   const th = useTheme();
   const s = styles(th);
   const v = reachView(reach, long);
+  const apart = long ? [detail, conn.host].filter(Boolean).join(' · ') : (detail ?? '');
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={long ? `${conn.name}, ${conn.host}, ${v.text}` : `${conn.name}, ${v.text}`}
+      accessibilityLabel={apart ? `${conn.name}, ${apart}, ${v.text}` : `${conn.name}, ${v.text}`}
       accessibilityState={{ selected: !!selected }}
       style={({ pressed }) => [s.row, tile === 32 ? s.rowSmall : s.rowBig, divided && s.divided, pressed && s.pressed]}
     >
@@ -135,9 +145,9 @@ export function PCRow({
         <Text style={s.name} numberOfLines={1}>
           {conn.name}
         </Text>
-        {long ? (
+        {apart ? (
           <Text style={s.host} numberOfLines={1} ellipsizeMode="middle">
-            {conn.host}
+            {apart}
           </Text>
         ) : null}
         <ReachLine reach={reach} long={long} size={tile === 32 ? 7 : 8} />
@@ -170,7 +180,16 @@ export function PCPickerSheet({
     <Sheet open={open} onClose={onClose} title={t('pc.pickTitle')} testID="pc-picker">
       <View style={s.list}>
         {list.map((c, i) => (
-          <PCRow key={c.id} conn={c} reach={reach[c.id]} long selected={c.id === currentId} onPress={() => onPick(c.id)} divided={i > 0} />
+          <PCRow
+            key={c.id}
+            conn={c}
+            reach={reach[c.id]}
+            long
+            detail={list.length > 1 ? osName(c.os) : ''}
+            selected={c.id === currentId}
+            onPress={() => onPick(c.id)}
+            divided={i > 0}
+          />
         ))}
         <Pressable
           onPress={onPair}

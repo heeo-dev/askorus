@@ -570,7 +570,7 @@ test('the questions go to the current PC; a conversation stays with the PC it wa
   expect(await screen.findByRole('header', { name: 'What would you like to ask?' }, { timeout: 5000 })).toBeTruthy();
   expect(conversations.list().map((c) => c.title)).toEqual(['on the desktop']);
   await user.press(await screen.findByRole('button', { name: /^AIs to answer: 3/ }));
-  expect(await screen.findByText('My PC: LAPTOP')).toBeTruthy();
+  expect(await screen.findByText('My PC: LAPTOP (Windows)')).toBeTruthy();
   await user.press(close());
   await ask(user, 'on the laptop');
   await screen.findByText('opencode says: on the laptop');

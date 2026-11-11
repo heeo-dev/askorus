@@ -86,6 +86,8 @@ export class FakeAgent {
   pairAnswer: 'approve' | 'deny' | 'wait' = 'approve';
   /** When false, every token is refused, as after `devices revoke`. */
   tokenValid = true;
+  /** The system this PC's info reports (#53). */
+  os = 'windows';
   remoteUrl = 'https://claude.ai/code/session_test';
   /** Codes /v1/info reports for Claude, such as claude_service_elevated. */
   notices: string[] = [];
@@ -675,7 +677,7 @@ export class FakeAgent {
         version: '0.1.0',
         apiVersion: 1,
         hostname: 'DESKTOP-TEST',
-        os: 'windows',
+        os: this.os,
         agents: [this.claudeInfo(), ...this.askAgents],
         capabilities: this.capabilities,
         reserved: [],

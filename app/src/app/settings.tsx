@@ -22,6 +22,7 @@ import { modelLabel } from '@/ask/models';
 import { type AskPrefs, defaultAskPrefs, loadAskPrefs, saveAskPrefs, synthWriters } from '@/ask/prefs';
 import { type Asker, askers } from '@/ask/thread';
 import { loadPrefs, type Prefs, savePrefs } from '@/connections/prefs';
+import { pcDetail, pcLabel } from '@/connections/label';
 import type { Connection } from '@/connections/store';
 import { t } from '@/i18n';
 import { PillChoice, Segment, SwitchRow } from '@/ui/controls';
@@ -84,6 +85,8 @@ export default function Settings() {
     setNote(leftOnPC ? t('settings.leftOnPC', { id: c.deviceId }) : '');
   };
 
+  // The open PC as the list has it now: its system may have just been read, or its name changed (#53).
+  const shownPC = pcOpen ? (list?.find((c) => c.id === pcOpen.id) ?? pcOpen) : null;
   const defaults = settingsLine(prefs.model, prefs.effort);
   // The moderator model (11-06): set per AI; the list is the moderator AI's on the current PC.
   const moderator = pcAIs?.find((a) => a.agent === ask.synthAgent && a.canAsk) ?? null;
@@ -100,7 +103,7 @@ export default function Settings() {
           {note ? <Text style={s.note}>{note}</Text> : null}
           <Group>
             {(list ?? []).map((c) => (
-              <PCRow key={c.id} conn={c} reach={reach[c.id]} long={false} tile={32} onPress={() => setPCOpen(c)} />
+              <PCRow key={c.id} conn={c} reach={reach[c.id]} long={false} tile={32} detail={pcDetail(c, list)} onPress={() => setPCOpen(c)} />
             ))}
             <Row
               title={t('settings.defaults')}
@@ -223,7 +226,16 @@ export default function Settings() {
         </Section>
       </ScrollView>
 
-      <PCSheet conn={pcOpen} onClose={() => setPCOpen(null)} onUnpaired={unpaired} />
+      <PCSheet
+        conn={shownPC}
+        label={shownPC ? pcLabel(shownPC, list) : undefined}
+        onClose={() => setPCOpen(null)}
+        onUnpaired={unpaired}
+        onRename={(c) => {
+          setPCOpen(null);
+          router.push({ pathname: '/pc/[id]/rename', params: { id: c.id } });
+        }}
+      />
       <DefaultsSheet open={defaultsOpen} onClose={() => setDefaultsOpen(false)} prefs={prefs} onChange={change} />
       <ModelSheet
         agent={modelOpen && moderator ? moderator.agent : null}

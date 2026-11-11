@@ -57,6 +57,7 @@ import {
   stopTurns,
   type Turn,
 } from '@/ask/thread';
+import { pcLabel } from '@/connections/label';
 import { connect } from '@/connections/open';
 import { type Cause, cause } from '@/connections/reach';
 import { type Connection, ConnectionStore } from '@/connections/store';
@@ -70,11 +71,14 @@ import { Spinner } from '@/ui/controls';
 import { DebateDock, DebateEnd } from '@/ui/Debate';
 import { Header } from '@/ui/Header';
 import { Icon, IconButton } from '@/ui/Icon';
+import { useSafeInsets } from '@/ui/keyboard';
 import { ModelSheet } from '@/ui/ModelSheet';
+import { PCLine } from '@/ui/PCLine';
+import { PCPickerSheet } from '@/ui/PCPickerSheet';
 import { RecordNotice, RecordSheet } from '@/ui/Record';
 import { RefineSheet } from '@/ui/Refine';
 import { ReachError } from '@/ui/ReachError';
-import { usePCs } from '@/ui/shell/pcs';
+import { rememberOS, usePCs } from '@/ui/shell/pcs';
 import { themed, type Theme, useTheme } from '@/ui/theme';
 import { TierSheet } from '@/ui/TierSheet';
 import { type Note, type TurnActions, TurnView } from '@/ui/TurnView';
@@ -84,6 +88,11 @@ const store = new ConnectionStore();
 type PC = { conn: Connection; client: AgentClient };
 type Load = { state: 'loading' } | { state: 'ok'; info: Info } | { state: 'error'; cause: Cause; text: string };
 type Head = { id: string; pcId: string; startedAt: number; title: string };
+
+const nothing = () => undefined;
+
+// How long the PC line says that opening a conversation changed the PC (#53).
+const pcSwitchedMs = 5000;
 // The one sheet open over the screen.
 type SheetState =
   | { kind: 'pick' }
@@ -111,6 +120,7 @@ const endRoom = 24;
 
 export default function Ask() {
   const th = useTheme();
+  const insets = useSafeInsets();
   const s = styles(th);
   const pcs = usePCs();
   const currentId = pcs.current?.id ?? null;
@@ -195,16 +205,52 @@ export default function Ask() {
     setLoad({ state: 'loading' });
     try {
       const info = await p.client.info();
+      rememberOS(p.conn.id, info.os).catch(() => undefined);
       if (pcRef.current === p) setLoad({ state: 'ok', info });
     } catch (e) {
       if (pcRef.current === p) setLoad({ state: 'error', cause: cause(e), text: errorText(e) });
     }
   }, []);
+  // Coming back to the screen or to the app asks a PC that did not answer once more
+  // (#53: it may be on again). A ref, so a failed try does not start the next one.
+  const failed = useRef(false);
+  failed.current = load.state === 'error';
+  useFocusEffect(
+    useCallback(() => {
+      if (failed.current && pcRef.current) loadInfo(pcRef.current);
+    }, [loadInfo]),
+  );
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (st) => {
+      if (st === 'active' && failed.current && pcRef.current) loadInfo(pcRef.current);
+    });
+    return () => sub.remove();
+  }, [loadInfo]);
+
+  // Opening a conversation moved the app to that conversation's PC (#53): the
+  // PC line says so for a few seconds. The picker opens from the same line.
+  const [pcSwitched, setPCSwitched] = useState(false);
+  const [pcPicker, setPCPicker] = useState(false);
+  const switchedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sayPCSwitched = useCallback(() => {
+    if (switchedTimer.current) clearTimeout(switchedTimer.current);
+    setPCSwitched(true);
+    switchedTimer.current = setTimeout(() => setPCSwitched(false), pcSwitchedMs);
+  }, []);
+  useEffect(
+    () => () => {
+      if (switchedTimer.current) clearTimeout(switchedTimer.current);
+    },
+    [],
+  );
 
   // Conversations left while they still ran (#23), by id: their follows
   // patch these copies, kept in the history at most about once a second.
   const bgs = useRef(new Map<string, { head: Head; turns: Turn[] }>());
   const [bgBusy, setBgBusy] = useState(false);
+  // Whether one of them runs on that PC. Only that holds a new question back: another
+  // PC answers on its own (#53: a question for one PC waited minutes for the other).
+  const bgOn = useCallback((pcId: string | null | undefined) => !!pcId && [...bgs.current.values()].some((b) => b.head.pcId === pcId), []);
   const bgTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const keepBgs = useCallback(() => {
     if (bgTimer.current) return;
@@ -281,24 +327,27 @@ export default function Ask() {
       if (!b) return;
       bgs.current.delete(id);
       conversations.save({ ...b.head, turns: b.turns });
-      if (bgs.current.size) return;
-      if (bgTimer.current) clearTimeout(bgTimer.current);
-      bgTimer.current = null;
-      setBgBusy(false);
+      setBgBusy(bgs.current.size > 0);
+      if (!bgs.current.size) {
+        if (bgTimer.current) clearTimeout(bgTimer.current);
+        bgTimer.current = null;
+      }
+      // One still runs on this conversation's PC: the question goes on waiting.
+      if (bgOn(head.current?.pcId ?? pcRef.current?.conn.id)) return;
       // A combined answer or debate of this conversation still coming holds it back (#29).
       if (concluding(turnsRef.current)) return;
       for (const x of turnsRef.current) if (x.queued) startQueued(pcRef.current?.client, x);
     },
-    [startQueued],
+    [startQueued, bgOn],
   );
 
   // A question that waited for this conversation's combined answer or
   // debate goes once it is in (#29), and nothing else runs in the background.
   useEffect(() => {
     const client = pcRef.current?.client;
-    if (!client || bgs.current.size || concluding(turns)) return;
+    if (!client || bgOn(head.current?.pcId ?? pcRef.current?.conn.id) || concluding(turns)) return;
     for (const x of turns) if (x.queued) startQueued(client, x);
-  }, [turns, startQueued]);
+  }, [turns, startQueued, bgOn]);
 
   // The current conversation is kept on the phone as it changes (milestone
   // B): at most about once a second, and at once when the app goes to the
@@ -409,13 +458,17 @@ export default function Ask() {
       conversations.setCurrent({ id: c.id, startedAt: c.startedAt, title: c.title });
       turnsRef.current = c.turns;
       setTurns(c.turns);
-      if (c.pcId !== currentId && pcs.list?.some((x) => x.id === c.pcId)) await pcs.pick(c.pcId);
+      if (c.pcId !== currentId && pcs.list?.some((x) => x.id === c.pcId)) {
+        // The conversation goes on with the PC that answered it: say that the PC changed (#53).
+        await pcs.pick(c.pcId);
+        sayPCSwitched();
+      }
       const p = await connect(store, c.pcId);
       if (!p || head.current?.id !== c.id) return;
       for (const turn of c.turns) {
         // Kept while it waited (the app was closed): it goes once none runs in the background.
         if (turn.queued) {
-          if (!bgs.current.size && !concluding(c.turns)) startQueued(p.client, turn);
+          if (!bgOn(c.pcId) && !concluding(c.turns)) startQueued(p.client, turn);
           continue;
         }
         if (running(turn)) {
@@ -436,7 +489,7 @@ export default function Ask() {
           track(turn.id, followDebate(p.client, turn, null, 'poll', deps));
       }
     },
-    [currentId, deps, fresh, pcs, startQueued, track],
+    [bgOn, currentId, deps, fresh, pcs, sayPCSwitched, startQueued, track],
   );
 
   useEffect(() => {
@@ -457,6 +510,14 @@ export default function Ask() {
     return () => current.forEach((c) => c.abort());
   }, []);
 
+  // The conversation on screen was not asked on the current PC (#53): it can be read,
+  // and nothing of it is sent to the PC that happens to be current. Its PC is not
+  // paired any more (orphan), or it is and can be switched to (awayPC: the PC was
+  // paired again while the conversation was open, or is just being switched to).
+  const headPC = head.current?.pcId ?? null;
+  const away = turns.length > 0 && !!headPC && !!pcs.list && headPC !== currentId;
+  const awayPC = away ? (pcs.list?.find((x) => x.id === headPC) ?? null) : null;
+  const orphan = away && !awayPC;
   const info = load.state === 'ok' && pc ? load.info : null;
   infoRef.current = info;
   const list = info ? askers(info) : [];
@@ -480,7 +541,7 @@ export default function Ask() {
   const sendWith = (record?: 'with' | 'without') => {
     const question = text.trim();
     const p = pcRef.current;
-    if (!p || !info || !question || busy) return;
+    if (!p || !info || !question || busy || away) return;
     // What this conversation concludes is still coming (its combined answer or debate): a
     // question that carries the record waits for it (#29); one sent without a record goes now.
     const coming = concluding(turns);
@@ -519,8 +580,8 @@ export default function Ask() {
     });
     if (!turn.agents.length) return;
     if (record === 'without') turn.noRecord = true;
-    // A conversation left running goes first: this question waits for it (#23).
-    const waitBg = bgs.current.size > 0;
+    // A conversation left running on this PC goes first: this question waits for it (#23).
+    const waitBg = bgOn(head.current?.pcId ?? p.conn.id);
     const waitHere = carries && record !== 'without' && coming ? coming : null;
     const wait = waitBg || !!waitHere;
     if (wait) {
@@ -579,6 +640,20 @@ export default function Ask() {
   const onlyOf = (agent: string, then?: () => void) => (canAsk(agent) ? () => (setPick({ agents: [agent], tier: follow.tier }), then?.()) : undefined);
   const carryOn = (key: string, p: RunPart) =>
     p.agent === 'claude' && p.session && canOpen ? () => continueInClaude(key, p.session ?? '') : undefined;
+
+  // What a turn of a read-only conversation passes on: opening, copying, nothing that asks a PC.
+  const readOnly = (turn: Turn): TurnActions => ({
+    compare: nothing,
+    retryRun: nothing,
+    openAnswer: (agent) => setSheet({ kind: 'answer', turn: turn.id, agent }),
+    openAIs: () => setSheet({ kind: 'ais', turn: turn.id }),
+    openRefine: () => setSheet({ kind: 'refine', turn: turn.id }),
+    openRecord: () => setSheet({ kind: 'record', turn: turn.id }),
+    copy,
+    only: () => undefined,
+    carryOn: () => undefined,
+    debate: { start: nothing, stop: nothing, poll: nothing, copy, openAIs: () => setSheet({ kind: 'ais', turn: turn.id }), noticed: true, notice: nothing },
+  });
 
   const actsFor = (turn: Turn): TurnActions => ({
     compare: (how) => {
@@ -752,13 +827,34 @@ export default function Ask() {
   const answerView = sheet?.kind === 'answer' && sheetTurn ? (partViews(sheetTurn, now, info).find((p) => p.agent === sheet.agent) ?? null) : null;
   const answerKey = answerView && sheetTurn ? `${sheetTurn.id}/${answerView.agent}` : '';
 
+  // The current PC in words that tell it from the others, and its line when there is more than one (#53).
+  const pcName = pcs.current ? pcLabel(pcs.current, pcs.list) : '';
+  const pcLine =
+    pcName && (pcs.list?.length ?? 0) > 1 ? <PCLine label={pcName} switched={pcSwitched} onPress={() => setPCPicker(true)} /> : null;
+
   const sheets = (
     <>
+      <PCPickerSheet
+        open={pcPicker}
+        onClose={() => setPCPicker(false)}
+        list={pcs.list ?? []}
+        currentId={currentId}
+        onPick={(id) => {
+          setPCPicker(false);
+          // Picked by hand: nothing to announce.
+          setPCSwitched(false);
+          if (id !== currentId) pcs.pick(id).catch(() => undefined);
+        }}
+        onPair={() => {
+          setPCPicker(false);
+          router.push('/pair');
+        }}
+      />
       <AISheet
         open={sheet?.kind === 'pick'}
         onClose={() => setSheet(null)}
         title={t('ask.pickTitle')}
-        subtitle={pc ? t('ask.onPC', { name: pc.conn.name }) : undefined}
+        subtitle={pcName ? t('ask.onPC', { name: pcName }) : undefined}
         rows={pickRows}
       />
       <ModelSheet
@@ -786,7 +882,7 @@ export default function Ask() {
         open={sheet?.kind === 'followPick'}
         onClose={() => setSheet(null)}
         title={t('ask.followPickTitle')}
-        subtitle={pc ? t('ask.onPC', { name: pc.conn.name }) : undefined}
+        subtitle={pcName ? t('ask.onPC', { name: pcName }) : undefined}
         rows={followRows}
       />
       <TierSheet
@@ -854,14 +950,28 @@ export default function Ask() {
   }
 
   const reach =
-    load.state === 'error' ? <ReachError cause={load.cause} detail={load.text} onRetry={() => pcRef.current && loadInfo(pcRef.current)} /> : null;
+    load.state === 'error' ? (
+      <ReachError
+        cause={load.cause}
+        detail={load.text}
+        onRetry={() => pcRef.current && loadInfo(pcRef.current)}
+        pc={pcLine ? pcName : undefined}
+        os={pcs.current?.os}
+        onPick={pcLine ? () => setPCPicker(true) : undefined}
+      />
+    ) : null;
 
   if (!turns.length) {
     const recent = recentQuestions(3);
     return (
       <View style={s.screen}>
         {header}
-        <ScrollView style={s.fill} contentContainerStyle={s.empty} keyboardShouldPersistTaps="handled">
+        {pcLine}
+        <ScrollView
+          style={s.fill}
+          contentContainerStyle={[s.empty, !(info && anyAsk) && { paddingBottom: 20 + insets.bottom }]}
+          keyboardShouldPersistTaps="handled"
+        >
           {reach}
           {load.state === 'loading' ? <Spinner size={24} /> : null}
           {info && !anyAsk ? <Text style={s.body}>{oldAgent(info) ? t('ask.oldAgent') : t('ask.noAI')}</Text> : null}
@@ -924,6 +1034,7 @@ export default function Ask() {
   return (
     <View style={s.screen}>
       {header}
+      {pcLine}
       <DebateEnd.Provider value={markDebateEnd}>
         <ScrollView
           ref={scroll}
@@ -954,21 +1065,27 @@ export default function Ask() {
             if (debateOn && following.current) toDebateEnd();
           }}
         >
-          {reach}
+          {away ? null : reach}
           {turns.map((turn, i) => (
             <TurnView
               key={turn.id}
               turn={turn}
-              info={info}
+              info={away ? null : info}
               now={now}
-              only={i === turns.length - 1 ? one : null}
+              only={!away && i === turns.length - 1 ? one : null}
               notes={notes}
-              act={actsFor(turn)}
+              act={away ? readOnly(turn) : actsFor(turn)}
             />
           ))}
         </ScrollView>
       </DebateEnd.Provider>
-      {liveDebate ? (
+      {away ? (
+        <View style={[s.orphan, { paddingBottom: 12 + insets.bottom }]} accessibilityRole="alert">
+          <Text style={s.orphanText}>{orphan ? t('ask.orphan') : t('ask.away', { name: awayPC ? pcLabel(awayPC, pcs.list) : '' })}</Text>
+          {awayPC ? <Button variant="outline" icon="switch" label={t('ask.awaySwitch')} onPress={() => pcs.pick(awayPC.id).catch(() => undefined)} /> : null}
+        </View>
+      ) : null}
+      {!away && liveDebate ? (
         <DebateDock
           turn={liveDebate}
           onPress={() => {
@@ -977,8 +1094,9 @@ export default function Ask() {
           }}
         />
       ) : null}
-      {askRecord ? <RecordNotice onGo={() => sendWith('with')} onWithout={() => sendWith('without')} /> : null}
-      <FollowBar
+      {askRecord && !away ? <RecordNotice onGo={() => sendWith('with')} onWithout={() => sendWith('without')} /> : null}
+      {away ? null : (
+        <FollowBar
         value={text}
         onChangeText={setText}
         onSend={send}
@@ -1009,6 +1127,7 @@ export default function Ask() {
         tier={follow.tier}
         onPickTier={() => setSheet({ kind: 'followTier' })}
       />
+      )}
       {sheets}
     </View>
   );
@@ -1076,6 +1195,8 @@ const styles = themed((th) =>
     recentText: { flex: 1, minWidth: 0, fontSize: 15, lineHeight: 21, color: th.textSub },
     pressed: { backgroundColor: th.raised },
     thread: { gap: 28, paddingHorizontal: 20, paddingTop: 4, paddingBottom: 20 },
+    orphan: { gap: 10, paddingTop: 12, paddingHorizontal: 20, borderTopWidth: 1, borderTopColor: th.barLine, backgroundColor: th.bg },
+    orphanText: { fontSize: 14, lineHeight: 20.3, color: th.textSub },
     pickRight: { flexDirection: 'row', alignItems: 'center', gap: 2, marginRight: -6 },
     noModel: { width: 44, height: 44 },
     track: { width: 40, height: 24, borderRadius: 12, padding: 3, flexDirection: 'row' },

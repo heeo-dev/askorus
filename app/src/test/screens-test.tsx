@@ -493,14 +493,14 @@ describe('pairing', () => {
     await user.press(await screen.findByRole('button', { name: 'Pair' }));
     const picker = within(await screen.findByTestId('pc-picker'));
     expect(await picker.findByRole('button', { name: /^OLD-LAPTOP, old-laptop\.tail0\.ts\.net, / })).toBeSelected();
-    expect(await picker.findByRole('button', { name: `DESKTOP-TEST, ${HOST}, Connected · agent 0.1.0` })).not.toBeSelected();
+    expect(await picker.findByRole('button', { name: `DESKTOP-TEST, Windows · ${HOST}, Connected · agent 0.1.0` })).not.toBeSelected();
     expect(r.getPathname()).toBe('/pcs');
     const [, added] = await new ConnectionStore().list();
     expect(added).toMatchObject({ host: HOST, name: 'DESKTOP-TEST' });
     expect((await loadAskPrefs()).pc).not.toBe(added.id);
 
     // Picking it there is what makes it the current PC.
-    await user.press(picker.getByRole('button', { name: `DESKTOP-TEST, ${HOST}, Connected · agent 0.1.0` }));
+    await user.press(picker.getByRole('button', { name: `DESKTOP-TEST, Windows · ${HOST}, Connected · agent 0.1.0` }));
     await waitFor(async () => expect((await loadAskPrefs()).pc).toBe(added.id));
     expect(old.id).not.toBe(added.id);
   });

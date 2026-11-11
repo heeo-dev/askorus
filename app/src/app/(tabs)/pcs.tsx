@@ -15,6 +15,7 @@ import { AppState, FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, 
 
 import type { AgentClient } from '@/api/client';
 import type { Folder, Session } from '@/api/types';
+import { pcDetail } from '@/connections/label';
 import { connect } from '@/connections/open';
 import { type Cause, cause } from '@/connections/reach';
 import { type Connection, ConnectionStore } from '@/connections/store';
@@ -29,7 +30,7 @@ import { SectionLabel } from '@/ui/List';
 import { PCPickerSheet, PCTile, type Reach, ReachLine } from '@/ui/PCPickerSheet';
 import { ReachError } from '@/ui/ReachError';
 import { SessionSheet } from '@/ui/SessionSheet';
-import { usePCs } from '@/ui/shell/pcs';
+import { rememberOS, usePCs } from '@/ui/shell/pcs';
 import { publishError, publishSessions } from '@/ui/shell/pcStatus';
 import { themed, useTheme } from '@/ui/theme';
 
@@ -91,7 +92,7 @@ export default function MyPC() {
       </>
     );
   } else {
-    body = <Sessions key={current.id} conn={current} onPick={() => setPickerOpen(true)} />;
+    body = <Sessions key={current.id} conn={current} detail={pcDetail(current, list)} onPick={() => setPickerOpen(true)} />;
   }
 
   return (
@@ -117,7 +118,7 @@ export default function MyPC() {
 
 // Sessions is one PC's part of the screen; a new current PC mounts a new one
 // (key), so nothing of the last PC stays.
-function Sessions({ conn, onPick }: { conn: Connection; onPick: () => void }) {
+function Sessions({ conn, detail, onPick }: { conn: Connection; detail: string; onPick: () => void }) {
   const th = useTheme();
   const s = styles(th);
   const insets = useSafeInsets();
@@ -154,6 +155,7 @@ function Sessions({ conn, onPick }: { conn: Connection; onPick: () => void }) {
     if (!pc) return;
     try {
       const i = await pc.client.info();
+      rememberOS(pc.conn.id, i.os).catch(() => undefined);
       setInfo({ state: 'ok', version: i.version });
       setCaps(i.capabilities);
       // Only the AIs whose sessions this list shows; one that only
@@ -287,6 +289,11 @@ function Sessions({ conn, onPick }: { conn: Connection; onPick: () => void }) {
           <Text style={s.pcName} numberOfLines={1} accessibilityRole="header">
             {conn.name}
           </Text>
+          {detail ? (
+            <Text style={s.pcDetail} numberOfLines={1}>
+              {detail}
+            </Text>
+          ) : null}
           <ReachLine reach={reach} long />
         </View>
         <IconButton name="switch" label={t('pc.pick')} onPress={onPick} size={20} />
@@ -295,7 +302,7 @@ function Sessions({ conn, onPick }: { conn: Connection; onPick: () => void }) {
       {pc === null ? <Text style={s.notice}>{t('sessions.gone')}</Text> : null}
       {load.state === 'error' ? (
         <View style={s.pad}>
-          <ReachError cause={load.cause} detail={load.text} onRetry={refresh} />
+          <ReachError cause={load.cause} detail={load.text} onRetry={refresh} os={conn.os} />
         </View>
       ) : null}
       {warnings.includes('claude_agents_unavailable') ? <Text style={s.warning}>{t('sessions.agentsUnavailable')}</Text> : null}
@@ -486,6 +493,7 @@ const styles = themed((th) =>
     pcBlock: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingLeft: 20, paddingRight: 8 },
     pcNames: { flex: 1, minWidth: 0, gap: 2 },
     pcName: { fontSize: 18, fontWeight: '600', lineHeight: 24, letterSpacing: -0.18, color: th.text },
+    pcDetail: { fontSize: 13, lineHeight: 18, color: th.caption },
     warning: { paddingHorizontal: 20, fontSize: 13, lineHeight: 19.5, color: th.caption },
     notice: { paddingHorizontal: 20, fontSize: 14, lineHeight: 20.3, color: th.danger },
     chips: { gap: 4, paddingLeft: 16, paddingRight: 20 },

@@ -10,6 +10,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Alert, Animated, Modal, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
 import { conversations, dayGroups, useConversations } from '@/ask/conversations';
+import { pcDetail } from '@/connections/label';
 import { label, t } from '@/i18n';
 
 import { StatusDot } from './controls';
@@ -57,6 +58,8 @@ export function Drawer({ open, onClose }: { open: boolean; onClose: () => void }
   };
   const groups = dayGroups({ list, current, now: new Date() });
   const pc = pcs.current;
+  // What tells this PC from the others (#53): its system, and its address when a name is shared.
+  const pcApart = pc ? pcDetail(pc, pcs.list) : '';
   const state = !status || status.state === 'checking' ? 'checking' : status.state;
   const waiting = state === 'ok' && status ? status.waiting : [];
   const pcLine = state === 'ok' ? t('pc.connected') : state === 'error' ? t('pc.notConnected') : t('home.checking');
@@ -146,13 +149,20 @@ export function Drawer({ open, onClose }: { open: boolean; onClose: () => void }
                   <Pressable
                     onPress={() => go(() => router.navigate('/pcs'))}
                     accessibilityRole="button"
-                    accessibilityLabel={`${pc.name}, ${pcLine}`}
+                    accessibilityLabel={pcApart ? `${pc.name}, ${pcApart}, ${pcLine}` : `${pc.name}, ${pcLine}`}
                     style={({ pressed }) => [s.pcRow, pressed && s.pressed]}
                   >
                     <Icon name="pc" size={20} color={th.textSub} />
-                    <Text style={s.pcName} numberOfLines={1}>
-                      {pc.name}
-                    </Text>
+                    <View style={s.pcNames}>
+                      <Text style={s.pcNameText} numberOfLines={1}>
+                        {pc.name}
+                      </Text>
+                      {pcApart ? (
+                        <Text style={s.pcApart} numberOfLines={1}>
+                          {pcApart}
+                        </Text>
+                      ) : null}
+                    </View>
                     <View style={s.pcState}>
                       <StatusDot kind={state === 'ok' ? 'ok' : state === 'error' ? 'failed' : 'stopped'} size={7} />
                       <Text style={s.pcStateText}>{pcLine}</Text>
@@ -246,6 +256,9 @@ const styles = themed((th) =>
     pcBlock: { paddingVertical: 2, borderRadius: 18, backgroundColor: th.raised, overflow: 'hidden' },
     pcRow: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 12, paddingLeft: 14, paddingRight: 10 },
     pcName: { flexShrink: 1, flexGrow: 1, fontSize: 15, fontWeight: '500', lineHeight: 21, color: th.text },
+    pcNames: { flexShrink: 1, flexGrow: 1, minWidth: 0, paddingVertical: 6 },
+    pcNameText: { fontSize: 15, fontWeight: '500', lineHeight: 21, color: th.text },
+    pcApart: { fontSize: 12, lineHeight: 16, color: th.textSub },
     pcState: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     pcStateText: { fontSize: 13, lineHeight: 18, color: th.textSub },
     waitRow: {
