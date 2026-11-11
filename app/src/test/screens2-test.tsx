@@ -241,7 +241,7 @@ describe('settings', () => {
     const user = userEvent.setup();
     await pairedPC();
     const pc = await openPCSheet(user);
-    expect(pc.getByText(`${HOST}:${PORT}`)).toBeTruthy();
+    expect(await pc.findByText(`Windows · ${HOST}:${PORT}`)).toBeTruthy();
     expect(pc.getByText('This phone: Test Phone (id dev-1)')).toBeTruthy();
   });
 

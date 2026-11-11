@@ -50,9 +50,11 @@ export async function pairWithPC(
   // The PC's own name for the list. Pairing already worked, so a failure
   // here only means the host name is shown instead.
   let name = link.host.split('.')[0];
+  let os: string | undefined;
   try {
     const info = await client.withToken(paired.token).info(wait.signal);
     if (info.hostname) name = info.hostname;
+    if (info.os) os = info.os;
   } catch {
     // keep the host name
   }
@@ -61,6 +63,7 @@ export async function pairWithPC(
     {
       kind: 'pc',
       name,
+      ...(os ? { os } : {}),
       host: link.host,
       port: link.port,
       deviceId: paired.deviceId,

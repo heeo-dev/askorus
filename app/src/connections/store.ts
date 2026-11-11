@@ -11,7 +11,9 @@ export type ConnectionKind = 'pc';
 export type Connection = {
   id: string;
   kind: ConnectionKind;
-  name: string; // the PC's host name, editable later
+  name: string; // the PC's host name until the person gives it another (#53)
+  os?: string; // the PC's system as its agent says it (windows, linux, darwin); absent until it was read (#53)
+  named?: boolean; // the person gave the name: pairing again keeps it (#53)
   host: string; // MagicDNS name
   port: number; // serve HTTPS port
   deviceId: string; // this phone's id on that PC
@@ -33,6 +35,12 @@ export const secureKeyValue: KeyValue = {
 };
 
 const listKey = 'connections.v1';
+// PCs that were unpaired, newest first: their id and address only, no token.
+// Pairing the same address again takes the id back, so the conversations
+// asked on that PC go on with it instead of staying read-only (#53).
+const goneKey = 'connections.gone.v1';
+const maxGone = 20;
+type Gone = { id: string; host: string; port: number };
 const tokenKey = (id: string) => `token.${id}`;
 
 export class ConnectionStore {
@@ -59,27 +67,54 @@ export class ConnectionStore {
 
   /**
    * Saves a new pairing. Pairing the same PC again replaces the old entry
-   * and its token, so one PC never shows twice.
+   * and its token, so one PC never shows twice; a name the person gave it
+   * stays.
    */
   async add(c: Omit<Connection, 'id'>, token: string): Promise<Connection> {
     const list = await this.list();
     const old = list.find((x) => x.kind === c.kind && x.host === c.host && x.port === c.port);
-    const conn: Connection = { ...c, id: old?.id ?? newId() };
+    // Unpaired before: the same PC comes back under its id.
+    const gone = old ? [] : await this.gone();
+    const back = gone.find((g) => g.host === c.host && g.port === c.port && !list.some((x) => x.id === g.id));
+    const conn: Connection = { ...c, ...(old?.named ? { name: old.name, named: true } : {}), id: old?.id ?? back?.id ?? newId() };
+    if (back) await this.kv.set(goneKey, JSON.stringify(gone.filter((g) => g !== back)));
     await this.kv.set(tokenKey(conn.id), token);
     const next = list.filter((x) => x.id !== conn.id).concat(conn);
     await this.kv.set(listKey, JSON.stringify(next));
     return conn;
   }
 
+  /** rename gives a PC the name the person typed. */
   async rename(id: string, name: string): Promise<void> {
     const list = await this.list();
-    await this.kv.set(listKey, JSON.stringify(list.map((c) => (c.id === id ? { ...c, name } : c))));
+    await this.kv.set(listKey, JSON.stringify(list.map((c) => (c.id === id ? { ...c, name, named: true } : c))));
+  }
+
+  /** setOS keeps the system a PC's agent reported; it reports whether anything changed. */
+  async setOS(id: string, os: string): Promise<boolean> {
+    const list = await this.list();
+    if (!os || !list.some((c) => c.id === id && c.os !== os)) return false;
+    await this.kv.set(listKey, JSON.stringify(list.map((c) => (c.id === id ? { ...c, os } : c))));
+    return true;
   }
 
   async remove(id: string): Promise<void> {
     await this.kv.remove(tokenKey(id));
     const list = await this.list();
-    await this.kv.set(listKey, JSON.stringify(list.filter((c) => c.id !== id)));
+    const c = list.find((x) => x.id === id);
+    await this.kv.set(listKey, JSON.stringify(list.filter((x) => x.id !== id)));
+    if (!c) return;
+    const gone = (await this.gone()).filter((g) => g.id !== id && !(g.host === c.host && g.port === c.port));
+    await this.kv.set(goneKey, JSON.stringify([{ id, host: c.host, port: c.port }, ...gone].slice(0, maxGone)));
+  }
+
+  private async gone(): Promise<Gone[]> {
+    try {
+      const v = JSON.parse((await this.kv.get(goneKey)) ?? '[]');
+      return Array.isArray(v) ? v.filter((g) => g && typeof g.id === 'string' && typeof g.host === 'string' && typeof g.port === 'number') : [];
+    } catch {
+      return [];
+    }
   }
 }
 

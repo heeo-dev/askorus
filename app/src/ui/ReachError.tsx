@@ -1,7 +1,9 @@
 // Explains why a PC cannot be used and what to check, then offers retry
 // (or pairing again when the PC dropped this phone). Used by 내 PC and the
 // Ask screen (S5c: a surface block with a danger title, as the boards'
-// tokens; the words and the order are unchanged).
+// tokens; the words and the order are unchanged). With several PCs (#53)
+// it names the PC it is about and offers picking another; how to start
+// the agent is said for that PC's system.
 
 import { router } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
@@ -32,11 +34,30 @@ const check: Partial<Record<Cause, MessageKey>> = {
 /** reachTitle is the one-line form, for a PC row. */
 export const reachTitle = (c: Cause) => t(title[c]);
 
-export function ReachError({ cause, detail, onRetry }: { cause: Cause; detail?: string; onRetry?: () => void }) {
+export function ReachError({
+  cause,
+  detail,
+  onRetry,
+  pc,
+  os,
+  onPick,
+}: {
+  cause: Cause;
+  detail?: string;
+  onRetry?: () => void;
+  /** The PC this is about, in words that tell it from the others; given while several are paired. */
+  pc?: string;
+  /** That PC's system as its agent reported it (windows, linux, darwin). */
+  os?: string;
+  /** Opens the PC picker; given while several are paired. */
+  onPick?: () => void;
+}) {
   const th = useTheme();
   const s = styles(th);
+  // On macOS and Linux the agent is kept running with `serve` for now (#52); `start` is the Windows way.
+  const serve = os === 'linux' || os === 'darwin';
   const checks = causesToCheck(cause)
-    .map((c) => check[c])
+    .map((c) => (c === 'agent_down' && serve ? 'reach.check.agentServe' : check[c]))
     .filter((k): k is MessageKey => !!k);
   return (
     <View style={s.box} accessibilityRole="alert">
@@ -44,6 +65,7 @@ export function ReachError({ cause, detail, onRetry }: { cause: Cause; detail?: 
         <Icon name="alert" size={18} color={th.danger} style={s.icon} />
         <Text style={s.title}>{t(title[cause])}</Text>
       </View>
+      {pc ? <Text style={s.pc}>{t('ask.onPC', { name: pc })}</Text> : null}
       {cause === 'other' && detail ? <Text style={s.text}>{detail}</Text> : null}
       {checks.map((k, i) => (
         <Text key={k} style={s.text}>
@@ -56,6 +78,7 @@ export function ReachError({ cause, detail, onRetry }: { cause: Cause; detail?: 
       ) : onRetry ? (
         <Button variant="outline" icon="retry" label={t('reach.retry')} onPress={onRetry} style={s.button} />
       ) : null}
+      {onPick ? <Button variant="outline" icon="switch" label={t('pc.pick')} onPress={onPick} /> : null}
     </View>
   );
 }
@@ -67,6 +90,7 @@ const styles = themed((th) =>
     icon: { marginTop: 1 },
     title: { flex: 1, fontSize: 15, fontWeight: '600', lineHeight: 21, color: th.danger },
     text: { fontSize: 14, lineHeight: 20.3, color: th.textSub },
+    pc: { fontSize: 14, fontWeight: '500', lineHeight: 20.3, color: th.text },
     button: { marginTop: 4 },
   }),
 );

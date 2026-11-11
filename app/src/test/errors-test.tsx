@@ -137,10 +137,10 @@ test('two PCs stay apart: the picker shows each with its own state, and picking 
   expect(await screen.findByText('Fix the login bug')).toBeTruthy();
   await user.press(screen.getByRole('button', { name: 'Pick another PC' }));
   const picker = within(await screen.findByTestId('pc-picker'));
-  expect(await picker.findByRole('button', { name: `DESKTOP-TEST, ${HOST}, Connected · agent 0.1.0` })).toBeSelected();
-  expect(await picker.findByRole('button', { name: `LAPTOP, ${laptopHost}, Connected · agent 0.1.0` })).not.toBeSelected();
+  expect(await picker.findByRole('button', { name: `DESKTOP-TEST, Windows · ${HOST}, Connected · agent 0.1.0` })).toBeSelected();
+  expect(await picker.findByRole('button', { name: `LAPTOP, Windows · ${laptopHost}, Connected · agent 0.1.0` })).not.toBeSelected();
 
-  await user.press(picker.getByRole('button', { name: `LAPTOP, ${laptopHost}, Connected · agent 0.1.0` }));
+  await user.press(picker.getByRole('button', { name: `LAPTOP, Windows · ${laptopHost}, Connected · agent 0.1.0` }));
   expect(await screen.findByText('Laptop work')).toBeTruthy();
   expect(screen.queryByText('Fix the login bug')).toBeNull();
   expect(screen.getByRole('header', { name: 'LAPTOP' })).toBeTruthy();
