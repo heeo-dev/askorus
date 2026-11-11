@@ -20,6 +20,7 @@ import NewSession from '@/app/pc/[id]/new';
 import Settings from '@/app/settings';
 import { loadAskPrefs } from '@/ask/prefs';
 import { ConnectionStore } from '@/connections/store';
+import * as tailnetCheck from '@/connections/tailnetCheck';
 import { CODE, FakeAgent, HOST, PAIR_LINK, PORT, TOKEN, session } from '@/test/fakeAgent';
 import { Header } from '@/ui/Header';
 
@@ -497,6 +498,50 @@ describe('pairing', () => {
     expect(await screen.findByText('Not a pairing link. Paste the whole link shown on the PC.')).toBeTruthy();
     expect(screen.queryByText('Is this your PC?')).toBeNull();
     expect(agent.calls).toHaveLength(0);
+  });
+
+  // #42: the code goes only to a PC inside the person's own tailnet. The
+  // phone's network is asked first (the native module on a phone).
+  test('a PC outside the tailnet gets no pairing request, and the screen says why', async () => {
+    const check = jest.spyOn(tailnetCheck, 'checkTailnetHost').mockResolvedValue('outside');
+    const user = userEvent.setup();
+    await renderRouter(routes, { initialUrl: `/pair?v=1&host=${HOST}&port=${PORT}&code=${CODE}` });
+    await user.press(await screen.findByRole('button', { name: 'Pair' }));
+    expect(await screen.findByRole('header', { name: "Couldn't pair" })).toBeTruthy();
+    expect(screen.getByText(/could not be confirmed as a PC inside your Tailscale network, so no pairing request was sent\..*came from someone else, do not use it\./)).toBeTruthy();
+    expect(check).toHaveBeenCalledWith(HOST, PORT);
+    expect(agent.calls).toHaveLength(0);
+    expect(await new ConnectionStore().list()).toEqual([]);
+
+    // From the start again; with Tailscale on the same link pairs.
+    check.mockResolvedValue('tailnet');
+    await user.press(screen.getByRole('button', { name: 'Start over' }));
+    await user.press(await screen.findByRole('button', { name: 'Paste the link instead' }));
+    await user.type(screen.getByLabelText('The link on the PC'), PAIR_LINK);
+    await user.press(screen.getByRole('button', { name: 'Pair with this link' }));
+    await user.press(await screen.findByRole('button', { name: 'Pair' }));
+    expect(await screen.findByText('Connected · agent 0.1.0')).toBeTruthy();
+    expect(agent.callsTo('POST', '/v1/pair')).toHaveLength(1);
+  });
+
+  test('a PC name with no address gets no pairing request: Tailscale may be off', async () => {
+    jest.spyOn(tailnetCheck, 'checkTailnetHost').mockResolvedValue('unresolved');
+    const user = userEvent.setup();
+    await renderRouter(routes, { initialUrl: `/pair?v=1&host=${HOST}&port=${PORT}&code=${CODE}` });
+    await user.press(await screen.findByRole('button', { name: 'Pair' }));
+    expect(await screen.findByText(/The PC's address could not be found, so no pairing request was sent\. Check that Tailscale is on on this phone/)).toBeTruthy();
+    expect(screen.queryByText(/came from someone else/)).toBeNull();
+    expect(agent.calls).toHaveLength(0);
+  });
+
+  test('where the check cannot be made (no native module) pairing goes on as before', async () => {
+    const check = jest.spyOn(tailnetCheck, 'checkTailnetHost');
+    const user = userEvent.setup();
+    await renderRouter(routes, { initialUrl: `/pair?v=1&host=${HOST}&port=${PORT}&code=${CODE}` });
+    await user.press(await screen.findByRole('button', { name: 'Pair' }));
+    expect(await screen.findByText('Connected · agent 0.1.0')).toBeTruthy();
+    expect(await check.mock.results[0].value).toBe('unknown');
+    expect(agent.callsTo('POST', '/v1/pair')).toHaveLength(1);
   });
 
   test('the pairing link itself opens the confirm step, with no back button', async () => {

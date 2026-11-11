@@ -5,7 +5,9 @@
 // askorus://pair link itself. The first PC paired becomes the current one;
 // a further PC is added to the list and the PC picker opens, so questions
 // never move to another PC without a pick (R-94). The confirm step warns
-// about links and QR codes that came from someone else.
+// about links and QR codes that came from someone else, and before the code
+// is sent the app checks that the PC is inside the person's own tailnet
+// (#42, connections/tailnetCheck).
 // A PC without the agent yet: the install line and the guide's address,
 // the same as the README's (#37).
 
@@ -21,6 +23,7 @@ import { CancelledError } from '@/api/client';
 import { cleanDeviceName, pairWithPC } from '@/connections/pair';
 import { type PairLink, parsePairLink } from '@/connections/pairLink';
 import { ConnectionStore } from '@/connections/store';
+import { checkTailnetHost } from '@/connections/tailnetCheck';
 import { currentLang, errorText, t } from '@/i18n';
 import { Button } from '@/ui/Button';
 import { Spinner } from '@/ui/controls';
@@ -123,6 +126,17 @@ export default function Pair() {
     abort.current = ctl;
     setStep({ kind: 'waiting', link });
     try {
+      // The code goes only to a PC inside the person's own tailnet (#42): the
+      // phone's network is asked where the name leads before anything is sent.
+      const where = await checkTailnetHost(link.host, link.port);
+      if (ctl.signal.aborted) {
+        setStep({ kind: 'confirm', link });
+        return;
+      }
+      if (where === 'outside' || where === 'unresolved') {
+        setStep({ kind: 'failed', link, text: t(where === 'outside' ? 'pair.notTailnet' : 'pair.noAddress') });
+        return;
+      }
       const before = await store.list().catch(() => []);
       const saved = await pairWithPC(link, deviceName, { store }, { signal: ctl.signal });
       // The first PC, or the same PC paired again, is the current one. With
