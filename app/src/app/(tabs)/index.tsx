@@ -846,6 +846,8 @@ export default function Ask() {
           </Text>
           <Text style={s.body}>{t('ask.noPCHint')}</Text>
           <Button label={t('home.pair')} onPress={() => router.push('/pair')} />
+          {/* What the app does, before there is a PC to ask (#51). */}
+          <Button variant="outline" label={t('ask.example')} onPress={() => router.push('/example')} />
         </View>
       </View>
     );
