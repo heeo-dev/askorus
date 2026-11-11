@@ -57,7 +57,7 @@ import {
   stopTurns,
   type Turn,
 } from '@/ask/thread';
-import { pcLabel } from '@/connections/label';
+import { pcDetail, pcLabel } from '@/connections/label';
 import { connect } from '@/connections/open';
 import { type Cause, cause } from '@/connections/reach';
 import { type Connection, ConnectionStore } from '@/connections/store';
@@ -830,7 +830,7 @@ export default function Ask() {
   // The current PC in words that tell it from the others, and its line when there is more than one (#53).
   const pcName = pcs.current ? pcLabel(pcs.current, pcs.list) : '';
   const pcLine =
-    pcName && (pcs.list?.length ?? 0) > 1 ? <PCLine label={pcName} switched={pcSwitched} onPress={() => setPCPicker(true)} /> : null;
+    pcName && (pcs.list?.length ?? 0) > 1 ? <PCLine name={pcs.current?.name ?? ''} detail={pcs.current ? pcDetail(pcs.current, pcs.list) : ''} switched={pcSwitched} onPress={() => setPCPicker(true)} /> : null;
 
   const sheets = (
     <>
