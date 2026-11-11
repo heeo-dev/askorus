@@ -36,7 +36,9 @@ check() { # check <name> <0 when ok> [detail]
   fi
 }
 note() { printf '   note  %s\n' "$1"; }
-has() { printf '%s' "$1" | grep -qE -- "$2"; }
+# No pipe: with pipefail, a grep -q that has seen enough ends the writer with a broken pipe
+# and the whole test reads as failed (seen on GitHub's Linux runner, never on the PC).
+has() { grep -qE -- "$2" <<< "$1"; }
 
 case "$(uname -s)" in Darwin) os=darwin ;; *) os=linux ;; esac
 exe="$work/bin/askorus-agent"

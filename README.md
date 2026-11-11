@@ -27,7 +27,7 @@ Developers can also list and start the Claude Code sessions on their PC from the
   <img src="docs/screenshots/en/demo.gif" width="320" alt="A real run, sped up: one question goes to Claude, Codex and OpenCode, the moderator writes a combined answer, and the AIs debate the point where they differ until it gets a result">
 </p>
 
-**Status:** in development. The Android app and the Windows agent work end to end. The agent has its first release, 0.1.0 ([install it](#install-the-pc-agent) with one line). The app is not on Google Play yet: for now, [install the preview APK](#install-the-android-app) from the release, or [build it from source](#build-from-source).
+**Status:** in development. The Android app and the PC agent (Windows, macOS, Linux) work end to end. The agent is on GitHub Releases ([install it](#install-the-pc-agent) with one line). The app is not on Google Play yet: for now, [install the preview APK](#install-the-android-app) from the release, or [build it from source](#build-from-source).
 
 ## How it works
 
@@ -50,24 +50,36 @@ The moderator is one of the AIs you asked. The debate is optional.
 
 ## What you need
 
-- A Windows PC (macOS later)
+- A PC with Windows, macOS or Linux
 - [Tailscale](https://tailscale.com) on the PC and the phone
 - At least one official AI program installed and signed in on the PC: Claude Code, Codex or OpenCode. With two or more you get combined answers and debates; My PCs (the Claude Code sessions) needs Claude Code. Askorus uses the subscriptions and free accounts you already have; it never reads or moves their sign-in data.
 - An Android phone (iOS later)
 
 ## Install the PC agent
 
-For now the agent is for Windows only; macOS and Linux come later.
+The agent runs on Windows, macOS and Linux. It is one line on each, and needs no administrator rights.
 
-Open PowerShell on the PC (a normal window, not "Run as administrator") and paste:
+**Windows.** Open PowerShell (a normal window, not "Run as administrator") and paste:
 
 ```powershell
 irm https://github.com/heeo-dev/askorus/releases/latest/download/install.ps1 | iex
 ```
 
-The script downloads the agent from the GitHub release, checks its SHA-256, puts it in `%LOCALAPPDATA%\Programs\Askorus` and starts `askorus-agent setup`. It needs no administrator rights. Run the same line again to update.
+**macOS and Linux.** Open a terminal and paste (as yourself, without `sudo`):
+
+```sh
+curl -fsSL https://github.com/heeo-dev/askorus/releases/latest/download/install.sh | sh
+```
+
+The script downloads the agent for your system from the GitHub release, checks its SHA-256, puts it in `%LOCALAPPDATA%\Programs\Askorus` (Windows) or `~/.local/bin` (macOS, Linux) and starts `askorus-agent setup`. Run the same line again to update.
 
 Setup goes step by step: it puts the agent on your PATH, checks the AI programs and Tailscale, starts the agent and makes it start at logon. It asks you before it lets Tailscale pass the phone's requests to the agent. Last, you scan a QR code with the app to pair the phone.
+
+On macOS and Linux the same commands work as on Windows. A few things differ by system:
+
+- **Linux:** Tailscale takes changes only with `sudo`, so setup shows the one command for you to run (`sudo tailscale serve ...`). Starting at logon is a systemd user unit; on a machine nobody logs on to, `loginctl enable-linger` makes it start at boot.
+- **macOS:** starting at logon is a launch agent in `~/Library/LaunchAgents`; it takes effect at your next logon, and `askorus-agent start` starts the agent now.
+- The macOS agent is tested by automated checks on a Mac in the cloud (the Go tests, the install script, and start, stop and logon start under launchd). It has not been tried yet with real AI programs and Tailscale on a person's Mac. If something does not work there, please [open an issue](https://github.com/heeo-dev/askorus/issues).
 
 <details>
 <summary>Read the script before you run it</summary>
@@ -78,14 +90,22 @@ notepad install.ps1
 powershell -ExecutionPolicy Bypass -File .\install.ps1
 ```
 
-The source is [scripts/install.ps1](scripts/install.ps1).
+On macOS and Linux:
+
+```sh
+curl -fsSL https://github.com/heeo-dev/askorus/releases/latest/download/install.sh -o install.sh
+less install.sh
+sh install.sh
+```
+
+The sources are [scripts/install.ps1](scripts/install.ps1) and [scripts/install.sh](scripts/install.sh).
 </details>
 
-**The first releases are not signed** with a publisher certificate yet. Windows may say the publisher is unknown, and on Windows 11 with Smart App Control on it may not run the agent at all. The script stops if the download does not match the release's SHA-256.
+**The first releases are not signed** with a publisher certificate yet. Windows may say the publisher is unknown, and on Windows 11 with Smart App Control on it may not run the agent at all. On macOS the agent is not signed with an Apple developer certificate either: installed with the line above it runs, but a copy downloaded with a browser may be held back by macOS. Both scripts stop if the download does not match the release's SHA-256.
 
 ### Or let your AI agent help
 
-Paste this into Claude Code or Codex on the PC. It reads the script first, installs from that same file with your OK, and explains what is missing.
+Paste this into Claude Code or Codex on a Windows PC (on macOS or Linux, give it the `install.sh` line above and the same rules). It reads the script first, installs from that same file with your OK, and explains what is missing.
 
 <details>
 <summary>The text to paste</summary>
@@ -139,7 +159,15 @@ go build -trimpath -o askorus-agent.exe ./cmd/askorus-agent
 .\askorus-agent.exe setup         # PATH, checks, start, start at logon, pairing, step by step
 ```
 
-The steps one by one: `path on` (put it on your PATH), `check` (what is missing and how to fix it), `start` (run it in the background, normal rights), `autostart on` (start it at logon), `pair` (show a QR code to scan with the app). `scripts/release.ps1` builds the release files.
+On macOS and Linux:
+
+```sh
+cd agent
+go build -trimpath -o askorus-agent ./cmd/askorus-agent
+./askorus-agent setup
+```
+
+The steps one by one: `path on` (put it on your PATH), `check` (what is missing and how to fix it), `start` (run it in the background, normal rights), `autostart on` (start it at logon), `pair` (show a QR code to scan with the app). `scripts/release.ps1` builds the release files for all three systems.
 
 The app is React Native with Expo (`app/`). See [docs/android-release.md](docs/android-release.md) for building the Android app.
 

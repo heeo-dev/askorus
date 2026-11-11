@@ -27,7 +27,9 @@ check() { # check <name> <0 when ok> [detail]
     fails=$((fails + 1))
   fi
 }
-has() { printf '%s' "$1" | grep -qE -- "$2"; }
+# No pipe: with pipefail, a grep -q that has seen enough ends the writer with a broken pipe
+# and the whole test reads as failed (seen on GitHub's Linux runner, never on the PC).
+has() { grep -qE -- "$2" <<< "$1"; }
 sum() { if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | awk '{print $1}'; else shasum -a 256 "$1" | awk '{print $1}'; fi; }
 
 case "$(uname -s)" in Darwin) os=darwin ;; *) os=linux ;; esac
@@ -59,7 +61,7 @@ install() { # install <base> <dir>: runs the script as a file; sets $out and $co
   code=$?
 }
 left() { find "$TMPDIR" -maxdepth 1 -name 'askorus-install-????????' | wc -l | tr -d ' '; }
-running() { "$1" status 2>/dev/null | head -n 1 | grep -q '^running'; }
+running() { case "$("$1" status 2>/dev/null)" in running*) return 0 ;; esac; return 1; }
 
 dir="$work/bin"
 exe="$dir/askorus-agent"
@@ -101,8 +103,8 @@ install 'http://example.invalid/releases' "$work/httpdir"
 [ "$code" = 1 ] && has "$out" 'https address or a folder'; check 'refused' $? "$out"
 
 echo '== an update while the agent runs'
-"$exe" start > /dev/null 2>&1
-running "$exe"; check 'the test agent runs' $?
+out="$("$exe" start 2>&1)"
+running "$exe"; check 'the test agent runs' $? "$out"
 install "$work/rel2" "$dir"
 check 'exit code 0' "$code" "$out"
 has "$out" 'stopping the agent' && has "$out" 'updated askorus-agent 0\.0\.1-test to askorus-agent 0\.0\.2-test'; check 'stopped it, updated, kept the old one' $? "$out"

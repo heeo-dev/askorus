@@ -41,7 +41,11 @@ const store = new ConnectionStore();
 const pairCommand = 'askorus-agent pair';
 
 // The install line and the README's install section, in the app's language.
-const installCommand = 'irm https://github.com/heeo-dev/askorus/releases/latest/download/install.ps1 | iex';
+// The one line that installs the agent, per system (#52: macOS and Linux as well).
+const installCommands = [
+  { os: 'Windows', how: 'pair.installWin', line: 'irm https://github.com/heeo-dev/askorus/releases/latest/download/install.ps1 | iex' },
+  { os: 'macOS, Linux', how: 'pair.installUnix', line: 'curl -fsSL https://github.com/heeo-dev/askorus/releases/latest/download/install.sh | sh' },
+] as const;
 function installGuide(): string {
   return currentLang() === 'ko'
     ? 'https://github.com/heeo-dev/askorus/blob/main/README.ko.md#' + encodeURIComponent('pc-에이전트-설치')
@@ -74,7 +78,7 @@ export default function Pair() {
   const [copied, setCopied] = useState(false);
   const [tailscaleOpen, setTailscaleOpen] = useState(false);
   const [installOpen, setInstallOpen] = useState(false);
-  const [installCopied, setInstallCopied] = useState(false);
+  const [installCopied, setInstallCopied] = useState<string | null>(null); // the system whose line was copied
   const [deviceName, setDeviceName] = useState(() => cleanDeviceName(Device.deviceName ?? Device.modelName));
   const abort = useRef<AbortController | null>(null);
   // Back only when there is somewhere to go back to (not when the link opened
@@ -172,9 +176,9 @@ export default function Pair() {
     setCopied(true);
   };
 
-  const copyInstall = async () => {
-    await Clipboard.setStringAsync(installCommand);
-    setInstallCopied(true);
+  const copyInstall = async (c: (typeof installCommands)[number]) => {
+    await Clipboard.setStringAsync(c.line);
+    setInstallCopied(c.os);
   };
 
   if (step.kind === 'scan') return <Scanner onLink={accept} onCancel={() => setStep({ kind: 'start' })} />;
@@ -348,18 +352,23 @@ export default function Pair() {
       <Sheet open={installOpen} onClose={() => setInstallOpen(false)} title={t('pair.installTitle')} testID="install-sheet">
         <View style={s.sheetBody}>
           <Text style={s.intro}>{t('pair.installBody')}</Text>
-          <View style={s.codeLong}>
-            <Text style={s.codeLongText} selectable>
-              {installCommand}
-            </Text>
-            <IconButton
-              name={installCopied ? 'check' : 'copy'}
-              label={t('sheet.copy')}
-              onPress={copyInstall}
-              size={20}
-              color={installCopied ? th.ok : th.textSub}
-            />
-          </View>
+          {installCommands.map((c) => (
+            <View key={c.os} style={s.installOne}>
+              <Text style={s.caption}>{t(c.how)}</Text>
+              <View style={s.codeLong}>
+                <Text style={s.codeLongText} selectable>
+                  {c.line}
+                </Text>
+                <IconButton
+                  name={installCopied === c.os ? 'check' : 'copy'}
+                  label={`${t('sheet.copy')} (${c.os})`}
+                  onPress={() => copyInstall(c)}
+                  size={20}
+                  color={installCopied === c.os ? th.ok : th.textSub}
+                />
+              </View>
+            </View>
+          ))}
           {installCopied ? <Text style={s.caption}>{t('sheet.copied')}</Text> : null}
           <Text style={s.caption}>{t('pair.installWindows')}</Text>
           <Button variant="outline" icon="open" label={t('pair.installOpen')} onPress={() => Linking.openURL(installGuide()).catch(() => undefined)} />
@@ -471,6 +480,7 @@ const styles = themed((th) =>
     code: { height: 52, flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 16, paddingRight: 4, borderRadius: 14, backgroundColor: th.surface },
     codeText: { flex: 1, minWidth: 0, fontFamily: mono, fontSize: 15, color: th.text },
     // On the sheet, whose ground is the surface colour: one step up.
+    installOne: { gap: 6 },
     codeLong: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10, paddingLeft: 14, paddingRight: 4, borderRadius: 14, backgroundColor: th.raised },
     codeLongText: { flex: 1, minWidth: 0, fontFamily: mono, fontSize: 13, lineHeight: 19, color: th.text },
     installRow: {

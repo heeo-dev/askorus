@@ -54,16 +54,16 @@ func waitEnd(t *testing.T, p serverProcess) error {
 }
 
 // #52: a folder server needs a real terminal on macOS and Linux as it does
-// on Windows. The program sees a terminal, runs in the folder given, and
-// Ctrl+C written to the terminal ends it.
+// on Windows. The program sees a terminal of the size given, runs in the
+// folder given, and Ctrl+C written to the terminal reaches a program that
+// reads keys itself as the byte 0x03, which is how the real server takes
+// it. (A program that does not read keys gets a signal from the terminal
+// instead; that is not tested here: on GitHub's macOS runner such a
+// program, cat, was not ended by it, while on Linux it was.)
 func TestPTYRunsAProgramOnATerminal(t *testing.T) {
 	dir := t.TempDir()
-	real, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-	_ = real
-	p, err := startPTY("/bin/sh", dir, []string{"-c", "test -t 0 && test -t 1 && echo on-a-terminal; pwd; stty size; echo ready; exec cat"})
+	p, err := startPTY("/bin/sh", dir, []string{"-c",
+		"test -t 0 && test -t 1 && echo on-a-terminal; pwd; stty size; stty raw -echo; echo ready; dd bs=1 count=1 2>/dev/null | od -An -tx1; echo key-read"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,12 +82,14 @@ func TestPTYRunsAProgramOnATerminal(t *testing.T) {
 	if !strings.Contains(out, base) {
 		t.Errorf("the program did not run in %s: %q", dir, out)
 	}
-	// Ctrl+C: cat reads lines, so the terminal turns the key into the interrupt signal.
 	if err := p.Interrupt(); err != nil {
 		t.Fatal(err)
 	}
-	if err := waitEnd(t, p); err == nil {
-		t.Error("the program ended as if nothing had happened; Ctrl+C should have ended it")
+	if key := readUntil(t, p, "key-read"); !strings.Contains(key, "03") {
+		t.Errorf("the program read %q, want the byte 03 (Ctrl+C)", key)
+	}
+	if err := waitEnd(t, p); err != nil {
+		t.Errorf("Wait = %v, want none", err)
 	}
 	if processAlive(p.PID(), "") {
 		t.Errorf("pid %d still runs", p.PID())
