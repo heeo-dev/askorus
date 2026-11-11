@@ -421,12 +421,14 @@ F8-1·F8-2 결과(2026-10-28):
 2절의 D 단계(macOS·Linux 에이전트)를 앞당겨 단계로 나눠 한다(메인테이너: "macOS·Linux 에이전트를 이슈로 등록하고, WSL에서 1단계부터 시작하자"). Claude Code는 macOS에서 쓰는 사람이 많고, 비공개 테스트에 참여할 사람 중에도 macOS를 쓰는 사람이 있다. 서명·공증과 '구현 전 테스트 5'는 여기에 넣지 않는다.
 
 - **단계**: 1 터미널에 `askorus-agent serve`를 켜 두고 쓰기(짝 맺기, 묻기, 세션 목록) → 2 백그라운드 실행(`start`·`shutdown`·`status`), 로그인할 때 켜기(macOS launchd, Linux systemd), 셸 설치 스크립트, `setup`, 배포판 실행 파일 → 3 폴더 열어 두기(서버 모드의 터미널 흉내).
-- **지금 상태(1단계, 진행 중)**: 에이전트는 macOS·Linux용으로 빌드되고, Linux(WSL2 Ubuntu 24.04)에서 `go test ./...`가 통과한다. macOS는 GitHub의 실행 환경에서 돌린다(`.github/workflows/agent-unix.yml`: ubuntu·macos에서 vet·test·build, 가짜 AI 프로그램만 쓰고 실제 AI·Tailscale·비밀값은 쓰지 않는다).
+- **지금 상태(1단계, 진행 중)**: 에이전트는 macOS·Linux용으로 빌드되고, Linux(WSL2 Ubuntu 24.04)에서 `go test ./...`가 통과한다. macOS는 GitHub의 실행 환경에서 돌린다(`.github/workflows/agent-unix.yml`: ubuntu, macOS Apple Silicon, macOS Intel에서 vet·test·build, 가짜 AI 프로그램만 쓰고 실제 AI·Tailscale·비밀값은 쓰지 않는다). 2026-11-12에 Linux와 macOS 26(Intel)에서 20개 묶음이 모두 통과했다. Apple Silicon 실행 환경은 그날 세 번 모두 배정되지 않아(GitHub가 15분 뒤 작업을 취소) 결과가 없다. 실제 AI로 묻기와 실제 Mac에서의 확인은 아직이다.
 - **1단계에서 고친 것**:
   - AI 프로세스를 묶어서 끄기(`internal/proc/proc_other.go`): Windows의 작업 개체가 하던 일을 프로세스 그룹으로 한다. 묻기를 멈추거나 시간이 다 되면 AI가 띄운 프로세스까지 끝난다. 전에는 Windows가 아니면 자식 프로세스가 남을 수 있었다.
   - Tailscale 명령 찾기(`internal/tailnet`): PATH에 없으면 macOS는 앱 안의 실행 파일(`/Applications/Tailscale.app/Contents/MacOS/Tailscale`)을 쓴다. Tailscale 문서를 따른 것이고 실제 Mac에서 확인해야 한다.
   - 안내 문구: `check`의 '에이전트가 돌고 있지 않습니다'가 `start`가 없는 운영체제에서는 `serve`를 가리킨다. `status`와 `setup`은 그 운영체제에서 아직 안 되는 것과 대신 할 일을 말한다.
   - 테스트: 자식 프로세스가 남지 않는지를 모든 운영체제에서 본다(전에는 Windows에서만). Windows의 `codex.cmd`·`codex.exe`를 전제한 테스트와 경로 대소문자 테스트를 운영체제별로 나눴다(Windows는 경로를 대소문자 없이 비교하고, 그 밖에서는 다른 대소문자가 다른 폴더다).
+  - 묻기 폴더를 실제 경로로(`internal/config`의 `AskFolder`, R-98): 첫 macOS 실행에서 찾았다. macOS는 임시 폴더가 링크 뒤에 있고(`/var`는 `/private/var`), AI 프로그램은 자기가 돈 폴더를 실제 경로로 적는데 에이전트는 폴더를 글자로 비교한다. 그래서 링크가 낀 묻기 폴더의 대화가 다른 폴더의 것으로 보였다. Windows가 아니면 묻기 폴더의 링크를 풀어서 쓴다(아직 없는 폴더는 있는 데까지). 허용 폴더와 숨긴 폴더는 그대로라, 링크가 낀 경로를 허용 폴더로 넣었을 때는 실제 Mac에서 따로 본다.
+  - macOS의 파일 시스템은 기본이 대소문자를 가리지 않고 닮은 글자(켈빈 기호 K)도 같은 이름으로 본다. 에이전트의 폴더 비교는 Windows가 아니면 글자 그대로라, 다른 표기로 적힌 같은 폴더를 다른 폴더로 본다(판정 대화를 덜 지우는 쪽이라 안전하다). OpenCode 판정 대화 정리 테스트는 그런 파일 시스템에서 닮은 이름 대신 분명히 다른 폴더를 쓴다.
 - **아직 Windows만 되는 것**(그 명령이 '지금은 Windows에서만'이라고 말한다): `start`, `autostart`, `path`, `setup`, 폴더 열어 두기, `pair`의 링크 복사.
 - **Linux로는 확인할 수 없는 것**: launchd, macOS의 Tailscale(`tailscale serve`의 동작), `/proc` 없이 프로세스 보기, 서명 없는 실행 파일의 차단, macOS에서 Claude Code의 백그라운드 세션과 원격 링크. 실제 Mac에서 사람이 본다.
-- **개발 PC에서 Linux로 돌려 보기**: WSL 안에 Go를 사용자 폴더에 두고(관리자 권한 없이), 워크트리의 `agent`를 WSL의 파일 시스템으로 복사해 `go test ./...`를 돌린다(`/mnt`에서는 파일 권한이 실제와 다르다).
+- **개발 PC에서 Linux로 돌려 보기**: WSL 안에 Go를 사용자 폴더에 두고(관리자 권한 없이), 워크트리의 `agent`를 WSL의 파일 시스템으로 복사해 `go test ./...`를 돌린다(`/mnt`에서는 파일 권한이 실제와 다르다). 임시 폴더(`TMPDIR`)를 링크 뒤에 두고 한 번 더 돌리면 macOS에서 걸릴 경로 문제를 Linux에서 미리 본다.
