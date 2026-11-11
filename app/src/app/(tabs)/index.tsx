@@ -62,6 +62,7 @@ import { type Cause, cause } from '@/connections/reach';
 import { type Connection, ConnectionStore } from '@/connections/store';
 import { errorText, has, t } from '@/i18n';
 import { AISheet, type AISheetRow } from '@/ui/AISheet';
+import { answerBy } from '@/ui/AnswerBlock';
 import { AnswerSheet } from '@/ui/AnswerSheet';
 import { Button } from '@/ui/Button';
 import { Composer, FollowBar } from '@/ui/Composer';
@@ -819,6 +820,7 @@ export default function Ask() {
         p={answerView}
         onClose={() => setSheet(null)}
         onCopy={answerView ? () => copy(answerKey, answerView.part.answer ?? '') : undefined}
+        more={answerView ? { ai: answerBy(answerView), text: answerView.part.answer ?? '', question: sheetTurn?.question } : undefined}
         onOnly={answerView ? onlyOf(answerView.agent, () => setSheet(null)) : undefined}
         onContinue={answerView ? carryOn(answerKey, answerView.part) : undefined}
         note={answerKey ? notes[answerKey] : undefined}

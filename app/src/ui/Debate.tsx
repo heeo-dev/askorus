@@ -146,7 +146,15 @@ export function DebateSection({ turn, info, note, act }: { turn: Turn; info: Inf
           >
             <View style={s.afterBody}>
               <Markdown text={snap.after.text} size="synth" ais={speakers(snap.points)} />
-              <AnswerActions onCopy={() => act.copy(`${turn.id}/debate`, plainNames(snap.after?.text ?? ''))} note={note} />
+              <AnswerActions
+                onCopy={() => act.copy(`${turn.id}/debate`, plainNames(snap.after?.text ?? ''))}
+                more={{
+                  ai: t('report.by.debate', { names: speakers(snap.points).map(agentName).join(', ') }),
+                  text: plainNames(snap.after?.text ?? ''),
+                  question: turn.question,
+                }}
+                note={note}
+              />
             </View>
           </CombinedAnswerCard>
         </View>
