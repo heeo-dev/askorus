@@ -1,0 +1,223 @@
+{
+  "id": "example-en",
+  "question": "Which is better for a beginner, a mechanical or a membrane keyboard?",
+  "req": {
+    "mode": "ask",
+    "prompt": "Which is better for a beginner, a mechanical or a membrane keyboard?",
+    "tier": "standard",
+    "agents": [
+      {
+        "agent": "claude"
+      },
+      {
+        "agent": "codex"
+      },
+      {
+        "agent": "opencode"
+      }
+    ],
+    "clientRunId": "example-en",
+    "compare": {
+      "earlier": [],
+      "judges": [
+        "claude",
+        "codex",
+        "opencode"
+      ],
+      "synthesis": {
+        "agent": "claude"
+      }
+    }
+  },
+  "agents": [
+    "claude",
+    "codex",
+    "opencode"
+  ],
+  "at": 1794398122260,
+  "compare": {
+    "start": "auto",
+    "judges": [
+      "claude",
+      "codex",
+      "opencode"
+    ],
+    "earlier": [],
+    "synth": {
+      "agent": "claude"
+    },
+    "id": "example-comparison",
+    "snap": {
+      "comparisonId": "example-comparison",
+      "status": "done",
+      "source": "run",
+      "runId": "example-run",
+      "engine": "pc",
+      "answers": [
+        {
+          "id": "claude",
+          "agent": "claude",
+          "via": "pc",
+          "family": "anthropic",
+          "model": "claude-sonnet-5-5",
+          "status": "ready",
+          "notJudged": 0,
+          "units": []
+        },
+        {
+          "id": "codex",
+          "agent": "codex",
+          "via": "pc",
+          "family": "openai",
+          "model": "gpt-6.1-terra",
+          "status": "ready",
+          "notJudged": 0,
+          "units": []
+        },
+        {
+          "id": "opencode",
+          "agent": "opencode",
+          "via": "pc",
+          "family": "deepseek",
+          "model": "opencode-go/deepseek-v4.1-flash#high",
+          "status": "ready",
+          "notJudged": 0,
+          "units": []
+        }
+      ],
+      "requests": [],
+      "judgments": [],
+      "items": [],
+      "counts": {
+        "differ": 0,
+        "check": 0,
+        "agree": 0,
+        "onlyOne": 0,
+        "notCompared": 0,
+        "notJudged": 0
+      },
+      "synthesis": {
+        "status": "done",
+        "agent": "claude",
+        "model": "claude-sonnet-5-5",
+        "attempt": 1,
+        "ms": 7607,
+        "inputTokens": 4993,
+        "outputTokens": 712,
+        "text": "**It depends on your budget and noise needs.** A membrane keyboard is the cheaper, quieter choice. A mechanical keyboard is the better long-term buy if you type or game a lot.\n\n**Membrane**\n- It's cheap, often $10–30.\n- It's quieter, which suits shared spaces and offices.\n- It's usually lighter and slimmer.\n- There's nothing to learn or configure, and it costs little to try if you're unsure how much you'll type.\n- It's comfortable enough for everyday typing and gaming.\n- The keys can start to feel mushy over time, and the board may wear out sooner.\n\n**Mechanical**\n- Each key has its own switch, so the feel is more consistent and responsive.\n- It lasts longer. Switches are typically rated for 50–100 million keystrokes.\n- You can swap keycaps, and on many models the switches. A single failed key is easy to fix.\n- You can choose a switch type (linear, tactile or clicky). Beginners can start with a tactile or linear switch, such as a brown or red, rather than a clicky one.\n- It costs more, with decent boards usually starting around $40–60.\n- It can be loud, though red or silent switches and O-rings reduce the noise.\n- It isn't harder for a beginner to use. You only have a higher price and a switch choice to make.\n\n**Which to pick**\n- Choose membrane if your budget is tight, the keyboard is in a shared or quiet space, or you only type occasionally.\n- Choose mechanical if you'll use it daily for years and noise isn't an issue. Pick tactile or linear switches.\n- If you can, try both in person, because key feel is a matter of preference.\n\n**Where the AIs differ**\n- {{Claude}} recommends mechanical for most beginners, as long as budget and noise suit you.\n- {{Codex}} and {{OpenCode}} say membrane is the better or safer starting point for most beginners. {{OpenCode}} adds that mechanical is the better buy if you'll type or game for hours a day.",
+        "judged": false
+      }
+    }
+  },
+  "run": {
+    "runId": "example-run",
+    "mode": "ask",
+    "tier": "standard",
+    "status": "done",
+    "startedAt": "2026-11-11T11:55:22.2641603Z",
+    "finishedAt": "2026-11-11T11:55:48.1529987Z",
+    "parts": [
+      {
+        "agent": "claude",
+        "status": "done",
+        "model": "claude-sonnet-5-5",
+        "answer": "For most beginners, a **mechanical keyboard** is the better pick, provided the budget and noise level suit you. A membrane keyboard is the better pick if you want the cheapest, quietest option.\n\n**Why mechanical usually wins**\n- **Typing feel:** Each key has its own switch, so keypresses are more consistent and responsive. Many people find this makes typing more comfortable and accurate.\n- **Durability:** Switches are typically rated for 50–100 million keystrokes. Membrane boards often wear out sooner, and the keys can start to feel mushy.\n- **Customization and repair:** You can swap keycaps, and on many models the switches too. A single failed key is easy to fix.\n- **Variety:** Switch types (linear, tactile, clicky) let you find a feel you like. Beginners can start with a tactile or linear switch, such as a brown or red.\n\n**Why membrane can still make sense**\n- **Price:** Membrane boards are very cheap, often $10–30. Decent mechanical boards usually start around $40–60.\n- **Noise:** Membrane keyboards are quieter, which helps in shared spaces or offices. Mechanical boards can be loud, though red or silent switches and O-rings reduce this.\n- **Weight and portability:** Membrane boards are usually lighter and slimmer.\n- **Low commitment:** If you're unsure how much you'll type, a membrane keyboard costs little to try.\n\n**Bottom line:** If you type or game regularly, spend a bit more on an entry-level mechanical keyboard with tactile or linear switches. If you need something cheap and quiet, or you only type occasionally, a membrane keyboard is fine.",
+        "ms": 8612,
+        "inputTokens": 4372,
+        "outputTokens": 552
+      },
+      {
+        "agent": "codex",
+        "status": "done",
+        "model": "gpt-6.1-terra",
+        "answer": "For most beginners, a **membrane keyboard** is the better starting point: it’s usually cheaper, quieter, and comfortable enough for everyday typing and gaming.\n\nA **mechanical keyboard** is worth considering if you type a lot or want a more distinct key feel. Mechanical keyboards offer a choice of switches, but they tend to cost more and some are noisy.\n\nIf possible, try both in person—the feel of the keys is a matter of preference.",
+        "ms": 13483,
+        "inputTokens": 12776,
+        "outputTokens": 95
+      },
+      {
+        "agent": "opencode",
+        "status": "done",
+        "model": "opencode-go/deepseek-v4.1-flash#high",
+        "answer": "For most beginners, a **membrane keyboard is the safer default** — it's cheaper, quieter, spill-tolerant, and there's nothing to learn or configure. If the person ends up typing or gaming for hours a day, a **mechanical keyboard with linear or tactile switches** (not clicky) is the better long-term buy: easier on the fingers, more consistent feel, and repairable/replaceable keycaps. The practical rule: buy membrane if budget is tight or the keyboard is shared/quiet-space; buy mechanical if the keyboard will be used daily for years and noise isn't an issue. Neither is \"harder\" for a beginner — mechanical keyboards require no skill, just a slightly higher price and a switch-type choice.",
+        "ms": 25888,
+        "inputTokens": 1334,
+        "outputTokens": 154
+      }
+    ],
+    "comparisonId": "example-comparison"
+  },
+  "debate": {
+    "id": "example-debate",
+    "snap": {
+      "debateId": "example-debate",
+      "status": "done",
+      "moderator": "claude",
+      "model": "claude-sonnet-5-5",
+      "tier": "standard",
+      "points": [
+        {
+          "id": "p1",
+          "topic": "Which keyboard type to recommend as the default for a beginner: mechanical or membrane",
+          "nature": "judgment",
+          "debate": true,
+          "goal": "Make clear which option fits which situation, based on budget, noise tolerance, hours of daily use and how sure the person is about their needs.",
+          "sides": [
+            {
+              "ais": [
+                "claude"
+              ],
+              "says": "Mechanical is the better pick for most beginners, provided budget and noise suit them, because of its consistent feel, durability and repairability."
+            },
+            {
+              "ais": [
+                "codex",
+                "opencode"
+              ],
+              "says": "Membrane is the better or safer starting point for most beginners because it is cheaper, quieter and needs no setup; mechanical becomes the better buy only for heavy daily typing or gaming."
+            }
+          ],
+          "turns": [
+            {
+              "ai": "claude",
+              "ask": "Codex and OpenCode say membrane is the safer default for beginners because it costs less and is quiet. Why should a beginner who is unsure about their usage still start with mechanical? Under what budget, noise and usage conditions would you switch your pick to membrane?",
+              "status": "done",
+              "text": "A beginner who is unsure about their usage can still start with mechanical, because the cost gap is small and the benefits show up quickly. Entry-level mechanical boards are often $40–60, and they need no setup. They plug in and work like any other keyboard. The consistent key feel, the longer lifespan, and the ability to replace a single switch or keycap mean the extra money is often recovered over time. Membrane boards that last are not much cheaper once you replace a worn one.\n\nI would switch to membrane in three cases:\n- **Budget:** you can spend under about $30, or the keyboard is a temporary or shared machine.\n- **Noise:** you work in a shared room, office, or library, or you sleep near the keyboard. Quiet matters more than feel, and a membrane board is the simpler fix.\n- **Usage:** you type only occasionally, so durability and feel add little.\n\nOutside those cases, I still favor mechanical. I'm relying on general product knowledge here, not a new source.",
+              "stance": "partly",
+              "model": "claude-sonnet-5-5",
+              "ms": 7023
+            },
+            {
+              "ai": "opencode",
+              "ask": "Claude says mechanical suits most beginners because it is more durable and consistent. At what daily usage level, budget and noise setting does mechanical become worth it over membrane, and why is membrane still the safer default below that level?",
+              "status": "done",
+              "text": "Mechanical becomes the better value once the keyboard is your main daily input—roughly two or more hours of typing or gaming most days—because that is where consistent feel and 50–100 million keystroke switch ratings versus roughly 5–10 million for membrane start to repay the extra cost (RTINGS, “Mechanical vs Membrane Keyboards”). Budget matters: under about $40–50, or for a shared or temporary machine, membrane remains the rational buy, while at $50–80 a beginner can get a decent mechanical board without much risk. Noise matters just as much: in a shared room, office, library, or bedroom, membrane—or a quiet linear/tactile mechanical with sound dampening—is the safer choice. Below that usage level, membrane is still the safer default because the upfront risk is lower, it is quiet and spill-tolerant, and the durability advantage is unlikely to be reached before the board is replaced or abandoned. So the practical split is light or uncertain use, tight budget, or a noise-sensitive space—membrane; sustained daily use for years, adequate budget, and a noise-tolerant or quiet-switch setup—mechanical. That is a refinement of my original position, not a change in it.",
+              "stance": "keep",
+              "model": "opencode-go/deepseek-v4.1-flash#high",
+              "ms": 28192
+            },
+            {
+              "ai": "codex",
+              "ask": "Given both positions, which concrete conditions (price, shared space, hours of typing or gaming) would make you recommend mechanical over membrane, and which the reverse?",
+              "status": "done",
+              "text": "I’d recommend **mechanical** if you can comfortably spend around $50–80, expect to type or game for a couple of hours most days, and prefer its key feel. In a shared space, choose a model with silent switches and check a sound test first.\n\nI’d recommend **membrane** if your budget is under about $30, your use is occasional or uncertain, or you need a quiet keyboard for a shared room. These prices and hours are rules of thumb, not hard thresholds: preference matters, and both types can suit daily use. Mechanical keyboards are generally more expensive and louder, while membrane keyboards are generally cheaper and quieter. [RTINGS](https://www.rtings.com/keyboard/learn/mechanical-vs-membrane)",
+              "stance": "keep",
+              "model": "gpt-6.1-terra",
+              "ms": 10632
+            }
+          ],
+          "result": "conditional",
+          "line": "The AIs mostly agree on the split. Choose membrane if your budget is under about $30–40, you use it only occasionally or aren't sure yet, or you share a room and need quiet. Choose mechanical if you can spend about $50–80 and type or game a couple of hours most days. In a shared space, pick a mechanical board with silent switches. Claude still makes mechanical the default for beginners, while Codex and OpenCode make membrane the default when you're unsure. The thresholds are rules of thumb, not hard limits."
+        }
+      ],
+      "after": {
+        "text": "**It depends on your budget, noise needs and how much you type.** Membrane is the safer pick if money is tight, use is occasional, or you need quiet. Mechanical is the better buy if you type or game daily and can spend a bit more. ({{Claude}} would make mechanical the default for most beginners. {{Codex}} and {{OpenCode}} would make membrane the default if you're unsure.)\n\n| | Membrane | Mechanical |\n|---|---|---|\n| Price | Cheap, often $10–30 | Decent boards usually start around $40–60; $50–80 gets a good entry-level one |\n| Noise | Quieter | Can be loud, though silent switches or O-rings help |\n| Feel | Comfortable for everyday typing and gaming | More consistent and responsive, with a choice of switches (linear, tactile, clicky) |\n| Durability | Rated roughly 5–10 million keystrokes; can feel mushy over time | Switches rated 50–100 million keystrokes; single switches and keycaps can be replaced |\n| Other | Lighter, slimmer, spill-tolerant, nothing to configure | Costs more, and you have to choose a switch type |\n\n**Choose membrane if:**\n- Your budget is under about $30–40.\n- You type only occasionally, or you aren't sure how much you'll use it.\n- You share a room or office and need quiet.\n- The keyboard is temporary or shared.\n\n**Choose mechanical if:**\n- You can spend about $50–80.\n- You type or game around two hours or more on most days.\n- You want a more distinct key feel and a board that lasts for years.\n\n**Tips for mechanical:**\n- Beginners should pick linear or tactile switches, such as red or brown, rather than clicky ones.\n- In a shared space, choose silent switches and check a sound test first.\n- Mechanical boards need no skill or setup. They plug in and work like any other keyboard.\n\nThese prices and hours are rules of thumb, not hard limits. If you can, try both in person, because key feel is a matter of preference.",
+        "agent": "claude",
+        "model": "claude-sonnet-5-5",
+        "ms": 6955
+      },
+      "calls": 6,
+      "ms": 65600
+    }
+  }
+}
