@@ -47,6 +47,16 @@ func waitListening(port int, want bool, d time.Duration) bool {
 	return agentListening(port) == want
 }
 
+// howToStart is the command that gets the agent running on this system:
+// `start` where the agent can run in the background (Windows), `serve` in a
+// terminal elsewhere (macOS and Linux for now, #52).
+func howToStart() string {
+	if controlSupported() {
+		return "askorus-agent start"
+	}
+	return "askorus-agent serve"
+}
+
 // startCmd runs `serve` in the background without a window.
 func startCmd(dir string, args []string, out io.Writer) error {
 	fs := flag.NewFlagSet("start", flag.ContinueOnError)
@@ -141,7 +151,13 @@ func statusCmd(dir string, out io.Writer) error {
 	if a := autostartGet(); a != "" {
 		say(out, m("starts at logon: %s", "로그인할 때 켜짐: %s", a))
 	} else {
-		say(out, m("does not start at logon (askorus-agent autostart on)", "로그인할 때 켜지지 않음 (askorus-agent autostart on)"))
+		if controlSupported() {
+			say(out, m("does not start at logon (askorus-agent autostart on)", "로그인할 때 켜지지 않음 (askorus-agent autostart on)"))
+		} else {
+			// macOS and Linux for now (#52): the agent runs in a terminal.
+			say(out, m("starting at logon is not available on this system yet; run `askorus-agent serve` in a terminal",
+				"이 운영체제에서는 로그인할 때 켜기가 아직 안 됩니다. 터미널에서 `askorus-agent serve`를 실행하세요"))
+		}
 	}
 	return nil
 }
@@ -320,7 +336,7 @@ func checkCmd(dir string, out io.Writer) error {
 	if agentListening(cfg.Port) {
 		c.line("ok", m("the agent runs on 127.0.0.1:%d", "에이전트가 127.0.0.1:%d에서 돌고 있습니다", cfg.Port))
 	} else {
-		c.line("warn", m("the agent is not running: askorus-agent start", "에이전트가 돌고 있지 않습니다: askorus-agent start"))
+		c.line("warn", m("the agent is not running: %s", "에이전트가 돌고 있지 않습니다: %s", howToStart()))
 	}
 	if controlSupported() {
 		if autostartGet() != "" {

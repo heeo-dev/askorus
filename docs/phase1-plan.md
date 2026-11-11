@@ -37,7 +37,7 @@ Askorus/
 | B1 | Expo 앱: 짝 맺기(QR), 세션 목록·검색·필터, 상세 시트, 새 세션, 폴더 화면, 설정, 오류 화면, ko/en (13절) | 실제 폰에서 시험 페이지로 되던 것이 앱으로 모두 됨 |
 | B2 | Android 내부 테스트 트랙(15절, 절차는 `docs/android-release.md`) | **본인 폰에서 1주일 실제 사용** **(B2-1 완료, B2-2는 MT-05·08만 남음. 나머지는 미룸, 18절)** |
 | C | iOS(EAS 빌드, TestFlight), 데모 모드 | TestFlight 외부 테스터 심사 통과 **(미룸, 18절)** |
-| D | macOS·Linux 에이전트(구현 전 테스트 5 포함), 서명·공증, 공개 | — **(미룸, 18절)** |
+| D | macOS·Linux 에이전트(구현 전 테스트 5 포함), 서명·공증, 공개 | — **(미룸, 18절. macOS·Linux 에이전트는 2026-11-11에 앞당김, 21절, #52)** |
 | E | 2차: 최근 대화 미리보기(F8), 우리 쪽 알림(F9), Tailscale 내장(`tsnet`) | 다음 (18절) |
 | P2 | Phase 2 한 번에 묻기(제품 방향 문서) | E 다음 |
 
@@ -415,3 +415,18 @@ F8-1·F8-2 결과(2026-10-28):
 
 - F9(우리 쪽 알림)는 미룬다. 알릴 대표 사건인 에이전트 꺼짐·PC 잠듦 때는 에이전트가 푸시를 보낼 수 없고, Expo 푸시는 N1(외부 요청 없음)을 깨며 Expo Go로 확인할 수 없다. 하게 되면 폰이 백그라운드에서 PC를 확인해 로컬 알림을 띄운다(설계 rev 65).
 - `tsnet`도 배포와 함께 미룬다. 다음은 Phase 2(`docs/phase2-plan.md`). Phase 3를 먼저 하지 않는 이유는 그 문서 1절.
+
+## 21. macOS·Linux 에이전트를 앞당김 (#52, 2026-11-11)
+
+2절의 D 단계(macOS·Linux 에이전트)를 앞당겨 단계로 나눠 한다(메인테이너: "macOS·Linux 에이전트를 이슈로 등록하고, WSL에서 1단계부터 시작하자"). Claude Code는 macOS에서 쓰는 사람이 많고, 비공개 테스트에 참여할 사람 중에도 macOS를 쓰는 사람이 있다. 서명·공증과 '구현 전 테스트 5'는 여기에 넣지 않는다.
+
+- **단계**: 1 터미널에 `askorus-agent serve`를 켜 두고 쓰기(짝 맺기, 묻기, 세션 목록) → 2 백그라운드 실행(`start`·`shutdown`·`status`), 로그인할 때 켜기(macOS launchd, Linux systemd), 셸 설치 스크립트, `setup`, 배포판 실행 파일 → 3 폴더 열어 두기(서버 모드의 터미널 흉내).
+- **지금 상태(1단계, 진행 중)**: 에이전트는 macOS·Linux용으로 빌드되고, Linux(WSL2 Ubuntu 24.04)에서 `go test ./...`가 통과한다. macOS는 GitHub의 실행 환경에서 돌린다(`.github/workflows/agent-unix.yml`: ubuntu·macos에서 vet·test·build, 가짜 AI 프로그램만 쓰고 실제 AI·Tailscale·비밀값은 쓰지 않는다).
+- **1단계에서 고친 것**:
+  - AI 프로세스를 묶어서 끄기(`internal/proc/proc_other.go`): Windows의 작업 개체가 하던 일을 프로세스 그룹으로 한다. 묻기를 멈추거나 시간이 다 되면 AI가 띄운 프로세스까지 끝난다. 전에는 Windows가 아니면 자식 프로세스가 남을 수 있었다.
+  - Tailscale 명령 찾기(`internal/tailnet`): PATH에 없으면 macOS는 앱 안의 실행 파일(`/Applications/Tailscale.app/Contents/MacOS/Tailscale`)을 쓴다. Tailscale 문서를 따른 것이고 실제 Mac에서 확인해야 한다.
+  - 안내 문구: `check`의 '에이전트가 돌고 있지 않습니다'가 `start`가 없는 운영체제에서는 `serve`를 가리킨다. `status`와 `setup`은 그 운영체제에서 아직 안 되는 것과 대신 할 일을 말한다.
+  - 테스트: 자식 프로세스가 남지 않는지를 모든 운영체제에서 본다(전에는 Windows에서만). Windows의 `codex.cmd`·`codex.exe`를 전제한 테스트와 경로 대소문자 테스트를 운영체제별로 나눴다(Windows는 경로를 대소문자 없이 비교하고, 그 밖에서는 다른 대소문자가 다른 폴더다).
+- **아직 Windows만 되는 것**(그 명령이 '지금은 Windows에서만'이라고 말한다): `start`, `autostart`, `path`, `setup`, 폴더 열어 두기, `pair`의 링크 복사.
+- **Linux로는 확인할 수 없는 것**: launchd, macOS의 Tailscale(`tailscale serve`의 동작), `/proc` 없이 프로세스 보기, 서명 없는 실행 파일의 차단, macOS에서 Claude Code의 백그라운드 세션과 원격 링크. 실제 Mac에서 사람이 본다.
+- **개발 PC에서 Linux로 돌려 보기**: WSL 안에 Go를 사용자 폴더에 두고(관리자 권한 없이), 워크트리의 `agent`를 WSL의 파일 시스템으로 복사해 `go test ./...`를 돌린다(`/mnt`에서는 파일 권한이 실제와 다르다).

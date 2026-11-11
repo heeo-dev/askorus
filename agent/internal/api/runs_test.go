@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -304,7 +305,12 @@ func TestAskFolderSessionsAndFolders(t *testing.T) {
 		{ID: "claude:2", Agent: "claude", Folder: work, State: core.StateHistory, LastActive: time.Now().Add(-time.Hour)},
 		{ID: "claude:3", Agent: "claude", Folder: filepath.Join(ask, "sub"), State: core.StateHistory, Badges: []string{core.BadgeAsk}},
 	}
-	cl.recent = []core.RecentFolder{{Path: strings.ToUpper(ask)}, {Path: work}}
+	// Windows paths compare without case; elsewhere another case is another folder.
+	askAgain := ask
+	if runtime.GOOS == "windows" {
+		askAgain = strings.ToUpper(ask)
+	}
+	cl.recent = []core.RecentFolder{{Path: askAgain}, {Path: work}}
 	var list SessionsResponse
 	json.Unmarshal(e.do("GET", "/v1/sessions", nil).Body.Bytes(), &list)
 	badges := map[string][]string{}

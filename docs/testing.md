@@ -27,7 +27,7 @@ Askorus Phase 1과 Phase 2(묻기·종합 답변·화면 재구성까지)의 테
 
 ## 2. 회귀 규칙
 
-1. **고칠 때마다·main에 합치기 전·`.local\bin`에 배포하기 전**: `scripts\test-all.ps1`이 `ALL PASSED`. 개인 값 검사, gofmt, `go vet`(Windows·Linux), Go 전체(UT+IT), `go vet -tags syntheval`(Windows·Linux)과 synth-eval 테스트, 앱 타입 검사, jest 전체(UT+ST), expo-doctor(`-Quick`이면 생략).
+1. **고칠 때마다·main에 합치기 전·`.local\bin`에 배포하기 전**: `scripts\test-all.ps1`이 `ALL PASSED`. 개인 값 검사, gofmt, `go vet`(Windows·Linux·macOS), Go 전체(UT+IT), `go vet -tags syntheval`(Windows·Linux)과 synth-eval 테스트, 앱 타입 검사, jest 전체(UT+ST), expo-doctor(`-Quick`이면 생략).
 2. **에이전트가 claude를 다루는 부분(실행 인자, 상태 판정, 링크, 폴더 서버)을 바꾸면**: `scripts\test-live.ps1`이 `LIVE PASSED`. claude.ai 쪽 동작이 걸리면 E2E-07도 본다.
 3. **앱을 바꾼 것을 main에 합치기 전**: `scripts\e2e.ps1`이 모두 Passed(테스트 폰). 에뮬레이터로 돌릴 때는 `-Emulator`.
 4. **버그를 고치면**: 가능하면 실패하는 테스트를 먼저 만들고, 고친 뒤 통과를 보고, 회귀 표에 한 줄 더한다. 그 버그를 잡은 단계보다 아래 단계에서 재현할 수 있으면 아래에 넣는다(예: E2E가 잡은 R-12·R-13도 ST·UT로 재현).

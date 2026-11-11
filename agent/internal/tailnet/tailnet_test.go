@@ -1,6 +1,7 @@
 package tailnet
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -175,5 +176,22 @@ func TestServeOnArgs(t *testing.T) {
 		if _, err := serveOnArgs(p[0], p[1]); err == nil {
 			t.Errorf("serveOnArgs(%d, %d) took a bad port", p[0], p[1])
 		}
+	}
+}
+
+// Where the CLI is looked for when it is not on PATH (#52): the install
+// folder on Windows, inside the app on macOS, nowhere else on Linux (there
+// the package puts it on PATH).
+func TestUsualPlaces(t *testing.T) {
+	win := usualPlaces("windows", "PF")
+	if len(win) != 1 || win[0] != filepath.Join("PF", "Tailscale", "tailscale.exe") {
+		t.Errorf("windows: %v", win)
+	}
+	mac := usualPlaces("darwin", "")
+	if len(mac) != 1 || mac[0] != "/Applications/Tailscale.app/Contents/MacOS/Tailscale" {
+		t.Errorf("darwin: %v", mac)
+	}
+	if got := usualPlaces("linux", ""); len(got) != 0 {
+		t.Errorf("linux: %v", got)
 	}
 }

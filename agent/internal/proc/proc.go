@@ -1,9 +1,10 @@
 // Package proc runs one AI command line for an ask: the executable itself,
 // never a shell or a .cmd script (P0-7: cmd.exe drops what follows a line
 // break and may read the question as commands), an argument array, a
-// working folder, extra environment and the prompt on stdin. On Windows the
-// process and everything it starts share a job object, so an ask that is
-// ended (time limit, agent shutdown) leaves no processes behind.
+// working folder, extra environment and the prompt on stdin. The process
+// and everything it starts are kept together (a job object on Windows, a
+// process group on macOS and Linux), so an ask that is ended (time limit,
+// agent shutdown) leaves no processes behind.
 //
 // It knows nothing about any one AI; adapters decide the arguments.
 package proc
