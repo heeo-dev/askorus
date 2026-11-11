@@ -47,15 +47,8 @@ func waitListening(port int, want bool, d time.Duration) bool {
 	return agentListening(port) == want
 }
 
-// howToStart is the command that gets the agent running on this system:
-// `start` where the agent can run in the background (Windows), `serve` in a
-// terminal elsewhere (macOS and Linux for now, #52).
-func howToStart() string {
-	if controlSupported() {
-		return "askorus-agent start"
-	}
-	return "askorus-agent serve"
-}
+// howToStart is the command that gets the agent running in the background.
+func howToStart() string { return "askorus-agent start" }
 
 // startCmd runs `serve` in the background without a window.
 func startCmd(dir string, args []string, out io.Writer) error {
@@ -63,9 +56,6 @@ func startCmd(dir string, args []string, out io.Writer) error {
 	testPage := fs.Bool("test-page", false, "serve the phone-browser test page")
 	if err := fs.Parse(args); err != nil {
 		return err
-	}
-	if !controlSupported() {
-		return fail("start is only supported on Windows for now; run `askorus-agent serve`", "start는 지금 Windows에서만 됩니다. `askorus-agent serve`를 쓰세요")
 	}
 	cfg, err := config.Load(dir)
 	if err != nil {
@@ -151,13 +141,7 @@ func statusCmd(dir string, out io.Writer) error {
 	if a := autostartGet(); a != "" {
 		say(out, m("starts at logon: %s", "로그인할 때 켜짐: %s", a))
 	} else {
-		if controlSupported() {
-			say(out, m("does not start at logon (askorus-agent autostart on)", "로그인할 때 켜지지 않음 (askorus-agent autostart on)"))
-		} else {
-			// macOS and Linux for now (#52): the agent runs in a terminal.
-			say(out, m("starting at logon is not available on this system yet; run `askorus-agent serve` in a terminal",
-				"이 운영체제에서는 로그인할 때 켜기가 아직 안 됩니다. 터미널에서 `askorus-agent serve`를 실행하세요"))
-		}
+		say(out, m("does not start at logon (askorus-agent autostart on)", "로그인할 때 켜지지 않음 (askorus-agent autostart on)"))
 	}
 	return nil
 }
@@ -169,9 +153,6 @@ func autostartCmd(args []string, out io.Writer) error {
 	}
 	switch args[0] {
 	case "on":
-		if !controlSupported() {
-			return fail("autostart is only supported on Windows for now", "자동 시작은 지금 Windows에서만 됩니다")
-		}
 		if claude.SelfElevated() {
 			return fail("run this from a normal (not administrator) terminal, so the agent starts with normal rights",
 				"관리자가 아닌 일반 터미널에서 실행하세요. 그래야 에이전트가 일반 권한으로 켜집니다")
@@ -556,7 +537,7 @@ func uninstallCmd(dir string, args []string, in io.Reader, out io.Writer) error 
 			return err
 		}
 	}
-	say(out, m("uninstalled; delete askorus-agent.exe yourself", "지웠습니다. askorus-agent.exe 파일은 직접 지우세요"))
+	say(out, m("uninstalled; delete %s yourself", "지웠습니다. %s 파일은 직접 지우세요", exeName))
 	return nil
 }
 

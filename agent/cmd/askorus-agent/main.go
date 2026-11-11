@@ -102,8 +102,8 @@ Usage / 사용법:
       start the agent at logon, with normal rights
       로그인할 때 에이전트를 일반 권한으로 켭니다
   askorus-agent path on | off | status
-      put the folder of this askorus-agent.exe on this user's PATH
-      이 askorus-agent.exe가 있는 폴더를 이 사용자의 PATH에 넣습니다
+      put the folder of this askorus-agent program on this user's PATH
+      이 askorus-agent 프로그램이 있는 폴더를 이 사용자의 PATH에 넣습니다
   askorus-agent uninstall [-yes] [-all]
       undo the setup (logon entry, PATH entry, the agent's serve port, paired phones)
       설치한 것을 되돌립니다 (자동 시작, PATH, 에이전트 serve 포트, 짝 맺은 폰)

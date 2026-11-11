@@ -57,14 +57,20 @@ func CheckExe(path string) error {
 // ErrNotFound is returned by LookExe when name is not on PATH.
 var ErrNotFound = errors.New("not found on PATH")
 
-// LookExe finds the executable called name on PATH. On Windows it looks
+// LookExe finds the executable called name on PATH (on macOS and Linux
+// also in the usual folders, see LookUsual). On Windows it looks
 // for name.exe only, so an npm name.cmd earlier on PATH is passed over;
 // shim is that .cmd (or "") so the caller can find the exe it starts.
 func LookExe(name string) (exe, shim string, err error) {
 	if runtime.GOOS != "windows" {
 		p, err := exec.LookPath(name)
 		if err != nil {
-			return "", "", ErrNotFound
+			// Not on PATH: the folders the AI programs' own installers use (#52).
+			usual, ok := LookUsual(name)
+			if !ok {
+				return "", "", ErrNotFound
+			}
+			p = usual
 		}
 		p, err = filepath.Abs(p)
 		return p, "", err

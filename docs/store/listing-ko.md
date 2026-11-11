@@ -40,7 +40,7 @@ Askorus는 질문 하나를 여러 AI에게 한 번에 묻는 앱입니다. 답�
 · 한국어와 영어, 밝은 화면과 어두운 화면
 
 ■ 필요한 것
-· Windows PC (macOS는 준비 중)
+· Windows, macOS, Linux 중 하나를 쓰는 PC
 · PC와 폰에 Tailscale (개인은 무료)
 · PC에 설치하고 로그인해 둔 공식 AI 프로그램: Claude Code, Codex, OpenCode 중 하나 이상. 이미 쓰고 있는 구독이나 무료 계정을 그대로 씁니다.
 · PC 에이전트 askorus-agent. 받는 곳과 설치 방법은 앱 첫 화면과 GitHub에 있습니다.

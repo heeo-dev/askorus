@@ -65,7 +65,11 @@ try {
     & $Shell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'release.ps1') -Version 0.0.2-test -Out $rel2 | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'release.ps1 0.0.2-test failed' }
     $sums = Get-Content (Join-Path $rel1 'SHA256SUMS.txt')
-    Check 'SHA256SUMS lists the exe and install.ps1' ($sums.Count -eq 2 -and $sums[0] -match '^[0-9a-f]{64}  askorus-agent-windows-amd64\.exe$' -and $sums[1] -match '^[0-9a-f]{64}  install\.ps1$') $sums
+    $want = 'askorus-agent-windows-amd64.exe', 'askorus-agent-darwin-arm64', 'askorus-agent-darwin-amd64', 'askorus-agent-linux-amd64', 'askorus-agent-linux-arm64', 'install.ps1', 'install.sh'
+    $listed = @($sums | ForEach-Object { if ($_ -match '^[0-9a-f]{64}  (\S+)$') { $Matches[1] } })
+    Check 'SHA256SUMS lists the agents for Windows, macOS and Linux and both install scripts' (($listed -join ' ') -eq ($want -join ' ')) $sums
+    $shBytes = [IO.File]::ReadAllBytes((Join-Path $rel1 'install.sh'))
+    Check 'install.sh has LF line ends and starts with #!/bin/sh' (-not ($shBytes -contains 13) -and [Text.Encoding]::ASCII.GetString($shBytes, 0, 9) -eq '#!/bin/sh') $null
 
     Write-Output '== new install through iex'
     $dir = Join-Path $T 'Programs\Askorus'

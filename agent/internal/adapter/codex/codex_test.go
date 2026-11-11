@@ -491,7 +491,8 @@ func TestFindExeOnPath(t *testing.T) {
 	if got, err := findExe(""); err != nil || got != exe {
 		t.Errorf("findExe = %q, %v; want %q", got, err, exe)
 	}
-	// Not on PATH: not found, and nothing else is tried.
+	// Not on PATH and in none of the usual folders (a home of the test's own): not found.
+	t.Setenv("HOME", t.TempDir())
 	t.Setenv("PATH", t.TempDir())
 	if got, err := findExe(""); err == nil {
 		t.Errorf("findExe = %q with no codex on PATH", got)

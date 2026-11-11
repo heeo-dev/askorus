@@ -224,6 +224,23 @@ func fakeRemoteControl(args []string) int {
 			}
 		}
 	}()
+	if os.Getenv("ASKORUS_FAKE_NO_CONSENT") == "1" {
+		// The real screen of Claude Code 2.1.322 before Remote Control was ever turned on (#52).
+		fmt.Print("Take this session with you and pick up right where you left off on any device.\r\n")
+		fmt.Print("The session keeps running on this machine. Use your other devices as a remote\r\ncontrol. Press Ctrl+C to stop.\r\n\r\n")
+		fmt.Print("Enable Remote Control? (y/n) ")
+		for c := range keys {
+			switch c {
+			case 'y', 'Y':
+				os.WriteFile(filepath.Join(cwd, "CONSENT-BY-AGENT"), nil, 0o600) // the test fails on this
+				return 0
+			case 0x03, 'n', 'N':
+				fmt.Print("\r\nRemote Control did not start: \"Enable Remote Control?\" got no answer. Run `claude remote-control` and answer y once; it won't ask again.\r\n")
+				return 1
+			}
+		}
+		return 1
+	}
 	if os.Getenv("ASKORUS_FAKE_UNTRUSTED") == "1" {
 		// The real server asks in a terminal and waits for an answer.
 		fmt.Printf("Quick safety check: is this a project you created or one you trust?\r\n")

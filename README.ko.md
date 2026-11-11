@@ -27,7 +27,7 @@ Askorus(애스코러스)는 폰에서 질문 하나를 여러 AI에게 한 번�
   <img src="docs/screenshots/ko/demo.gif" width="320" alt="실제로 돌린 화면을 빠르게 감은 것: 질문 하나가 Claude, Codex, OpenCode에 가고, 사회자가 종합 답변을 쓰고, 의견이 다른 곳을 AI끼리 토론해 쟁점마다 결과가 나옵니다">
 </p>
 
-**상태:** 개발 중입니다. 안드로이드 앱과 Windows 에이전트가 처음부터 끝까지 동작합니다. 에이전트는 첫 배포판 0.1.0이 나왔고 [한 줄로 설치](#pc-에이전트-설치)합니다. 앱은 아직 Google Play에 없어서, 지금은 배포판의 [미리보기 APK를 설치](#안드로이드-앱-설치)하거나 [소스에서 빌드](#소스에서-빌드)합니다.
+**상태:** 개발 중입니다. 안드로이드 앱과 PC 에이전트(Windows, macOS, Linux)가 처음부터 끝까지 동작합니다. 에이전트는 GitHub 배포판에 있고 [한 줄로 설치](#pc-에이전트-설치)합니다. 앱은 아직 Google Play에 없어서, 지금은 배포판의 [미리보기 APK를 설치](#안드로이드-앱-설치)하거나 [소스에서 빌드](#소스에서-빌드)합니다.
 
 ## 이렇게 동작해요
 
@@ -50,24 +50,36 @@ Askorus(애스코러스)는 폰에서 질문 하나를 여러 AI에게 한 번�
 
 ## 필요한 것
 
-- Windows PC (macOS는 나중에)
+- Windows, macOS, Linux 중 하나를 쓰는 PC
 - PC와 폰에 [Tailscale](https://tailscale.com)
 - PC에 설치하고 로그인해 둔 공식 AI 프로그램 하나 이상: Claude Code, Codex, OpenCode. 둘 이상이면 종합 답변과 토론이 나오고, '내 PC'(Claude Code 세션)에는 Claude Code가 있어야 합니다. 이미 쓰는 구독과 무료 계정을 그대로 쓰며, 그 로그인 정보는 읽거나 옮기지 않습니다.
 - 안드로이드 폰 (iOS는 나중에)
 
 ## PC 에이전트 설치
 
-지금은 Windows만 됩니다. macOS와 Linux는 나중에 나옵니다.
+에이전트는 Windows, macOS, Linux에서 돕니다. 어디서나 한 줄이고, 관리자 권한은 필요 없습니다.
 
-PC에서 PowerShell을 열고(관리자 권한이 아닌 보통 창) 아래 한 줄을 붙여 넣으세요.
+**Windows.** PowerShell을 열고(관리자 권한이 아닌 보통 창) 아래 한 줄을 붙여 넣으세요.
 
 ```powershell
 irm https://github.com/heeo-dev/askorus/releases/latest/download/install.ps1 | iex
 ```
 
-스크립트가 GitHub 배포판에서 에이전트를 받아 SHA-256을 확인하고, `%LOCALAPPDATA%\Programs\Askorus`에 둔 뒤 `askorus-agent setup`을 시작합니다. 관리자 권한은 필요 없습니다. 업데이트할 때도 같은 줄을 다시 실행하면 됩니다.
+**macOS와 Linux.** 터미널을 열고 아래 한 줄을 붙여 넣으세요(`sudo` 없이, 본인 계정으로).
+
+```sh
+curl -fsSL https://github.com/heeo-dev/askorus/releases/latest/download/install.sh | sh
+```
+
+스크립트가 GitHub 배포판에서 내 운영체제에 맞는 에이전트를 받아 SHA-256을 확인하고, `%LOCALAPPDATA%\Programs\Askorus`(Windows)나 `~/.local/bin`(macOS, Linux)에 둔 뒤 `askorus-agent setup`을 시작합니다. 업데이트할 때도 같은 줄을 다시 실행하면 됩니다.
 
 setup은 차례로 안내합니다. 에이전트를 PATH에 넣고, AI 프로그램과 Tailscale을 점검하고, 에이전트를 켜고 로그인할 때 켜지게 합니다. 폰의 요청을 에이전트로 넘기는 Tailscale 설정은 켜기 전에 묻습니다. 마지막으로 앱으로 QR을 찍어 폰과 짝을 맺습니다.
+
+macOS와 Linux에서도 명령은 Windows와 같습니다. 운영체제마다 다른 점은 이렇습니다.
+
+- **Linux:** Tailscale 설정은 `sudo`가 있어야 바뀌므로, setup이 직접 실행할 명령 하나(`sudo tailscale serve ...`)를 보여 줍니다. 로그인할 때 켜기는 systemd 사용자 단위입니다. 아무도 로그인하지 않는 컴퓨터에서는 `loginctl enable-linger`를 해 두면 부팅할 때 켜집니다.
+- **macOS:** 로그인할 때 켜기는 `~/Library/LaunchAgents`의 LaunchAgent입니다. 다음 로그인부터 적용되고, 지금 바로 켜려면 `askorus-agent start`를 실행합니다.
+- macOS용 에이전트는 클라우드의 Mac에서 자동 점검(Go 테스트, 설치 스크립트, launchd 아래에서 켜기·끄기·로그인할 때 켜기)으로 확인했습니다. 실제 AI 프로그램과 Tailscale이 있는 사람의 Mac에서는 아직 써 보지 못했습니다. 안 되는 것이 있으면 [이슈로 알려 주세요](https://github.com/heeo-dev/askorus/issues).
 
 <details>
 <summary>실행하기 전에 스크립트 읽어 보기</summary>
@@ -78,14 +90,22 @@ notepad install.ps1
 powershell -ExecutionPolicy Bypass -File .\install.ps1
 ```
 
-원본은 [scripts/install.ps1](scripts/install.ps1)입니다.
+macOS와 Linux에서는:
+
+```sh
+curl -fsSL https://github.com/heeo-dev/askorus/releases/latest/download/install.sh -o install.sh
+less install.sh
+sh install.sh
+```
+
+원본은 [scripts/install.ps1](scripts/install.ps1)과 [scripts/install.sh](scripts/install.sh)입니다.
 </details>
 
-**초기 배포판에는 게시자 서명이 아직 없습니다.** Windows가 '알 수 없는 게시자'라고 알릴 수 있고, Windows 11에서 스마트 앱 컨트롤이 켜져 있으면 에이전트가 아예 실행되지 않을 수 있습니다. 받은 파일이 배포판의 SHA-256과 다르면 스크립트가 멈춥니다.
+**초기 배포판에는 게시자 서명이 아직 없습니다.** Windows가 '알 수 없는 게시자'라고 알릴 수 있고, Windows 11에서 스마트 앱 컨트롤이 켜져 있으면 에이전트가 아예 실행되지 않을 수 있습니다. macOS용 에이전트에도 Apple 개발자 서명이 없습니다. 위의 한 줄로 설치하면 실행되지만, 브라우저로 내려받은 파일은 macOS가 막을 수 있습니다. 받은 파일이 배포판의 SHA-256과 다르면 두 스크립트 모두 멈춥니다.
 
 ### AI 에이전트에게 맡기기
 
-PC의 Claude Code나 Codex에 아래 글을 붙여 넣으세요. 스크립트를 먼저 읽어 보고, 내가 허락하면 읽은 그 파일로 설치하고, 빠진 것을 쉽게 설명해 줍니다.
+Windows PC의 Claude Code나 Codex에 아래 글을 붙여 넣으세요(macOS나 Linux에서는 위의 `install.sh` 줄과 같은 규칙을 주면 됩니다). 스크립트를 먼저 읽어 보고, 내가 허락하면 읽은 그 파일로 설치하고, 빠진 것을 쉽게 설명해 줍니다.
 
 <details>
 <summary>붙여 넣을 글</summary>
@@ -139,7 +159,15 @@ go build -trimpath -o askorus-agent.exe ./cmd/askorus-agent
 .\askorus-agent.exe setup         # PATH, 점검, 켜기, 로그인할 때 켜기, 짝 맺기를 차례로
 ```
 
-하나씩 하려면: `path on`(PATH에 넣기), `check`(빠진 것과 고치는 방법), `start`(백그라운드로 켜기, 일반 권한), `autostart on`(로그인할 때 켜기), `pair`(QR을 띄우고 앱으로 찍기). 배포 파일은 `scripts/release.ps1`이 만듭니다.
+macOS와 Linux에서는:
+
+```sh
+cd agent
+go build -trimpath -o askorus-agent ./cmd/askorus-agent
+./askorus-agent setup
+```
+
+하나씩 하려면: `path on`(PATH에 넣기), `check`(빠진 것과 고치는 방법), `start`(백그라운드로 켜기, 일반 권한), `autostart on`(로그인할 때 켜기), `pair`(QR을 띄우고 앱으로 찍기). 세 운영체제의 배포 파일은 `scripts/release.ps1`이 만듭니다.
 
 앱은 React Native와 Expo로 만들었습니다(`app/`). 안드로이드 앱 빌드는 [docs/android-release.md](docs/android-release.md)를 보세요.
 
