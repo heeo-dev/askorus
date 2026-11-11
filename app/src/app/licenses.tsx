@@ -11,6 +11,7 @@ import { useMemo, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { t } from '@/i18n';
+import { reflow } from '@/licenses/reflow';
 import { TopBar } from '@/ui/Header';
 import { Icon } from '@/ui/Icon';
 import { useSafeInsets } from '@/ui/keyboard';
@@ -47,7 +48,9 @@ export default function LicensesScreen() {
     return out;
   }, []);
 
-  const text = open && open.t !== null ? data.texts[open.t] : '';
+  // Shown with its paragraphs joined again (reflow): the stored text is
+  // wrapped for a wide screen.
+  const text = useMemo(() => (open && open.t !== null ? reflow(data.texts[open.t]) : ''), [open]);
 
   return (
     <View style={s.screen}>
