@@ -1,6 +1,6 @@
-# Askorus 개인정보처리방침 (초안)
+# Askorus 개인정보처리방침
 
-시행일: (Play에 올릴 때 적는다)
+시행일: 2026년 11월 11일
 
 Askorus는 질문 하나를 여러 AI에게 한 번에 묻고, 사회자 AI가 답을 정리하며, 의견이 다른 곳은 AI끼리 토론하게 하는 앱이다. 폰에서 사용자 PC의 코딩 AI 세션을 보고 켜는 기능도 있다. AI에게 묻고, 정리하고, 토론시키는 일은 사용자의 PC가 한다. 개발자는 서버를 두지 않고, 사용자의 데이터를 받지 않는다.
 
@@ -16,15 +16,15 @@ Askorus는 질문 하나를 여러 AI에게 한 번에 묻고, 사회자 AI가 �
 - **사회자에게 묻기**: 이어서 물을 상대로 사회자를 고르면 사회자 AI 혼자 답한다. PC는 사회자 AI 프로그램에 질문, 결론 기록, 앞 답들을 보내고(결론 이어 주기 설정과 상관없이), 사회자 AI의 회사가 이것을 받는다. 웹 검색과 읽기만 켠 일회성 묻기라 그 대화는 남기지 않는다.
 - **질문 정제**(2026-11-04부터 꺼져 있고 설정에도 없음, 아래는 다시 켤 때의 동작): 정제를 켜면 답을 받기 전에 그 질문을 받는 AI 중 하나(사회자)가 질문과 앞 질문 3개까지를 읽고 질문의 종류·의도·깊이·언어를 정한다. 그 AI의 회사가 질문을 한 번 더 받는다. 종합 답변과 같이 웹 검색을 끄고 파일 쓰기와 명령을 막으며, 대화가 남는 방식도 같다. 정한 종류에 맞는 답 형식이 질문 뒤에 붙어 모든 AI에게 간다.
 - **어린이**: 어린이를 대상으로 하지 않는다.
-- **문의**: (공개 전에 연락처를 적는다)
+- **문의**: heeo.dev@gmail.com. 버그와 요청은 GitHub 이슈(https://github.com/heeo-dev/askorus/issues)로도 받는다.
 
 Askorus는 Anthropic, OpenAI 같은 AI 회사의 공식 제품이 아니다.
 
 ---
 
-# Askorus Privacy Policy (draft)
+# Askorus Privacy Policy
 
-Effective date: (set when published on Google Play)
+Effective date: November 11, 2026
 
 Askorus asks one question to several AIs at once; a moderator AI sums up their answers, and where the AIs disagree, they debate. It also lets you see and start the coding AI sessions on your own PC from your phone. Your own PC does the asking, the summing up and the debating. The developer runs no server and receives none of your data.
 
@@ -40,6 +40,6 @@ Askorus asks one question to several AIs at once; a moderator AI sums up their a
 - **Asking the moderator**: when you pick the moderator for a follow-up, the moderator AI answers alone. Your PC sends its AI program the question, the record of conclusions and the earlier answers (whatever the carry setting), and the moderator's company receives them. It is a one-off ask with only web search and reading on, so the conversation is not kept.
 - **Question refining** (off since 2026-11-04 and not in Settings; this is what it does if turned on again): when refining is on, one of the AIs the question goes to (the moderator) first reads the question, with up to three earlier questions, and sets its kind, intent, depth and language; that AI's company receives the question once more. As for combined answers, web search is off, file writes and commands are blocked, and the conversation is kept the same way. The answer format of that kind is added after the question for every AI.
 - **Children**: the app is not directed at children.
-- **Contact**: (add before publishing)
+- **Contact**: heeo.dev@gmail.com. Bugs and requests are also welcome as GitHub issues (https://github.com/heeo-dev/askorus/issues).
 
 Askorus is not an official product of any AI company, such as Anthropic or OpenAI.

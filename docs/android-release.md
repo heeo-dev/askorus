@@ -37,7 +37,7 @@ Expo Go와 다른 점(스토어 빌드에서만 드러남, `src/config-test.ts`�
 
 내부 테스트는 심사가 없어 대부분 나중에 채워도 되지만, 비공개·프로덕션 테스트 전에는 모두 필요하다.
 
-- **개인정보처리방침 URL**: 글의 기준은 `docs/privacy.md`, 웹페이지 원본은 `docs/privacy/index.html`. 공개 주소가 필요하다(저장소를 공개하기 전이면 따로 올릴 곳을 정한다). 문의 연락처에는 Play에 공개하는 개발자 이메일을 쓴다.
+- **개인정보처리방침 URL**: 글의 기준은 `docs/privacy.md`, 웹페이지 원본은 `docs/privacy/index.html`. 공개 주소는 GitHub Pages의 `https://heeo-dev.github.io/askorus/privacy/`다(#40, main의 `/docs`). 시행일은 2026-11-11이고, 문의 연락처는 Play에 공개하는 개발자 이메일과 같은 주소를 쓴다(2026-11-11 적음). 글을 고치면 두 파일을 같이 고치고 시행일도 바꾼다.
 - **데이터 보안 양식**: 개발자가 받는 데이터 없음. 앱은 데이터를 수집·공유하지 않는다. 짝 맺은 PC 주소와 기기 토큰은 폰의 보안 저장소에만 두고, 통신은 사용자의 Tailscale 망 안에서 사용자의 PC와만 한다. 카메라는 QR 읽기에만 쓰고 사진을 저장하거나 보내지 않는다.
 - **앱 이름·설명**: 칸마다 넣을 글은 `docs/store/listing-ko.md`·`listing-en.md`. 설명 끝에 '공식 Anthropic·Claude 제품이 아니다'를 적는다.
 - **그림**: 아이콘·대표 그림·스크린숏은 `docs/store/README.md`의 체크 목록. Claude·Anthropic 로고나 이름은 쓰지 않는다.
