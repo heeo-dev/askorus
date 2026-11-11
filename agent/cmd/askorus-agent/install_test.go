@@ -58,7 +58,7 @@ func (r *cleanupRecorder) calls() []string {
 func uninstallDir(t *testing.T) (dir, ask string) {
 	t.Helper()
 	dir = filepath.Join(t.TempDir(), "agent")
-	ask = filepath.Join(t.TempDir(), "my asks")
+	ask = filepath.Join(realTemp(t), "my asks")
 	cfg := config.Default()
 	cfg.Port = 8799
 	cfg.Ask.Folder = ask
@@ -220,7 +220,7 @@ func TestCheckerCounts(t *testing.T) {
 // on in the Claude app (P2-2: it needs a trusted folder).
 func TestSetupTipsTrustTheAskFolder(t *testing.T) {
 	cfg := config.Default()
-	cfg.Ask.Folder = filepath.Join(t.TempDir(), "my asks")
+	cfg.Ask.Folder = filepath.Join(realTemp(t), "my asks")
 	tips := setupTips(cfg)
 	var trust msg
 	for _, tip := range tips {

@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 
 	"github.com/heeo-dev/askorus/agent/internal/core"
@@ -112,16 +113,40 @@ func (j JudgeConfig) validate() error {
 	return nil
 }
 
-// AskFolder returns the ask folder from the settings or the default.
+// AskFolder returns the ask folder from the settings or the default, by
+// its real path (see realPath).
 func (c Config) AskFolder() (string, error) {
 	if c.Ask.Folder != "" {
-		return filepath.Clean(c.Ask.Folder), nil
+		return realPath(filepath.Clean(c.Ask.Folder)), nil
 	}
 	base, err := CacheBase()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(base, "ask"), nil
+	return realPath(filepath.Join(base, "ask")), nil
+}
+
+// realPath returns path with its symbolic links resolved, as far as the
+// path exists yet. The AI programs record the folder they ran in by its
+// real path and the agent compares folders as text, so a link on the way
+// to the ask folder (on macOS /var is /private/var) would make its
+// conversations look like another folder's (#52). Windows paths are left
+// as they are.
+func realPath(path string) string {
+	if runtime.GOOS == "windows" {
+		return path
+	}
+	rest := ""
+	for p := path; ; {
+		if r, err := filepath.EvalSymlinks(p); err == nil {
+			return filepath.Join(r, rest)
+		}
+		parent := filepath.Dir(p)
+		if parent == p {
+			return path
+		}
+		p, rest = parent, filepath.Join(filepath.Base(p), rest)
+	}
 }
 
 // HistoryFoldersOn reports whether folders with conversations may be used.

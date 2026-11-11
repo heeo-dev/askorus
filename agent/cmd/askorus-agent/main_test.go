@@ -129,7 +129,7 @@ func TestInfoShowsSynthesize(t *testing.T) {
 // the judge folder inside the ask folder, or none without one.
 func TestJudgeGate(t *testing.T) {
 	cfg := config.Default()
-	cfg.Ask.Folder = filepath.Join(t.TempDir(), "ask")
+	cfg.Ask.Folder = filepath.Join(realTemp(t), "ask")
 	cfg.Judge = config.JudgeConfig{PerAI: 1}
 	g := judgeGate(cfg)
 	if g.Folder != core.JudgeFolder(cfg.Ask.Folder) || g.Settings.PerAI != 1 {
@@ -172,7 +172,7 @@ func TestPrintQR(t *testing.T) {
 // The CLI sessions list hides the judge folder like GET /v1/sessions does
 // (P2-3), with the settings' hidden folders, and never appends to them.
 func TestSessionFilterHidesJudgeFolder(t *testing.T) {
-	root := t.TempDir()
+	root := realTemp(t)
 	ask := filepath.Join(root, "ask")
 	secret := filepath.Join(root, "secret")
 	hiddenFolders := make([]string, 1, 8)
@@ -217,4 +217,16 @@ func TestSessionFilterHidesJudgeFolder(t *testing.T) {
 	if extra := hiddenFolders[:cap(hiddenFolders)][1:]; slices.ContainsFunc(extra, func(s string) bool { return s != "" }) {
 		t.Errorf("the settings' hidden folders were appended to: %q", extra)
 	}
+}
+
+// realTemp is t.TempDir() by its real path. On macOS the temporary folder
+// is behind a link (/var is /private/var), the AI programs record folders
+// by their real path, and so does the agent for its ask folder (#52).
+func realTemp(t *testing.T) string {
+	t.Helper()
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return dir
 }

@@ -134,7 +134,8 @@ func TestAskSettings(t *testing.T) {
 	if err := c.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	if got, _ := c.AskFolder(); got != c.Ask.Folder {
+	// By its real path: on macOS the temporary folder is behind a link.
+	if got, _ := c.AskFolder(); got != realPath(c.Ask.Folder) {
 		t.Errorf("ask folder = %q", got)
 	}
 	tiers := func(agent, tier string, m core.AskModel) map[string]map[string]core.AskModel {

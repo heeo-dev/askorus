@@ -109,7 +109,13 @@ func newRig(t *testing.T, mutate func(*rigOptions)) *rig {
 	for k, v := range o.env {
 		t.Setenv(k, v)
 	}
-	root := t.TempDir()
+	// By its real path: on macOS the temporary folder is behind a link
+	// (/var is /private/var), and the pretend AI programs report the
+	// folder they ran in by its real path.
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
 	r := &rig{t: t, exes: exes, root: root, o: o, logs: &syncBuffer{},
 		claudeDir: filepath.Join(root, "claude"), askDir: filepath.Join(root, "ask")}
 	r.judge = core.JudgeFolder(r.askDir)

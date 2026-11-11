@@ -26,7 +26,12 @@ type launchEnv struct {
 func newLaunchEnv(t *testing.T, entries []agentEntry) launchEnv {
 	t.Helper()
 	r, argsFile := fakeRunner(t)
-	root := t.TempDir()
+	// By its real path: on macOS the temporary folder is behind a link
+	// (/var is /private/var), and claude records the real folder.
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
 	projects := filepath.Join(root, "projects")
 	folder := filepath.Join(root, "work")
 	os.MkdirAll(folder, 0o700)

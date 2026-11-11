@@ -181,7 +181,16 @@ func TestCleanupJudge(t *testing.T) {
 		}
 		if li, err1 := os.Stat(lookalike); err1 == nil {
 			if ji, err2 := os.Stat(jf); err2 == nil && os.SameFile(li, ji) {
-				t.Fatalf("%q is the judge folder on this file system", lookalike)
+				// macOS (#52): its file system folds that letter too, so
+				// there the name is the judge folder itself. A plainly
+				// different folder stands in.
+				if runtime.GOOS == "windows" {
+					t.Fatalf("%q is the judge folder on this file system", lookalike)
+				}
+				lookalike = filepath.Join(filepath.Dir(ask), "ask-other", core.JudgeFolderName)
+				if err := os.MkdirAll(lookalike, 0o700); err != nil {
+					t.Fatal(err)
+				}
 			}
 		}
 		fakecli.SetSessions(t, []fakecli.Session{
