@@ -27,7 +27,7 @@ Developers can also list and start the Claude Code sessions on their PC from the
   <img src="docs/screenshots/en/demo.gif" width="320" alt="A real run, sped up: one question goes to Claude, Codex and OpenCode, the moderator writes a combined answer, and the AIs debate the point where they differ until it gets a result">
 </p>
 
-**Status:** in development. The Android app and the Windows agent work end to end. The agent has its first release, 0.1.0 ([install it](#install-the-pc-agent) with one line). The app is not on Google Play yet: for now, [build it from source](#build-from-source).
+**Status:** in development. The Android app and the Windows agent work end to end. The agent has its first release, 0.1.0 ([install it](#install-the-pc-agent) with one line). The app is not on Google Play yet: for now, [install the preview APK](#install-the-android-app) from the release, or [build it from source](#build-from-source).
 
 ## How it works
 
@@ -112,6 +112,22 @@ Rules:
 ```
 
 </details>
+
+## Install the Android app
+
+The app is not on Google Play yet. Until it is, a preview APK comes with each release.
+
+1. On the phone, open the [latest release](https://github.com/heeo-dev/askorus/releases/latest) and download `askorus-android-<version>.apk`.
+2. Open the downloaded file. Android asks whether your browser may install apps: allow it for this install. Play Protect may offer to scan the app first, as it does for any app from outside a store.
+3. Open Askorus and pair it with your PC: run `askorus-agent pair` on the PC and scan the QR code.
+
+Good to know about the preview APK:
+
+- **No automatic updates.** To update, download the newer APK and install it over the old one. Your history and pairing stay.
+- **Moving to the Google Play app later means installing again.** Google Play signs the app with another key, so the Play app cannot be installed over this one. You will have to remove this app first (the history kept in it goes with it) and pair again.
+- **Check the file if you like.** The release notes give the APK's SHA-256.
+
+The app lists the open-source software it is built with under Settings > About > Open-source licenses.
 
 ## Build from source
 
