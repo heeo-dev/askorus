@@ -24,7 +24,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        # macOS on both kinds of Mac. The Apple silicon runners are at times
+        # not handed out for a long while (the job is then cancelled, not
+        # failed); the Intel one usually still runs the macOS tests.
+        os: [ubuntu-latest, macos-latest, macos-26-intel]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     defaults:
