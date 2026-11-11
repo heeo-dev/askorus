@@ -100,6 +100,9 @@ if [ "$os" = darwin ]; then
   out="$("$exe" status 2>&1)"; has "$out" 'starts at logon'; check 'status says it starts at logon' $? "$out"
   if [ "${ASKORUS_TEST_LAUNCHD:-}" = 1 ]; then
     # launchd itself: load the file and see the agent come up as it would at logon.
+    # launchd gives the agent this user's real home folder, so the command that
+    # stops it looks for its lock there too.
+    mac() { HOME="$real_home" XDG_CACHE_HOME= "$@"; }
     domain="gui/$(id -u)"
     launchctl bootstrap "$domain" "$plist" > "$work/launchctl.out" 2>&1; bcode=$?
     if [ "$bcode" != 0 ]; then
@@ -108,8 +111,8 @@ if [ "$os" = darwin ]; then
     fi
     check "launchd takes the file ($domain)" "$bcode" "$(cat "$work/launchctl.out")"
     for _ in 1 2 3 4 5 6 7 8 9 10 11 12; do listening && break; sleep 0.5; done
-    listening; check 'the agent comes up under launchd' $? "$(launchctl print "$domain/app.askorus.agent" 2>&1 | head -n 30; cat "$XDG_CACHE_HOME/../Library/Caches/Askorus/background.out" 2>/dev/null | tail -n 5)"
-    out="$("$exe" shutdown 2>&1)"; has "$out" 'the agent stopped'; check 'shutdown stops the agent launchd started' $? "$out"
+    listening; check 'the agent comes up under launchd' $? "$(launchctl print "$domain/app.askorus.agent" 2>&1 | head -n 30)"
+    out="$(mac "$exe" shutdown 2>&1)"; has "$out" 'the agent stopped'; check 'shutdown stops the agent launchd started' $? "$out"
     sleep 1
     ! listening; check 'launchd does not start it again' $?
     launchctl bootout "$domain/app.askorus.agent" > /dev/null 2>&1

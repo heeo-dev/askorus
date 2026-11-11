@@ -11,6 +11,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/heeo-dev/askorus/agent/internal/proc"
 )
 
 // Runner runs the claude executable directly, never through a shell, and
@@ -46,7 +48,12 @@ func NewRunner(exe string) (*Runner, error) {
 	if exe == "" {
 		p, err := exec.LookPath("claude")
 		if err != nil {
-			return nil, ErrNotFound
+			// Not on PATH: where Claude Code's own installer puts it on macOS and Linux (#52).
+			usual, ok := proc.LookUsual("claude")
+			if !ok {
+				return nil, ErrNotFound
+			}
+			p = usual
 		}
 		exe = p
 	}

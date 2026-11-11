@@ -40,7 +40,7 @@ FEATURES
 - English and Korean, light and dark
 
 WHAT YOU NEED
-- A Windows PC (macOS is on the way)
+- A PC with Windows, macOS or Linux
 - Tailscale on the PC and the phone (free for personal use)
 - At least one official AI program installed and signed in on the PC: Claude Code, Codex or OpenCode. Askorus uses the subscriptions and free accounts you already have.
 - The PC agent, askorus-agent. Where to get it and how to set it up is on the app's first screen and on GitHub.
