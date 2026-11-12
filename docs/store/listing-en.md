@@ -13,7 +13,7 @@ Askorus
 **Short description** (up to 80)
 
 ```
-You ask. The AIs debate. A moderator sums up their answers into a better one.
+Ask Claude Code, Codex and OpenCode on your PC from your phone. They debate.
 ```
 
 **Full description** (up to 4,000)
@@ -23,9 +23,17 @@ You ask. The AIs debate.
 
 Askorus asks one question to several AIs at once. When the answers are in, a moderator AI sums them up, and where the AIs disagree, they debate. Many AI answers, debated into a better one.
 
+You need your own PC. Askorus asks the AI programs installed on your PC (Claude Code, Codex, OpenCode) from your phone, and does not work with a phone alone. To see what it does without a PC, tap "See an example" on the first screen.
+
+WHAT YOU NEED
+- A PC with Windows, macOS or Linux
+- Tailscale on the PC and the phone (free for personal use)
+- At least one official AI program installed and signed in on the PC: Claude Code, Codex or OpenCode. Askorus uses the subscriptions and free accounts you already have.
+- The PC agent, askorus-agent. Where to get it and how to set it up is on the app's first screen and on GitHub.
+
 HOW IT WORKS
 1. Question: ask once, from your phone.
-2. Answers: every AI you turned on answers on its own.
+2. Answers: the AIs on your PC each answer on their own.
 3. Moderator: a moderator AI reads all the answers and writes one combined answer, and shows where the AIs agree and where they don't.
 4. Debate: if you like, the AIs debate the points where they differ. The moderator picks the points, each AI keeps or changes its view, and the result of every point is summed up at the end.
 
@@ -38,12 +46,6 @@ FEATURES
 - Your history stays on your phone
 - For developers: see, start and continue the Claude Code sessions on your own PC from your phone
 - English and Korean, light and dark
-
-WHAT YOU NEED
-- A PC with Windows, macOS or Linux
-- Tailscale on the PC and the phone (free for personal use)
-- At least one official AI program installed and signed in on the PC: Claude Code, Codex or OpenCode. Askorus uses the subscriptions and free accounts you already have.
-- The PC agent, askorus-agent. Where to get it and how to set it up is on the app's first screen and on GitHub.
 
 PRIVACY
 - Askorus has no server of its own. Your question goes from your phone to your PC, and the official AI programs on your PC send it to each AI company.
