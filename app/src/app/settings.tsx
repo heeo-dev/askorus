@@ -25,6 +25,7 @@ import { loadPrefs, type Prefs, savePrefs } from '@/connections/prefs';
 import { pcDetail, pcLabel } from '@/connections/label';
 import { type Connection, ConnectionStore } from '@/connections/store';
 import { t } from '@/i18n';
+import { ContactSheet } from '@/ui/ContactSheet';
 import { PillChoice, Segment, SwitchRow } from '@/ui/controls';
 import { DefaultsSheet, settingsLine } from '@/ui/DefaultsSheet';
 import { TopBar } from '@/ui/Header';
@@ -52,6 +53,7 @@ export default function Settings() {
   const [ask, setAsk] = useState<AskPrefs>(defaultAskPrefs);
   const [pcOpen, setPCOpen] = useState<Connection | null>(null);
   const [defaultsOpen, setDefaultsOpen] = useState(false);
+  const [contactOpen, setContactOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
   // The current PC's AIs, for the moderator model's list (11-06); null while loading or without a PC.
   const [pcAIs, setPCAIs] = useState<Asker[] | null>(null);
@@ -228,6 +230,7 @@ export default function Settings() {
               onPress={() => router.push('/about')}
             />
             <Row title={t('settings.licenses')} chevron onPress={() => router.push('/licenses')} />
+            <Row title={t('contact.title')} subtitle={t('contact.row')} subtitleTone="sub" chevron onPress={() => setContactOpen(true)} />
           </Group>
         </Section>
       </ScrollView>
@@ -242,6 +245,7 @@ export default function Settings() {
           router.push({ pathname: '/pc/[id]/rename', params: { id: c.id } });
         }}
       />
+      <ContactSheet open={contactOpen} onClose={() => setContactOpen(false)} />
       <DefaultsSheet open={defaultsOpen} onClose={() => setDefaultsOpen(false)} prefs={prefs} onChange={change} />
       <ModelSheet
         agent={modelOpen && moderator ? moderator.agent : null}
