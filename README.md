@@ -105,10 +105,10 @@ The sources are [scripts/install.ps1](scripts/install.ps1) and [scripts/install.
 
 ### Or let your AI agent help
 
-Paste this into Claude Code or Codex on a Windows PC (on macOS or Linux, give it the `install.sh` line above and the same rules). It reads the script first, installs from that same file with your OK, and explains what is missing.
+Paste the text for your system into Claude Code or Codex on the PC. It reads the script first, installs from that same file with your OK, and explains what is missing.
 
 <details>
-<summary>The text to paste</summary>
+<summary>The text to paste (Windows)</summary>
 
 ```text
 Help me install the Askorus PC agent (https://github.com/heeo-dev/askorus) on this Windows PC.
@@ -128,6 +128,31 @@ Rules:
 - Do not run anything as administrator, and never use options that skip your own (the AI's) permission prompts or sandbox.
 - Never read or copy the sign-in files of any AI program (for example ~/.claude/.credentials.json).
 - Tailscale settings, stopping Claude services or sessions, and consent prompts are mine: show me what to do and let me do it.
+- Do not run "setup" or "pair".
+```
+
+</details>
+
+<details>
+<summary>The text to paste (macOS, Linux)</summary>
+
+```text
+Help me install the Askorus PC agent (https://github.com/heeo-dev/askorus) on this computer (macOS or Linux).
+1. Save the install script to a file, read it, and tell me in a few lines what it does:
+   curl -fsSL https://github.com/heeo-dev/askorus/releases/latest/download/install.sh -o install.sh
+   If any environment variable starting with ASKORUS_ is already set, tell me first.
+2. When I say yes, run that very file you read (do not download it again) as me, without sudo and without its setup step:
+   ASKORUS_NO_SETUP=1 sh install.sh
+3. From here on, run every command with the full path of the installed file:
+   "$HOME/.local/bin/askorus-agent" <command>
+   Run "path on", then "check". Explain each [X] and [!] line in plain words with what I should do, and the [i] lines that are mine to do (Remote Control consent, trusting a folder).
+4. When check has no [X] left, run "start" and "autostart on".
+5. Last, tell me to run "askorus-agent pair" in my own terminal window, scan the QR code with the Askorus app, check that the phone asking is mine, and allow it myself.
+Rules:
+- Run only the commands above, and ask me before each one.
+- Do not run anything with sudo or as root, and never use options that skip your own (the AI's) permission prompts or sandbox.
+- Never read or copy the sign-in files of any AI program (for example ~/.claude/.credentials.json).
+- Tailscale settings (on Linux check shows a command that starts with sudo), stopping Claude services or sessions, and consent prompts are mine: show me what to do and let me do it.
 - Do not run "setup" or "pair".
 ```
 

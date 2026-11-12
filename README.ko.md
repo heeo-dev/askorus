@@ -105,10 +105,10 @@ sh install.sh
 
 ### AI 에이전트에게 맡기기
 
-Windows PC의 Claude Code나 Codex에 아래 글을 붙여 넣으세요(macOS나 Linux에서는 위의 `install.sh` 줄과 같은 규칙을 주면 됩니다). 스크립트를 먼저 읽어 보고, 내가 허락하면 읽은 그 파일로 설치하고, 빠진 것을 쉽게 설명해 줍니다.
+PC의 Claude Code나 Codex에 내 운영체제에 맞는 글을 붙여 넣으세요. 스크립트를 먼저 읽어 보고, 내가 허락하면 읽은 그 파일로 설치하고, 빠진 것을 쉽게 설명해 줍니다.
 
 <details>
-<summary>붙여 넣을 글</summary>
+<summary>붙여 넣을 글 (Windows)</summary>
 
 ```text
 이 Windows PC에 Askorus PC 에이전트(https://github.com/heeo-dev/askorus) 설치를 도와줘.
@@ -128,6 +128,31 @@ Windows PC의 Claude Code나 Codex에 아래 글을 붙여 넣으세요(macOS나
 - 관리자 권한으로 실행하지 말고, 너(AI)의 권한 확인이나 샌드박스를 건너뛰는 옵션은 절대 쓰지 마.
 - 어떤 AI 프로그램의 로그인 파일도 읽거나 옮기지 마(예: ~/.claude/.credentials.json).
 - Tailscale 설정, Claude 서비스·세션 끄기, 동의 질문은 내 몫이야. 할 일을 보여 주고 내가 하게 해 줘.
+- "setup"과 "pair"는 실행하지 마.
+```
+
+</details>
+
+<details>
+<summary>붙여 넣을 글 (macOS, Linux)</summary>
+
+```text
+이 컴퓨터(macOS 또는 Linux)에 Askorus PC 에이전트(https://github.com/heeo-dev/askorus) 설치를 도와줘.
+1. 설치 스크립트를 파일로 저장해 읽고, 무엇을 하는지 몇 줄로 알려 줘:
+   curl -fsSL https://github.com/heeo-dev/askorus/releases/latest/download/install.sh -o install.sh
+   ASKORUS_로 시작하는 환경 변수가 이미 있으면 먼저 알려 줘.
+2. 내가 좋다고 하면, 다시 받지 말고 1에서 읽은 바로 그 파일을 내 계정으로, sudo 없이, setup 단계 없이 실행해 줘:
+   ASKORUS_NO_SETUP=1 sh install.sh
+3. 그다음 명령은 모두 설치된 파일의 전체 경로로 실행해 줘:
+   "$HOME/.local/bin/askorus-agent" <명령>
+   "path on", "check" 순서로 실행하고, [X]와 [!] 줄마다 무슨 뜻인지와 내가 할 일을 쉬운 말로, [i] 줄 중 내가 직접 할 일(Remote Control 동의, 폴더 신뢰)도 알려 줘.
+4. check에 [X]가 없어지면 "start"와 "autostart on"을 실행해 줘.
+5. 마지막으로, 내 터미널 창에서 "askorus-agent pair"를 실행하고 Askorus 앱으로 QR을 찍은 뒤, 요청한 기기가 내 폰인지 보고 직접 허용하라고 알려 줘.
+지킬 것:
+- 위의 명령만 실행하고, 실행하기 전마다 나에게 물어 줘.
+- sudo나 root로 실행하지 말고, 너(AI)의 권한 확인이나 샌드박스를 건너뛰는 옵션은 절대 쓰지 마.
+- 어떤 AI 프로그램의 로그인 파일도 읽거나 옮기지 마(예: ~/.claude/.credentials.json).
+- Tailscale 설정(Linux에서는 check가 sudo로 시작하는 명령을 보여 줘), Claude 서비스·세션 끄기, 동의 질문은 내 몫이야. 할 일을 보여 주고 내가 하게 해 줘.
 - "setup"과 "pair"는 실행하지 마.
 ```
 
