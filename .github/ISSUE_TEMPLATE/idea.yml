@@ -1,0 +1,16 @@
+name: Idea or request / 제안
+description: Something Askorus could do, or do better. 한국어로 써도 됩니다.
+labels: ["개선"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What would you like / 무엇을 바라나요
+      description: What you were trying to do, and what would have helped. 무엇을 하려다가 떠올랐는지, 어떻게 되면 좋을지.
+    validations:
+      required: true
+  - type: textarea
+    id: more
+    attributes:
+      label: Anything else / 그 밖에
+      description: Other ways you thought of, examples from other apps. 생각해 본 다른 방법, 다른 앱의 예.

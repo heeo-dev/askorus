@@ -11,4 +11,5 @@ AGENTS.md @heeo-dev
 # What runs on a person's PC straight from a release: the installer and the
 # script that builds the release files (#48).
 /scripts/install.ps1 @heeo-dev
+/scripts/install.sh @heeo-dev
 /scripts/release.ps1 @heeo-dev

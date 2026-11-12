@@ -44,6 +44,8 @@ Askorus(애스코러스)는 폰에서 질문 하나를 여러 AI에게 한 번�
 - 종합 답변과 같은 곳·다른 곳 표시
 - AI끼리 토론, 쟁점마다 결과(합의, 상황에 따라 다름)
 - AI마다 모델과 생각 깊이 고르기
+- 답을 공유하거나 신고하기, PC를 준비하기 전에 예시 대화 보기
+- 폰 하나에 PC 여러 대(Windows, macOS, Linux): 어느 PC가 답하는지 보여 주고 골라 쓰기
 - 대화 기록을 폰에 저장
 - 개발자용: 내 PC의 Claude Code 세션을 폰에서(목록, 새로 시작, 열기, 멈추기, 폴더 열어 두기)
 - 한국어와 영어, 밝은 화면과 어두운 화면
@@ -158,6 +160,26 @@ PC의 Claude Code나 Codex에 내 운영체제에 맞는 글을 붙여 넣으세
 
 </details>
 
+## 안 될 때
+
+먼저 PC에서 `askorus-agent check`를 실행하세요. 빠진 것을 줄마다 할 일과 함께 알려 줍니다. `[X]`는 꼭 고쳐야 하는 것, `[!]`는 주의, `[i]`는 사람이 직접 해야 하는 것입니다.
+
+- **폰이 PC에 닿지 않는다고 합니다.** 폰과 PC 모두 Tailscale이 켜져 있고 같은 계정이어야 합니다. PC에서는 `tailscale serve`가 에이전트 포트를 넘겨야 합니다. 실행할 명령은 `check`가 그대로 보여 줍니다(Linux에서는 `sudo`로 시작합니다).
+- **PC는 켜져 있는데 에이전트가 돌고 있지 않다고 합니다.** `askorus-agent start`를 실행하세요. 로그인할 때 켜지게 하려면 `askorus-agent autostart on`.
+- **새 Claude Code 세션이 시작되지 않습니다.** Claude Code는 폴더마다 한 번 신뢰할지 묻습니다. PC에서 그 폴더로 가서 `claude`를 한 번 실행하고 허용하세요.
+- **폴더 열어 두기가 '켜는 중'에 머물거나 실패합니다.** Claude Code에서 Remote Control을 한 번 켜야 합니다. PC에서 `claude remote-control`을 실행해 `y`로 답하고 Ctrl+C로 끄세요.
+- **AI가 목록에 없습니다.** PC에 설치하고 로그인한 뒤 `check`를 다시 실행하세요. `autostart on` 뒤에 설치한 프로그램은 흔한 설치 폴더에서 찾습니다. 못 찾으면 `autostart on`을 다시 실행하세요.
+
+그래도 안 되면 `askorus-agent check` 결과를 붙여 [이슈를 열어 주세요](https://github.com/heeo-dev/askorus/issues/new/choose)(계정과 PC 이름은 지우고).
+
+## 지우기
+
+```
+askorus-agent uninstall
+```
+
+무엇을 되돌릴지 보여 주고 먼저 묻습니다. 에이전트를 멈추고, 로그인할 때 켜기와 PATH 등록을 없애고, 에이전트의 `tailscale serve` 포트를 끄고, 짝 맺은 폰을 모두 끊습니다. `-all`을 붙이면 에이전트의 설정과 로그도 지웁니다. 그다음 프로그램 파일은 직접 지우세요(Windows는 `%LOCALAPPDATA%\Programs\Askorus`, macOS와 Linux는 `~/.local/bin/askorus-agent`). 폰에서는 설정에서 PC를 끊거나 앱을 지우면 됩니다.
+
 ## 안드로이드 앱 설치
 
 앱은 아직 Google Play에 없습니다. 그때까지는 배포판마다 미리보기 APK를 같이 올립니다.
@@ -212,11 +234,15 @@ go build -trimpath -o askorus-agent ./cmd/askorus-agent
 | `agent/` | PC 에이전트(Go): `tailscale serve` 뒤의 API, AI 프로그램마다의 어댑터 |
 | `app/` | 폰 앱(React Native, Expo) |
 | `docs/` | 계획, 테스트, 개인정보, 스토어 설명, 브랜드(`docs/brand`) |
-| `scripts/` | 테스트와 도구(main에 합치기 전 기준은 `scripts/test-all.ps1`) |
+| `scripts/` | 테스트와 도구(main에 합치기 전 기준은 `scripts/test-all.ps1`, macOS와 Linux에서는 [CONTRIBUTING.md](CONTRIBUTING.md) 참고) |
 
 ## 공식 제품이 아닙니다
 
 Askorus는 독립 프로젝트입니다. 어떤 AI 회사의 공식 제품도 아니며, Anthropic, OpenAI, Google 등과 제휴하거나 보증을 받지 않았습니다. Claude, Codex 등의 이름은 각 회사의 상표입니다.
+
+## 기여
+
+버그 신고와 제안은 [이슈](https://github.com/heeo-dev/askorus/issues/new/choose)로 받습니다. 빌드, 테스트, 변경을 보내는 방법은 [CONTRIBUTING.md](CONTRIBUTING.md)에 있습니다.
 
 ## 보안
 

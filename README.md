@@ -44,6 +44,8 @@ The moderator is one of the AIs you asked. The debate is optional.
 - A combined answer, with where the AIs agree and where they differ
 - AI debates with a result for every point (agreed, or depends on the situation)
 - Pick the model and how hard each AI thinks
+- Share an answer, or report it; see an example conversation before you set up a PC
+- Several PCs on one phone (Windows, macOS, Linux): the app shows which one answers and lets you switch
 - Conversation history saved on your phone
 - For developers: Claude Code sessions on your PC, from your phone (list, start, open, stop, keep a folder open)
 - English and Korean, light and dark
@@ -158,6 +160,26 @@ Rules:
 
 </details>
 
+## If something does not work
+
+Run `askorus-agent check` on the PC first. It lists what is missing, each line with what to do: `[X]` must be fixed, `[!]` is a warning, `[i]` is something only you can do.
+
+- **The phone says it cannot reach the PC.** Tailscale must be on and signed in to the same account on both. On the PC, `tailscale serve` must pass the agent's port: `check` shows the exact command (on Linux it starts with `sudo`).
+- **The PC is on, but the agent is not running.** Run `askorus-agent start`. To have it start at logon, `askorus-agent autostart on`.
+- **A new Claude Code session does not start.** Claude Code asks once per folder whether you trust it: on the PC, run `claude` in that folder once and accept.
+- **Keeping a folder open stays at "starting" or fails.** Remote Control has to be turned on once in Claude Code: on the PC, run `claude remote-control`, answer `y`, then stop it with Ctrl+C.
+- **An AI is missing from the list.** Install it and sign in to it on the PC, then run `check` again. A program installed after `autostart on` is found in its usual folder, or run `autostart on` again.
+
+Still stuck? [Open an issue](https://github.com/heeo-dev/askorus/issues/new/choose) with the output of `askorus-agent check` (take your account and PC names out first).
+
+## Uninstall
+
+```
+askorus-agent uninstall
+```
+
+It shows what it will undo and asks first: it stops the agent, removes the logon entry and the PATH entry, turns off the agent's `tailscale serve` port and disconnects every paired phone. With `-all` it also deletes the agent's settings and logs. Then delete the program file yourself (`%LOCALAPPDATA%\Programs\Askorus` on Windows, `~/.local/bin/askorus-agent` on macOS and Linux). On the phone, remove the PC under Settings, or uninstall the app.
+
 ## Install the Android app
 
 The app is not on Google Play yet. Until it is, a preview APK comes with each release.
@@ -212,11 +234,15 @@ Details: [docs/privacy.md](docs/privacy.md).
 | `agent/` | The PC agent (Go): the API behind `tailscale serve`, the adapters for each AI program |
 | `app/` | The phone app (React Native, Expo) |
 | `docs/` | Plans, testing, privacy, store listings and the brand (`docs/brand`) |
-| `scripts/` | Tests and tools (`scripts/test-all.ps1` is the gate before merging) |
+| `scripts/` | Tests and tools (`scripts/test-all.ps1` is the gate before merging; on macOS and Linux see [CONTRIBUTING.md](CONTRIBUTING.md)) |
 
 ## Not an official product
 
 Askorus is an independent project. It is not an official product of any AI company and is not affiliated with or endorsed by Anthropic, OpenAI, Google or others. Claude, Codex and other names are trademarks of their owners.
+
+## Contributing
+
+Bug reports and ideas are welcome as [issues](https://github.com/heeo-dev/askorus/issues/new/choose). How to build, test and send a change: [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Security
 

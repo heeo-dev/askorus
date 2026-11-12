@@ -30,12 +30,12 @@ Askorus server. Reports of these kinds are especially useful:
 - reading or changing files on the PC through a question, an answer or a name
 - a web page, a link or a QR code that makes the app or the agent act for
   someone else
-- the install script (`scripts/install.ps1`) installing something other than
-  the released file
+- an install script (`scripts/install.ps1`, `scripts/install.sh`) installing
+  something other than the released file
 
 Not in scope: what an AI company's own program or service does with your
-question, problems that need administrator rights or the same Windows user
-account on the PC, and the unsigned first releases (planned, see the README).
+question, problems that need administrator (root) rights or the same user account
+on the PC, whichever system it runs, and the unsigned first releases (planned, see the README).
 
 ## Supported versions
 
@@ -68,10 +68,10 @@ Askorus는 PC 에이전트(`agent/`, 내 PC에서 돌며 내 AI 프로그램을 
 - 에이전트가 정해지지 않은 명령이나 AI 도구를 실행하게 하는 것
 - 질문, 답, 이름을 통해 PC의 파일을 읽거나 바꾸는 것
 - 웹페이지, 링크, QR이 앱이나 에이전트를 남 대신 움직이게 하는 것
-- 설치 스크립트(`scripts/install.ps1`)가 배포된 파일이 아닌 것을 설치하는 것
+- 설치 스크립트(`scripts/install.ps1`, `scripts/install.sh`)가 배포된 파일이 아닌 것을 설치하는 것
 
-범위 밖: AI 회사의 프로그램과 서비스가 질문을 다루는 방식, PC의 관리자 권한이나
-같은 Windows 사용자 계정이 있어야 되는 문제, 서명 없는 초기 배포판(예정된 일,
+범위 밖: AI 회사의 프로그램과 서비스가 질문을 다루는 방식, 어느 운영체제든 PC의 관리자(root)
+권한이나 같은 사용자 계정이 있어야 되는 문제, 서명 없는 초기 배포판(예정된 일,
 README 참고).
 
 ### 지원하는 판
