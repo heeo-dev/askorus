@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | 패키지 이름 | `app.askorus` (2026-11-08 이름을 Askorus로 바꾸며 `app.asksemble`에서 바꿈, #31. Play에 처음 올리면 바꿀 수 없다) | `app/app.json` `android.package` |
 | Expo 프로젝트 | `@heeodev/askorus`(개인 계정 owner, 2026-11-08 `eas init`으로 만듦, #31). 옛 `@heeodev/asksemble`은 Expo에 그대로 남아 있다. 서명 키는 로컬 빌드와 같은 것(옛 프로젝트에서 EAS가 만든 키, SHA-256 7E:98…)을 같은 날 새 프로젝트의 app.askorus에 올렸다(`.local\eas-upload-key.cmd`, 사용자가 실행). 그래서 클라우드 빌드도 폰의 로컬 빌드 위에 덮어 깔린다 | `app/app.json` `owner`, `extra.eas.projectId` |
-| 보이는 버전 | `version` (지금 0.2.1, 2026-11-12) | `app/app.json` |
+| 보이는 버전 | `version` (지금 0.2.2, 2026-11-12) | `app/app.json` |
 | 빌드 번호(versionCode) | EAS가 보관하고 store 빌드마다 1씩 올린다. 로컬 빌드는 빌드할 때 번호를 준다(안 주면 1). Play는 앞에 올린 것보다 큰 번호만 받으므로, 로컬에서 만든 AAB를 올린 뒤 EAS로 넘어갈 때는 EAS의 번호를 그 위로 맞춘다. 2026-11-11 기준 로컬에서 만든 AAB는 2까지다 | `app/eas.json` `cli.appVersionSource: remote` |
 | 시험용 빌드 | `preview`: APK, 링크·QR로 폰에 바로 설치 | `npm run build:apk` |
 | 스토어 빌드 | `production`: AAB, Play 내부 테스트에 초안으로 올림 | `npm run build:aab`, `npm run eas -- submit -p android` |

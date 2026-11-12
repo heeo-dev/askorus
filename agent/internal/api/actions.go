@@ -30,7 +30,15 @@ const (
 	CodeJobNotFound   = "job_not_found"
 	CodeTooManyJobs   = "too_many_jobs"
 	CodeNotGit        = "not_a_git_repository"
+	// CodeTooManyServers: maxFolderServers folders are kept open already
+	// (R-103, #45).
+	CodeTooManyServers = "too_many_folder_servers"
 )
+
+// maxFolderServers is how many folders can be kept open at once (R-103,
+// #45). A kept-open folder outlives the phone that asked for it (it is
+// saved and starts again with the PC), so the number has an end.
+const maxFolderServers = 8
 
 // actionStatus maps adapter error codes to HTTP status.
 var actionStatus = map[string]int{
@@ -120,18 +128,31 @@ func (s *Server) launcherFor(w http.ResponseWriter, r *http.Request) (core.Launc
 // for a session that does not exist. A failing list lets the action go on:
 // this is a second line of defence, after the list's hiding, and the
 // adapter still checks the id itself (S3 decision 9).
+//
+// A session in a hidden folder (`hidden add`) is refused the same way
+// (R-104, #46): the person took that folder away from the phone, so its
+// sessions cannot be opened, stopped, removed or previewed by id either.
 func (s *Server) judgeSession(ctx context.Context, a core.Adapter, id string) bool {
-	if s.o.AskFolder == "" {
+	var dirs []string
+	if s.o.AskFolder != "" {
+		dirs = append(dirs, core.JudgeFolder(s.o.AskFolder))
+	}
+	dirs = append(dirs, s.o.HiddenFolders...)
+	if len(dirs) == 0 {
 		return false
 	}
-	dir := core.JudgeFolder(s.o.AskFolder)
 	res, err := a.ListSessions(ctx)
 	if err != nil {
 		return false
 	}
 	for _, sess := range res.Sessions {
-		if strings.EqualFold(sess.ID, id) && core.InFolder(sess.Folder, dir) {
-			return true
+		if !strings.EqualFold(sess.ID, id) {
+			continue
+		}
+		for _, dir := range dirs {
+			if core.InFolder(sess.Folder, dir) {
+				return true
+			}
 		}
 	}
 	return false
@@ -423,6 +444,18 @@ func (s *Server) setFolderServer(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		writeError(w, http.StatusNotFound, CodeFolderUnknown, "folder is not allowed and has no past sessions")
 		return
+	}
+	if req.Enabled && (source == sourceHistory || !f.Server.Enabled) && s.o.Folders != nil {
+		on := 0
+		for _, x := range s.o.Folders() {
+			if x.Server.Enabled {
+				on++
+			}
+		}
+		if on >= maxFolderServers {
+			writeError(w, http.StatusConflict, CodeTooManyServers, "too many folders are kept open; turn one off first")
+			return
+		}
 	}
 	if source == sourceHistory {
 		// Keeping a history folder open saves it to the allowed list first;

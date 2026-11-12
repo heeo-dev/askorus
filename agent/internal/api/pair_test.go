@@ -210,8 +210,9 @@ func TestFailureLimit(t *testing.T) {
 			t.Fatalf("try %d = %d", i, w.Code)
 		}
 	}
-	// Now even the right token is refused from that address...
-	w := e.do("GET", "/v1/info", map[string]string{"X-Forwarded-For": "100.64.0.20"})
+	// Now a wrong token is refused from that address (the right one is
+	// not: TestRightTokenIsNeverLockedOut)...
+	w := e.do("GET", "/v1/info", bad)
 	if w.Code != 429 || errCode(t, w) != CodeTooMany || w.Header().Get("Retry-After") == "" {
 		t.Errorf("blocked client = %d %s", w.Code, w.Body)
 	}

@@ -32,6 +32,7 @@ const APIVersion = 1
 const (
 	CodeBadHost        = "bad_host"
 	CodeCrossOrigin    = "cross_origin"
+	CodeFunnel         = "funnel_not_allowed"
 	CodeUnauthorized   = "unauthorized"
 	CodeWrongAccount   = "wrong_account"
 	CodeNotFound       = "not_found"
@@ -277,11 +278,23 @@ func (s *Server) checkHost(next http.Handler) http.Handler {
 	})
 }
 
+// funnelHeader is the header tailscale serve adds to a request that came
+// through Funnel, from the public internet ("?1").
+const funnelHeader = "Tailscale-Funnel-Request"
+
 // checkOrigin refuses browser cross-origin requests. The app is native and
 // sends no Origin header; CORS is never enabled. Only the test page, when
 // turned on, may call from its own origin.
 func (s *Server) checkOrigin(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// tailscale marks what came in from the internet through Funnel
+		// (R-104, #46). The agent stops when it sees Funnel on its port,
+		// but it looks once a minute and may not be able to read tailscale;
+		// such a request is refused here at once, before any token is read.
+		if r.Header.Get(funnelHeader) != "" {
+			writeError(w, http.StatusForbidden, CodeFunnel, "requests through Tailscale Funnel are not allowed")
+			return
+		}
 		origin := r.Header.Get("Origin")
 		allowed := origin == "" || (s.o.TestPage && s.sameOrigin(r))
 		if !allowed || r.Method == http.MethodOptions {
@@ -295,12 +308,14 @@ func (s *Server) checkOrigin(next http.Handler) http.Handler {
 // authenticate requires a device token on every request (N4). The
 // Tailscale login header is checked too, but never trusted alone, because a
 // local program can forge it.
+//
+// The token is looked at before the failure limit (R-101, #43): a request
+// with a paired phone's token is never refused for the wrong requests of
+// others, which a program on the PC could pile up on purpose. Only requests
+// without a right token are counted and refused. A token is 32 random
+// bytes, so a locked-out sender gains nothing from still being checked.
 func (s *Server) authenticate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		client := clientKey(r)
-		if s.refuseIfLimited(w, client) {
-			return
-		}
 		token, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
 		var d devices.Device
 		if ok && s.o.Devices != nil {
@@ -309,6 +324,10 @@ func (s *Server) authenticate(next http.Handler) http.Handler {
 			ok = false
 		}
 		if !ok {
+			client := clientKey(r)
+			if s.refuseIfLimited(w, client) {
+				return
+			}
 			s.limiter.fail(client)
 			w.Header().Set("WWW-Authenticate", "Bearer")
 			writeError(w, http.StatusUnauthorized, CodeUnauthorized, "device token required")

@@ -97,3 +97,21 @@ func TestRevokeAmbiguousName(t *testing.T) {
 		t.Error("ambiguous name revoked a device")
 	}
 }
+
+// R-104 (#46): an id wins over a name. A device named like another
+// device's id does not keep that one from being revoked, and the one with
+// the odd name can still be revoked by its own id.
+func TestRevokeIDWinsOverName(t *testing.T) {
+	s, _ := Open(t.TempDir())
+	_, first, _ := s.Add("phone")
+	_, second, _ := s.Add(first.ID) // named like the first one's id
+	gone, err := s.Revoke(first.ID)
+	if err != nil || gone.ID != first.ID {
+		t.Fatalf("revoke by id = %+v, %v", gone, err)
+	}
+	// Now the name alone matches, as before.
+	gone, err = s.Revoke(first.ID)
+	if err != nil || gone.ID != second.ID {
+		t.Fatalf("revoke by name = %+v, %v", gone, err)
+	}
+}

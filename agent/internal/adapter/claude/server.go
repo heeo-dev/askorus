@@ -223,7 +223,7 @@ func (ss *servers) supervise(s *server) {
 			})
 			return
 		}
-		msg := "the server ended"
+		msg := serverEnded
 		if err != nil {
 			msg += " (" + err.Error() + ")"
 		}
@@ -520,4 +520,25 @@ func tailString(s string, n int) string {
 		return s
 	}
 	return "…" + string(r[len(r)-n:])
+}
+
+// serverEnded starts the error of a folder server that ended on its own.
+// What follows it after ": " is the last lines of its screen.
+const serverEnded = "the server ended"
+
+// ServeLogReason is what agent.log says about a folder server's state
+// (R-102, #44). The status the phone gets ends with the last lines of the
+// server's screen, and a screen can show a session's name, which may be
+// words from a conversation. The log keeps the reason without the screen.
+func ServeLogReason(st core.ServeStatus) string {
+	if st.State == core.ServeFailed && strings.HasPrefix(st.Error, serverEnded) {
+		rest := st.Error[len(serverEnded):]
+		if strings.HasPrefix(rest, " (") {
+			if i := strings.Index(rest, ")"); i > 0 {
+				return serverEnded + rest[:i+1]
+			}
+		}
+		return serverEnded
+	}
+	return st.Error
 }

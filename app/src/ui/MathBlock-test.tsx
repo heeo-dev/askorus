@@ -8,7 +8,7 @@ import { Dimensions, Linking, StyleSheet } from 'react-native';
 import { createOnShouldStartLoadWithRequest } from 'react-native-webview/lib/WebViewShared';
 
 import { katexFonts, katexVersion } from './katex-style';
-import { MathBlock, allowLoad, drawable } from './MathBlock';
+import { MathBlock, allowLoad, drawable, mathPage } from './MathBlock';
 import { palettes } from './theme';
 
 const quadratic = 'x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}';
@@ -28,7 +28,7 @@ test('KaTeX draws the quadratic formula into a page that loads nothing', async (
   expect(html).toContain('class="katex"');
   expect(html).toContain('<math'); // MathML for screen readers
   expect(html).toContain('<meta http-equiv="Content-Security-Policy"');
-  expect(html).toContain("default-src 'none'; style-src 'unsafe-inline'; font-src data:; script-src 'unsafe-inline'; img-src data:");
+  expect(html).toMatch(/default-src 'none'; style-src 'unsafe-inline'; font-src data:; script-src 'nonce-[0-9a-f]{32}'; img-src data:/);
   expect(html).not.toMatch(/https?:|file:/i);
   for (const m of html.matchAll(/url\(([^)]*)\)/g)) expect(m[1]).toMatch(/^data:font\/woff2;base64,/);
   expect(html).toContain(`color:${palettes.light.text}`); // the theme's text colour
@@ -186,4 +186,36 @@ test('the WebView loads only its own page and hands no URL to another app', asyn
   }
   expect(open).not.toHaveBeenCalled();
   expect(canOpen).not.toHaveBeenCalled();
+});
+
+// #47: the page runs only the script built here. It is named by a nonce
+// that is new for every page, so an inline script or an on… attribute that
+// came with a formula would not run.
+test('the page allows only its own script, by a nonce new for every page', async () => {
+  const html = await page(quadratic);
+  const nonce = /script-src 'nonce-([0-9a-f]{32})'/.exec(html)?.[1];
+  expect(nonce).toBeDefined();
+  expect(html).not.toContain("script-src 'unsafe-inline'");
+  expect(html.match(/<script/g)).toHaveLength(1);
+  expect(html).toContain(`<script nonce="${nonce}">`);
+  const other = /script-src 'nonce-([0-9a-f]{32})'/.exec(mathPage('<span>x</span>', '#000'))?.[1];
+  expect(other).toBeDefined();
+  expect(other).not.toBe(nonce);
+  // A nonce that is not plain hex is not written into the page.
+  const odd = mathPage('<span>x</span>', '#000', 15, `x'; script-src *`);
+  expect(odd).not.toContain('script-src *');
+  expect(odd).toMatch(/script-src 'nonce-[0-9a-f]{32}'/);
+});
+
+// #47: Android lets a load through when the answer to the load question is
+// late. If any page but the formula's own starts to load, the WebView goes
+// and the formula is shown as written.
+test('another page starting to load takes the WebView away', async () => {
+  await render(<MathBlock tex={quadratic} />);
+  const web = screen.getByTestId('math-webview');
+  await act(async () => web.props.onLoadStart({ nativeEvent: { url: 'about:blank' } }));
+  expect(screen.getByTestId('math-webview')).toBeTruthy();
+  await act(async () => web.props.onLoadStart({ nativeEvent: { url: 'https://example.com/' } }));
+  expect(screen.queryByTestId('math-webview')).toBeNull();
+  expect(screen.getByText(quadratic)).toBeTruthy();
 });

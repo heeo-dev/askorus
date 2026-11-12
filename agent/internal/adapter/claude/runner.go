@@ -169,10 +169,10 @@ func (r *Runner) RunFor(ctx context.Context, timeout time.Duration, dir string, 
 	var exitErr *exec.ExitError
 	switch {
 	case ctx.Err() == context.DeadlineExceeded:
-		return res, fmt.Errorf("claude %s: timed out after %s", strings.Join(args, " "), timeout)
+		return res, fmt.Errorf("claude %s: timed out after %s", argNames(args), timeout)
 	case errors.As(err, &exitErr):
 		res.ExitCode = exitErr.ExitCode()
-		return res, fmt.Errorf("claude %s: exit code %d", strings.Join(args, " "), res.ExitCode)
+		return res, fmt.Errorf("claude %s: exit code %d", argNames(args), res.ExitCode)
 	case err != nil:
 		return res, err
 	}
@@ -224,3 +224,23 @@ func (b *capBuffer) Write(p []byte) (int, error) {
 }
 
 func (b *capBuffer) Bytes() []byte { return b.buf.Bytes() }
+
+// argNames is what an error says about a claude command: the subcommand and
+// the option names, never a value (R-102, #44). A value can be a session
+// name, which may be words from a conversation, and the error text reaches
+// agent.log, which keeps only time, device, action and result (N8).
+func argNames(args []string) string {
+	var out []string
+	for i, a := range args {
+		switch {
+		case strings.HasPrefix(a, "-"):
+			if j := strings.IndexByte(a, '='); j > 0 {
+				a = a[:j]
+			}
+			out = append(out, a)
+		case i == 0:
+			out = append(out, a) // the subcommand: agents, stop, remote-control
+		}
+	}
+	return strings.Join(out, " ")
+}

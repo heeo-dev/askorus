@@ -26,6 +26,8 @@ import { nameParts, plainNames } from '@/ask/aiNames';
 import * as i18n from '@/i18n';
 
 import { lettersOrDigits, korean, mathAt, type MathToken, prose } from './inlineMath';
+import { shownElsewhere } from './linkCheck';
+import { type LinkAsk, LinkSheet } from './LinkSheet';
 import { MathBlock, drawable } from './MathBlock';
 import { texToUnicode } from './tex';
 import { type AIColour, aiColour, type Theme, useAIColours, useTheme } from './theme';
@@ -520,6 +522,8 @@ type Ctx = {
   math: { count: number; chars: number };
   /** The AIs a combined answer may name in braces (#6), drawn as chips: name to the AI's own colour, if any. */
   names?: ReadonlyMap<string, AIColour | undefined>;
+  /** Shows where a link really goes before it opens (#47, ui/LinkSheet). */
+  onLink: (l: LinkAsk) => void;
 };
 
 /**
@@ -537,10 +541,14 @@ export function Markdown({ text, size = 'body', ais }: { text: string; size?: 'b
     () => (ais ? new Map(ais.map((a) => [agentName(a), own ? aiColour(th, a) : undefined] as const)) : undefined),
     [ais, th, own],
   );
+  const [link, setLink] = useState<LinkAsk | null>(null);
   return (
-    <AsText text={known ? plainNames(text) : text} style={s.body}>
-      <Drawn text={text} s={s} names={known} />
-    </AsText>
+    <>
+      <AsText text={known ? plainNames(text) : text} style={s.body}>
+        <Drawn text={text} s={s} names={known} onLink={setLink} />
+      </AsText>
+      <LinkSheet link={link} onClose={() => setLink(null)} />
+    </>
   );
 }
 
@@ -580,11 +588,11 @@ function split(text: string): [string, string] {
   return [text.slice(0, at), text.slice(at).trim()];
 }
 
-function Drawn({ text, s, names }: { text: string; s: Ctx['s']; names?: Ctx['names'] }) {
+function Drawn({ text, s, names, onLink }: { text: string; s: Ctx['s']; names?: Ctx['names']; onLink: Ctx['onLink'] }) {
   const [head, rest] = useMemo(() => split(text), [text]);
   const tokens = useMemo(() => lex(head), [head]);
   const notes = useMemo(() => footnoteNumbers(tokens), [tokens]);
-  const c: Ctx = { s, notes, depth: 0, math: { ...mathBudget }, names };
+  const c: Ctx = { s, notes, depth: 0, math: { ...mathBudget }, names, onLink };
   const defs = footnoteDefs(tokens).sort((a, b) => (notes.get(a.id) ?? 0) - (notes.get(b.id) ?? 0));
   return (
     <View style={s.root}>
@@ -877,12 +885,17 @@ function inline(tokens: Token[] | undefined, c: Ctx, depth = 0): ReactNode[] {
       case 'link': {
         const l = t as Tokens.Link;
         const href = safeLink(decode(l.href));
+        // Words that name another site than the link's own are asked about
+        // first; a long press shows any link's real address (#47).
+        const shown = href ? shownElsewhere(decode(l.text ?? ''), href) : null;
         return (
           <Text
             key={i}
             style={href ? s.link : undefined}
-            onPress={href ? () => Linking.openURL(href).catch(() => undefined) : undefined}
+            onPress={href ? () => (shown ? c.onLink({ href, shown }) : Linking.openURL(href).catch(() => undefined)) : undefined}
+            onLongPress={href ? () => c.onLink({ href, shown }) : undefined}
             accessibilityRole={href ? 'link' : undefined}
+            accessibilityHint={href ? i18n.t('link.hint') : undefined}
           >
             {inner(l.tokens)}
           </Text>

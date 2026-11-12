@@ -552,21 +552,36 @@ func errCode(err error) string {
 
 // funnelWatch ends serve when tailscale funnel opens the agent port to
 // the internet while it runs (design 보안: Funnel이면 시작을 거부).
-func funnelWatch(ctx context.Context, port int, every time.Duration, onFunnel func()) {
+//
+// When tailscale cannot be read the watch sees nothing. unread is then told
+// why, once each time it starts failing, and with nil when reading works
+// again (R-104, #46): agent.log shows that the watch was blind.
+func funnelWatch(ctx context.Context, port int, every time.Duration, onFunnel func(), unread func(error)) {
 	t := time.NewTicker(every)
 	defer t.Stop()
+	blind := false
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-t.C:
 		}
-		if ti := lookTailnet(ctx, port); ti.served && ti.serve.Funnel {
+		ti := lookTailnetFn(ctx, port)
+		if ti.served && ti.serve.Funnel {
 			onFunnel()
 			return
 		}
+		if now := ti.problem != nil; now != blind {
+			blind = now
+			if unread != nil {
+				unread(ti.problem)
+			}
+		}
 	}
 }
+
+// lookTailnetFn is lookTailnet; tests put their own in.
+var lookTailnetFn = lookTailnet
 
 // awakeWatch keeps the PC awake while a background session or a folder
 // server runs, when the settings ask for it.

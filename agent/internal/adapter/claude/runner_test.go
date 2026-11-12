@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/heeo-dev/askorus/agent/internal/core"
 )
 
 // R-18: exec copies output with io.Copy, which used an embedded
@@ -148,5 +150,50 @@ func TestParseAgentsShapes(t *testing.T) {
 	}
 	if _, err := parseAgents([]byte("Error: not logged in")); err == nil {
 		t.Error("text output accepted")
+	}
+}
+
+// R-102 (#44): an error about a claude command names the subcommand and the
+// options, never a value. A session name can be words from a conversation
+// and the error text reaches agent.log.
+func TestRunnerErrorHasNoArgumentValues(t *testing.T) {
+	if got := argNames([]string{"--bg", "--remote-control", "my secret plan", "-n", "my secret plan", "--model=opus"}); got != "--bg --remote-control -n --model" {
+		t.Errorf("argNames = %q", got)
+	}
+	if got := argNames([]string{"stop", "0a1b2c3d"}); got != "stop" {
+		t.Errorf("argNames = %q", got)
+	}
+	r, _ := fakeRunner(t)
+	// The fake claude knows no such session: it ends with a code.
+	_, err := r.Run(context.Background(), "", "stop", "5ec2e7aa")
+	if err == nil || !strings.Contains(err.Error(), "claude stop: exit code") || strings.Contains(err.Error(), "5ec2e7aa") {
+		t.Errorf("err = %v", err)
+	}
+	t.Setenv("ASKORUS_FAKE_SLEEP", "5s")
+	r.timeout = 300 * time.Millisecond
+	_, err = r.Run(context.Background(), "", "--bg", "--remote-control", "my secret plan", "-n", "my secret plan")
+	if err == nil || !strings.Contains(err.Error(), "timed out") || strings.Contains(err.Error(), "secret") {
+		t.Errorf("err = %v", err)
+	}
+}
+
+// R-102 (#44): the log line of a folder server that ended keeps the reason
+// and leaves out the last lines of its screen, which the phone still gets.
+func TestServeLogReasonLeavesTheScreenOut(t *testing.T) {
+	for _, c := range [][2]string{
+		{serverEnded + " (exit status 1): Session: my secret plan | Connected", serverEnded + " (exit status 1)"},
+		{serverEnded + ": Session: my secret plan", serverEnded},
+		{serverEnded, serverEnded},
+	} {
+		if got := ServeLogReason(core.ServeStatus{State: core.ServeFailed, Error: c[0]}); got != c[1] {
+			t.Errorf("%q -> %q, want %q", c[0], got, c[1])
+		}
+	}
+	// What is not a screen stays: the help for the consent, the folder, the pid.
+	if got := ServeLogReason(core.ServeStatus{State: core.ServeFailed, Error: consentHelp}); got != consentHelp {
+		t.Errorf("consent = %q", got)
+	}
+	if got := ServeLogReason(core.ServeStatus{State: core.ServeExternal, Error: "pid 12"}); got != "pid 12" {
+		t.Errorf("external = %q", got)
 	}
 }

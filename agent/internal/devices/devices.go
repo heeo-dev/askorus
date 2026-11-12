@@ -153,13 +153,23 @@ func (s *Store) Revoke(idOrName string) (Device, error) {
 	if err := s.refresh(); err != nil {
 		return Device{}, err
 	}
+	// An id wins over a name (R-104, #46): a device named like another
+	// device's id must not keep that one from being revoked.
 	idx := -1
 	for i, d := range s.list {
-		if d.ID == idOrName || d.Name == idOrName {
-			if idx >= 0 {
-				return Device{}, fmt.Errorf("%q matches more than one device; use the id", idOrName)
-			}
+		if d.ID == idOrName {
 			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		for i, d := range s.list {
+			if d.Name == idOrName {
+				if idx >= 0 {
+					return Device{}, fmt.Errorf("%q matches more than one device; use the id", idOrName)
+				}
+				idx = i
+			}
 		}
 	}
 	if idx < 0 {

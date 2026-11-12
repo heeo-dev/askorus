@@ -39,7 +39,7 @@ import (
 )
 
 // version is set at release time with -ldflags "-X main.version=...".
-var version = "0.2.1-dev"
+var version = "0.2.2-dev"
 
 const usage = `Askorus PC agent (not an official Anthropic product)
 Askorus PC 에이전트 (Anthropic의 공식 제품이 아닙니다)
@@ -350,7 +350,7 @@ func serve(dir string, args []string) error {
 	host, _ := os.Hostname()
 	rec := newReconciler(dir, adapter, logger)
 	adapter.OnServerState(func(folder string, st core.ServeStatus) {
-		logger.Info("folder server", "folder", folder, "state", st.State, "restarts", st.Restarts, "err", st.Error)
+		logger.Info("folder server", "folder", folder, "state", st.State, "restarts", st.Restarts, "err", claude.ServeLogReason(st))
 	})
 	// Without an ask folder asks are off; remote sessions still work.
 	askFolder, err := cfg.AskFolder()
@@ -410,7 +410,13 @@ func serve(dir string, args []string) error {
 	recCtx, stopRec := context.WithCancel(ctx)
 	go rec.run(recCtx)
 	exposed := make(chan struct{})
-	go funnelWatch(recCtx, cfg.Port, time.Minute, func() { close(exposed) })
+	go funnelWatch(recCtx, cfg.Port, time.Minute, func() { close(exposed) }, func(err error) {
+		if err != nil {
+			logger.Warn("funnel watch cannot read tailscale", "err", err.Error())
+		} else {
+			logger.Info("funnel watch reads tailscale again")
+		}
+	})
 	go awakeWatch(recCtx, dir, adapter, adapter, time.Minute)
 	stopReq := listenStop(cfg.Port) // `askorus-agent shutdown`
 	errc := make(chan error, 1)
@@ -865,6 +871,12 @@ func devicesCmd(dir string, args []string, out io.Writer) error {
 			return err
 		}
 		say(out, m("revoked %s (%s)", "%s 기기의 연결을 끊었습니다 (%s)", d.Name, d.ID))
+		// A folder that phone kept open stays open (R-103, #45): it is a
+		// setting of this PC, and Claude's own apps reach it, not Askorus.
+		if n := keptOpen(dir); n > 0 {
+			say(out, m("%d folder(s) are still kept open for Claude's apps (see: askorus-agent folders). If that phone is lost, turn them off and sign that phone out of your Claude account too.",
+				"열어 둔 폴더 %d개는 그대로 켜져 있습니다 (보기: askorus-agent folders). 폰을 잃어버렸다면 폴더를 끄고, Claude 계정에서도 그 폰을 로그아웃하세요.", n))
+		}
 		return nil
 	}
 	return fail("unknown devices command %q", "모르는 devices 명령 %q입니다", args[0])
@@ -875,4 +887,19 @@ func short(s string, n int) string {
 		return s
 	}
 	return string([]rune(s)[:n-1]) + "…"
+}
+
+// keptOpen is how many folders have a server kept open in the settings.
+func keptOpen(dir string) int {
+	cfg, err := config.Load(dir)
+	if err != nil {
+		return 0
+	}
+	n := 0
+	for _, f := range cfg.Folders {
+		if f.Server.Enabled {
+			n++
+		}
+	}
+	return n
 }

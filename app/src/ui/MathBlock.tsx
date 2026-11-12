@@ -8,6 +8,7 @@
 // The WebView only ever shows the page built here: every other load is
 // refused, and no URL is handed to another app.
 
+import * as Crypto from 'expo-crypto';
 import katex from 'katex';
 import { useMemo, useState } from 'react';
 import { Platform, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
@@ -22,17 +23,26 @@ const mono = Platform.select({ ios: 'Menlo', default: 'monospace' });
 const startHeight = 44;
 const maxHeight = 2000;
 
-// The page may run its own inline script and use inline styles and data:
-// fonts, and nothing else; base-uri and form-action close the last ways out.
-const csp = [
-  "default-src 'none'",
-  "style-src 'unsafe-inline'",
-  'font-src data:',
-  "script-src 'unsafe-inline'",
-  'img-src data:',
-  "base-uri 'none'",
-  "form-action 'none'",
-].join('; ');
+// The page may run the one script built here, named by a nonce made new for
+// every page, and use inline styles and data: fonts, and nothing else;
+// base-uri and form-action close the last ways out. With a nonce no other
+// inline script and no on… attribute runs, so if KaTeX ever let HTML from a
+// formula through, it still could not run code (#47).
+const csp = (nonce: string) =>
+  [
+    "default-src 'none'",
+    "style-src 'unsafe-inline'",
+    'font-src data:',
+    `script-src 'nonce-${nonce}'`,
+    'img-src data:',
+    "base-uri 'none'",
+    "form-action 'none'",
+  ].join('; ');
+
+/** newNonce is 128 random bits in hex: the formula was written before it exists, so it cannot name it. */
+export function newNonce(): string {
+  return [...Crypto.getRandomBytes(16)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
 
 // trust: false keeps out \href, \url and \includegraphics; the limits stop a
 // formula that expands or grows without end. strict: 'ignore' draws what
@@ -93,7 +103,9 @@ export function fontFaces(html: string): string {
 }
 
 /** mathPage builds the whole page for one formula: CSP, KaTeX's CSS, the fonts it uses and the HTML. */
-export function mathPage(html: string, color: string, fontSize = 15): string {
+export function mathPage(html: string, color: string, fontSize = 15, nonce = newNonce()): string {
+  // The nonce goes into an attribute and the CSP: only hex is taken.
+  const once = /^[0-9a-f]{16,64}$/.test(nonce) ? nonce : newNonce();
   // The colour goes into CSS, so only a hex colour is taken.
   const ink = /^#[0-9a-f]{3,8}$/i.test(color) ? color : 'inherit';
   // In an HTML page these namespaces are implied; dropping them leaves no web address in the page.
@@ -108,12 +120,12 @@ export function mathPage(html: string, color: string, fontSize = 15): string {
   return [
     '<!DOCTYPE html>',
     '<html><head><meta charset="utf-8">',
-    `<meta http-equiv="Content-Security-Policy" content="${csp}">`,
+    `<meta http-equiv="Content-Security-Policy" content="${csp(once)}">`,
     '<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">',
     `<style>\n${fontFaces(body)}\n${katexRules}\n${page}\n</style>`,
     '</head><body>',
     `<div id="m">${body}</div>`,
-    `<script>${measure}</script>`,
+    `<script nonce="${once}">${measure}</script>`,
     '</body></html>',
   ].join('\n');
 }
@@ -171,6 +183,14 @@ export function MathBlock({ tex, plain = false }: { tex: string; plain?: boolean
         onMessage={(e: WebViewMessageEvent): void => {
           const h = pageHeight(e.nativeEvent.data);
           if (h !== null) setHeight(h);
+        }}
+        // Android lets a load through when the answer to
+        // onShouldStartLoadWithRequest takes longer than 250 ms. The page has
+        // no links and its CSP allows no connection, but should any other
+        // page ever start to load, the WebView goes and the formula is shown
+        // as written (#47).
+        onLoadStart={(e): void => {
+          if (!allowLoad(e.nativeEvent)) fail();
         }}
         onError={fail}
         onRenderProcessGone={fail}

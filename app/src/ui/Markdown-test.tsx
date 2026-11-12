@@ -547,3 +547,38 @@ test('#6: the AIs a combined answer names are chips in their own colours, plain 
   expect(chip('Claude')).toMatchObject({ backgroundColor: palettes.dark.avatar, color: palettes.dark.text });
   expect(chip('OpenCode')).toMatchObject({ backgroundColor: palettes.dark.avatar, color: palettes.dark.text });
 });
+
+// #47: a link's words can name one site while the link goes to another.
+// Such a link asks first, showing where it really goes; a long press shows
+// that for any link; a plain link still opens at once.
+test('a link whose words name another site asks first; a long press shows the address of any link', async () => {
+  setLang('ko');
+  const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
+  const user = userEvent.setup();
+  await render(<Markdown text={'[mybank.com](https://evil.example/login) 그리고 [출처](https://example.com/a)'} />);
+
+  await user.press(screen.getByText('mybank.com'));
+  expect(open).not.toHaveBeenCalled();
+  expect(screen.getByTestId('link-sheet')).toBeTruthy();
+  expect(screen.getByText('evil.example')).toBeTruthy();
+  expect(screen.getByText('https://evil.example/login')).toBeTruthy();
+  expect(screen.getByText(/글에는 mybank\.com, 실제로는 evil\.example/)).toBeTruthy();
+  await user.press(screen.getByText('열기'));
+  expect(open).toHaveBeenCalledWith('https://evil.example/login');
+  expect(screen.queryByTestId('link-sheet')).toBeNull();
+  open.mockClear();
+
+  // A plain link opens at once, and a long press shows its address without a warning.
+  await user.press(screen.getByText('출처'));
+  expect(open).toHaveBeenCalledWith('https://example.com/a');
+  expect(screen.queryByTestId('link-sheet')).toBeNull();
+  open.mockClear();
+  await user.longPress(screen.getByText('출처'));
+  expect(open).not.toHaveBeenCalled();
+  expect(screen.getByText('example.com')).toBeTruthy();
+  expect(screen.queryByText(/실제로는/)).toBeNull();
+  await user.press(screen.getByText('주소 복사'));
+  expect(jest.requireMock('expo-clipboard').setStringAsync).toHaveBeenCalledWith('https://example.com/a');
+  expect(screen.getByText('복사했습니다.')).toBeTruthy();
+  open.mockRestore();
+});
