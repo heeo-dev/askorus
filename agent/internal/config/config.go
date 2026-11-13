@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/heeo-dev/askorus/agent/internal/core"
 )
@@ -269,7 +270,15 @@ func WriteFileAtomic(path string, data []byte) error {
 	if err := f.Close(); err != nil {
 		return err
 	}
-	return os.Rename(tmp, path)
+	// On Windows the rename fails for the moment another process has the
+	// old file open (a command reading it just then): try again shortly.
+	for try := 0; ; try++ {
+		err = os.Rename(tmp, path)
+		if err == nil || try >= 9 {
+			return err
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
 }
 
 func (c *Config) normalize() {

@@ -47,8 +47,10 @@ Usage / 사용법:
       run the agent in this window; phones reach it inside your Tailscale network only
       이 창에서 에이전트를 돌립니다. 폰은 내 Tailscale 망 안에서만 닿습니다
   askorus-agent login | logout [-yes]
-      sign this PC in to Tailscale with a link (once), or sign it out
-      이 PC를 링크로 Tailscale에 로그인합니다 (한 번). logout은 로그아웃합니다
+      sign this PC in to Tailscale with a link (once), or sign it out.
+      To change the account: logout, then login
+      이 PC를 링크로 Tailscale에 로그인합니다 (한 번). logout은 로그아웃합니다.
+      계정을 바꾸려면 logout 뒤 login
   askorus-agent pair [-light-terminal]
       show a QR code for 5 minutes to pair a phone
       폰과 짝을 맺는 QR을 5분 동안 보여 줍니다

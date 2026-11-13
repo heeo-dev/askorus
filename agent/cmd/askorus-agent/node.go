@@ -62,7 +62,17 @@ func writeNodeInfo(dir string, n nodeInfo) error {
 // readNodeInfo reads what the running agent wrote. It is false when no
 // agent runs: a file left by one that crashed says nothing.
 func readNodeInfo(dir string) (nodeInfo, bool) {
-	b, err := os.ReadFile(filepath.Join(dir, nodeFile))
+	var b []byte
+	var err error
+	// The agent replaces the file on every change of state. On Windows a
+	// read at that very moment can fail: read again before saying no agent runs.
+	for try := 0; ; try++ {
+		b, err = os.ReadFile(filepath.Join(dir, nodeFile))
+		if err == nil || os.IsNotExist(err) || try >= 5 {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
 	if err != nil {
 		return nodeInfo{}, false
 	}
@@ -168,6 +178,7 @@ type nodeWatch struct {
 	noLinkAt time.Time // since when the node needs a login but has no link
 	askedAt  time.Time // when a link was last asked for
 	fails    int       // status reads that failed in a row
+	unsaved  bool      // the state file does not hold st yet (a write failed)
 }
 
 // statusFailsMax is how many status reads in a row may fail before the
@@ -261,11 +272,23 @@ func (w *nodeWatch) once(ctx context.Context) {
 	if ask {
 		_ = w.node.Login(ctx)
 	}
+	w.mu.Lock()
+	write := changed || w.unsaved
+	w.mu.Unlock()
+	if write {
+		// The other commands (login, status, pair) read the state from this
+		// file: one that could not be written is written on the next look,
+		// or `login` would go on waiting for a sign-in that is done.
+		err := writeNodeInfo(w.dir, nodeInfo{Port: w.port, PID: os.Getpid(), Status: st})
+		if err != nil {
+			w.logger.Warn("tailnet state not written", "err", err.Error())
+		}
+		w.mu.Lock()
+		w.unsaved = err != nil
+		w.mu.Unlock()
+	}
 	if !changed {
 		return
-	}
-	if err := writeNodeInfo(w.dir, nodeInfo{Port: w.port, PID: os.Getpid(), Status: st}); err != nil {
-		w.logger.Warn("tailnet state not written", "err", err.Error())
 	}
 	w.tell(st)
 }
@@ -354,14 +377,27 @@ var loginPoll = 500 * time.Millisecond
 // phone) and returns when the node is signed in.
 func waitLogin(ctx context.Context, dir string, out io.Writer, limit time.Duration) error {
 	deadline := time.Now().Add(limit)
-	shown, asked, approval := "", false, false
+	shown, asked, approval, missed := "", false, false, 0
 	for {
 		n, ok := readNodeInfo(dir)
+		if ok {
+			missed = 0
+		}
 		switch {
 		case !ok:
+			// One look that finds nothing can be the moment the agent replaces its
+			// state file; three in a row is an agent that does not run.
+			if missed++; missed < 3 {
+				break
+			}
 			return fail("the agent is not running; start it first: %s", "에이전트가 돌고 있지 않습니다. 먼저 켜세요: %s", howToStart())
 		case n.signedIn():
 			say(out, m("signed in to Tailscale as %s. This PC is %s there.", "Tailscale에 %s 계정으로 로그인했습니다. 망에서 이 PC의 이름은 %s입니다.", n.Owner, n.Name))
+			if shown == "" && !approval {
+				// It was signed in already: the person may be here to change the account.
+				say(out, m("to use another Tailscale account: askorus-agent logout, then askorus-agent login (the phone's app has to use the same account, and pairs again)",
+					"다른 Tailscale 계정을 쓰려면: askorus-agent logout 뒤 askorus-agent login (폰의 앱도 같은 계정이어야 하고, 다시 짝 맺습니다)"))
+			}
 			return nil
 		case n.State == tsnode.StateNeedsApproval:
 			if !approval {
@@ -370,9 +406,13 @@ func waitLogin(ctx context.Context, dir string, out io.Writer, limit time.Durati
 					"로그인했습니다. Tailscale 망이 새 기기의 승인을 요구합니다. Tailscale 관리 화면에서 이 PC를 승인하세요 (기다리는 중)."))
 			}
 		case n.LoginURL != "" && n.LoginURL != shown:
+			if shown == "" {
+				say(out, m("Askorus connects your phone and this PC through Tailscale: a private network that only your own devices can join (a service by Tailscale Inc., free for personal use). No port of this PC is opened to the internet and no server of ours is in between. Tailscale learns your account, the device names and when they connect, not your questions or answers. More: the README (What is Tailscale?).",
+					"Askorus는 폰과 이 PC를 Tailscale로 잇습니다. 내 기기들만 들어오는 사설망입니다(Tailscale사의 서비스, 개인은 무료). 이 PC의 포트를 인터넷에 열지 않고, 중간에 우리 서버도 없습니다. Tailscale이 아는 것은 계정, 기기 이름, 접속한 때이고 질문과 답은 모릅니다. 자세한 것은 README의 'Tailscale이 뭔가요?'."))
+			}
 			shown = n.LoginURL
-			say(out, m("Sign this PC in to Tailscale (once). Open this link in a browser, here or on the phone (the QR code is the same link), and sign in. Use the account the phone's Askorus app will use too. Nothing of Tailscale needs installing.",
-				"이 PC를 Tailscale에 로그인합니다 (한 번). 이 링크를 이 PC나 폰의 브라우저에서 열고 로그인하세요 (QR도 같은 링크입니다). 폰의 Askorus 앱에서 쓸 계정과 같은 계정으로 하세요. Tailscale을 따로 설치할 필요는 없습니다."))
+			say(out, m("Sign this PC in to Tailscale (once). Open this link in a browser, here or on the phone (the QR code is the same link), and sign in. Use the account the phone's Askorus app will use too; without one, you can make it on that page. Your password goes to Tailscale's page only. Nothing of Tailscale needs installing.",
+				"이 PC를 Tailscale에 로그인합니다 (한 번). 이 링크를 이 PC나 폰의 브라우저에서 열고 로그인하세요 (QR도 같은 링크입니다). 폰의 Askorus 앱에서 쓸 계정과 같은 계정으로 하세요. 계정이 없으면 그 화면에서 만들 수 있습니다. 비밀번호는 Tailscale의 화면에만 넣습니다. Tailscale을 따로 설치할 필요는 없습니다."))
 			fmt.Fprintf(out, "\n  %s\n\n", n.LoginURL)
 			_ = printQR(out, n.LoginURL, true)
 			say(out, m("Waiting for the sign-in (Ctrl+C stops waiting; the agent keeps running).", "로그인을 기다립니다 (Ctrl+C는 기다리기만 멈춤. 에이전트는 계속 돕니다)."))
@@ -426,7 +466,7 @@ func logoutCmd(dir string, args []string, in io.Reader, out io.Writer) error {
 	if !nodeSignOut(dir, 20*time.Second) {
 		return fail("the agent did not sign out in time; see `askorus-agent status`", "에이전트가 제때 로그아웃하지 못했습니다. `askorus-agent status`로 확인하세요")
 	}
-	say(out, m("signed out of Tailscale", "Tailscale에서 로그아웃했습니다"))
+	say(out, m("signed out of Tailscale. Sign in again, with this or another account: %s", "Tailscale에서 로그아웃했습니다. 다시 로그인하려면(같은 계정이든 다른 계정이든): %s", howToLogin()))
 	return nil
 }
 

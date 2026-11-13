@@ -189,6 +189,36 @@ func TestNodeWatchQuietAndUnreadable(t *testing.T) {
 	}
 }
 
+// A state that could not be written (on Windows another command can have
+// the file open at that very moment) is written on the next look. Left
+// unwritten, the file would go on saying "not signed in" and `login` would
+// wait for a sign-in that is done (R-108).
+func TestNodeWatchWritesAgainAfterAFailedWrite(t *testing.T) {
+	agentRuns(t, true)
+	dir := t.TempDir()
+	node := &fakeNode{}
+	w := &nodeWatch{node: node, dir: dir, port: 8790, logger: logx.Discard(), out: &bytes.Buffer{}}
+	ctx := context.Background()
+
+	// Something stands where the file goes: the write fails.
+	inTheWay := filepath.Join(dir, nodeFile)
+	if err := os.MkdirAll(filepath.Join(inTheWay, "x"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	node.set(signedInNode().Status)
+	w.once(ctx)
+	if _, ok := readNodeInfo(dir); ok {
+		t.Fatal("a state was read although none could be written")
+	}
+	if err := os.RemoveAll(inTheWay); err != nil {
+		t.Fatal(err)
+	}
+	w.once(ctx) // nothing changed since, but the file is still owed
+	if n, ok := readNodeInfo(dir); !ok || !n.signedIn() {
+		t.Errorf("the state was not written on the next look: %+v %v", n, ok)
+	}
+}
+
 // The other commands ask the running agent for a login link or a logout by
 // leaving a word in a file; the watch takes it once.
 func TestNodeRequests(t *testing.T) {
@@ -326,6 +356,44 @@ func TestWaitLogin(t *testing.T) {
 	}
 	if strings.Count(got, "https://login.tailscale.com/a/abc123") != 1 {
 		t.Errorf("the link was shown more than once:\n%s", got)
+	}
+	// Someone who has never seen Tailscale meets it here: before the link,
+	// what it is, why it is needed and what it learns.
+	for _, s := range []string{"a private network that only your own devices can join", "no server of ours is in between",
+		"not your questions or answers", "내 기기들만 들어오는 사설망", "Your password goes to Tailscale's page only"} {
+		if !strings.Contains(got, s) {
+			t.Errorf("output lacks %q:\n%s", s, got)
+		}
+	}
+	if strings.Index(got, "a private network that only your own devices can join") > strings.Index(got, "https://login.tailscale.com/a/abc123") {
+		t.Errorf("the explanation comes after the link:\n%s", got)
+	}
+	// A sign-in just made is not followed by how to change the account.
+	if strings.Contains(got, "askorus-agent logout") {
+		t.Errorf("a fresh sign-in talks about changing the account:\n%s", got)
+	}
+}
+
+// login on a PC that is signed in already says as which account and how to
+// change it: the command exists, but nothing told people about it.
+func TestWaitLoginAlreadySignedIn(t *testing.T) {
+	agentRuns(t, true)
+	dir := t.TempDir()
+	if err := writeNodeInfo(dir, signedInNode()); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if err := waitLogin(context.Background(), dir, &out, time.Second); err != nil {
+		t.Fatalf("waitLogin: %v", err)
+	}
+	got := out.String()
+	for _, s := range []string{"signed in to Tailscale as me@example.com", "askorus-agent logout, then askorus-agent login", "askorus-agent logout 뒤 askorus-agent login"} {
+		if !strings.Contains(got, s) {
+			t.Errorf("output lacks %q:\n%s", s, got)
+		}
+	}
+	if strings.Contains(got, "login.tailscale.com") {
+		t.Errorf("a link was shown to a PC that is signed in:\n%s", got)
 	}
 }
 
