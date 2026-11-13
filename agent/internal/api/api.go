@@ -1,6 +1,6 @@
-// Package api is the agent's HTTP API. It listens on 127.0.0.1 only and is
-// reached through tailscale serve. It knows adapters only through
-// core.Adapter (principle 2).
+// Package api is the agent's HTTP API. It is served only on the agent's own
+// Tailscale node (package tsnode), which also says who sent each request
+// (WithCaller). It knows adapters only through core.Adapter (principle 2).
 package api
 
 import (
@@ -12,7 +12,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
@@ -32,7 +31,6 @@ const APIVersion = 1
 const (
 	CodeBadHost        = "bad_host"
 	CodeCrossOrigin    = "cross_origin"
-	CodeFunnel         = "funnel_not_allowed"
 	CodeUnauthorized   = "unauthorized"
 	CodeWrongAccount   = "wrong_account"
 	CodeNotFound       = "not_found"
@@ -64,20 +62,22 @@ type Pairer interface {
 
 // Options configures the server.
 type Options struct {
-	Version    string
-	Hostname   string
-	Adapters   []core.Adapter
-	Devices    TokenVerifier
-	Pairer     Pairer // nil: POST /v1/pair is refused
-	Logger     *slog.Logger
-	ServeHosts []string // extra accepted Host names
-	// TailscaleOwner is the PC owner's Tailscale login. Requests naming
-	// another login are refused, and pairing needs it to be known.
-	TailscaleOwner string
-	HiddenFolders  []string
-	// TestPage serves the phone-browser test page at /test/ and accepts
-	// same-origin browser requests from it.
-	TestPage bool
+	Version  string
+	Hostname string
+	Adapters []core.Adapter
+	Devices  TokenVerifier
+	Pairer   Pairer // nil: POST /v1/pair is refused
+	Logger   *slog.Logger
+	// Hosts returns the names and addresses the agent's Tailscale node
+	// answers on (its MagicDNS name, with and without the tailnet's part,
+	// and its addresses). A request to any other Host is refused. It is
+	// called per request: they are known only once the node has signed in.
+	Hosts func() []string
+	// Owner returns the login of the Tailscale account the node is signed
+	// in as, which is the PC owner's; "" until it is. Every request must
+	// come from a device of that account (checkCaller).
+	Owner         func() string
+	HiddenFolders []string
 	// Hidden sessions are left out of the list; DELETE adds to it.
 	Hidden HiddenStore
 	// Folders returns the folders new sessions may start in. It is called
@@ -117,7 +117,6 @@ type Options struct {
 // Server serves /v1.
 type Server struct {
 	o       Options
-	hosts   map[string]bool
 	limiter *limiter
 	jobs    *jobs.Manager
 	runs    *runs.Manager
@@ -131,7 +130,6 @@ type Server struct {
 func New(o Options) *Server {
 	s := &Server{
 		o:       o,
-		hosts:   map[string]bool{"127.0.0.1": true, "localhost": true, "::1": true},
 		limiter: newLimiter(),
 		jobs:    jobs.NewManager(),
 		runs:    runs.NewManager(),
@@ -145,9 +143,6 @@ func New(o Options) *Server {
 			code = p.Error.Code // the message is the AI's text and is not logged
 		}
 		o.Logger.Info("run part", "mode", mode, "agent", p.Agent, "status", string(p.Status), "ms", p.Ms, "code", code)
-	}
-	for _, h := range o.ServeHosts {
-		s.hosts[strings.ToLower(h)] = true
 	}
 	s.gate = compares.Gate{Settings: o.Judge, MinVersions: o.JudgeMinVersions}
 	if filepath.IsAbs(o.AskFolder) {
@@ -170,10 +165,6 @@ func (s *Server) Handler() http.Handler {
 	top.HandleFunc("/v1/pair", methodNotAllowed)
 	top.HandleFunc("POST /v1/pair/status", s.pairStatus)
 	top.HandleFunc("/v1/pair/status", methodNotAllowed)
-	if s.o.TestPage {
-		top.Handle("GET /test/", s.testPage())
-		top.Handle("GET /test", http.RedirectHandler("/test/", http.StatusFound))
-	}
 	mux := http.NewServeMux()
 	top.Handle("/", s.authenticate(mux))
 	route := func(method, path string, h http.HandlerFunc) {
@@ -261,8 +252,8 @@ func (s *Server) recoverPanics(next http.Handler) http.Handler {
 	})
 }
 
-// checkHost blocks DNS rebinding: a web page cannot make the browser send
-// our host names.
+// checkHost blocks DNS rebinding: a web page in a browser on one of the
+// person's devices cannot make that browser send our node's names.
 func (s *Server) checkHost(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		host := r.Host
@@ -270,7 +261,16 @@ func (s *Server) checkHost(next http.Handler) http.Handler {
 			host = h
 		}
 		host = strings.ToLower(strings.TrimSuffix(strings.Trim(host, "[]"), "."))
-		if !s.hosts[host] {
+		ok := false
+		if s.o.Hosts != nil {
+			for _, h := range s.o.Hosts() {
+				if host != "" && host == strings.ToLower(strings.TrimSuffix(h, ".")) {
+					ok = true
+					break
+				}
+			}
+		}
+		if !ok {
 			writeError(w, http.StatusForbidden, CodeBadHost, "host not allowed")
 			return
 		}
@@ -278,26 +278,11 @@ func (s *Server) checkHost(next http.Handler) http.Handler {
 	})
 }
 
-// funnelHeader is the header tailscale serve adds to a request that came
-// through Funnel, from the public internet ("?1").
-const funnelHeader = "Tailscale-Funnel-Request"
-
 // checkOrigin refuses browser cross-origin requests. The app is native and
-// sends no Origin header; CORS is never enabled. Only the test page, when
-// turned on, may call from its own origin.
+// sends no Origin header; CORS is never enabled.
 func (s *Server) checkOrigin(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// tailscale marks what came in from the internet through Funnel
-		// (R-104, #46). The agent stops when it sees Funnel on its port,
-		// but it looks once a minute and may not be able to read tailscale;
-		// such a request is refused here at once, before any token is read.
-		if r.Header.Get(funnelHeader) != "" {
-			writeError(w, http.StatusForbidden, CodeFunnel, "requests through Tailscale Funnel are not allowed")
-			return
-		}
-		origin := r.Header.Get("Origin")
-		allowed := origin == "" || (s.o.TestPage && s.sameOrigin(r))
-		if !allowed || r.Method == http.MethodOptions {
+		if r.Header.Get("Origin") != "" || r.Method == http.MethodOptions {
 			writeError(w, http.StatusForbidden, CodeCrossOrigin, "cross-origin requests are not allowed")
 			return
 		}
@@ -305,17 +290,22 @@ func (s *Server) checkOrigin(next http.Handler) http.Handler {
 	})
 }
 
-// authenticate requires a device token on every request (N4). The
-// Tailscale login header is checked too, but never trusted alone, because a
-// local program can forge it.
+// authenticate requires two things of every request (N4): it came from a
+// device of the PC owner's own Tailscale account (checkCaller, what the
+// node itself saw), and it carries a paired device's token. Neither alone
+// lets anyone in.
 //
 // The token is looked at before the failure limit (R-101, #43): a request
 // with a paired phone's token is never refused for the wrong requests of
-// others, which a program on the PC could pile up on purpose. Only requests
-// without a right token are counted and refused. A token is 32 random
-// bytes, so a locked-out sender gains nothing from still being checked.
+// others, which another device of the tailnet could pile up on purpose.
+// Only requests without a right token are counted and refused. A token is
+// 32 random bytes, so a locked-out sender gains nothing from still being
+// checked.
 func (s *Server) authenticate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := s.checkCaller(w, r); !ok {
+			return
+		}
 		token, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
 		var d devices.Device
 		if ok && s.o.Devices != nil {
@@ -335,10 +325,6 @@ func (s *Server) authenticate(next http.Handler) http.Handler {
 		}
 		if info, _ := r.Context().Value(reqInfoKey{}).(*reqInfo); info != nil {
 			info.device = d.ID
-		}
-		if login := r.Header.Get("Tailscale-User-Login"); s.o.TailscaleOwner != "" && login != "" && !strings.EqualFold(login, s.o.TailscaleOwner) {
-			writeError(w, http.StatusForbidden, CodeWrongAccount, "tailscale account is not the PC owner")
-			return
 		}
 		next.ServeHTTP(w, r)
 	})
@@ -513,12 +499,8 @@ func (s *Server) Close() {
 	s.compares.Close()
 }
 
-// Listen opens 127.0.0.1:port. The agent never listens on other addresses.
-func Listen(port int) (net.Listener, error) {
-	return net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
-}
-
-// HTTPServer wraps h with conservative timeouts.
+// HTTPServer wraps h with conservative timeouts. The agent serves it only
+// on its Tailscale node's listener, never on the PC's own addresses.
 func HTTPServer(h http.Handler) *http.Server {
 	return &http.Server{
 		Handler:           h,

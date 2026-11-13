@@ -14,7 +14,7 @@ import (
 // #52: the launch agent's file must be XML that launchd reads, with the
 // agent's path and the terminal's PATH as text, never as markup.
 func TestPlistText(t *testing.T) {
-	got := plistText(`/Users/a b/<x>&"y"/askorus-agent`, true, "/opt/homebrew/bin:/usr/bin:/Users/a/R&D", "/Users/a/my <agent>", "/Users/a/Library/Caches/Askorus/background.out")
+	got := plistText(`/Users/a b/<x>&"y"/askorus-agent`, "/opt/homebrew/bin:/usr/bin:/Users/a/R&D", "/Users/a/my <agent>", "/Users/a/Library/Caches/Askorus/background.out")
 	d := xml.NewDecoder(strings.NewReader(got))
 	d.Strict = true
 	var texts []string
@@ -35,7 +35,7 @@ func TestPlistText(t *testing.T) {
 	joined := strings.Join(texts, "|")
 	for _, want := range []string{
 		"Label|" + launchLabel,
-		`ProgramArguments|/Users/a b/<x>&"y"/askorus-agent|serve|-test-page`,
+		`ProgramArguments|/Users/a b/<x>&"y"/askorus-agent|serve`,
 		"RunAtLoad",
 		detachedEnv + "|1",
 		"PATH|/opt/homebrew/bin:/usr/bin:/Users/a/R&D",
@@ -46,7 +46,7 @@ func TestPlistText(t *testing.T) {
 			t.Errorf("the plist lacks %q:\n%s", want, joined)
 		}
 	}
-	if !strings.Contains(got, `<!-- command: "/Users/a b/<x>&\"y\"/askorus-agent" serve -test-page -->`) {
+	if !strings.Contains(got, `<!-- command: "/Users/a b/<x>&\"y\"/askorus-agent" serve -->`) {
 		t.Errorf("the command comment:\n%s", got)
 	}
 }
@@ -59,14 +59,14 @@ func TestAutostartOnMac(t *testing.T) {
 	if autostartGet() != "" {
 		t.Fatal("on before it was turned on")
 	}
-	if err := autostartSet("/Users/me/.local/bin/askorus-agent", false); err != nil {
+	if err := autostartSet("/Users/me/.local/bin/askorus-agent"); err != nil {
 		t.Fatal(err)
 	}
 	b, err := os.ReadFile(plist)
 	if err != nil || !strings.Contains(string(b), "<string>/opt/homebrew/bin:/usr/bin</string>") || !strings.Contains(string(b), "<string>serve</string>") {
 		t.Fatalf("plist = %q, %v", b, err)
 	}
-	if got := autostartGet(); got != `"/Users/me/.local/bin/askorus-agent" serve` || got != autostartCommand("/Users/me/.local/bin/askorus-agent", false) {
+	if got := autostartGet(); got != `"/Users/me/.local/bin/askorus-agent" serve` || got != autostartCommand("/Users/me/.local/bin/askorus-agent") {
 		t.Errorf("autostartGet = %q", got)
 	}
 	if err := autostartRemove(); err != nil {

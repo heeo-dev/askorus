@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/heeo-dev/askorus/agent/internal/api"
+	"github.com/heeo-dev/askorus/agent/internal/api/apitest"
 	"github.com/heeo-dev/askorus/agent/internal/config"
 	"github.com/heeo-dev/askorus/agent/internal/core"
 	"github.com/heeo-dev/askorus/agent/internal/devices"
@@ -39,13 +40,13 @@ type phone struct {
 	srv    *httptest.Server
 	dir    string // agent settings folder (pairing files, devices)
 	token  string
-	login  string // Tailscale-User-Login the phone's requests carry
+	login  string // the Tailscale account the node sees the phone's requests come from
 	others string // a second existing folder with past sessions
 	ask    string // the ask folder (P2-1)
 }
 
 // newPhone starts the whole agent around a fake claude and returns a
-// phone that talks to it the way tailscale serve forwards requests.
+// phone that talks to it as through the agent's Tailscale node.
 func newPhone(t *testing.T, entries []agentEntry) *phone {
 	t.Helper()
 	env := newLaunchEnv(t, entries)
@@ -71,8 +72,8 @@ func newPhone(t *testing.T, entries []agentEntry) *phone {
 		Version: "it", Hostname: "PC", Adapters: []core.Adapter{env.a}, Devices: store,
 		Pairer:         &pairing.Pairer{Dir: dir, Devices: store, Poll: 10 * time.Millisecond, Timeout: 5 * time.Second},
 		Logger:         logx.Discard(),
-		ServeHosts:     []string{itHost},
-		TailscaleOwner: itOwner,
+		Hosts:          func() []string { return []string{itHost} },
+		Owner:          func() string { return itOwner },
 		Hidden:         hid,
 		Folders:        func() []config.Folder { return allowed },
 		HistoryFolders: func() bool { return true },
@@ -84,7 +85,7 @@ func newPhone(t *testing.T, entries []agentEntry) *phone {
 		},
 		AskFolder: ask,
 	}).Handler()
-	srv := httptest.NewServer(h)
+	srv := httptest.NewServer(apitest.AsOwner(h))
 	t.Cleanup(srv.Close)
 	return &phone{t: t, env: env, srv: srv, dir: dir, login: itOwner, others: others, ask: ask}
 }
@@ -107,7 +108,7 @@ func (p *phone) run(body any) map[string]any {
 	return nil
 }
 
-// call sends one request as tailscale serve forwards it from the phone.
+// call sends one request as the node hands it on from the phone.
 func (p *phone) call(method, path string, body any) (int, map[string]any) {
 	p.t.Helper()
 	var rd io.Reader
@@ -117,8 +118,7 @@ func (p *phone) call(method, path string, body any) (int, map[string]any) {
 	}
 	req, _ := http.NewRequest(method, p.srv.URL+path, rd)
 	req.Host = itHost
-	req.Header.Set("Tailscale-User-Login", p.login)
-	req.Header.Set("X-Forwarded-For", "100.64.0.9")
+	req.Header.Set(apitest.LoginHeader, p.login)
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}

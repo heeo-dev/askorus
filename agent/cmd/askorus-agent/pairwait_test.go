@@ -14,7 +14,7 @@ func TestWaitingLineCopiesTheLink(t *testing.T) {
 	if !clipboardSupported() {
 		t.Skip("no clipboard on this system yet")
 	}
-	const link = "askorus://pair?code=ABCDEFGHIJKLMNOPQRSTUVWXYZ&host=pc.example.ts.net&port=8800&v=1"
+	const link = "askorus://pair?code=ABCDEFGHIJKLMNOPQRSTUVWXYZ&host=pc.example.ts.net&port=8790&v=2"
 	var copied []string
 	old := copyLink
 	copyLink = func(s string) error { copied = append(copied, s); return nil }

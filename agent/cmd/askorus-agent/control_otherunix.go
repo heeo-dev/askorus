@@ -10,13 +10,10 @@ import "errors"
 
 var errNoAutostart = errors.New("starting at logon is not built in on this system; add `askorus-agent start` to your shell's start file")
 
-func autostartCommand(exe string, testPage bool) string {
-	if testPage {
-		return selfCommand(exe, "start", "-test-page")
-	}
+func autostartCommand(exe string) string {
 	return selfCommand(exe, "start")
 }
-func autostartSet(string, bool) error     { return errNoAutostart }
+func autostartSet(string) error           { return errNoAutostart }
 func autostartRemove() error              { return nil }
 func autostartGet() string                { return "" }
 func awakeCommand(int) (string, []string) { return "", nil }

@@ -17,8 +17,9 @@ import (
 // FileName is the settings file inside the agent directory.
 const FileName = "agent.json"
 
-// DefaultPort is the 127.0.0.1 port when none is set. It avoids the ports
-// already used by other local services on the reference PC.
+// DefaultPort is the port the agent listens on inside the Tailscale network
+// when none is set (#57: on its own node, not on the PC's addresses). It
+// also names the running agent for the other commands (stop, status).
 const DefaultPort = 8790
 
 // Spawn modes for folder server mode (F10).
@@ -39,12 +40,6 @@ type Config struct {
 	DefaultEffort string   `json:"defaultEffort,omitempty"`
 	// HiddenFolders are left out of the session list.
 	HiddenFolders []string `json:"hiddenFolders,omitempty"`
-	// ServeHosts are extra Host header names to accept, such as the
-	// tailscale serve name "<pc>.<tailnet>.ts.net".
-	ServeHosts []string `json:"serveHosts,omitempty"`
-	// TailscaleOwner is the login of the PC owner. When set, requests whose
-	// Tailscale-User-Login header names someone else are refused.
-	TailscaleOwner string `json:"tailscaleOwner,omitempty"`
 	// ClaudePath overrides where the claude executable is looked up.
 	ClaudePath string `json:"claudePath,omitempty"`
 	// CodexPath and OpenCodePath do the same for the AIs that only answer
@@ -304,7 +299,6 @@ func (c *Config) normalize() {
 var (
 	idRe     = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,31}$`)
 	modelRe  = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._\[\]-]{0,63}$`) // never starts with "-"
-	hostRe   = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$`)
 	efforts  = map[string]bool{"low": true, "medium": true, "high": true, "xhigh": true, "max": true}
 	nonSlugs = regexp.MustCompile(`[^a-z0-9]+`)
 )
@@ -348,11 +342,6 @@ func (c Config) Validate() error {
 	for _, h := range c.HiddenFolders {
 		if !filepath.IsAbs(h) {
 			return fmt.Errorf("hidden folder %q must be absolute", h)
-		}
-	}
-	for _, h := range c.ServeHosts {
-		if !hostRe.MatchString(h) {
-			return fmt.Errorf("serve host %q must be a lowercase host name", h)
 		}
 	}
 	for name, p := range map[string]string{"claudePath": c.ClaudePath, "codexPath": c.CodexPath, "opencodePath": c.OpenCodePath} {

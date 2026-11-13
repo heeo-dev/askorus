@@ -63,7 +63,9 @@ func newEnv(t *testing.T, a core.Adapter, mutate func(*Options)) env {
 	logs := &syncBuffer{}
 	o := Options{
 		Version: "0.1.0", Hostname: "pc", Adapters: []core.Adapter{a}, Devices: store,
-		Logger: logx.New(logs, slog.LevelInfo), ServeHosts: []string{"pc.tail.ts.net"},
+		Logger: logx.New(logs, slog.LevelInfo),
+		Hosts:  func() []string { return testHosts },
+		Owner:  func() string { return testOwner },
 	}
 	if mutate != nil {
 		mutate(&o)
@@ -72,7 +74,44 @@ func newEnv(t *testing.T, a core.Adapter, mutate func(*Options)) env {
 	// Asks and combined answers still running end with the test, before
 	// its folders are removed (cleanups run last in, first out).
 	t.Cleanup(srv.Close)
-	return env{h: srv.Handler(), srv: srv, token: tok, device: dev.ID, logs: logs, store: store}
+	return env{h: viaNode(srv.Handler()), srv: srv, token: tok, device: dev.ID, logs: logs, store: store}
+}
+
+// The tests stand in for the agent's Tailscale node: it is signed in as
+// testOwner and answers on testHosts. 127.0.0.1 is among them only because
+// the tests' requests are written that way; the real list never has it.
+const (
+	testOwner    = "owner@example.com"
+	testCallerIP = "100.64.0.9"
+)
+
+var testHosts = []string{"askorus-pc.tail.ts.net", "askorus-pc", "100.64.0.1", "fd7a:115c:a1e0::1", "127.0.0.1"}
+
+// Headers only the tests' stand-in node reads, to say who a request is
+// from. The server itself never reads a header for that.
+const (
+	hdrCallerLogin = "Test-Caller-Login"
+	hdrCallerIP    = "Test-Caller-Ip"
+	hdrNoCaller    = "Test-No-Caller"
+)
+
+// viaNode does what the node's listener does in the agent: it says who
+// sent each request. By default that is a device of the owner's account;
+// the test headers above change it or leave it out.
+func viaNode(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get(hdrNoCaller) == "" {
+			c := Caller{Login: testOwner, IP: testCallerIP}
+			if v := r.Header.Get(hdrCallerLogin); v != "" {
+				c.Login = v
+			}
+			if v := r.Header.Get(hdrCallerIP); v != "" {
+				c.IP = v
+			}
+			r = WithCaller(r, c)
+		}
+		h.ServeHTTP(w, r)
+	})
 }
 
 // syncBuffer is a log buffer that the request goroutine and background
@@ -163,22 +202,34 @@ func TestStreamReserved(t *testing.T) {
 }
 
 func TestHostCheck(t *testing.T) {
-	e := newEnv(t, fakeAdapter{}, nil)
-	for _, host := range []string{"127.0.0.1", "localhost:8790", "[::1]:8790", "PC.tail.ts.net", "pc.tail.ts.net."} {
+	// Only what the node answers on: its name (with and without the
+	// tailnet's part) and its addresses. The PC's own names are not among
+	// them, since nothing listens there (#57).
+	e := newEnv(t, fakeAdapter{}, func(o *Options) {
+		o.Hosts = func() []string {
+			return []string{"askorus-pc.tail.ts.net", "askorus-pc", "100.64.0.1", "fd7a:115c:a1e0::1"}
+		}
+	})
+	for _, host := range []string{"askorus-pc.tail.ts.net", "ASKORUS-PC.tail.ts.net:8790", "askorus-pc.tail.ts.net.", "askorus-pc:8790", "100.64.0.1:8790", "[fd7a:115c:a1e0::1]:8790"} {
 		if w := e.do("GET", "/v1/info", map[string]string{"Host": host}); w.Code != 200 {
 			t.Errorf("host %q refused: %d", host, w.Code)
 		}
 	}
-	for _, host := range []string{"evil.example", "evil.example:8790", "127.0.0.1.evil.example", "100.64.0.1"} {
+	for _, host := range []string{"evil.example", "evil.example:8790", "askorus-pc.tail.ts.net.evil.example", "100.64.0.2", "127.0.0.1", "localhost:8790", "[::1]:8790"} {
 		w := e.do("GET", "/v1/info", map[string]string{"Host": host})
 		if w.Code != 403 || errCode(t, w) != CodeBadHost {
 			t.Errorf("host %q allowed: %d", host, w.Code)
 		}
 	}
+	// Before the node has signed in it has no name: nothing is accepted.
+	none := newEnv(t, fakeAdapter{}, func(o *Options) { o.Hosts = func() []string { return nil } })
+	if w := none.do("GET", "/v1/info", nil); w.Code != 403 || errCode(t, w) != CodeBadHost {
+		t.Errorf("no hosts yet: %d %s", w.Code, w.Body)
+	}
 }
 
 func TestAuth(t *testing.T) {
-	e := newEnv(t, fakeAdapter{}, func(o *Options) { o.TailscaleOwner = "owner@example.com" })
+	e := newEnv(t, fakeAdapter{}, nil)
 	cases := []struct {
 		name   string
 		hdr    map[string]string
@@ -188,7 +239,7 @@ func TestAuth(t *testing.T) {
 		{"no token", map[string]string{"Authorization": ""}, 401, CodeUnauthorized},
 		{"wrong token", map[string]string{"Authorization": "Bearer ask_wrong"}, 401, CodeUnauthorized},
 		{"basic auth", map[string]string{"Authorization": "Basic Zm9vOmJhcg=="}, 401, CodeUnauthorized},
-		{"other account", map[string]string{"Tailscale-User-Login": "kid@example.com"}, 403, CodeWrongAccount},
+		{"other account", map[string]string{hdrCallerLogin: "kid@example.com"}, 403, CodeWrongAccount},
 		{"browser origin", map[string]string{"Origin": "https://evil.example"}, 403, CodeCrossOrigin},
 	}
 	for _, c := range cases {
@@ -197,11 +248,49 @@ func TestAuth(t *testing.T) {
 			t.Errorf("%s: %d %s", c.name, w.Code, w.Body)
 		}
 	}
-	if w := e.do("GET", "/v1/info", map[string]string{"Tailscale-User-Login": "Owner@Example.com"}); w.Code != 200 {
+	if w := e.do("GET", "/v1/info", map[string]string{hdrCallerLogin: "Owner@Example.com"}); w.Code != 200 {
 		t.Errorf("owner refused: %d", w.Code)
 	}
 	if w := e.do("OPTIONS", "/v1/info", nil); w.Code != 403 {
 		t.Errorf("preflight = %d", w.Code)
+	}
+}
+
+// A paired phone's token alone is not enough (#57): the request must also
+// be one the agent's own Tailscale node saw coming from a device of the
+// owner's account. What the sender writes into the request does not count.
+func TestCallerRequired(t *testing.T) {
+	e := newEnv(t, fakeAdapter{}, nil)
+	cases := []struct {
+		name   string
+		hdr    map[string]string
+		status int
+		code   string
+	}{
+		{"nobody said who sent it", map[string]string{hdrNoCaller: "1"}, 403, CodeNotTailnet},
+		{"headers a sender can write", map[string]string{hdrNoCaller: "1", "Tailscale-User-Login": testOwner, "X-Forwarded-For": testCallerIP}, 403, CodeNotTailnet},
+		{"not a tailnet address", map[string]string{hdrCallerIP: "192.168.0.5"}, 403, CodeNotTailnet},
+		{"another account", map[string]string{hdrCallerLogin: "kid@example.com"}, 403, CodeWrongAccount},
+		{"another account, forged header", map[string]string{hdrCallerLogin: "kid@example.com", "Tailscale-User-Login": testOwner}, 403, CodeWrongAccount},
+	}
+	for _, c := range cases {
+		w := e.do("GET", "/v1/info", c.hdr)
+		if w.Code != c.status || errCode(t, w) != c.code {
+			t.Errorf("%s: %d %s", c.name, w.Code, w.Body)
+		}
+	}
+	// The node is not signed in yet: the owner is unknown and nobody gets in.
+	early := newEnv(t, fakeAdapter{}, func(o *Options) { o.Owner = func() string { return "" } })
+	if w := early.do("GET", "/v1/info", nil); w.Code != 503 || errCode(t, w) != CodeOwnerUnknown {
+		t.Errorf("owner unknown: %d %s", w.Code, w.Body)
+	}
+	// A refusal for who sent it is not a failed token: it must not lock
+	// the sender's address out.
+	for i := 0; i < maxFails+2; i++ {
+		e.do("GET", "/v1/info", map[string]string{hdrCallerLogin: "kid@example.com"})
+	}
+	if w := e.do("GET", "/v1/info", map[string]string{"Authorization": ""}); w.Code != 401 {
+		t.Errorf("after refused callers, a tokenless request = %d, want 401 (not locked out)", w.Code)
 	}
 }
 
@@ -276,17 +365,5 @@ func TestLogCutsLongPaths(t *testing.T) {
 	}
 	if strings.Contains(logs, strings.Repeat("a", maxLogPath)) || !strings.Contains(logs, "…") {
 		t.Errorf("long path not cut: %d bytes of log", len(logs))
-	}
-}
-
-func TestListenLoopbackOnly(t *testing.T) {
-	ln, err := Listen(0)
-	if err == nil {
-		defer ln.Close()
-	}
-	// Port 0 is refused by config validation, but Listen itself must bind
-	// to 127.0.0.1 whatever port it gets.
-	if err == nil && !strings.HasPrefix(ln.Addr().String(), "127.0.0.1:") {
-		t.Errorf("listening on %s", ln.Addr())
 	}
 }

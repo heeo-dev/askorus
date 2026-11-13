@@ -14,6 +14,7 @@ import (
 	"github.com/heeo-dev/askorus/agent/internal/adapter/codex"
 	"github.com/heeo-dev/askorus/agent/internal/adapter/opencode"
 	"github.com/heeo-dev/askorus/agent/internal/api"
+	"github.com/heeo-dev/askorus/agent/internal/api/apitest"
 	"github.com/heeo-dev/askorus/agent/internal/config"
 	"github.com/heeo-dev/askorus/agent/internal/core"
 	"github.com/heeo-dev/askorus/agent/internal/devices"
@@ -48,9 +49,9 @@ func newLiveAsk(t *testing.T) (*liveEnv, string) {
 		t.Fatal(err)
 	}
 	adapters := []core.Adapter{claude.New(claude.Options{ClaudeDir: claudeDir}), codex.New(codex.Options{SchemaDir: t.TempDir()}), opencode.New(opencode.Options{})}
-	srv := httptest.NewServer(api.New(api.Options{
+	srv := httptest.NewServer(apitest.AsOwner(api.New(apitest.Node(api.Options{
 		Version: "live", Hostname: "PC", Adapters: adapters, Devices: store, Logger: logx.Discard(), AskFolder: folder,
-	}).Handler())
+	})).Handler()))
 	t.Cleanup(srv.Close)
 	return &liveEnv{t: t, srv: srv, token: token, folder: folder}, folder
 }

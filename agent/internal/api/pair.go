@@ -3,15 +3,12 @@ package api
 import (
 	"encoding/json"
 	"errors"
-	"net"
 	"net/http"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/heeo-dev/askorus/agent/internal/pairing"
-	"github.com/heeo-dev/askorus/agent/internal/tailnet"
 )
 
 // PairRequest is the body of POST /v1/pair.
@@ -47,9 +44,9 @@ type PairStatus struct {
 
 const pollAfterMs = 1000
 
-// pairPreflight applies the checks every pairing call needs: the request
-// came through tailscale serve from a tailnet address, from the PC owner's
-// account, and the client is not locked out.
+// pairPreflight applies the checks every pairing call needs: the client is
+// not locked out, and the request came from a device of the PC owner's own
+// Tailscale account (checkCaller).
 func (s *Server) pairPreflight(w http.ResponseWriter, r *http.Request) (pairing.Origin, bool) {
 	client := clientKey(r)
 	if s.refuseIfLimited(w, client) {
@@ -59,21 +56,11 @@ func (s *Server) pairPreflight(w http.ResponseWriter, r *http.Request) (pairing.
 		writeError(w, http.StatusNotFound, CodePairClosed, "pairing is not available")
 		return pairing.Origin{}, false
 	}
-	login := strings.TrimSpace(r.Header.Get("Tailscale-User-Login"))
-	ip := forwardedIP(r)
-	if login == "" || !tailnet.IsTailnetIP(ip) {
-		writeError(w, http.StatusForbidden, CodeNotTailnet, "pairing must come through Tailscale")
+	c, ok := s.checkCaller(w, r)
+	if !ok {
 		return pairing.Origin{}, false
 	}
-	if s.o.TailscaleOwner == "" {
-		writeError(w, http.StatusServiceUnavailable, CodeOwnerUnknown, "the PC owner's Tailscale account is not known")
-		return pairing.Origin{}, false
-	}
-	if !strings.EqualFold(login, s.o.TailscaleOwner) {
-		writeError(w, http.StatusForbidden, CodeWrongAccount, "tailscale account is not the PC owner")
-		return pairing.Origin{}, false
-	}
-	return pairing.Origin{Login: login, RemoteIP: ip}, true
+	return pairing.Origin{Login: c.Login, RemoteIP: c.IP}, true
 }
 
 // pair starts the handshake and returns at once.
@@ -149,28 +136,6 @@ func (s *Server) pairFailed(w http.ResponseWriter, err error) {
 	writeError(w, http.StatusInternalServerError, CodeInternal, "pairing failed")
 }
 
-// forwardedIP is the phone address tailscale serve puts in
-// X-Forwarded-For. Only the last entry is used: it is the one serve added.
-func forwardedIP(r *http.Request) string {
-	xff := r.Header.Get("X-Forwarded-For")
-	if i := strings.LastIndex(xff, ","); i >= 0 {
-		xff = xff[i+1:]
-	}
-	return strings.TrimSpace(xff)
-}
-
-// clientKey groups requests for the failure limit.
-func clientKey(r *http.Request) string {
-	if ip := forwardedIP(r); ip != "" {
-		return ip
-	}
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
-}
-
 func (s *Server) refuseIfLimited(w http.ResponseWriter, client string) bool {
 	wait := s.limiter.blocked(client)
 	if wait <= 0 {
@@ -183,8 +148,7 @@ func (s *Server) refuseIfLimited(w http.ResponseWriter, client string) bool {
 
 // Failure limits. Past maxFails failures inside failWindow a client is
 // refused for blockFor. Past maxTotalFails from everyone, all clients are
-// refused, which also covers a local program that changes its forwarded
-// address on every try.
+// refused, which also covers senders that come from many addresses.
 const (
 	maxFails      = 10
 	maxTotalFails = 100
