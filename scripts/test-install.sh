@@ -39,7 +39,7 @@ asset="askorus-agent-$os-$arch"
 # Two releases, built here as release.ps1 builds them.
 build() { # build <version> <folder>
   mkdir -p "$2"
-  (cd "$root/agent" && CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=$1" -o "$2/$asset" ./cmd/askorus-agent) || return 1
+  (cd "$root/agent" && CGO_ENABLED=0 go build -trimpath -tags ts_omit_peerapiserver,ts_omit_c2n,ts_omit_logtail -ldflags "-s -w -X main.version=$1" -o "$2/$asset" ./cmd/askorus-agent) || return 1
   cp "$root/scripts/install.sh" "$2/install.sh"
   (cd "$2" && for f in "$asset" install.sh; do printf '%s  %s\n' "$(sum "$f")" "$f"; done > SHA256SUMS.txt)
 }
@@ -52,6 +52,9 @@ check 'two releases are built' $? ''
 real_path="$PATH"
 export HOME="$work/home" XDG_CACHE_HOME="$work/home/.cache" XDG_CONFIG_HOME="$work/home/.config" TMPDIR="$work/tmp"
 export ASKORUS_AGENT_DIR="$work/agent" ASKORUS_NO_SETUP=1
+# The test agent runs without its Tailscale node (#57): it signs in nowhere
+# and talks to no server.
+export ASKORUS_TEST_NO_TAILNET=1
 mkdir -p "$HOME" "$TMPDIR" "$ASKORUS_AGENT_DIR"
 printf '{"port": %d}\n' "$port" > "$ASKORUS_AGENT_DIR/agent.json"
 unset ASKORUS_VERSION ASKORUS_INSTALL_DIR ASKORUS_DOWNLOAD_BASE

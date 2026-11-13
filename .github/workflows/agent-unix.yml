@@ -2,16 +2,17 @@
 # where scripts/test-all.ps1 runs everything; this runs the Go tests on the
 # two other systems, with the pretend AI programs the tests bring along,
 # then the install script and the background commands (start, autostart,
-# path) for real on the runner. No real AI, no Tailscale and no secrets are
-# used.
+# path) for real on the runner. No real AI and no secrets are used, and the
+# agent runs without its Tailscale node (ASKORUS_TEST_NO_TAILNET): nothing
+# signs in anywhere or talks to Tailscale's servers.
 name: agent (macOS, Linux)
 
 on:
   push:
     branches: [main]
-    paths: ['agent/**', 'scripts/install.sh', 'scripts/test-install.sh', 'scripts/test-unix.sh', '.github/workflows/agent-unix.yml']
+    paths: ['agent/**', 'tsbridge/**', 'scripts/install.sh', 'scripts/test-install.sh', 'scripts/test-unix.sh', '.github/workflows/agent-unix.yml']
   pull_request:
-    paths: ['agent/**', 'scripts/install.sh', 'scripts/test-install.sh', 'scripts/test-unix.sh', '.github/workflows/agent-unix.yml']
+    paths: ['agent/**', 'tsbridge/**', 'scripts/install.sh', 'scripts/test-install.sh', 'scripts/test-unix.sh', '.github/workflows/agent-unix.yml']
   workflow_dispatch:
 
 permissions:
@@ -45,16 +46,23 @@ jobs:
           go-version-file: agent/go.mod
           cache-dependency-path: agent/go.sum
       - name: vet
-        run: go vet ./...
+        run: go vet -tags ts_omit_peerapiserver,ts_omit_c2n,ts_omit_logtail ./...
       - name: test
-        run: go test ./...
+        run: go test -tags ts_omit_peerapiserver,ts_omit_c2n,ts_omit_logtail ./...
       - name: build
-        run: go build -trimpath -o "${RUNNER_TEMP}/askorus-agent" ./cmd/askorus-agent
+        run: go build -trimpath -tags ts_omit_peerapiserver,ts_omit_c2n,ts_omit_logtail -o "${RUNNER_TEMP}/askorus-agent" ./cmd/askorus-agent
       - name: build for the other Mac and for Linux on ARM
         run: |
-          GOOS=darwin GOARCH=arm64 go build -trimpath -o "${RUNNER_TEMP}/a1" ./cmd/askorus-agent
-          GOOS=darwin GOARCH=amd64 go build -trimpath -o "${RUNNER_TEMP}/a2" ./cmd/askorus-agent
-          GOOS=linux GOARCH=arm64 go build -trimpath -o "${RUNNER_TEMP}/a3" ./cmd/askorus-agent
+          GOOS=darwin GOARCH=arm64 go build -trimpath -tags ts_omit_peerapiserver,ts_omit_c2n,ts_omit_logtail -o "${RUNNER_TEMP}/a1" ./cmd/askorus-agent
+          GOOS=darwin GOARCH=amd64 go build -trimpath -tags ts_omit_peerapiserver,ts_omit_c2n,ts_omit_logtail -o "${RUNNER_TEMP}/a2" ./cmd/askorus-agent
+          GOOS=linux GOARCH=arm64 go build -trimpath -tags ts_omit_peerapiserver,ts_omit_c2n,ts_omit_logtail -o "${RUNNER_TEMP}/a3" ./cmd/askorus-agent
+      # The app's Tailscale bridge (#57): vetted as the Android app builds it, and its tests.
+      - name: tsbridge
+        working-directory: tsbridge
+        run: |
+          go vet -tags ts_omit_peerapiserver,ts_omit_c2n,ts_omit_logtail ./...
+          GOOS=android GOARCH=arm64 CGO_ENABLED=0 go vet -tags ts_omit_peerapiserver,ts_omit_c2n,ts_omit_logtail .
+          go test -tags ts_omit_peerapiserver,ts_omit_c2n,ts_omit_logtail ./...
       - name: install script
         working-directory: .
         run: bash scripts/test-install.sh
