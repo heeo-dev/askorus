@@ -74,7 +74,6 @@ export default function Pair() {
   const [pasted, setPasted] = useState('');
   const [pasteError, setPasteError] = useState('');
   const [copied, setCopied] = useState(false);
-  const [tailscaleOpen, setTailscaleOpen] = useState(false);
   const [installOpen, setInstallOpen] = useState(false);
   const [installCopied, setInstallCopied] = useState<string | null>(null); // the system whose line was copied
   const [deviceName, setDeviceName] = useState(() => cleanDeviceName(Device.deviceName ?? Device.modelName));
@@ -243,7 +242,7 @@ export default function Pair() {
             <View style={s.steps}>
               <View style={s.step}>
                 <StepHead n={1} text={t('pair.stepLogin')} />
-                <TailnetLogin />
+                <TailnetLogin manage />
               </View>
               <View style={s.step}>
                 <StepHead n={2} text={t('pair.step1')} />
@@ -354,24 +353,8 @@ export default function Pair() {
       </FormScroll>
 
       <View style={[s.foot, { paddingBottom: 16 + insets.bottom }]}>
-        <Pressable
-          onPress={() => setTailscaleOpen(true)}
-          accessibilityRole="button"
-          accessibilityLabel={t('pair.tailscaleNote')}
-          style={({ pressed }) => [s.note, pressed && s.pressed]}
-        >
-          <Icon name="shield" size={18} color={th.textSub} />
-          <Text style={s.noteText}>{t('pair.tailscaleNote')}</Text>
-          <Icon name="chevronRight" size={16} color={th.textSub} />
-        </Pressable>
         <Text style={s.caption}>{t('app.notOfficial')}</Text>
       </View>
-
-      <Sheet open={tailscaleOpen} onClose={() => setTailscaleOpen(false)} title={t('pair.tailscaleTitle')} testID="tailscale-sheet">
-        <View style={s.sheetBody}>
-          <Text style={s.intro}>{t('pair.tailscaleBody')}</Text>
-        </View>
-      </Sheet>
 
       <Sheet open={installOpen} onClose={() => setInstallOpen(false)} title={t('pair.installTitle')} testID="install-sheet">
         <View style={s.sheetBody}>
@@ -547,9 +530,7 @@ const styles = themed((th) =>
     centerText: { textAlign: 'center' },
     wide: { alignSelf: 'stretch' },
     foot: { gap: 2, paddingHorizontal: 20 },
-    note: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: -8, paddingHorizontal: 8, borderRadius: 22 },
     pressed: { backgroundColor: th.raised },
-    noteText: { flex: 1, fontSize: 13, lineHeight: 18.2, color: th.textSub },
     sheetBody: { gap: 14, paddingTop: 6, paddingHorizontal: 20, paddingBottom: 8 },
     cameraAsk: { flex: 1, justifyContent: 'center', gap: 14, paddingHorizontal: 24 },
     scanner: { flex: 1, backgroundColor: '#000000' },

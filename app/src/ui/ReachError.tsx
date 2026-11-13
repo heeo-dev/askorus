@@ -72,7 +72,8 @@ export function ReachError({
           {t(k)}
         </Text>
       ))}
-      {cause === 'tailnet_login' ? <TailnetLogin onSignedIn={onRetry} /> : null}
+      {/* Not signed in, or signed in with an account the PC is not in: both are settled at the sign-in. */}
+      {cause === 'tailnet_login' || cause === 'not_own_pc' ? <TailnetLogin onSignedIn={onRetry} manage /> : null}
       {cause === 'unpaired' ? (
         <Button label={t('sessions.repair')} onPress={() => router.push('/pair')} style={s.button} />
       ) : onRetry ? (

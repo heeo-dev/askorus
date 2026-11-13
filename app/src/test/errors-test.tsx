@@ -68,6 +68,10 @@ test('the PC is not in this Tailscale account: nothing is sent, and it says what
   expect(await screen.findAllByText('This PC is not in your Tailscale account')).toHaveLength(2);
   expect(screen.getByText(/signed in with the same Tailscale account as this app \(on the PC: askorus-agent status\)/)).toBeTruthy();
   expect(agent.calls).toHaveLength(0);
+  // The box shows which account this phone is in and how to change it:
+  // the wrong account is found out here.
+  expect(screen.getByText('me@example.com')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Sign out or switch account' })).toBeTruthy();
 });
 
 test('cannot reach the PC: lists what to check, phone first, and retry works', async () => {

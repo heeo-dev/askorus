@@ -713,13 +713,38 @@ describe('pairing', () => {
 
   // #57: nothing of Tailscale is installed on the phone, so the line under
   // the screen only explains what it is; there is no store to send to.
-  test('the Tailscale line opens a sheet that says it is built in', async () => {
+  // Someone who has never seen Tailscale meets it at the sign-in: the card
+  // says in a line why it is there, and a line of words (not an alert
+  // mark, which means trouble in this app) opens what it is, why it is
+  // needed, what protects the connection and what Tailscale learns.
+  test('the sign-in says why Tailscale is there and opens the explanation', async () => {
+    const user = userEvent.setup();
+    await neverSignedIn();
+    await renderRouter(routes, { initialUrl: '/pair' });
+    expect(await screen.findByText(/uses Tailscale to connect this phone and your PC/)).toBeTruthy();
+    expect(screen.queryByText('The phone and the PC connect only inside your own Tailscale account')).toBeNull(); // the old line at the foot
+    await user.press(screen.getByRole('button', { name: 'What is Tailscale?' }));
+    const about = within(await screen.findByTestId('tailnet-about'));
+    for (const head of ['Why is it needed?', 'What protects it?', 'What Tailscale learns', 'Your password']) expect(about.getByText(head)).toBeTruthy();
+    expect(about.getByText(/no app to install and no VPN to turn on/)).toBeTruthy();
+    expect(about.getByText(/Not your questions or answers/)).toBeTruthy();
+    expect(about.queryByRole('button', { name: 'Get Tailscale' })).toBeNull();
+  });
+
+  // Signed in with the wrong account: the pairing screen is where that is
+  // found out, so the way to change it is there, under the account.
+  test('the signed-in line of the pairing screen offers to sign out or switch account', async () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     const user = userEvent.setup();
     await renderRouter(routes, { initialUrl: '/pair' });
-    await user.press(await screen.findByRole('button', { name: 'The phone and the PC connect only inside your own Tailscale account' }));
-    const ts = within(await screen.findByTestId('tailscale-sheet'));
-    expect(ts.getByText(/built into this app and the PC's agent, so there is nothing to install and no VPN to turn on/)).toBeTruthy();
-    expect(ts.queryByRole('button', { name: 'Get Tailscale' })).toBeNull();
+    expect(await screen.findByText('me@example.com')).toBeTruthy();
+    await user.press(screen.getByRole('button', { name: 'Sign out or switch account' }));
+    expect(alert).toHaveBeenCalledWith('Sign out of Tailscale?', expect.stringContaining('To switch accounts, sign out and then sign in with the other one'), expect.any(Array));
+    expect(mockTailnet.calls).not.toContain('logout');
+    const buttons = alert.mock.calls[0][2] as Array<{ text: string; onPress?: () => void }>;
+    buttons.find((b) => b.text === 'Sign out')?.onPress?.();
+    await waitFor(() => expect(mockTailnet.calls).toEqual(expect.arrayContaining(['logout', 'stop'])));
+    expect(await screen.findByRole('button', { name: 'Sign in to Tailscale' })).toBeTruthy();
   });
 
   // #37: a PC without the agent yet. The line under the intro opens the

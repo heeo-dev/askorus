@@ -30,13 +30,16 @@ test('the row names the account; the sheet shows the phone and signs out after a
   const sheet = within(await screen.findByTestId('tailnet-sheet'));
   expect(await sheet.findByText('Connected to Tailscale')).toBeTruthy();
   expect(sheet.getByText('askorus-test-phone.tail0.ts.net')).toBeTruthy();
-  expect(sheet.getByText(/does not use the phone's VPN and does not affect other apps/)).toBeTruthy();
+  // The explanation is in the sheet itself (no second sheet over this one).
+  expect(sheet.getByText('What Tailscale learns')).toBeTruthy();
+  expect(sheet.getByText(/no app to install and no VPN to turn on/)).toBeTruthy();
+  expect(sheet.queryByRole('button', { name: 'What is Tailscale?' })).toBeNull();
 
-  await user.press(sheet.getByRole('button', { name: 'Sign out of Tailscale' }));
+  await user.press(sheet.getByRole('button', { name: 'Sign out or switch account' }));
   expect(alert).toHaveBeenCalledWith('Sign out of Tailscale?', expect.stringContaining('Paired PCs and your conversations stay'), expect.any(Array));
   expect(mockTailnet.calls).not.toContain('logout'); // not before the person says so
   const buttons = alert.mock.calls[0][2] as Array<{ text: string; onPress?: () => void }>;
-  buttons.find((b) => b.text === 'Sign out of Tailscale')?.onPress?.();
+  buttons.find((b) => b.text === 'Sign out')?.onPress?.();
   await waitFor(() => expect(mockTailnet.calls).toEqual(expect.arrayContaining(['logout', 'stop'])));
   await waitFor(() => expect(screen.getByRole('button', { name: /^Tailscale/ })).toHaveAccessibilityValue({ text: 'Not signed in' }));
 });
@@ -52,7 +55,7 @@ test('a phone that never signed in: the row says so and the sheet signs in', asy
 
   await user.press(row);
   const sheet = within(await screen.findByTestId('tailnet-sheet'));
-  expect(sheet.queryByRole('button', { name: 'Sign out of Tailscale' })).toBeNull();
+  expect(sheet.queryByRole('button', { name: 'Sign out or switch account' })).toBeNull();
   await user.press(await sheet.findByRole('button', { name: 'Sign in to Tailscale' }));
   await waitFor(() => expect(open).toHaveBeenCalledWith(LOGIN_URL));
 });

@@ -6,15 +6,33 @@
 // cannot be reached because the phone is not signed in.
 
 import { useEffect, useRef, useState } from 'react';
-import { Linking, StyleSheet, Text, View } from 'react-native';
+import { Alert, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { t } from '@/i18n';
-import { loginTailnet, type TailnetStatus, useTailnet } from '@/tailnet/node';
+import { loginTailnet, logoutTailnet, type TailnetStatus, useTailnet } from '@/tailnet/node';
 
 import { Button } from './Button';
 import { Spinner } from './controls';
 import { Icon } from './Icon';
+import { TailnetAboutLink } from './TailnetAbout';
 import { themed, useTheme } from './theme';
+
+/**
+ * Asks, then signs this phone out of Tailscale. Signing out is also how
+ * the account is changed: the next sign-in can be with another one.
+ */
+export function confirmTailnetLogout(after?: () => void) {
+  Alert.alert(t('tailnet.logoutTitle'), t('tailnet.logoutBody'), [
+    { text: t('sheet.cancel'), style: 'cancel' },
+    {
+      text: t('tailnet.logoutDo'),
+      style: 'destructive',
+      onPress: () => {
+        void logoutTailnet().finally(() => after?.());
+      },
+    },
+  ]);
+}
 
 /** One line for a row: who is signed in, or that nobody is. */
 export function tailnetLine(st: TailnetStatus): string {
@@ -35,9 +53,13 @@ export function tailnetLine(st: TailnetStatus): string {
 /**
  * onSignedIn is called when the sign-in goes through while the card is
  * showing, so what was waiting for it (a request that failed, a screen)
- * goes on without another press.
+ * goes on without another press. about (on unless told otherwise) puts
+ * the line that explains Tailscale above the button; a sheet that shows
+ * the explanation itself turns it off. manage adds, under the account, the
+ * way to sign out or change it: where a person finds out that they signed
+ * in with the wrong one (pairing, a PC that is not in the account).
  */
-export function TailnetLogin({ onSignedIn }: { onSignedIn?: () => void } = {}) {
+export function TailnetLogin({ onSignedIn, about = true, manage = false }: { onSignedIn?: () => void; about?: boolean; manage?: boolean } = {}) {
   const th = useTheme();
   const s = styles(th);
   const st = useTailnet();
@@ -81,12 +103,25 @@ export function TailnetLogin({ onSignedIn }: { onSignedIn?: () => void } = {}) {
 
   if (st.state === 'running') {
     return (
-      <View style={[s.box, s.row]} testID="tailnet-running" accessibilityLabel={`${t('tailnet.connected')} ${st.owner ?? ''}`}>
-        <Icon name="check" size={18} color={th.ok} />
-        <View style={s.grow}>
-          <Text style={s.title}>{t('tailnet.connected')}</Text>
-          {st.owner ? <Text style={s.caption}>{st.owner}</Text> : null}
+      <View style={s.box} testID="tailnet-running">
+        <View style={s.row} accessible accessibilityLabel={`${t('tailnet.connected')} ${st.owner ?? ''}`}>
+          <Icon name="check" size={18} color={th.ok} />
+          <View style={s.grow}>
+            <Text style={s.title}>{t('tailnet.connected')}</Text>
+            {st.owner ? <Text style={s.caption}>{st.owner}</Text> : null}
+          </View>
         </View>
+        {manage ? (
+          <Pressable
+            onPress={() => confirmTailnetLogout()}
+            accessibilityRole="button"
+            accessibilityLabel={t('tailnet.logout')}
+            hitSlop={10}
+            style={({ pressed }) => [s.manage, pressed && s.pressed]}
+          >
+            <Text style={s.manageText}>{t('tailnet.logout')}</Text>
+          </Pressable>
+        ) : null}
       </View>
     );
   }
@@ -103,6 +138,8 @@ export function TailnetLogin({ onSignedIn }: { onSignedIn?: () => void } = {}) {
   const link = st.state === 'needsLogin' ? st.loginURL : undefined;
   return (
     <View style={s.box} testID="tailnet-login">
+      <Text style={s.lead}>{t('tailnet.why')}</Text>
+      {about ? <TailnetAboutLink /> : null}
       <Text style={s.text}>{t('tailnet.loginBody')}</Text>
       {waiting ? (
         <View style={s.row}>
@@ -126,6 +163,10 @@ const styles = themed((th) =>
     row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
     grow: { flex: 1, minWidth: 0 },
     title: { fontSize: 15, fontWeight: '500', lineHeight: 21, color: th.text },
+    lead: { fontSize: 15, lineHeight: 21.75, color: th.text },
+    manage: { alignSelf: 'flex-start', minHeight: 28, justifyContent: 'center' },
+    manageText: { fontSize: 14, fontWeight: '500', lineHeight: 20, color: th.accent, textDecorationLine: 'underline' },
+    pressed: { opacity: 0.6 },
     text: { fontSize: 14, lineHeight: 20.3, color: th.textSub },
     caption: { fontSize: 13, lineHeight: 19.5, color: th.caption },
     error: { fontSize: 14, lineHeight: 20.3, color: th.danger },
