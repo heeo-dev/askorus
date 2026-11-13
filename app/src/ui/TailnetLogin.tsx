@@ -32,10 +32,21 @@ export function tailnetLine(st: TailnetStatus): string {
   }
 }
 
-export function TailnetLogin() {
+/**
+ * onSignedIn is called when the sign-in goes through while the card is
+ * showing, so what was waiting for it (a request that failed, a screen)
+ * goes on without another press.
+ */
+export function TailnetLogin({ onSignedIn }: { onSignedIn?: () => void } = {}) {
   const th = useTheme();
   const s = styles(th);
   const st = useTailnet();
+  const was = useRef(st.state);
+  useEffect(() => {
+    const before = was.current;
+    was.current = st.state;
+    if (before !== 'running' && st.state === 'running') onSignedIn?.();
+  }, [st.state, onSignedIn]);
   const [asked, setAsked] = useState(false); // the person pressed the button
   const [error, setError] = useState('');
   const opened = useRef(''); // the link already handed to the browser

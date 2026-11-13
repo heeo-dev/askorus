@@ -72,7 +72,7 @@ export function ReachError({
           {t(k)}
         </Text>
       ))}
-      {cause === 'tailnet_login' ? <TailnetLogin /> : null}
+      {cause === 'tailnet_login' ? <TailnetLogin onSignedIn={onRetry} /> : null}
       {cause === 'unpaired' ? (
         <Button label={t('sessions.repair')} onPress={() => router.push('/pair')} style={s.button} />
       ) : onRetry ? (

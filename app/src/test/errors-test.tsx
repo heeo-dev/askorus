@@ -38,7 +38,8 @@ async function pairedPC(name = 'DESKTOP-TEST', host = HOST, token = TOKEN) {
 
 // #57: Tailscale is inside the app. A phone that is not signed in says so
 // (it is known for certain, not a guess) and offers the sign-in right
-// there; once the person is signed in, Try again reaches the PC.
+// there; once the person is signed in, the screen reaches the PC by itself
+// (on a real phone the card kept the old title until Try again was pressed).
 test('the phone is not signed in to Tailscale: says so and offers the sign-in', async () => {
   const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
   const user = userEvent.setup();
@@ -53,8 +54,7 @@ test('the phone is not signed in to Tailscale: says so and offers the sign-in', 
   await user.press(screen.getByRole('button', { name: 'Sign in to Tailscale' }));
   await waitFor(() => expect(open).toHaveBeenCalledWith(LOGIN_URL));
   finishSignIn();
-  await user.press(screen.getByRole('button', { name: 'Try again' }));
-  expect(await screen.findByText('Fix the login bug')).toBeTruthy();
+  await waitFor(() => expect(screen.getByText('Fix the login bug')).toBeTruthy(), { timeout: 4000 });
 });
 
 // The PC's name is not a device of the phone's Tailscale account (the PC's
