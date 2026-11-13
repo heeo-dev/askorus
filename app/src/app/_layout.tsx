@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { StyleSheet, useColorScheme, View } from 'react-native';
 
 import { conversations } from '@/ask/conversations';
+import { resumeTailnet } from '@/tailnet/node';
 
 import { setRootBottom } from '@/ui/keyboard';
 import { LaunchCover } from '@/ui/LaunchCover';
@@ -13,10 +14,13 @@ import { palettes, resolveScheme, ThemeProvider, useTheme, useThemeChoice } from
 // The two entrances are tabs (extension principle 9, see (tabs)/_layout);
 // the screens they open stack on top of them. Every screen draws its own
 // top (Header or TopBar, S5c), so the stack shows no header. The kept
-// conversations' heads are read once, for the drawer (milestone B).
+// conversations' heads are read once, for the drawer (milestone B). The
+// app's Tailscale node starts here when the person signed in before (#57),
+// so the first request to a PC does not wait for it.
 export default function RootLayout() {
   useEffect(() => {
     conversations.init();
+    void resumeTailnet();
   }, []);
   return (
     <ThemeProvider>

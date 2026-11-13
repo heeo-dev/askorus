@@ -9,7 +9,7 @@ import { cause, causesToCheck } from './reach';
 const checkKey: Record<string, MessageKey> = {
   phone_offline: 'reach.check.phone',
   pc_unreachable: 'reach.check.pc',
-  agent_down: 'reach.check.agent',
+  not_own_pc: 'reach.check.not_own',
 };
 
 /** note: nothing is wrong, but something is missing (an optional AI). */
@@ -27,12 +27,13 @@ export async function diagnose(client: AgentClient): Promise<Check[]> {
     info = await client.info();
   } catch (e) {
     const c = cause(e);
-    if (c === 'phone_offline' || c === 'pc_unreachable' || c === 'agent_down') {
+    if (c === 'phone_offline' || c === 'pc_unreachable' || c === 'not_own_pc') {
       return [
-        { ok: false, text: t(c === 'agent_down' ? 'reach.agent_down' : 'reach.offline') },
+        { ok: false, text: t(c === 'not_own_pc' ? 'reach.not_own_pc' : 'reach.offline') },
         ...causesToCheck(c).map((x) => ({ ok: false, text: t(checkKey[x]) })),
       ];
     }
+    if (c === 'tailnet_login') return [{ ok: false, text: errorText(e) }];
     if (c === 'unpaired' || c === 'wrong_account') {
       return [
         { ok: true, text: t('diag.reached') },

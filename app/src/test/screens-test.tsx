@@ -20,8 +20,9 @@ import NewSession from '@/app/pc/[id]/new';
 import Settings from '@/app/settings';
 import { loadAskPrefs } from '@/ask/prefs';
 import { ConnectionStore } from '@/connections/store';
-import * as tailnetCheck from '@/connections/tailnetCheck';
+import { resetTailnet } from '@/tailnet/node';
 import { CODE, FakeAgent, HOST, PAIR_LINK, PORT, TOKEN, session } from '@/test/fakeAgent';
+import { finishSignIn, LOGIN_URL, mockTailnet, neverSignedIn } from '@/test/tailnet';
 import { Header } from '@/ui/Header';
 import * as qrScanner from '@/ui/QrScanner';
 
@@ -386,7 +387,7 @@ describe('pairing', () => {
     expect(screen.queryByText(/enter.*code/i)).toBeNull();
     expect(screen.getByText('Not an official product of any AI company.')).toBeTruthy();
 
-    await user.press(screen.getByRole('button', { name: 'Scan QR code' }));
+    await user.press(await screen.findByRole('button', { name: 'Scan QR code', disabled: false }));
     expect(await screen.findByText('The camera is needed to scan the QR code on the PC screen.')).toBeTruthy();
     await user.press(screen.getByRole('button', { name: 'Cancel' }));
     expect(await screen.findByText('askorus-agent pair')).toBeTruthy();
@@ -399,7 +400,7 @@ describe('pairing', () => {
     const user = userEvent.setup();
     await renderRouter(routes, { initialUrl: '/pair' });
     expect(screen.queryByTestId('status-bar-light')).toBeNull();
-    await user.press(await screen.findByRole('button', { name: 'Scan QR code' }));
+    await user.press(await screen.findByRole('button', { name: 'Scan QR code', disabled: false }));
     expect(await screen.findByText('Fit the QR code on the PC screen inside the frame.')).toBeTruthy();
     expect(screen.getByTestId('status-bar-light')).toBeTruthy();
     await user.press(screen.getByRole('button', { name: 'Cancel' }));
@@ -411,7 +412,7 @@ describe('pairing', () => {
     jest.spyOn(qrScanner, 'useCameraPermission').mockReturnValue([{ granted: true, canAskAgain: true }, jest.fn()]);
     const user = userEvent.setup();
     await renderRouter(routes, { initialUrl: '/pair' });
-    await user.press(await screen.findByRole('button', { name: 'Scan QR code' }));
+    await user.press(await screen.findByRole('button', { name: 'Scan QR code', disabled: false }));
     const camera = await screen.findByTestId('qr-scanner');
     await act(async () => camera.props.onScanned('https://example.com/menu'));
     expect(await screen.findByText('This is not an Askorus pairing QR code.')).toBeTruthy();
@@ -426,7 +427,7 @@ describe('pairing', () => {
     const open = jest.spyOn(Linking, 'openSettings').mockResolvedValue();
     const user = userEvent.setup();
     await renderRouter(routes, { initialUrl: '/pair' });
-    await user.press(await screen.findByRole('button', { name: 'Scan QR code' }));
+    await user.press(await screen.findByRole('button', { name: 'Scan QR code', disabled: false }));
     expect(screen.queryByRole('button', { name: 'Allow camera' })).toBeNull();
     await user.press(await screen.findByRole('button', { name: 'Allow the camera in Settings' }));
     expect(open).toHaveBeenCalled();
@@ -436,7 +437,7 @@ describe('pairing', () => {
     jest.spyOn(qrScanner, 'scannerAvailable').mockReturnValue(false);
     const user = userEvent.setup();
     await renderRouter(routes, { initialUrl: '/pair' });
-    await user.press(await screen.findByRole('button', { name: 'Scan QR code' }));
+    await user.press(await screen.findByRole('button', { name: 'Scan QR code', disabled: false }));
     expect(await screen.findByText('This build cannot scan QR codes. Go back and paste the link shown on the PC instead.')).toBeTruthy();
     expect(screen.queryByTestId('qr-scanner')).toBeNull();
     await user.press(screen.getByRole('button', { name: 'Cancel' }));
@@ -489,8 +490,8 @@ describe('pairing', () => {
   test('a further PC is added without becoming the current one: the picker opens with both', async () => {
     const user = userEvent.setup();
     const old = await pairedPC('OLD-LAPTOP', 'old-laptop.tail0.ts.net');
-    const r = await renderRouter(routes, { initialUrl: `/pair?v=1&host=${HOST}&port=${PORT}&code=${CODE}` });
-    await user.press(await screen.findByRole('button', { name: 'Pair' }));
+    const r = await renderRouter(routes, { initialUrl: `/pair?v=2&host=${HOST}&port=${PORT}&code=${CODE}` });
+    await user.press(await screen.findByRole('button', { name: 'Pair', disabled: false }));
     const picker = within(await screen.findByTestId('pc-picker'));
     expect(await picker.findByRole('button', { name: /^OLD-LAPTOP, old-laptop\.tail0\.ts\.net, / })).toBeSelected();
     expect(await picker.findByRole('button', { name: `DESKTOP-TEST, Windows · ${HOST}, Connected · agent 0.1.0` })).not.toBeSelected();
@@ -508,8 +509,8 @@ describe('pairing', () => {
   test('the same PC paired again stays the current one, with no picker', async () => {
     const user = userEvent.setup();
     const pc = await pairedPC();
-    await renderRouter(routes, { initialUrl: `/pair?v=1&host=${HOST}&port=${PORT}&code=${CODE}` });
-    await user.press(await screen.findByRole('button', { name: 'Pair' }));
+    await renderRouter(routes, { initialUrl: `/pair?v=2&host=${HOST}&port=${PORT}&code=${CODE}` });
+    await user.press(await screen.findByRole('button', { name: 'Pair', disabled: false }));
     expect(await screen.findByText('Connected · agent 0.1.0')).toBeTruthy();
     expect(screen.queryByTestId('pc-picker')).toBeNull();
     expect(await new ConnectionStore().list()).toHaveLength(1);
@@ -517,7 +518,7 @@ describe('pairing', () => {
   });
 
   test('the confirm step warns about a link or QR from someone else', async () => {
-    await renderRouter(routes, { initialUrl: `/pair?v=1&host=${HOST}&port=${PORT}&code=${CODE}` });
+    await renderRouter(routes, { initialUrl: `/pair?v=2&host=${HOST}&port=${PORT}&code=${CODE}` });
     const warn = within(await screen.findByTestId('pair-warn'));
     expect(warn.getByText(/Pair only if this address matches the one on your own PC's screen\. Do not pair from a link or QR code someone sent you\./)).toBeTruthy();
     expect(screen.getByText('When you tap Pair, your PC asks whether to allow this phone.')).toBeTruthy();
@@ -525,65 +526,123 @@ describe('pairing', () => {
   });
 
   test('a pairing link to a server outside ts.net opens no confirm step', async () => {
-    await renderRouter(routes, { initialUrl: `/pair?v=1&host=desktop-test.tail0.ts.net.example.org&port=443&code=${CODE}` });
+    await renderRouter(routes, { initialUrl: `/pair?v=2&host=desktop-test.tail0.ts.net.example.org&port=443&code=${CODE}` });
     expect(await screen.findByText('Not a pairing link. Paste the whole link shown on the PC.')).toBeTruthy();
     expect(screen.queryByText('Is this your PC?')).toBeNull();
 
     // A good link, then a refused one: the first link's confirm step does not stay.
-    await act(async () => router.navigate({ pathname: '/pair', params: { v: '1', host: HOST, port: String(PORT), code: CODE } }));
+    await act(async () => router.navigate({ pathname: '/pair', params: { v: '2', host: HOST, port: String(PORT), code: CODE } }));
     expect(await screen.findByText('Is this your PC?')).toBeTruthy();
-    await act(async () => router.navigate({ pathname: '/pair', params: { v: '1', host: 'evil.example.org', port: '443', code: CODE } }));
+    await act(async () => router.navigate({ pathname: '/pair', params: { v: '2', host: 'evil.example.org', port: '443', code: CODE } }));
     expect(await screen.findByText('Not a pairing link. Paste the whole link shown on the PC.')).toBeTruthy();
     expect(screen.queryByText('Is this your PC?')).toBeNull();
     expect(agent.calls).toHaveLength(0);
   });
 
-  // #42: the code goes only to a PC inside the person's own tailnet. The
-  // phone's network is asked first (the native module on a phone).
-  test('a PC outside the tailnet gets no pairing request, and the screen says why', async () => {
-    const check = jest.spyOn(tailnetCheck, 'checkTailnetHost').mockResolvedValue('outside');
+  // #42, #57: the code goes only to one of the person's own devices. The
+  // app's own Tailscale node is asked whose device the name is, before
+  // anything is sent.
+  test("a PC that is someone else's device gets no pairing request, and the screen says why", async () => {
+    mockTailnet.peers[HOST] = { known: true, sameUser: false };
     const user = userEvent.setup();
-    await renderRouter(routes, { initialUrl: `/pair?v=1&host=${HOST}&port=${PORT}&code=${CODE}` });
-    await user.press(await screen.findByRole('button', { name: 'Pair' }));
+    await renderRouter(routes, { initialUrl: `/pair?v=2&host=${HOST}&port=${PORT}&code=${CODE}` });
+    await user.press(await screen.findByRole('button', { name: 'Pair', disabled: false }));
     expect(await screen.findByRole('header', { name: "Couldn't pair" })).toBeTruthy();
-    expect(screen.getByText(/could not be confirmed as a PC inside your Tailscale network, so no pairing request was sent\..*came from someone else, do not use it\./)).toBeTruthy();
-    expect(check).toHaveBeenCalledWith(HOST, PORT);
+    expect(screen.getByText(/is not a device of your Tailscale account, so no pairing request was sent\..*came from someone else, do not use it\./)).toBeTruthy();
+    expect(mockTailnet.calls).toContain(`peer ${HOST}`);
     expect(agent.calls).toHaveLength(0);
     expect(await new ConnectionStore().list()).toEqual([]);
 
-    // From the start again; with Tailscale on the same link pairs.
-    check.mockResolvedValue('tailnet');
+    // From the start again; once it is one of the person's own devices the same link pairs.
+    delete mockTailnet.peers[HOST];
     await user.press(screen.getByRole('button', { name: 'Start over' }));
     await user.press(await screen.findByRole('button', { name: 'Paste the link instead' }));
     await user.type(screen.getByLabelText('The link on the PC'), PAIR_LINK);
     await user.press(screen.getByRole('button', { name: 'Pair with this link' }));
-    await user.press(await screen.findByRole('button', { name: 'Pair' }));
+    await user.press(await screen.findByRole('button', { name: 'Pair', disabled: false }));
     expect(await screen.findByText('Connected · agent 0.1.0')).toBeTruthy();
     expect(agent.callsTo('POST', '/v1/pair')).toHaveLength(1);
   });
 
-  test('a PC name with no address gets no pairing request: Tailscale may be off', async () => {
-    jest.spyOn(tailnetCheck, 'checkTailnetHost').mockResolvedValue('unresolved');
+  test('a PC name the Tailscale account does not have gets no pairing request', async () => {
+    mockTailnet.peers[HOST] = { known: false, sameUser: false };
     const user = userEvent.setup();
-    await renderRouter(routes, { initialUrl: `/pair?v=1&host=${HOST}&port=${PORT}&code=${CODE}` });
-    await user.press(await screen.findByRole('button', { name: 'Pair' }));
-    expect(await screen.findByText(/The PC's address could not be found, so no pairing request was sent\. Check that Tailscale is on on this phone/)).toBeTruthy();
+    await renderRouter(routes, { initialUrl: `/pair?v=2&host=${HOST}&port=${PORT}&code=${CODE}` });
+    await user.press(await screen.findByRole('button', { name: 'Pair', disabled: false }));
+    expect(await screen.findByText(/was not found in your Tailscale account, so no pairing request was sent\. Check that the PC's agent is running/)).toBeTruthy();
     expect(screen.queryByText(/came from someone else/)).toBeNull();
     expect(agent.calls).toHaveLength(0);
   });
 
-  test('where the check cannot be made (no native module) pairing goes on as before', async () => {
-    const check = jest.spyOn(tailnetCheck, 'checkTailnetHost');
+  // #57: Tailscale is inside the app. A phone that never signed in signs in
+  // first: the button opens the sign-in page in the browser, the app
+  // notices when the person is back, and only then can a QR be scanned.
+  // Until the person asks, the node is not even started.
+  test('a phone that is not signed in to Tailscale signs in first, then scans', async () => {
+    const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    await neverSignedIn();
+    await renderRouter(routes, { initialUrl: '/pair' });
+    expect(await screen.findByRole('header', { name: 'Sign in to Tailscale' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Scan QR code' })).toBeDisabled();
+    expect(screen.getByText('Sign in to Tailscale above first.')).toBeTruthy();
+    expect(screen.getByText(/There is no other app to install\./)).toBeTruthy();
+    expect(mockTailnet.calls).toEqual([]);
+
+    await user.press(screen.getByRole('button', { name: 'Sign in to Tailscale' }));
+    await waitFor(() => expect(open).toHaveBeenCalledWith(LOGIN_URL));
+    expect(mockTailnet.calls[0]).toBe('start askorus-test-phone');
+    expect(await screen.findByText('Finish signing in in the browser, then come back to this app.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Open the browser again' })).toBeTruthy();
+    expect(open).toHaveBeenCalledTimes(1);
+
+    finishSignIn();
+    expect(await screen.findByText('Connected to Tailscale', {}, { timeout: 4000 })).toBeTruthy();
+    expect(screen.getByText('me@example.com')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Scan QR code' })).toBeEnabled();
+    expect(screen.queryByText('Sign in to Tailscale above first.')).toBeNull();
+    expect(agent.calls).toHaveLength(0);
+  });
+
+  test('the pairing link opened on a phone that is not signed in asks for the sign-in before Pair', async () => {
+    const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    await neverSignedIn();
+    await renderRouter(routes, { initialUrl: `/pair?v=2&host=${HOST}&port=${PORT}&code=${CODE}` });
+    expect(await screen.findByText('Is this your PC?')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Pair' })).toBeDisabled();
+    await user.press(screen.getByRole('button', { name: 'Sign in to Tailscale' }));
+    await waitFor(() => expect(open).toHaveBeenCalledWith(LOGIN_URL));
+    finishSignIn();
+    await user.press(await screen.findByRole('button', { name: 'Pair', disabled: false }, { timeout: 4000 }));
+    expect(await screen.findByText('Connected · agent 0.1.0')).toBeTruthy();
+  });
+
+  // A link of an agent from before Tailscale was built in (version 1, behind
+  // `tailscale serve`) is not tried: the screen says to update the agent.
+  test('a pairing link of an older agent says to update the agent', async () => {
     const user = userEvent.setup();
     await renderRouter(routes, { initialUrl: `/pair?v=1&host=${HOST}&port=${PORT}&code=${CODE}` });
-    await user.press(await screen.findByRole('button', { name: 'Pair' }));
-    expect(await screen.findByText('Connected · agent 0.1.0')).toBeTruthy();
-    expect(await check.mock.results[0].value).toBe('unknown');
-    expect(agent.callsTo('POST', '/v1/pair')).toHaveLength(1);
+    expect(await screen.findByText(/This QR code is from an older agent\. Update the Askorus agent on the PC/)).toBeTruthy();
+    expect(screen.queryByText('Is this your PC?')).toBeNull();
+    // Pasted, the same.
+    await user.type(screen.getByLabelText('The link on the PC'), `askorus://pair?v=1&host=${HOST}&port=${PORT}&code=${CODE}`);
+    await user.press(screen.getByRole('button', { name: 'Pair with this link' }));
+    expect(await screen.findByText(/This QR code is from an older agent/)).toBeTruthy();
+    expect(agent.calls).toHaveLength(0);
+  });
+
+  test('a build without Tailscale inside says so and cannot pair', async () => {
+    mockTailnet.available = false;
+    resetTailnet();
+    await renderRouter(routes, { initialUrl: '/pair' });
+    expect(await screen.findByText('This build has no Tailscale inside, so it cannot connect to a PC.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Scan QR code' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Sign in to Tailscale' })).toBeNull();
   });
 
   test('the pairing link itself opens the confirm step, with no back button', async () => {
-    await renderRouter(routes, { initialUrl: `/pair?v=1&host=${HOST}&port=${PORT}&code=${CODE}` });
+    await renderRouter(routes, { initialUrl: `/pair?v=2&host=${HOST}&port=${PORT}&code=${CODE}` });
     expect(await screen.findByText('Is this your PC?')).toBeTruthy();
     expect(screen.getByText(HOST)).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Back' })).toBeNull();
@@ -601,8 +660,8 @@ describe('pairing', () => {
   test('a refusal on the PC is explained and nothing is saved', async () => {
     const user = userEvent.setup();
     agent.pairAnswer = 'deny';
-    await renderRouter(routes, { initialUrl: `/pair?v=1&host=${HOST}&port=${PORT}&code=${CODE}` });
-    await user.press(await screen.findByRole('button', { name: 'Pair' }));
+    await renderRouter(routes, { initialUrl: `/pair?v=2&host=${HOST}&port=${PORT}&code=${CODE}` });
+    await user.press(await screen.findByRole('button', { name: 'Pair', disabled: false }));
     expect(await screen.findByText('Declined on the PC.')).toBeTruthy();
     expect(screen.getByText("Couldn't pair")).toBeTruthy();
     expect(await new ConnectionStore().list()).toEqual([]);
@@ -619,8 +678,8 @@ describe('pairing', () => {
       }
       return fake(u, init);
     }) as typeof fetch;
-    await renderRouter(routes, { initialUrl: `/pair?v=1&host=${HOST}&port=${PORT}&code=${CODE}` });
-    await user.press(await screen.findByRole('button', { name: 'Pair' }));
+    await renderRouter(routes, { initialUrl: `/pair?v=2&host=${HOST}&port=${PORT}&code=${CODE}` });
+    await user.press(await screen.findByRole('button', { name: 'Pair', disabled: false }));
     expect(await screen.findByText('No answer on the PC within 2 minutes.')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Start over' })).toBeTruthy();
     expect(await new ConnectionStore().list()).toEqual([]);
@@ -629,8 +688,8 @@ describe('pairing', () => {
   test('waiting for the PC can be cancelled', async () => {
     const user = userEvent.setup();
     agent.pairAnswer = 'wait';
-    await renderRouter(routes, { initialUrl: `/pair?v=1&host=${HOST}&port=${PORT}&code=${CODE}` });
-    await user.press(await screen.findByRole('button', { name: 'Pair' }));
+    await renderRouter(routes, { initialUrl: `/pair?v=2&host=${HOST}&port=${PORT}&code=${CODE}` });
+    await user.press(await screen.findByRole('button', { name: 'Pair', disabled: false }));
     expect(await screen.findByText('Waiting for the PC to allow it')).toBeTruthy();
     await user.press(screen.getByRole('button', { name: 'Cancel' }));
     expect(await screen.findByText('Is this your PC?')).toBeTruthy();
@@ -646,21 +705,21 @@ describe('pairing', () => {
     expect(await screen.findByText('Not a pairing link. Paste the whole link shown on the PC.')).toBeTruthy();
     // R-94: a pairing link that names a server outside ts.net is refused the same way.
     await user.clear(screen.getByLabelText('The link on the PC'));
-    await user.type(screen.getByLabelText('The link on the PC'), `askorus://pair?v=1&host=evil.example.org&port=443&code=${CODE}`);
+    await user.type(screen.getByLabelText('The link on the PC'), `askorus://pair?v=2&host=evil.example.org&port=443&code=${CODE}`);
     await user.press(screen.getByRole('button', { name: 'Pair with this link' }));
     expect(await screen.findByText('Not a pairing link. Paste the whole link shown on the PC.')).toBeTruthy();
     expect(screen.queryByText('Is this your PC?')).toBeNull();
   });
 
-  test('the Tailscale line opens a sheet with what to do and where to get it', async () => {
-    const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
+  // #57: nothing of Tailscale is installed on the phone, so the line under
+  // the screen only explains what it is; there is no store to send to.
+  test('the Tailscale line opens a sheet that says it is built in', async () => {
     const user = userEvent.setup();
     await renderRouter(routes, { initialUrl: '/pair' });
-    await user.press(await screen.findByRole('button', { name: 'The phone and the PC need the same Tailscale account turned on' }));
+    await user.press(await screen.findByRole('button', { name: 'The phone and the PC connect only inside your own Tailscale account' }));
     const ts = within(await screen.findByTestId('tailscale-sheet'));
-    expect(ts.getByText(/same Tailscale account as the PC/)).toBeTruthy();
-    await user.press(ts.getByRole('button', { name: 'Get Tailscale' }));
-    expect(open).toHaveBeenCalledWith(expect.stringContaining('tailscale'));
+    expect(ts.getByText(/built into this app and the PC's agent, so there is nothing to install and no VPN to turn on/)).toBeTruthy();
+    expect(ts.queryByRole('button', { name: 'Get Tailscale' })).toBeNull();
   });
 
   // #37: a PC without the agent yet. The line under the intro opens the

@@ -35,7 +35,7 @@ test('lists every package of package-lock.json that is not dev-only, at its vers
 test('every entry has a name and a kind, and its text is in the list of texts', () => {
   for (const p of data.packages) {
     expect(p.n).toBeTruthy();
-    expect(['npm', 'android', 'other']).toContain(p.k);
+    expect(['npm', 'android', 'go', 'other']).toContain(p.k);
     if (p.t !== null) expect(data.texts[p.t]?.length ?? 0).toBeGreaterThan(40);
   }
   // Equal texts are stored once.

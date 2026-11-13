@@ -22,7 +22,7 @@ type User = ReturnType<typeof userEvent.setup>;
 
 let win: FakeAgent;
 let wsl: FakeAgent;
-// The Linux PC is on but its agent is not running: Tailscale answers 502.
+// The Linux PC cannot be reached (off, or its agent stopped): the request fails.
 let wslDown = false;
 
 beforeEach(() => {
@@ -35,8 +35,8 @@ beforeEach(() => {
   globalThis.fetch = (async (u: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(u));
     if (url.hostname === wslHost) {
-      if (wslDown) return new Response('', { status: 502 });
-      return wsl.fetch(`https://${HOST}:${PORT}${url.pathname}${url.search}`, init);
+      if (wslDown) throw new TypeError('Network request failed');
+      return wsl.fetch(`http://${HOST}:${PORT}${url.pathname}${url.search}`, init);
     }
     return win.fetch(u, init);
   }) as typeof fetch;
@@ -199,10 +199,10 @@ test('a PC that does not answer is named, and another can be picked from the car
   wslDown = true;
   await user.press(screen.getByRole('button', { name: 'Open menu' }));
   await user.press(await within(await screen.findByTestId('drawer')).findByRole('button', { name: 'on linux' }));
-  expect(await screen.findByText('The PC is on, but the agent is not running')).toBeTruthy();
-  // Which PC, and the way to start the agent: the same on every system since #52.
+  expect(await screen.findByText("Can't reach the PC")).toBeTruthy();
+  // Which PC, and the way to look at and start the agent: the same on every system since #52.
   expect(screen.getByText(`My PC: ${wslLabel}`)).toBeTruthy();
-  expect(screen.getByText(/Start the agent on the PC with askorus-agent start/)).toBeTruthy();
+  expect(screen.getByText(/on the PC: askorus-agent status; if it is off, askorus-agent start/)).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy();
   // The conversation is still there to read.
   expect(screen.getByText('opencode says: on linux')).toBeTruthy();

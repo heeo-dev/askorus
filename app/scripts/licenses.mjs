@@ -2,11 +2,12 @@
 // screen shows (#32): every package the app is built from that is not a
 // dev-only package (package-lock.json), with its version, its license and
 // the text of its license file; then the Android libraries the build adds
-// (scripts/android-libs.json, see scripts/android-libs.mjs) and the fonts
-// and shapes that are not packages. Equal license texts are stored once.
-// Each entry: n name, v version, l license, t the place of its text in
-// `texts` (null: none), k kind (npm, android, other), u an address when
-// there is no text.
+// (scripts/android-libs.json, see scripts/android-libs.mjs), the Go modules
+// of the built-in Tailscale (scripts/go-libs.json, see scripts/go-libs.mjs,
+// #57) and the fonts and shapes that are not packages. Equal license texts
+// are stored once. Each entry: n name, v version, l license, t the place of
+// its text in `texts` (null: none), k kind (npm, android, go, other), u an
+// address when there is no text.
 //
 // Run it after any change of dependencies: npm run licenses
 // (licenses-test fails until you do: it compares the list with package-lock.json.)
@@ -100,6 +101,12 @@ const android = libs
   .sort((a, b) => a.n.localeCompare(b.n));
 if (android.length < 50) fail(`only ${android.length} Android libraries in scripts/android-libs.json`);
 
+// 2b. The Go modules of the app's Tailscale bridge (tsbridge, #57), each with
+// its own license text (scripts/go-libs.json, made by scripts/go-libs.mjs).
+const goLibs = JSON.parse(readFileSync(join(app, 'scripts', 'go-libs.json'), 'utf8'));
+const goMods = goLibs.modules.map((m) => ({ n: m.n, v: m.v, l: m.l, t: m.t === null ? null : textId(goLibs.texts[m.t]), k: 'go' }));
+if (goMods.length < 20) fail(`only ${goMods.length} Go modules in scripts/go-libs.json`);
+
 // 3. What is in the app but is not a package: KaTeX's fonts (inside the
 // katex package, under their own license), the outlines the logo is drawn
 // from, and the icon shapes. The same notices as THIRD-PARTY-NOTICES.md.
@@ -129,13 +136,13 @@ const other = [
   { n: 'Feather (icon shapes)', v: '', l: 'MIT', t: textId(noticeText('MIT License (Feather)')), k: 'other' },
 ];
 
-const data = { packages: [...npm, ...android, ...other], texts };
+const data = { packages: [...npm, ...android, ...goMods, ...other], texts };
 mkdirSync(dirname(out), { recursive: true });
 writeFileSync(out, JSON.stringify(data) + '\n');
 const noText = npm.filter((p) => p.t === null).map((p) => p.n);
 const noName = npm.filter((p) => !p.l).map((p) => p.n);
 console.log(
-  `licenses: ${npm.length} packages, ${android.length} Android libraries, ${other.length} others, ${texts.length} texts ` +
+  `licenses: ${npm.length} packages, ${android.length} Android libraries, ${goMods.length} Go modules, ${other.length} others, ${texts.length} texts ` +
     `(${Math.round(JSON.stringify(data).length / 1024)} KB) -> ${out}`,
 );
 if (noText.length) console.log(`licenses: no license file in ${noText.length}: ${noText.slice(0, 12).join(', ')}${noText.length > 12 ? ', …' : ''}`);

@@ -14,8 +14,8 @@ export type Connection = {
   name: string; // the PC's host name until the person gives it another (#53)
   os?: string; // the PC's system as its agent says it (windows, linux, darwin); absent until it was read (#53)
   named?: boolean; // the person gave the name: pairing again keeps it (#53)
-  host: string; // MagicDNS name
-  port: number; // serve HTTPS port
+  host: string; // the name of the PC agent's own Tailscale node (MagicDNS)
+  port: number; // the port it listens on there
   deviceId: string; // this phone's id on that PC
   deviceName: string;
   pairedAt: string; // RFC 3339

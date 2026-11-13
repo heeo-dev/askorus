@@ -1,13 +1,15 @@
-// Pairing with a PC (F7, N4; S5c board F-Pair): run one command on the PC,
-// scan the QR it shows (the main way) or paste the link printed with it,
-// check which PC it is, send the code and wait until the person at the PC
-// allows it. Opened from 내 PC, Settings, a PC's 'pair again', or by the
-// askorus://pair link itself. The first PC paired becomes the current one;
-// a further PC is added to the list and the PC picker opens, so questions
-// never move to another PC without a pick (R-94). The confirm step warns
-// about links and QR codes that came from someone else, and before the code
-// is sent the app checks that the PC is inside the person's own tailnet
-// (#42, connections/tailnetCheck). The QR is read by the app's own scanner
+// Pairing with a PC (F7, N4; S5c board F-Pair): sign in to Tailscale in the
+// app (once; it is built in, #57), run one command on the PC, scan the QR
+// it shows (the main way) or paste the link printed with it, check which PC
+// it is, send the code and wait until the person at the PC allows it.
+// Opened from 내 PC, Settings, a PC's 'pair again', or by the askorus://pair
+// link itself. The first PC paired becomes the current one; a further PC is
+// added to the list and the PC picker opens, so questions never move to
+// another PC without a pick (R-94). The confirm step warns about links and
+// QR codes that came from someone else, and before the code is sent the
+// app's own Tailscale node is asked whether the PC is one of the person's
+// own devices (#42, tailnet/node ownDevice); the node applies the same rule
+// to every request after. The QR is read by the app's own scanner
 // (ui/QrScanner): on the phone, with nothing sent anywhere (#32).
 // A PC without the agent yet: the install line and the guide's address,
 // the same as the README's (#37).
@@ -19,12 +21,12 @@ import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Linking, Platform, Pressable, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { CancelledError } from '@/api/client';
+import { CancelledError, NetworkError } from '@/api/client';
 import { cleanDeviceName, pairWithPC } from '@/connections/pair';
-import { type PairLink, parsePairLink } from '@/connections/pairLink';
+import { isOldPairLink, type PairLink, parsePairLink } from '@/connections/pairLink';
 import { ConnectionStore } from '@/connections/store';
-import { checkTailnetHost } from '@/connections/tailnetCheck';
 import { currentLang, errorText, t } from '@/i18n';
+import { ownDevice, type PeerAnswer, useTailnet } from '@/tailnet/node';
 import { Button } from '@/ui/Button';
 import { Spinner } from '@/ui/controls';
 import { FormScroll } from '@/ui/FormScroll';
@@ -34,6 +36,7 @@ import { useSafeInsets } from '@/ui/keyboard';
 import { Sheet } from '@/ui/Sheet';
 import { QrScanner, scannerAvailable, useCameraPermission } from '@/ui/QrScanner';
 import { pickPC } from '@/ui/shell/pcs';
+import { TailnetLogin } from '@/ui/TailnetLogin';
 import { themed, useTheme } from '@/ui/theme';
 
 const store = new ConnectionStore();
@@ -51,11 +54,6 @@ function installGuide(): string {
     ? 'https://github.com/heeo-dev/askorus/blob/main/README.ko.md#' + encodeURIComponent('pc-에이전트-설치')
     : 'https://github.com/heeo-dev/askorus#install-the-pc-agent';
 }
-
-const tailscaleStore =
-  Platform.OS === 'ios'
-    ? 'https://apps.apple.com/app/tailscale/id1470499037'
-    : 'https://play.google.com/store/apps/details?id=com.tailscale.ipn';
 
 const mono = Platform.select({ ios: 'Menlo', default: 'monospace' });
 
@@ -80,6 +78,9 @@ export default function Pair() {
   const [installOpen, setInstallOpen] = useState(false);
   const [installCopied, setInstallCopied] = useState<string | null>(null); // the system whose line was copied
   const [deviceName, setDeviceName] = useState(() => cleanDeviceName(Device.deviceName ?? Device.modelName));
+  // The app's Tailscale node. A PC is reached only while it runs (the
+  // person signed in); a build without it cannot pair.
+  const signedIn = useTailnet().state === 'running';
   const abort = useRef<AbortController | null>(null);
   // Back only when there is somewhere to go back to (not when the link opened
   // the app here). Read once the screen has focus: the router is not ready
@@ -111,17 +112,27 @@ export default function Pair() {
     }
     // A link the app refuses (R-94: a server outside ts.net, a bad code)
     // says so, and never leaves an earlier link's confirm step on the screen.
+    // A link of an agent from before Tailscale was built in says to update it.
     setStep({ kind: 'start' });
     setPasteOpen(true);
-    setPasteError(t('pair.badLink'));
+    setPasteError(t(params.v === '1' ? 'pair.oldAgent' : 'pair.badLink'));
   }, [params.v, params.host, params.port, params.code]);
 
   useEffect(() => () => abort.current?.abort(), []);
 
+  // Takes a scanned or pasted link. An old agent's link is taken too, in the
+  // sense that scanning stops: the screen then says to update the agent.
   const accept = (text: string): boolean => {
     const link = parsePairLink(text.trim());
-    if (!link) return false;
-    setStep({ kind: 'confirm', link });
+    if (link) {
+      setStep({ kind: 'confirm', link });
+      return true;
+    }
+    if (!isOldPairLink(text)) return false;
+    setStep({ kind: 'start' });
+    setPasteOpen(true);
+    setPasted('');
+    setPasteError(t('pair.oldAgent'));
     return true;
   };
 
@@ -131,15 +142,22 @@ export default function Pair() {
     abort.current = ctl;
     setStep({ kind: 'waiting', link });
     try {
-      // The code goes only to a PC inside the person's own tailnet (#42): the
-      // phone's network is asked where the name leads before anything is sent.
-      const where = await checkTailnetHost(link.host, link.port);
+      // The code goes only to one of the person's own devices (#42): the
+      // app's Tailscale node is asked whose device the name is before
+      // anything is sent. A name it does not know gets nothing either.
+      let where: PeerAnswer;
+      try {
+        where = await ownDevice(link.host);
+      } catch (e) {
+        setStep({ kind: 'failed', link, text: errorText(new NetworkError(e)) });
+        return;
+      }
       if (ctl.signal.aborted) {
         setStep({ kind: 'confirm', link });
         return;
       }
-      if (where === 'outside' || where === 'unresolved') {
-        setStep({ kind: 'failed', link, text: t(where === 'outside' ? 'pair.notTailnet' : 'pair.noAddress') });
+      if (where === 'other' || where === 'unknown') {
+        setStep({ kind: 'failed', link, text: t(where === 'other' ? 'pair.notTailnet' : 'pair.noAddress') });
         return;
       }
       const before = await store.list().catch(() => []);
@@ -224,7 +242,11 @@ export default function Pair() {
 
             <View style={s.steps}>
               <View style={s.step}>
-                <StepHead n={1} text={t('pair.step1')} />
+                <StepHead n={1} text={t('pair.stepLogin')} />
+                <TailnetLogin />
+              </View>
+              <View style={s.step}>
+                <StepHead n={2} text={t('pair.step1')} />
                 <View style={s.code}>
                   <Text style={s.codeText} selectable>
                     {pairCommand}
@@ -234,8 +256,9 @@ export default function Pair() {
                 {copied ? <Text style={s.caption}>{t('sheet.copied')}</Text> : null}
               </View>
               <View style={s.step}>
-                <StepHead n={2} text={t('pair.step2')} />
-                <Button icon="camera" label={t('pair.scan')} onPress={() => setStep({ kind: 'scan' })} />
+                <StepHead n={3} text={t('pair.step2')} />
+                <Button icon="camera" label={t('pair.scan')} onPress={() => setStep({ kind: 'scan' })} disabled={!signedIn} />
+                {signedIn ? null : <Text style={s.caption}>{t('pair.loginFirst')}</Text>}
               </View>
             </View>
 
@@ -301,7 +324,9 @@ export default function Pair() {
                 placeholderTextColor={th.caption}
               />
             </View>
-            <Button label={t('pair.send')} onPress={() => send(step.link)} disabled={!deviceName.trim()} />
+            {/* The link opened the app before the person signed in: the sign-in comes first. */}
+            {signedIn ? null : <TailnetLogin />}
+            <Button label={t('pair.send')} onPress={() => send(step.link)} disabled={!deviceName.trim() || !signedIn} />
             <Button variant="outline" label={t('pair.otherQR')} onPress={() => setStep({ kind: 'start' })} />
           </>
         )}
@@ -345,7 +370,6 @@ export default function Pair() {
       <Sheet open={tailscaleOpen} onClose={() => setTailscaleOpen(false)} title={t('pair.tailscaleTitle')} testID="tailscale-sheet">
         <View style={s.sheetBody}>
           <Text style={s.intro}>{t('pair.tailscaleBody')}</Text>
-          <Button variant="outline" icon="open" label={t('pair.tailscaleGet')} onPress={() => Linking.openURL(tailscaleStore).catch(() => undefined)} />
         </View>
       </Sheet>
 

@@ -27,11 +27,13 @@ const json = (status: number, body: unknown) => () =>
 const dropped = () => () => new TypeError('Network request failed');
 const noSleep = async () => {};
 
-const base = 'https://pc.example.ts.net:8790';
+const base = 'http://pc.example.ts.net:8790';
 
-test('baseUrl leaves out the default port', () => {
-  expect(baseUrl('pc.example.ts.net', 443)).toBe('https://pc.example.ts.net');
+// #57: plain http inside the tailnet (the tailnet encrypts between the two
+// devices), always with the port.
+test('baseUrl is plain http to the node of the PC, with its port', () => {
   expect(baseUrl('pc.example.ts.net', 8790)).toBe(base);
+  expect(baseUrl('pc.example.ts.net', 443)).toBe('http://pc.example.ts.net:443');
 });
 
 test('requests carry the token and JSON body, and ignore unknown fields', async () => {

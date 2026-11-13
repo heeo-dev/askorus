@@ -51,7 +51,14 @@ export function label(prefix: 'state' | 'badge' | 'tool' | 'activity', code: str
 
 /** errorText explains a failed call in the person's language. */
 export function errorText(e: unknown): string {
-  if (e instanceof NetworkError) return t('error.network');
+  if (e instanceof NetworkError) {
+    // The app's own Tailscale node could not send it, and says why (#57).
+    const why = (e.cause as { code?: unknown } | null | undefined)?.code;
+    if (why === 'tailnet_login') return t('error.tailnet_login');
+    if (why === 'tailnet_off') return t('tailnet.unavailable');
+    if (why === 'tailnet_not_own' || why === 'tailnet_unknown_host') return t('error.tailnet_not_own');
+    return t('error.network');
+  }
   if (e instanceof AgentError) {
     const key = `error.${e.code}`;
     return has(key) ? t(key) : t('error.unknown', { code: e.code });

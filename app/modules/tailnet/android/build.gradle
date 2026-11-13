@@ -1,0 +1,40 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'app.askorus'
+version = '1.0.0'
+
+android {
+  namespace "app.askorus.tailnet"
+  defaultConfig {
+    versionCode 1
+    versionName '1.0.0'
+    consumerProguardFiles 'consumer-rules.pro'
+  }
+}
+
+// The app's own Tailscale node (#57): a Go library (tsbridge/, Tailscale's
+// tsnet) bound with gomobile. tsbridge/build-android.sh builds it and puts
+// the Java side in libs/ and the native side in src/main/jniLibs/; neither
+// is kept in git. A missing library stops the build here with what to run,
+// instead of an app that cannot reach any PC.
+def tsbridgeJar = file('libs/tsbridge.jar')
+def tsbridgeLibs = fileTree(dir: 'src/main/jniLibs', include: '**/libgojni.so')
+
+tasks.register('checkTsbridge') {
+  doLast {
+    if (!tsbridgeJar.exists() || tsbridgeLibs.isEmpty()) {
+      throw new GradleException(
+        'The Tailscale bridge is not built. Run tsbridge/build-android.sh ' +
+        '(see docs/android-release.md), then build again.')
+    }
+  }
+}
+preBuild.dependsOn 'checkTsbridge'
+
+dependencies {
+  implementation files('libs/tsbridge.jar')
+  implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2'
+}

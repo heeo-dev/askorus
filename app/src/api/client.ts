@@ -1,5 +1,9 @@
 // Client for one PC agent's /v1 API. It returns data and stable error
-// codes only; the screens pick the words (N9).
+// codes only; the screens pick the words (N9). Requests go through the
+// app's own Tailscale node (tailnet/node, #57), never the phone's ordinary
+// network.
+
+import { tailnetFetch } from '@/tailnet/node';
 
 import type {
   Comparison,
@@ -35,7 +39,11 @@ export class AgentError extends Error {
   }
 }
 
-/** The request never got an answer: phone offline, Tailscale off, PC asleep, agent down. */
+/**
+ * The request never got an answer: phone offline, PC asleep, agent down,
+ * or the app's Tailscale node could not send it (cause is then a
+ * TailnetError with the reason: not signed in, not the person's own PC).
+ */
 export class NetworkError extends Error {
   constructor(
     readonly cause?: unknown,
@@ -72,8 +80,11 @@ export type WaitOptions = {
 // row before giving up (about half a minute at one poll a second).
 const maxMisses = 30;
 
+// Plain http, inside the tailnet only: Tailscale already encrypts between
+// the phone's node and the PC's and knows who is on each end, so the PC
+// needs no certificate (and no name in the public certificate logs).
 export function baseUrl(host: string, port: number): string {
-  return port === 443 ? `https://${host}` : `https://${host}:${port}`;
+  return `http://${host}:${port}`;
 }
 
 export function defaultSleep(ms: number, signal?: AbortSignal): Promise<void> {
@@ -104,7 +115,7 @@ export class AgentClient {
     opts: ClientOptions = {},
   ) {
     this.token = opts.token;
-    this.fetchFn = opts.fetch ?? ((input, init) => fetch(input, init));
+    this.fetchFn = opts.fetch ?? tailnetFetch;
     this.sleep = opts.sleep ?? defaultSleep;
     this.timeoutMs = opts.timeoutMs ?? 15000;
   }
