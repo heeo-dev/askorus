@@ -57,6 +57,17 @@ Askorus(애스코러스)는 폰에서 질문 하나를 여러 AI에게 한 번�
 - PC에 설치하고 로그인해 둔 공식 AI 프로그램 하나 이상: Claude Code, Codex, OpenCode. 둘 이상이면 종합 답변과 토론이 나오고, '내 PC'(Claude Code 세션)에는 Claude Code가 있어야 합니다. 이미 쓰는 구독과 무료 계정을 그대로 쓰며, 그 로그인 정보는 읽거나 옮기지 않습니다.
 - 안드로이드 폰 (iOS는 나중에)
 
+### Tailscale이 뭔가요?
+
+내 기기들만 들어오는 사설망을 만들어 주는 서비스입니다(Tailscale사, 개인은 무료). Askorus 안에 들어 있습니다.
+
+- **왜 필요한가요.** 폰이 밖에서도 집의 PC에 닿아야 합니다. 보통은 PC를 인터넷에 열거나 중간에 서버를 둬야 하는데, Askorus는 둘 다 하지 않습니다. 대신 폰과 PC가 같은 Tailscale 계정으로 로그인해 서로를 찾습니다.
+- **무엇이 지켜지나요.** 내 계정에 로그인한 기기만 PC에 닿습니다. 폰과 PC 사이는 암호화되어, Tailscale의 중계 서버를 거칠 때도 Tailscale은 내용을 읽지 못합니다. 그 위에 PC에서 한 번 허용한 폰만 받습니다.
+- **Tailscale이 아는 것.** 계정(메일), 두 기기의 이름, 접속한 주소와 시간입니다. 질문과 답은 모릅니다.
+- **비밀번호.** 로그인은 브라우저의 Tailscale 화면에서 합니다. Askorus는 비밀번호를 받지 않습니다.
+
+앱에서도 로그인을 물을 때 같은 설명을 볼 수 있습니다('Tailscale이 뭔가요?').
+
 ## PC 에이전트 설치
 
 에이전트는 Windows, macOS, Linux에서 돕니다. 어디서나 한 줄이고, 관리자 권한은 필요 없습니다.
@@ -167,7 +178,7 @@ PC의 Claude Code나 Codex에 내 운영체제에 맞는 글을 붙여 넣으세
 먼저 PC에서 `askorus-agent check`를 실행하세요. 빠진 것을 줄마다 할 일과 함께 알려 줍니다. `[X]`는 꼭 고쳐야 하는 것, `[!]`는 주의, `[i]`는 사람이 직접 해야 하는 것입니다.
 
 - **폰이 PC에 닿지 않는다고 합니다.** PC에서 에이전트가 돌고 있고 Tailscale에 로그인되어 있어야 합니다. `askorus-agent status`가 둘 다 보여 줍니다. 꺼져 있으면 `askorus-agent start`, 로그인이 안 되어 있으면 `askorus-agent login`을 실행하세요. 로그인할 때 켜지게 하려면 `askorus-agent autostart on`.
-- **폰이 Tailscale에 로그인되어 있지 않다고 하거나, 이 PC가 내 Tailscale 계정에 없다고 합니다.** 앱의 설정 > Tailscale에서 PC의 에이전트와 같은 계정으로 로그인하세요(어느 계정인지는 PC에서 `askorus-agent status`). 이미 Tailscale을 쓰고 있다면 Askorus에는 그 계정을 써도 되고 따로 만든 계정을 써도 됩니다. 앱과 에이전트만 같은 계정이면 됩니다. 브라우저가 이미 Tailscale에 로그인돼 있으면 그 계정으로 붙이겠냐고 묻습니다. 다른 계정을 쓰려면 그 화면에서 계정을 바꾸거나 시크릿 창에서 링크를 여세요.
+- **폰이 Tailscale에 로그인되어 있지 않다고 하거나, 이 PC가 내 Tailscale 계정에 없다고 합니다.** 앱의 설정 > Tailscale에서 PC의 에이전트와 같은 계정으로 로그인하세요(어느 계정인지는 PC에서 `askorus-agent status`). 계정을 바꾸려면 앱에서는 '로그아웃 / 계정 바꾸기'(설정 > Tailscale, 짝 맺기 화면, 'PC가 내 계정에 없습니다' 상자), PC에서는 `askorus-agent logout` 뒤 `askorus-agent login`입니다. 바꾼 뒤에는 다시 짝 맺습니다. 이미 Tailscale을 쓰고 있다면 Askorus에는 그 계정을 써도 되고 따로 만든 계정을 써도 됩니다. 앱과 에이전트만 같은 계정이면 됩니다. 브라우저가 이미 Tailscale에 로그인돼 있으면 그 계정으로 붙이겠냐고 묻습니다. 다른 계정을 쓰려면 그 화면에서 계정을 바꾸거나 시크릿 창에서 링크를 여세요.
 - **새 Claude Code 세션이 시작되지 않습니다.** Claude Code는 폴더마다 한 번 신뢰할지 묻습니다. PC에서 그 폴더로 가서 `claude`를 한 번 실행하고 허용하세요.
 - **폴더 열어 두기가 '켜는 중'에 머물거나 실패합니다.** Claude Code에서 Remote Control을 한 번 켜야 합니다. PC에서 `claude remote-control`을 실행해 `y`로 답하고 Ctrl+C로 끄세요.
 - **AI가 목록에 없습니다.** PC에 설치하고 로그인한 뒤 `check`를 다시 실행하세요. `autostart on` 뒤에 설치한 프로그램은 흔한 설치 폴더에서 찾습니다. 못 찾으면 `autostart on`을 다시 실행하세요.

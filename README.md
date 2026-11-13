@@ -57,6 +57,17 @@ The moderator is one of the AIs you asked. The debate is optional.
 - At least one official AI program installed and signed in on the PC: Claude Code, Codex or OpenCode. With two or more you get combined answers and debates; My PCs (the Claude Code sessions) needs Claude Code. Askorus uses the subscriptions and free accounts you already have; it never reads or moves their sign-in data.
 - An Android phone (iOS later)
 
+### What is Tailscale?
+
+A service that makes a private network only your own devices can join (by Tailscale Inc., free for personal use). Askorus has it built in.
+
+- **Why it is needed.** Your phone has to reach your PC at home from wherever you are. That usually means opening the PC to the internet or putting a server in between. Askorus does neither: the phone and the PC sign in to the same Tailscale account and find each other there.
+- **What protects the connection.** Only devices signed in to your account can reach the PC. Traffic between the phone and the PC is encrypted, so Tailscale cannot read it, even when it passes through Tailscale's relay servers. On top of that, the PC takes only a phone you allowed on it once.
+- **What Tailscale learns.** Your account (email), the names of the two devices, and the addresses and times of their connections. Not your questions or answers.
+- **Your password.** You sign in on Tailscale's own page in the browser. Askorus never gets your password.
+
+The app says the same where it asks you to sign in ("What is Tailscale?").
+
 ## Install the PC agent
 
 The agent runs on Windows, macOS and Linux. It is one line on each, and needs no administrator rights.
@@ -167,7 +178,7 @@ Rules:
 Run `askorus-agent check` on the PC first. It lists what is missing, each line with what to do: `[X]` must be fixed, `[!]` is a warning, `[i]` is something only you can do.
 
 - **The phone says it cannot reach the PC.** On the PC, the agent must be running and signed in to Tailscale: `askorus-agent status` shows both, `askorus-agent start` starts it and `askorus-agent login` signs it in. To have it start at logon, `askorus-agent autostart on`.
-- **The phone says it is not signed in to Tailscale, or that the PC is not in your Tailscale account.** Sign in under Settings > Tailscale in the app, with the same account as the PC's agent (`askorus-agent status` on the PC shows which). If you already use Tailscale, the account for Askorus can be that one or a separate one: the app and the agent only have to use the same. A browser that is already signed in to Tailscale offers that account: for another one, switch accounts on that page or open the link in a private window.
+- **The phone says it is not signed in to Tailscale, or that the PC is not in your Tailscale account.** Sign in under Settings > Tailscale in the app, with the same account as the PC's agent (`askorus-agent status` on the PC shows which). To change the account: in the app, "Sign out or switch account" (Settings > Tailscale, the pairing screen, or the box that says the PC is not in your account); on the PC, `askorus-agent logout` and then `askorus-agent login`. After a change, pair again. If you already use Tailscale, the account for Askorus can be that one or a separate one: the app and the agent only have to use the same. A browser that is already signed in to Tailscale offers that account: for another one, switch accounts on that page or open the link in a private window.
 - **A new Claude Code session does not start.** Claude Code asks once per folder whether you trust it: on the PC, run `claude` in that folder once and accept.
 - **Keeping a folder open stays at "starting" or fails.** Remote Control has to be turned on once in Claude Code: on the PC, run `claude remote-control`, answer `y`, then stop it with Ctrl+C.
 - **An AI is missing from the list.** Install it and sign in to it on the PC, then run `check` again. A program installed after `autostart on` is found in its usual folder, or run `autostart on` again.
