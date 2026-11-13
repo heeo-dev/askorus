@@ -35,3 +35,7 @@ Thumbs.db
 
 # Claude Code worktrees
 .claude/worktrees/
+
+# The Tailscale bridge built by tsbridge/build-android.sh (#57)
+app/modules/tailnet/android/libs/
+app/modules/tailnet/android/src/main/jniLibs/

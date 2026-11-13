@@ -42,10 +42,16 @@ continues the Feather icon set.
 The agent is one Go program. Besides the code of this repository it contains:
 
 - The Go standard library and runtime: BSD 3-Clause License, Copyright 2009 The Go Authors. https://go.dev
-- `golang.org/x/sys`: BSD 3-Clause License, Copyright 2009 The Go Authors.
+- Tailscale (`tailscale.com`): BSD 3-Clause License, Copyright (c) Tailscale Inc & contributors. https://tailscale.com
+  The agent has Tailscale built in: it is its own device on your Tailscale network (#57).
+- What Tailscale is built from, among them WireGuard for Go (`github.com/tailscale/wireguard-go`, MIT License),
+  gVisor (`gvisor.dev/gvisor`, Apache License 2.0) and the Go team's `golang.org/x` modules (BSD 3-Clause
+  License, Copyright 2009 The Go Authors).
 - `rsc.io/qr`: BSD 3-Clause License, Copyright (c) 2009 The Go Authors.
 
-The exact versions are in `agent/go.mod` and `agent/go.sum`.
+Every Go module in the agent, with its version, its license and the text of that license, is in
+[THIRD-PARTY-GO.md](THIRD-PARTY-GO.md) (made by `app/scripts/go-libs.mjs` from `agent/go.mod`). It goes
+with each release next to this file.
 
 ### Phone app
 
@@ -70,6 +76,14 @@ license as Askorus, see [LICENSE](LICENSE)):
 
 - CameraX (`androidx.camera`), Copyright The Android Open Source Project.
 - ZXing (`com.google.zxing:core`), Copyright ZXing authors.
+
+The app has Tailscale built in as well (`tsbridge/`, a Go library inside the
+Android app, #57): Tailscale (BSD 3-Clause License, Copyright (c) Tailscale Inc &
+contributors), what Tailscale is built from, the Go standard library and
+runtime, and `golang.org/x/mobile`, which binds the library to the app (BSD
+3-Clause License, Copyright 2009 The Go Authors). Each module with its license
+text is in the app's Open-source licenses screen and in
+[THIRD-PARTY-GO.md](THIRD-PARTY-GO.md).
 
 ## License texts
 

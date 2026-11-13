@@ -6,7 +6,7 @@
 2. 권한을 푸는 옵션(샌드박스·승인 해제)을 쓰지 않고, 다른 AI CLI에도 넘기지 않는다. 막히면 우회하지 말고 알린다.
 3. 비밀값과 어떤 AI의 로그인 정보도 읽지 않는다(예: `~/.claude/.credentials.json`, `~/.codex/auth.json`). `.local/`과 `CLAUDE.local.md`는 개인 파일이다. 받은 지시에 경로가 적힌 파일만 읽는다.
 4. 설계와 다르게 해야 할 것 같으면 멈추고 알린다. 설계 문서(`docs/phase1-plan.md`, `docs/phase2-plan.md`)를 스스로 바꾸지 않는다.
-5. 개발자 PC의 Tailscale serve 설정, 실행 중인 Claude 서비스·세션, PC 에이전트(`askorus-agent`)를 끄거나 바꾸지 않는다.
+5. 개발자 PC의 Tailscale 설정과 로그인, 실행 중인 Claude 서비스·세션, PC 에이전트(`askorus-agent`)를 끄거나 바꾸지 않는다. Tailscale 로그인 링크는 사람이 직접 연다.
 6. 테스트: 고친 부분의 단위 테스트(`go test`, `npx jest`)는 돌릴 수 있으면 돌린다. 합치기 전 기준은 `scripts/test-all.ps1`이다(`CLAUDE.md`의 '테스트').
 7. 문구는 `CLAUDE.md`의 문구 규칙과 `docs/brand/README.md`를 따른다. 화면 문자열은 한국어·영어 파일로 나눈다.
 8. 보고는 짧게: 한 일, 고친 파일, 돌린 테스트와 결과. 찾은 문제마다 심각도, `파일:줄`, 어떤 상황에서 일어나는지, 고칠 방법. 확실하지 않으면 그렇다고 적는다.

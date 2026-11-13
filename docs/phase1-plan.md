@@ -2,24 +2,29 @@
 
 2026-10-26 작성. 기준은 Claude Docs의 'Phase 1 설계'(rev 46, 7절의 결정과 짝 맺기 다시 묻기를 반영한 것은 rev 51, A3 결정과 작업 방식은 rev 54, N5 목표는 rev 55, A4 서버 모드는 rev 56, 세션 파일은 rev 57)와 '제품 방향과 Phase 설계'다. 설계와 다르게 해야 할 일은 아래 '물어볼 것'에 적고, 정해지면 원본 설계 문서를 고친다.
 
+**2026-11-13부터 폰과 PC의 연결은 내장 Tailscale 하나뿐이다(25절, #57).** 아래 5~24절은 그때그때의 기록이라, 거기 나오는 `tailscale serve`, `Tailscale-User-Login`·`X-Forwarded-For` 머리글, 127.0.0.1 포트, HTTPS 인증서, Funnel 감시, 시험 페이지(`-test-page`), `serveHosts`·`tailscaleOwner` 설정, 폰의 Tailscale 앱 안내는 지금 코드에 없다. 지금의 모습은 1~3절의 표와 25절이다.
+
 ## 1. 저장소 구조
 
 ```
 Askorus/
 ├─ agent/                     PC 에이전트 (Go 모듈, 단일 실행 파일)
-│  ├─ cmd/askorus-agent/    main: serve · pair · sessions · info · devices · version (뒤에 check · uninstall)
+│  ├─ cmd/askorus-agent/    main: serve · login · logout · pair · sessions · info · devices · version · check · uninstall
 │  ├─ internal/core/          Claude를 모르는 공통 타입: Session, State, Capability, Adapter 인터페이스
 │  ├─ internal/config/        설정 파일(허용 폴더, 포트, 기본 모델·노력 수준, 폴더별 열어 두기)
 │  ├─ internal/logx/          로그. 토큰·대화 내용 키는 지워서 남긴다
 │  ├─ internal/devices/       기기 토큰 해시 저장소 (파일이 바뀌면 다시 읽어 서버와 CLI가 같이 씀)
 │  ├─ internal/pairing/       짝 맺기 창·코드·PC 허용 (pair 명령과 서버가 파일로 주고받음)
-│  ├─ internal/tailnet/       tailscale CLI 읽기 전용: 주인 계정, MagicDNS 이름, serve·funnel 상태
-│  ├─ internal/api/           HTTP 서버: 127.0.0.1 바인딩, Host 검사, 토큰 확인, /v1 라우트
+│  ├─ internal/tsnode/        에이전트의 Tailscale 기기(tsnet): 로그인, 망 안에서 듣기, 보낸 쪽 확인(WhoIs) (#57)
+│  ├─ internal/api/           HTTP 서버: 내장 기기에서만 열림, 보낸 쪽 확인, Host 검사, 토큰 확인, /v1 라우트
 │  └─ internal/adapter/claude/  Claude 어댑터: claude 실행기, agents --json 파서, 대화 기록 수집기 (Claude 코드는 여기만)
 ├─ app/                       폰 앱 (React Native + Expo, TypeScript)
 │  ├─ src/i18n/               ko.json · en.json
 │  ├─ src/connections/        연결 목록 (kind: pc, 뒤에 handoff · direct · cloud-pc)
+│  ├─ src/tailnet/            앱의 Tailscale 기기: 로그인, 요청 보내기 (#57)
+│  ├─ modules/tailnet/        그 네이티브 모듈 (Kotlin, tsbridge를 부름)
 │  └─ src/api/                에이전트 /v1 클라이언트 (모르는 필드는 무시)
+├─ tsbridge/                  앱의 Tailscale 부분 (Go, tsnet. gomobile로 Android 앱에 넣는다, #57)
 └─ docs/                      이 계획, 뒤에 설치 문서·API 문서. 공개할 때 설계도 여기로 옮긴다
 ```
 
@@ -38,7 +43,7 @@ Askorus/
 | B2 | Android 내부 테스트 트랙(15절, 절차는 `docs/android-release.md`) | **본인 폰에서 1주일 실제 사용** **(B2-1 완료, B2-2는 MT-05·08만 남음. 나머지는 미룸, 18절)** |
 | C | iOS(EAS 빌드, TestFlight), 데모 모드 | TestFlight 외부 테스터 심사 통과 **(미룸, 18절)** |
 | D | macOS·Linux 에이전트(구현 전 테스트 5 포함), 서명·공증, 공개 | — **(미룸, 18절. macOS·Linux 에이전트는 2026-11-11에 앞당김, 21절, #52)** |
-| E | 2차: 최근 대화 미리보기(F8), 우리 쪽 알림(F9), Tailscale 내장(`tsnet`) | 다음 (18절) |
+| E | 2차: 최근 대화 미리보기(F8), 우리 쪽 알림(F9), Tailscale 내장(`tsnet`) | F8 끝남(19절), F9 미룸(20절), Tailscale 내장은 에이전트와 앱 모두에 넣고 그것만 남김(25절, #57, 2026-11-13) |
 | P2 | Phase 2 한 번에 묻기(제품 방향 문서) | E 다음 |
 
 ## 3. 요구사항 → 코드
@@ -53,13 +58,13 @@ Askorus/
 | F6 | PC에서 이어 보기 안내 | `core.Session.AttachCommand`(어댑터가 채움), 앱 복사 버튼 |
 | F7 | 여러 PC | 앱 `connections`(연결 목록, 원칙 8) |
 | F10 | 폴더 열어 두기 | `config.Folder.Server`, `adapter/claude/server.go`(A4), `api` `GET /v1/folders`·`PUT /v1/folders/{id}/server` |
-| N1 | 중계 서버 없음 | 에이전트는 기본으로 외부로 나가는 요청이 없다. 예외는 사용자가 켠 연동(알림 푸시, 판정 모델)뿐이고 무엇이 어디로 가는지 앱 설정과 `check`에 보인다(2026-10-29 다듬음, 설계 rev 67). AI CLI가 스스로 하는 통신은 규칙 밖. 앱은 연결 목록의 주소로만 접속 |
+| N1 | 중계 서버 없음 | 우리 서버는 없다. 에이전트와 앱이 스스로 밖으로 보내는 것은 내장 Tailscale의 통신뿐이다(로그인, 기기 찾기, 직접 연결이 안 될 때 암호화된 채로 지나가는 Tailscale 중계. 진단 로그는 끔. 앱은 사용자가 로그인을 누르기 전에는 이것도 하지 않는다, 25절). 그 밖의 예외는 사용자가 켠 연동(알림 푸시, 판정 모델)뿐이고 무엇이 어디로 가는지 앱 설정과 `check`에 보인다(2026-10-29 다듬음, 설계 rev 67). AI CLI가 스스로 하는 통신은 규칙 밖. 앱은 연결 목록의 주소로만 접속 |
 | N2 | 정해진 동작만 | `runner.go`: 명령 종류(enum)별로 인자를 만들고 금지 플래그 검사. 셸 없이 `exec.Command(exe, args...)`. `.cmd`/`.bat`은 실행 거부 |
 | N3 | 일반 권한 | `serve`는 관리자 권한이면 시작을 거부, 자동 시작은 HKCU Run(일반 권한), 관리자 서비스 감지(`adapter/claude/daemon.go`) |
-| N4 | 짝 맺은 기기만 | `devices` 해시 저장소, `api` 토큰 미들웨어와 실패 횟수 제한(`api/pair.go`), `pairing`(QR 코드·PC 허용), `devices revoke` |
+| N4 | 짝 맺은 기기만 | 둘 다 맞아야 한다: ① 에이전트의 Tailscale 기기가 본, 주인 계정의 기기에서 온 요청(`api/caller.go`, `cmd/askorus-agent/node.go`의 `viaNode`) ② 짝 맺은 기기의 토큰(`devices` 해시 저장소, `api` 토큰 미들웨어와 실패 횟수 제한). `pairing`(QR 코드·PC 허용), `devices revoke`. 앱은 자기 계정의 기기에만 보낸다(`tsbridge.Fetch`) |
 | N5 | 빠름 | 수집기 캐시: 파일별 크기·수정 시각, 덧붙은 부분만 읽기 |
 | N6 | 플랫폼 | Go 크로스 빌드, 경로는 `os.UserHomeDir`·`os.UserConfigDir` |
-| N7 | 설치 쉬움 | 단일 실행 파일, QR 짝 맺기 |
+| N7 | 설치 쉬움 | 단일 실행 파일, QR 짝 맺기. Tailscale은 설치하지 않고 양쪽에서 한 번씩 로그인만 한다(25절) |
 | N8 | 비밀값 보호 | 토큰은 SHA-256 해시만 저장, `logx`가 token·authorization·prompt·content 키를 지움, 앱은 `expo-secure-store` |
 | N9 | 다국어 | 앱 `src/i18n/ko.json`·`en.json`. 에이전트 API는 코드(`code`)만 돌려주고 문장은 앱이 고른다 |
 | N10 | 로그인 정보 비접촉 | 수집기는 `~/.claude/projects`, `~/.claude/sessions/<pid>.json`(이름이 숫자.json인 파일만, 2026-10-26 사용자 허락), `daemon.lock`·`daemon.status.json`만 읽는다. `.credentials.json`·`~/.claude.json`·`sessions/*.key`는 열지 않는다(테스트로 확인) |
@@ -84,7 +89,7 @@ Askorus/
 
 - **단위 테스트** (`go test ./...`): 설정 검증, 로그 가리기, Host 검사, 토큰 확인, 대화 기록 파서(`testdata/`의 가짜 기록), `agents --json` 파서, 상태 판정, 필터. 실제 대화 기록은 저장소에 넣지 않는다.
 - **가짜 `claude` 실행기 테스트**: 테스트 실행 파일이 `ASKORUS_FAKE_CLAUDE=1`이면 가짜 `claude`로 동작한다(`internal/adapter/claude/fake_test.go`). 가짜는 받은 인자를 파일에 적고 정해 둔 출력·종료 코드를 낸다. 인자 배열, 금지 플래그 거부(거부되면 프로세스를 아예 띄우지 않음), 시간 초과, 종료 코드를 보고, A3에서 `Workspace not trusted` 처리를 더한다.
-- **실제 PC 수동 시험**: 일반 권한 셸에서. A1은 읽기 명령(`claude agents --json --all`, `claude --version`)만. A3부터 실제 열기·새 세션은 사용자 확인 뒤 시험 폴더에서. Tailscale serve 설정은 사용자가 정한 포트로 사용자 확인 뒤에.
+- **실제 PC 수동 시험**: 일반 권한 셸에서. A1은 읽기 명령(`claude agents --json --all`, `claude --version`)만. A3부터 실제 열기·새 세션은 사용자 확인 뒤 시험 폴더에서. Tailscale 로그인은 사용자가 직접 한다(25절. 처음 계획의 'serve 설정'은 없어졌다).
 
 ## 5. A1 결과 (2026-10-26)
 
@@ -481,3 +486,51 @@ F8-1·F8-2 결과(2026-10-28):
 - **답 속 링크(#47)**: 링크의 글이 다른 사이트의 주소를 말하면 누를 때 '링크 열기' 시트로 실제 주소를 보여 주고 묻는다. 어느 링크든 길게 누르면 실제 주소를 보고 복사할 수 있다(`src/ui/LinkSheet.tsx`, `linkCheck.ts`). 글이 주소 모양이 아닌 링크는 전처럼 한 번에 열린다.
 - **수식 화면(#47)**: 페이지마다 새 nonce가 붙은 스크립트 하나만 돌고(`'unsafe-inline'`을 뺌), 수식 페이지가 아닌 주소가 열리기 시작하면 WebView를 없애고 수식을 적힌 대로 보여 준다.
 - **`askorus://` 스킴은 그대로 둔다(#47, 정함)**: 검증된 App Link가 아니라 같은 폰의 다른 앱도 이 스킴을 등록할 수 있다. 그래도 두는 까닭: 기본 길은 앱 안 QR 찍기라 스킴을 거치지 않고, 링크로 들어온 짝 맺기도 주소 확인 화면(R-94)과 내 Tailscale 안의 PC인지 확인(#42, R-96), PC 터미널의 허용을 모두 거친다. 다른 앱이 링크를 가로채도 짝 맺기 코드 하나를 얻을 뿐이고, 그 코드는 PC 주인의 Tailscale 계정으로 tailnet 안에서 보내야 하며 PC에서 사람이 허용해야 쓸 수 있다. App Link로 바꾸려면 우리가 가진 도메인과 서버 쪽 파일이 있어야 하는데 서버를 두지 않는다. 스토어 심사나 사용자 의견으로 필요해지면 다시 정한다.
+
+## 25. 연결은 내장 Tailscale 하나뿐 (#57, 2026-11-13, 판 0.3.0)
+
+메인테이너가 정했다: "아직 테스터 없어. 내장만 지원하자. Tailscale 앱과 tailscale serve 기능 지우고 설계 문서, 관련 문서, Readme, 코드, 그림 등 전부 지워줘." 시작은 폰의 Tailscale 앱이 시스템 VPN이라 결제 앱(삼성 월렛)이 막히고, 껐다 켰다 해야 하는 불편이었다. 조사 결과는 이슈 #57의 댓글에 있다.
+
+**무엇이 바뀌나**
+
+| | 전 | 지금 |
+| --- | --- | --- |
+| 폰 | Tailscale 앱(시스템 VPN)을 깔고 켜 둠 | 앱 안에 Tailscale(`tsnet`). VPN 권한 없음, 다른 앱에 영향 없음, 앱을 쓰는 동안만 연결 |
+| PC | Tailscale 설치, `tailscale serve`로 127.0.0.1의 에이전트에 HTTPS를 붙임, 관리 화면에서 HTTPS 켜기 | 에이전트 안에 Tailscale. PC의 주소에는 포트를 열지 않는다(127.0.0.1도) |
+| 준비물 | 양쪽에 Tailscale 설치와 로그인 | Tailscale 계정. 양쪽에서 링크로 한 번씩 로그인 |
+| 암호화 | Tailscale + 그 위의 HTTPS | Tailscale(두 기기 사이의 WireGuard). 그 안은 평문 HTTP라 인증서가 필요 없고, PC 이름이 공개 인증서 기록에 남지 않는다 |
+| 보낸 쪽 확인 | serve가 붙인 머리글(로컬 프로그램이 지어낼 수 있어 토큰과 함께만 믿음) | 에이전트의 기기가 망에 직접 묻는다(WhoIs). 요청에 적힌 것은 쓰지 않는다 |
+| PC 주소 확인(#42) | 폰의 네트워크에 이름과 경로를 물어 추정 | 앱의 기기가 망의 기기 목록에서 '내 계정의 기기'인지 본다. 모든 요청에 같은 규칙 |
+
+**정한 것 (1호가 정함, 메인테이너: "나머지는 내장만 지원한다고 생각하고 너의 의견대로")**
+
+1. **기기 둘.** 폰 앱과 PC 에이전트가 각각 사용자의 tailnet에 기기로 들어간다. 이름은 `askorus-<폰 이름>`, `askorus-<PC 이름>`. PC에 Tailscale이 따로 깔려 있어도 상관없고 쓰지도 않는다. 계정은 이미 쓰는 Tailscale 계정이어도 되고 Askorus용으로 따로 둔 계정이어도 된다. 앱과 에이전트만 같은 계정이면 된다. 이미 로그인된 브라우저에서 링크를 열면 그 계정이 먼저 나오므로, 다른 계정을 쓰려면 그 화면의 계정 바꾸기나 시크릿 창을 안내한다(README의 문제 해결).
+2. **로그인은 사람이 브라우저에서.** 에이전트는 `askorus-agent login`(setup의 4단계)이 링크와 그 QR을 보여 주고 기다린다. 앱은 짝 맺기 화면의 1단계와 설정 > Tailscale의 버튼이 브라우저를 연다. 앱과 에이전트는 계정 비밀번호를 받지 않는다. 계정이 없으면 Tailscale의 로그인 화면에서 만든다.
+3. **로그인하기 전에는 아무 데도 가지 않는다.** 앱은 사용자가 로그인을 누르기 전에는 기기를 켜지 않는다(Tailscale 서버와도 통신하지 않는다). 로그인한 적이 있으면 앱을 열 때 켠다.
+4. **에이전트는 내장 기기에서만 듣는다.** 포트는 `agent.json`의 `port`(기본 8790)를 그대로 쓰되, 이제 tailnet 안의 포트다. 이 번호는 돌고 있는 에이전트를 가리키는 이름으로도 쓴다(`shutdown`·`status`의 이벤트와 잠금 파일). 에이전트가 도는지는 포트를 두드려 보지 않고 이것으로 안다.
+5. **두 가지가 다 맞아야 들어온다(N4).** ① 에이전트의 기기가 본, 주인 계정(기기가 로그인한 계정)의 기기에서 온 요청 ② 짝 맺은 기기의 토큰. ①이 없으면 토큰이 맞아도 403이다. 태그가 붙은 기기나 다른 사람이 공유한 기기는 사람이 아니거나 다른 계정이라 거절한다. 주인 계정을 모를 때(로그인 전)는 아무도 들이지 않는다. API 핸들러를 다른 소켓에 열어도 보낸 쪽이 없어 아무도 못 들어온다.
+6. **앱은 내 계정의 기기에만 보낸다.** 규칙은 네이티브 쪽(`tsbridge.Fetch`)에 있어 화면 코드가 잊을 수 없다. 이름은 폰의 DNS가 아니라 tailnet의 기기 목록에서 찾는다. 짝 맺기 전에는 화면이 먼저 물어(`ownDevice`) 까닭을 말해 준다.
+7. **짝 맺기 링크는 v=2.** host가 에이전트 기기의 이름이다. 옛 에이전트의 v=1 링크는 시도하지 않고 "에이전트를 새 판으로 올리세요"라고 한다. 옛 앱은 v=2를 모르는 링크로 거절한다.
+8. **진단 로그 끔.** Tailscale 라이브러리가 Tailscale로 보내는 진단 로그를 양쪽 모두 끈다. 기기 키는 폰에서는 앱 폴더(`files/tailnet`), PC에서는 에이전트 설정 폴더(`tailnet`)에 있다.
+9. **키 만료.** Tailscale의 기기 키는 기본 180일 뒤 만료된다. `check`가 14일 전부터 알리고, 만료되면 `login`으로 다시 로그인한다. 앱은 '로그인 필요'로 보이고 같은 버튼으로 다시 한다. 관리 화면에서 기기의 키 만료를 끌 수 있다.
+10. **지운 것.** 127.0.0.1 리스너, `internal/tailnet`(tailscale CLI), setup·check의 serve와 HTTPS 단계, Funnel 감시와 머리글 검사(R-104), 시험 페이지와 `-test-page`, `serveHosts`·`tailscaleOwner` 설정, 앱의 Tailscale 앱 안내와 스토어 링크, `modules/tailnet-check`와 경로 확인(#42의 구현), 502를 '에이전트 꺼짐'으로 읽던 것.
+11. **테스트는 Tailscale에 가지 않는다.** 에이전트의 설치·켜기·끄기 테스트는 `ASKORUS_TEST_NO_TAILNET=1`로 기기 없이 돈다(아무것도 열지 않고 아무도 들이지 않는다). 앱의 테스트는 모듈 대역을 쓴다. 실제 연결은 실제 폰에서 본다(`docs/testing.md`).
+12. **iOS는 따로.** Tailscale의 iOS용 라이브러리로 같은 다리를 만들 수 있는지는 iOS를 할 때 본다(C 단계).
+13. **Tailscale 라이브러리에서 뺀 것(11-13 보안 검토, 찾음: 2호, 확인: 1호).** 에이전트와 앱의 다리는 빌드 태그 `ts_omit_peerapiserver,ts_omit_c2n,ts_omit_logtail`로만 빌드한다(`tsnode.BuildTags`). 라이브러리가 기본으로 넣는 것 셋을 뺀다: ① 다른 기기를 위한 서비스(PeerAPI: 파일 받기, 디버그 화면). 내장 방식에서는 이것이 PC의 모든 주소에 TCP 포트를 하나 열어, '포트를 열지 않는다'는 규칙과 어긋났다. ② Tailscale의 서버가 기기에 물을 수 있는 진단(C2N). ③ 로그를 올리는 부분과 그 버퍼 파일(올리기는 이미 꺼 두었지만 버퍼 파일에 로그인 링크가 남았다). 태그 없이 빌드한 실행 파일은 Tailscale 기기를 켜지 않는다(`ErrBuildTags`). 빌드하는 곳(배포·테스트 스크립트, CI, 다리 빌드, README)이 모두 같은 태그를 쓰는지 테스트가 본다.
+14. **앱은 확인한 주소로만, 터널로만 접속한다(같은 검토).** `tsbridge.Fetch`는 이름이 아니라 방금 '내 계정의 기기'로 확인한 그 기기의 Tailscale 주소로 접속하고, 접속은 내장 기기의 네트워크 스택으로만 한다(`dialTailnet`). 라이브러리의 보통 접속은 tailnet에 없는 이름을 폰의 DNS로 풀고 tailnet 기기가 아닌 주소에는 폰의 네트워크로 나가므로, 확인과 접속 사이에 기기 목록이 바뀌면 토큰이 터널 밖으로 평문으로 나갈 수 있었다.
+15. **백그라운드 실행의 콘솔에는 링크를 쓰지 않는다(같은 검토).** `start`로 켠 에이전트의 콘솔은 파일(`background.out`)이라 로그인 링크, 계정, 기기 이름을 적지 않는다(누가 그 로그를 받아 링크를 열면 이 PC를 자기 tailnet에 붙일 수 있다). 링크는 `login`·`check`·`setup`이 사람에게 직접 보인다. 기기 상태를 몇 번 잇달아 읽지 못하면 주인 계정을 비워 아무도 들이지 않는다.
+
+**흐름**
+
+- PC: `setup` → 1 이 PC → 2 AI 프로그램 → 3 에이전트 켜기(자동 시작) → 4 Tailscale 로그인(링크와 QR, 기다림) → 5 폰과 짝 맺기.
+- 폰: 짝 맺기 화면 → 1 Tailscale 로그인(브라우저, 돌아오면 앱이 알아챔) → 2 PC에서 `askorus-agent pair` → 3 QR 찍기 → 이 PC가 맞나요 → PC에서 허용.
+- 돌고 있는 에이전트와 다른 명령(`pair`·`login`·`status`·`check`·`setup`)은 별개 프로세스라 파일로 주고받는다: 기기 상태는 `tailnet.json`, 로그인 링크 요청과 로그아웃 요청은 `tailnet-request`.
+
+**비용과 남은 것**
+
+- 크기: 에이전트 12.6MB → 약 24MB(배포판 기준). 앱은 라이브러리가 약 21MB라 APK 파일이 37MB → 52MB(arm64, 압축하지 않고 담긴다), 스토어에서 내려받는 크기로는 약 +8MB.
+- Tailscale 안에서 panic이 나면 프로세스 전체가 죽는다. Android에는 Go가 아는 홈·캐시 폴더가 없어 로그 폴더를 정해 주고(`TS_LOGS_DIR`), 앱이 인터페이스 목록을 읽을 수 없어 가짜 목록을 넣는다(`tsbridge/madeup.go`). Tailscale 판을 올릴 때 실제 폰에서 다시 확인한다.
+- Expo Go에는 네이티브 모듈이 없어 PC에 연결할 수 없다. 화면만 볼 때 말고는 빌드한 앱으로 본다. E2E(`scripts/e2e.ps1`)는 Expo Go 기준이라 다시 짜야 한다(따로 이슈).
+- EAS 클라우드 빌드는 빌드 전 단계에서 gomobile을 돌리게 해야 한다(`docs/android-release.md` 1.1).
+- Play의 데이터 보안 양식을 다시 답한다(내장 Tailscale이 기기 이름과 IP를 Tailscale에 보낸다).
+- 아직 안 본 것: 모바일 데이터에서의 연결, 실제 Mac과 Linux에서의 에이전트 로그인, Windows 방화벽 알림.
