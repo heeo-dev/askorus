@@ -26,6 +26,7 @@ import { Linking, Platform, Pressable, Share, StyleSheet, Text, TextInput, View 
 import { AgentError, CancelledError, NetworkError } from '@/api/client';
 import { findPCs, type FoundPC, newMatch } from '@/connections/discover';
 import { osName } from '@/connections/label';
+import { shownHost, shownPC } from '@/demo';
 import { cleanDeviceName, pairWithPC } from '@/connections/pair';
 import { isOldPairLink, type PairLink, parsePairLink } from '@/connections/pairLink';
 import { ConnectionStore } from '@/connections/store';
@@ -330,8 +331,8 @@ export default function Pair() {
                       >
                         <Icon name="pc" size={20} color={th.text} />
                         <View style={s.foundTexts}>
-                          <Text style={s.foundName}>{pc.name}</Text>
-                          <Text style={s.caption}>{[osName(pc.os), pc.host.split('.')[0]].filter(Boolean).join(' · ')}</Text>
+                          <Text style={s.foundName}>{shownPC(pc.name)}</Text>
+                          <Text style={s.caption}>{[osName(pc.os), shownHost(pc.host.split('.')[0])].filter(Boolean).join(' · ')}</Text>
                         </View>
                         {pc.paired ? <Text style={s.caption}>{t('pair.already')}</Text> : null}
                         <Icon name="chevronRight" size={16} color={th.textSub} />
@@ -411,8 +412,8 @@ export default function Pair() {
             </Text>
             {pickedPC ? (
               <View style={s.card}>
-                <Text style={s.host}>{pickedPC.name}</Text>
-                <Text style={s.caption}>{[osName(pickedPC.os), pickedPC.host.split('.')[0]].filter(Boolean).join(' · ')}</Text>
+                <Text style={s.host}>{shownPC(pickedPC.name)}</Text>
+                <Text style={s.caption}>{[osName(pickedPC.os), shownHost(pickedPC.host.split('.')[0])].filter(Boolean).join(' · ')}</Text>
               </View>
             ) : (
               <View style={s.card}>

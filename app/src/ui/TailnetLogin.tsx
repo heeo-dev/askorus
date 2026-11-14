@@ -8,6 +8,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { shownAccount } from '@/demo';
 import { t } from '@/i18n';
 import { loginTailnet, logoutTailnet, type TailnetStatus, useTailnet } from '@/tailnet/node';
 
@@ -108,7 +109,7 @@ export function TailnetLogin({ onSignedIn, about = true, manage = false }: { onS
           <Icon name="check" size={18} color={th.ok} />
           <View style={s.grow}>
             <Text style={s.title}>{t('tailnet.connected')}</Text>
-            {st.owner ? <Text style={s.caption}>{st.owner}</Text> : null}
+            {st.owner ? <Text style={s.caption}>{shownAccount(st.owner)}</Text> : null}
           </View>
         </View>
         {manage ? (
