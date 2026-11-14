@@ -86,7 +86,7 @@ curl -fsSL https://github.com/heeo-dev/askorus/releases/latest/download/install.
 
 The script downloads the agent for your system from the GitHub release, checks its SHA-256, puts it in `%LOCALAPPDATA%\Programs\Askorus` (Windows) or `~/.local/bin` (macOS, Linux) and starts `askorus-agent setup`. Run the same line again to update.
 
-Setup goes step by step: it puts the agent on your PATH, checks the AI programs, starts the agent and makes it start at logon. Then it shows a link (and a QR code of the same link) to sign the PC in to Tailscale, once. Last, you scan a QR code with the app to pair the phone; the app asks you to sign in to Tailscale too, with the same account.
+Setup goes step by step: it puts the agent on your PATH, checks the AI programs, starts the agent and makes it start at logon. Then it shows a link (and a QR code of the same link) to sign the PC in to Tailscale, once. Last, it opens a pairing window: in the app, sign in to Tailscale with the same account and tap your PC in the list. There is no QR code to scan (one is shown for a phone that does not list the PC).
 
 On macOS and Linux the same commands work as on Windows. A few things differ by system:
 
@@ -136,7 +136,7 @@ Help me install the Askorus PC agent (https://github.com/heeo-dev/askorus) on th
    Run "path on", then "check". Explain each [X] and [!] line in plain words with what I should do, and the [i] lines that are mine to do (Remote Control consent, trusting a folder).
 4. When check has no [X] left, run "start" and "autostart on", then "check" once more: it now says whether this PC is signed in to Tailscale.
 5. If it is not, tell me to run "askorus-agent login" in my own PowerShell window and to open the link it shows. Signing in is mine to do; nothing of Tailscale needs installing.
-6. Last, tell me to run "askorus-agent pair" in my own PowerShell window, scan the QR code with the Askorus app, check that the phone asking is mine, and allow it myself.
+6. Last, tell me to run "askorus-agent pair" in my own PowerShell window and to tap this PC in the Askorus app (signed in to the same Tailscale account). It says which phone came in, with two digits my phone shows too: I check that it is mine.
 Rules:
 - Run only the commands above, and ask me before each one.
 - Do not run anything as administrator, and never use options that skip your own (the AI's) permission prompts or sandbox.
@@ -162,7 +162,7 @@ Help me install the Askorus PC agent (https://github.com/heeo-dev/askorus) on th
    Run "path on", then "check". Explain each [X] and [!] line in plain words with what I should do, and the [i] lines that are mine to do (Remote Control consent, trusting a folder).
 4. When check has no [X] left, run "start" and "autostart on", then "check" once more: it now says whether this PC is signed in to Tailscale.
 5. If it is not, tell me to run "askorus-agent login" in my own terminal window and to open the link it shows. Signing in is mine to do; nothing of Tailscale needs installing.
-6. Last, tell me to run "askorus-agent pair" in my own terminal window, scan the QR code with the Askorus app, check that the phone asking is mine, and allow it myself.
+6. Last, tell me to run "askorus-agent pair" in my own terminal window and to tap this PC in the Askorus app (signed in to the same Tailscale account). It says which phone came in, with two digits my phone shows too: I check that it is mine.
 Rules:
 - Run only the commands above, and ask me before each one.
 - Do not run anything with sudo or as root, and never use options that skip your own (the AI's) permission prompts or sandbox.
@@ -178,6 +178,8 @@ Rules:
 Run `askorus-agent check` on the PC first. It lists what is missing, each line with what to do: `[X]` must be fixed, `[!]` is a warning, `[i]` is something only you can do.
 
 - **The phone says it cannot reach the PC.** On the PC, the agent must be running and signed in to Tailscale: `askorus-agent status` shows both, `askorus-agent start` starts it and `askorus-agent login` signs it in. To have it start at logon, `askorus-agent autostart on`.
+- **The app does not list my PC.** The app looks for the PC among the devices of the Tailscale account it is signed in to. Check that the agent runs and is signed in with the same account (`askorus-agent status`). A PC set to another port than 8790 is paired with the QR code: run `askorus-agent pair` and use "Pair with a QR code or a link" in the app.
+- **I am not at the PC and want to add a phone.** A phone that is already paired can allow it: open Askorus on that phone, and the request shows there with the new phone's name and its two digits.
 - **The phone says it is not signed in to Tailscale, or that the PC is not in your Tailscale account.** Sign in under Settings > Tailscale in the app, with the same account as the PC's agent (`askorus-agent status` on the PC shows which). To change the account: in the app, "Sign out or switch account" (Settings > Tailscale, the pairing screen, or the box that says the PC is not in your account); on the PC, `askorus-agent logout` and then `askorus-agent login`. After a change, pair again. If you already use Tailscale, the account for Askorus can be that one or a separate one: the app and the agent only have to use the same. A browser that is already signed in to Tailscale offers that account: for another one, switch accounts on that page or open the link in a private window.
 - **A new Claude Code session does not start.** Claude Code asks once per folder whether you trust it: on the PC, run `claude` in that folder once and accept.
 - **Keeping a folder open stays at "starting" or fails.** Remote Control has to be turned on once in Claude Code: on the PC, run `claude remote-control`, answer `y`, then stop it with Ctrl+C.
@@ -199,7 +201,7 @@ The app is not on Google Play yet. Until it is, a preview APK comes with each re
 
 1. On the phone, open the [latest release](https://github.com/heeo-dev/askorus/releases/latest) and download `askorus-android-<version>.apk`.
 2. Open the downloaded file. Android asks whether your browser may install apps: allow it for this install. Play Protect may offer to scan the app first, as it does for any app from outside a store.
-3. Open Askorus and pair it with your PC: sign in to Tailscale when the app asks (the same account as on the PC), run `askorus-agent pair` on the PC and scan the QR code.
+3. Open Askorus and pair it with your PC: sign in to Tailscale when the app asks (the same account as on the PC), then tap your PC in the list. The PC asks once whether to allow the phone, in a small window on its screen, and both show the same two digits. (While `askorus-agent pair` or `setup` is waiting in a terminal, the phone is taken without a question.)
 
 Good to know about the preview APK:
 
@@ -229,7 +231,7 @@ go build -trimpath -tags ts_omit_peerapiserver,ts_omit_c2n,ts_omit_logtail -o as
 
 The tags leave out parts of the Tailscale library the agent must not carry (a port on the PC's own addresses, diagnostics, the log uploader); it refuses to start its Tailscale device without them.
 
-The steps one by one: `path on` (put it on your PATH), `check` (what is missing and how to fix it), `start` (run it in the background, normal rights), `autostart on` (start it at logon), `login` (sign the PC in to Tailscale with a link), `pair` (show a QR code to scan with the app). `scripts/release.ps1` builds the release files for all three systems.
+The steps one by one: `path on` (put it on your PATH), `check` (what is missing and how to fix it), `start` (run it in the background, normal rights), `autostart on` (start it at logon), `login` (sign the PC in to Tailscale with a link), `pair` (open a pairing window: a phone that taps the PC in the app is taken without a question; a QR code is shown for a phone that does not list the PC). `scripts/release.ps1` builds the release files for all three systems.
 
 The app is React Native with Expo (`app/`); its Tailscale part is a Go library (`tsbridge/`) that is built into the Android app. See [docs/android-release.md](docs/android-release.md) for building the Android app.
 
