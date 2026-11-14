@@ -214,6 +214,11 @@ The app is not on Google Play yet. Until it is, a preview APK comes with each re
 2. Open the downloaded file. Android asks whether your browser may install apps: allow it for this install. Play Protect may offer to scan the app first, as it does for any app from outside a store.
 3. Open Askorus and pair it with your PC: sign in to Tailscale when the app asks (the same account as on the PC), then tap your PC in the list and tap Pair. The phone shows two digits. The PC asks once whether to allow the phone, in a small window on its screen that shows the same two digits: allow it only if they match. The phone then shows "Paired" with the digits until you tap Done. (While `askorus-agent pair` or `setup` is waiting in a terminal, the phone is taken without a question.)
 
+<p align="center">
+  <img src="docs/screenshots/en/6-pair-list.png" width="200" alt="Pair with a PC: signed in to Tailscale, and the PC found in the account is listed to tap">
+  <img src="docs/screenshots/en/7-pair-number.png" width="200" alt="Waiting for the PC to allow it: the phone shows two digits, and the PC shows the same">
+</p>
+
 Good to know about the preview APK:
 
 - **No automatic updates.** To update, download the newer APK and install it over the old one. Your history and pairing stay. (Updating from 0.2.x is the exception: see [Updating from 0.2.x](#updating-from-02x).)
