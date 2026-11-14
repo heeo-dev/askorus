@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -40,6 +41,19 @@ func newDirectEnv(t *testing.T) directEnv {
 		Owner: func() string { return testOwner },
 	}).Handler()
 	return directEnv{pairEnv: pairEnv{h: viaNode(h), dir: dir}, store: store, pairer: p}
+}
+
+// openWindow opens a pairing window as a pair command that runs does.
+func (e directEnv) openWindow(t *testing.T) pairing.Window {
+	t.Helper()
+	_, win, err := pairing.Open(e.dir, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := pairing.Hold(e.dir, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	return win
 }
 
 func bearer(token string) map[string]string {
@@ -94,9 +108,16 @@ func TestHello(t *testing.T) {
 	if h.Name != "askorus-agent" || h.Hostname != "DESKTOP-TEST" || h.Version != "9.9.9" || h.OS == "" || h.APIVersion != APIVersion || h.Pairing != "ask" {
 		t.Errorf("hello = %+v", h)
 	}
+	// A window file alone is not an open window: the pair command that
+	// opened it has to be running (R-109).
 	if _, _, err := pairing.Open(e.dir, time.Now()); err != nil {
 		t.Fatal(err)
 	}
+	w = e.serve(viaServe("GET", "/v1/hello", "", nil))
+	if json.Unmarshal(w.Body.Bytes(), &h); h.Pairing != "ask" {
+		t.Errorf("with a window nobody holds: %+v", h)
+	}
+	e.openWindow(t)
 	w = e.serve(viaServe("GET", "/v1/hello", "", nil))
 	if json.Unmarshal(w.Body.Bytes(), &h); h.Pairing != "window" {
 		t.Errorf("with a pairing window open: %+v", h)
@@ -119,10 +140,7 @@ func TestHello(t *testing.T) {
 // the pair command learns who came in, with the two digits.
 func TestPairDirectIntoAnOpenWindow(t *testing.T) {
 	e := newDirectEnv(t)
-	_, win, err := pairing.Open(e.dir, time.Now())
-	if err != nil {
-		t.Fatal(err)
-	}
+	win := e.openWindow(t)
 	st := e.poll(t, e.ask(t, "Galaxy S23", "47"))
 	if st.Status != string(pairing.StateApproved) || st.Token == "" || st.DeviceName != "Galaxy S23" {
 		t.Fatalf("status = %+v", st)
@@ -204,6 +222,65 @@ func TestPairDirectRefused(t *testing.T) {
 	}
 	if list, _ := e.store.List(); len(list) != 0 {
 		t.Errorf("%d devices after a refusal", len(list))
+	}
+}
+
+// R-111. A device whose requests keep ending refused or unanswered is not
+// asked about again for a while: each request puts a question in front of a
+// person and holds the one place in the line. It is counted when the
+// request ends, so a device that never asks how it went is counted too.
+// A pairing window open on the PC still takes it: that is the person's
+// consent whatever came before.
+func TestPairDirectAskLimit(t *testing.T) {
+	e := newDirectEnv(t)
+	var asked atomic.Int32
+	e.pairer.Confirm = func(context.Context, pairing.Question) (bool, bool) { asked.Add(1); return false, true }
+	body := `{"deviceName":"Galaxy S23","match":"47"}`
+	// ask sends a request once the one before it has ended (409 until then).
+	ask := func(hdr map[string]string) *httptest.ResponseRecorder {
+		t.Helper()
+		deadline := time.Now().Add(3 * time.Second)
+		for {
+			w := e.serve(viaServe("POST", "/v1/pair", body, hdr))
+			if w.Code != http.StatusConflict {
+				return w
+			}
+			if time.Now().After(deadline) {
+				t.Fatal("the request before never ended")
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+	}
+	for i := 0; i < maxAskFails; i++ {
+		// The asking device never calls /v1/pair/status.
+		if w := ask(nil); w.Code != http.StatusAccepted {
+			t.Fatalf("request %d: %d %s", i+1, w.Code, w.Body)
+		}
+	}
+	w := ask(nil)
+	if w.Code != http.StatusTooManyRequests || errCode(t, w) != CodePairAskLimit || w.Header().Get("Retry-After") == "" || !strings.Contains(w.Body.String(), "askorus-agent pair") {
+		t.Fatalf("after %d refusals: %d %s", maxAskFails, w.Code, w.Body)
+	}
+	if asked.Load() != maxAskFails {
+		t.Errorf("the screen was asked %d times", asked.Load())
+	}
+	// Nothing else is shut: the device is not locked out of the rest.
+	if w := e.serve(viaServe("GET", "/v1/hello", "", nil)); w.Code != 200 {
+		t.Errorf("hello while asking is held back: %d %s", w.Code, w.Body)
+	}
+	// Another device of the account is not held back.
+	if w := ask(map[string]string{hdrCallerIP: "100.64.0.77"}); w.Code != http.StatusAccepted {
+		t.Errorf("another device: %d %s", w.Code, w.Body)
+	}
+	// The person opens a pairing window: the held-back device is taken.
+	e.openWindow(t)
+	w = ask(nil)
+	var started PairStarted
+	if w.Code != http.StatusAccepted || json.Unmarshal(w.Body.Bytes(), &started) != nil {
+		t.Fatalf("into an open window: %d %s", w.Code, w.Body)
+	}
+	if st := e.poll(t, started.RequestID); st.Status != string(pairing.StateApproved) || st.Token == "" {
+		t.Errorf("into an open window: %+v", st)
 	}
 }
 

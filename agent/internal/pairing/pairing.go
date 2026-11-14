@@ -7,6 +7,8 @@
 //	pairing-request.json   server: a phone sent the right code
 //	pairing-decision.json  pair command: the person at the PC allowed or refused
 //	pairing-result.json    server: the device that was added, or why not
+//	pairing-alive          pair command: its modification time is touched every
+//	                       second while the command runs (#58)
 //
 // The code is 128 random bits, valid for 5 minutes, and used at most once:
 // the first request with the right code consumes the window whether or not
@@ -40,6 +42,7 @@ const (
 	requestFile  = "pairing-request.json"
 	decisionFile = "pairing-decision.json"
 	resultFile   = "pairing-result.json"
+	aliveFile    = "pairing-alive"
 
 	// WindowTTL is how long a pairing code works.
 	WindowTTL = 5 * time.Minute
@@ -47,6 +50,13 @@ const (
 	MaxBadCodes = 5
 	// DecisionTimeout is how long the phone waits for the person at the PC.
 	DecisionTimeout = 2 * time.Minute
+	// AliveEvery is how often the pair command says that it still runs, and
+	// AliveFor how long the server believes it. A window takes a request
+	// without a code only while the command that opened it is alive: a
+	// closed terminal or a killed command must not leave a window behind
+	// that lets a device in with nobody looking (#58).
+	AliveEvery = time.Second
+	AliveFor   = 5 * time.Second
 )
 
 var (
@@ -115,9 +125,57 @@ func Open(dir string, now time.Time) (code string, w Window, err error) {
 
 // Close removes every pairing file.
 func Close(dir string) {
-	for _, f := range []string{windowFile, requestFile, decisionFile, resultFile} {
+	for _, f := range []string{windowFile, requestFile, decisionFile, resultFile, aliveFile} {
 		os.Remove(filepath.Join(dir, f))
 	}
+}
+
+// CloseWindow removes the pairing files if window id is still the open one.
+// A pair command that ends must not take away the window another one opened
+// in the meantime.
+func CloseWindow(dir, id string) {
+	var w Window
+	if readJSON(filepath.Join(dir, windowFile), &w) == nil && w.ID != id {
+		return
+	}
+	Close(dir)
+}
+
+// Hold says that the command that opened the window runs at time now.
+func Hold(dir string, now time.Time) error {
+	path := filepath.Join(dir, aliveFile)
+	if _, err := os.Stat(path); err != nil {
+		if err := os.WriteFile(path, nil, 0o600); err != nil {
+			return err
+		}
+	}
+	return os.Chtimes(path, now, now)
+}
+
+// KeepAlive says so now and every AliveEvery from then on, until stop is
+// called. It only touches the file Hold made: once the files are closed it
+// does nothing.
+func KeepAlive(dir string) (stop func(), err error) {
+	if err := Hold(dir, time.Now()); err != nil {
+		return nil, err
+	}
+	path := filepath.Join(dir, aliveFile)
+	quit, done := make(chan struct{}), make(chan struct{})
+	go func() {
+		defer close(done)
+		t := time.NewTicker(AliveEvery)
+		defer t.Stop()
+		for {
+			select {
+			case <-quit:
+				return
+			case now := <-t.C:
+				_ = os.Chtimes(path, now, now) // a miss is made up for by the next one
+			}
+		}
+	}()
+	var once sync.Once
+	return func() { once.Do(func() { close(quit); <-done }) }, nil
 }
 
 // PendingRequest returns the request for window id, if a phone is waiting.
@@ -171,6 +229,11 @@ type Pairer struct {
 	misses map[string]int      // wrong codes per window id
 	reqs   map[string]*pending // by request id
 	direct *direct             // the request without a code that waits
+	// used holds the windows that took a request, by id, until they would
+	// have expired. A window is good for one request, and that must hold
+	// even when its file could not be deleted (on Windows a file somebody
+	// is reading at that moment stays).
+	used map[string]time.Time
 }
 
 // CollectTimeout is how long an issued token waits for the phone to fetch
@@ -324,6 +387,9 @@ func (p *Pairer) claim(code string) (Window, error) {
 		os.Remove(path)
 		return Window{}, ErrNoWindow
 	}
+	if _, used := p.used[w.ID]; used {
+		return Window{}, ErrNoWindow
+	}
 	code = strings.ToUpper(strings.TrimSpace(code))
 	if len(code) > 64 || subtle.ConstantTimeCompare([]byte(hashCode(code)), []byte(w.CodeHash)) != 1 {
 		if p.misses == nil {
@@ -368,10 +434,42 @@ func (p *Pairer) waitDecision(ctx context.Context, id string) (bool, error) {
 // finish consumes the window and leaves only the result for the pair
 // command to read.
 func (p *Pairer) finish(res Result) {
-	for _, f := range []string{windowFile, requestFile, decisionFile} {
-		os.Remove(filepath.Join(p.Dir, f))
-	}
+	p.markUsed(res.WindowID, p.now().Add(WindowTTL))
+	// The result first: the pair command must never see the window gone
+	// with no result to read.
 	_ = writeJSON(filepath.Join(p.Dir, resultFile), res)
+	for _, f := range []string{windowFile, requestFile, decisionFile} {
+		removeFile(filepath.Join(p.Dir, f))
+	}
+}
+
+// markUsed records that window id took its one request.
+func (p *Pairer) markUsed(id string, until time.Time) {
+	if id == "" {
+		return
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	now := p.now()
+	for k, t := range p.used {
+		if !now.Before(t) {
+			delete(p.used, k)
+		}
+	}
+	if p.used == nil {
+		p.used = map[string]time.Time{}
+	}
+	p.used[id] = until
+}
+
+// removeFile deletes a file, trying again for a moment when it is in use.
+func removeFile(path string) {
+	for i := 0; i < 5; i++ {
+		if err := os.Remove(path); err == nil || errors.Is(err, os.ErrNotExist) {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
 }
 
 func (p *Pairer) now() time.Time {

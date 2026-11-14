@@ -87,7 +87,12 @@ func zenityArgs(q Question) []string {
 	return []string{"--question", "--no-markup", "--title=" + q.Title, "--text=" + q.Text, "--ok-label=" + q.Allow, "--cancel-label=" + q.Deny, "--default-cancel"}
 }
 
-// kdialogArgs are the arguments for kdialog.
+// kdialogArgs are the arguments for kdialog. --warningyesno: the default
+// button is No. kdialog has no switch for plain text, and Qt reads a text
+// as markup when it looks like markup, so the three characters markup
+// needs are swapped for look-alikes: a device name cannot hide or restyle
+// the question.
 func kdialogArgs(q Question) []string {
-	return []string{"--title", q.Title, "--yes-label", q.Allow, "--no-label", q.Deny, "--warningyesno", q.Text}
+	plain := strings.NewReplacer("<", "‹", ">", "›", "&", "＆").Replace
+	return []string{"--title", plain(q.Title), "--yes-label", plain(q.Allow), "--no-label", plain(q.Deny), "--warningyesno", plain(q.Text)}
 }

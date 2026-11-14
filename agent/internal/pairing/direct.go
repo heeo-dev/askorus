@@ -6,7 +6,9 @@ package pairing
 // consent, given in one of three ways:
 //
 //   - a pairing window is open on the PC (`pair` or `setup` is waiting in a
-//     terminal the person is looking at): the first request is taken at once;
+//     terminal the person is looking at): the first request is taken at once.
+//     The window counts only while that command runs (it says so every
+//     second), and for one request;
 //   - no window: the PC shows a question on its screen (Confirm);
 //   - nobody at the PC: a phone that is already paired answers (Pending,
 //     Answer).
@@ -14,12 +16,17 @@ package pairing
 // The phone shows two digits and sends them along; every place that asks or
 // reports shows the same two digits, so a request from another device that
 // only carries the phone's name can be told apart.
+//
+// Whatever answers first settles the request, once: a refusal that came
+// first is not undone by a window opened a moment later, and an answer to a
+// request that is already settled is an error.
 
 import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"os"
 	"path/filepath"
 	"sync"
 	"time"
@@ -49,13 +56,38 @@ type Question struct {
 
 // direct is the code-less request that waits for an answer; at most one.
 type direct struct {
-	q      Question
-	answer chan bool
-	once   sync.Once
+	q    Question
+	done chan struct{} // closed when the request is settled
+
+	mu       sync.Mutex
+	state    State  // StatePending until settled
+	windowID string // the window that let it in, if one did
 }
 
-func (d *direct) decide(allow bool) {
-	d.once.Do(func() { d.answer <- allow })
+// settle records the outcome if there is none yet, and reports whether it
+// did: the first answer counts, whoever gave it.
+func (d *direct) settle(st State, windowID string) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.state != StatePending {
+		return false
+	}
+	d.state, d.windowID = st, windowID
+	close(d.done)
+	return true
+}
+
+func (d *direct) outcome() (State, string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.state, d.windowID
+}
+
+func answerState(allow bool) State {
+	if allow {
+		return StateApproved
+	}
+	return StateDenied
 }
 
 func matchOK(s string) bool {
@@ -70,10 +102,25 @@ func randomHex(n int) (string, error) {
 	return hex.EncodeToString(raw), nil
 }
 
-// openWindow returns the pairing window, if one is open now.
+// openWindow returns the pairing window, if one is open now: not expired,
+// not used for a request yet, and held by a pair command that still runs.
 func (p *Pairer) openWindow() (Window, bool) {
 	var w Window
-	if readJSON(filepath.Join(p.Dir, windowFile), &w) != nil || w.ID == "" || !p.now().Before(w.ExpiresAt) {
+	now := p.now()
+	if readJSON(filepath.Join(p.Dir, windowFile), &w) != nil || w.ID == "" || !now.Before(w.ExpiresAt) {
+		return Window{}, false
+	}
+	p.mu.Lock()
+	_, used := p.used[w.ID]
+	p.mu.Unlock()
+	if used {
+		return Window{}, false
+	}
+	fi, err := os.Stat(filepath.Join(p.Dir, aliveFile))
+	if err != nil {
+		return Window{}, false
+	}
+	if age := now.Sub(fi.ModTime()); age >= AliveFor || age <= -AliveFor {
 		return Window{}, false
 	}
 	return w, true
@@ -88,8 +135,10 @@ func (p *Pairer) WindowIsOpen() bool {
 
 // StartDirect takes a request without a code and returns a request id for
 // Status, as Start does. The caller has already been checked to be a device
-// of the PC owner's own Tailscale account.
-func (p *Pairer) StartDirect(deviceName, match string, o Origin) (string, error) {
+// of the PC owner's own Tailscale account. ended, if not nil, is called once
+// with the outcome when the request is settled, whether or not the phone
+// ever asks for it.
+func (p *Pairer) StartDirect(deviceName, match string, o Origin, ended func(State)) (string, error) {
 	name, ok := cleanName(deviceName)
 	if !ok {
 		return "", ErrBadName
@@ -121,8 +170,9 @@ func (p *Pairer) StartDirect(deviceName, match string, o Origin) (string, error)
 		}
 	}
 	d := &direct{
-		q:      Question{ID: qid, DeviceName: name, Match: match, Login: o.Login, RemoteIP: o.RemoteIP, At: p.now().UTC()},
-		answer: make(chan bool, 1),
+		q:     Question{ID: qid, DeviceName: name, Match: match, Login: o.Login, RemoteIP: o.RemoteIP, At: p.now().UTC()},
+		done:  make(chan struct{}),
+		state: StatePending,
 	}
 	p.mu.Lock()
 	if p.reqs == nil {
@@ -131,14 +181,14 @@ func (p *Pairer) StartDirect(deviceName, match string, o Origin) (string, error)
 	p.reqs[id] = &pending{state: StatePending}
 	p.direct = d
 	p.mu.Unlock()
-	go p.awaitDirect(id, d)
+	go p.awaitDirect(id, d, ended)
 	return id, nil
 }
 
 // awaitDirect waits for the first answer: an open window (now, or one the
 // person opens while the phone waits), the question on the PC's screen, or
 // a paired phone. Then it records the outcome for Status.
-func (p *Pairer) awaitDirect(id string, d *direct) {
+func (p *Pairer) awaitDirect(id string, d *direct, ended func(State)) {
 	timeout := p.Timeout
 	if timeout == 0 {
 		timeout = DecisionTimeout
@@ -164,43 +214,42 @@ func (p *Pairer) awaitDirect(id string, d *direct) {
 			// An answer counts only while the question was still open: a
 			// dialog that ends because the time is up is no refusal.
 			if ok && ctx.Err() == nil {
-				d.decide(allow)
+				d.settle(answerState(allow), "")
 			}
 			shown <- ok
 		}()
 	}
 
-	windowID := ""
-	allow, state := false, StatePending
 	t := time.NewTicker(poll)
 	defer t.Stop()
-	for state == StatePending {
+	for waiting := true; waiting; {
 		if w, ok := p.openWindow(); ok {
-			// The person has a pairing window open: that is the consent.
-			windowID, allow, state = w.ID, true, StateApproved
+			// The person has a pairing window open: that is the consent. The
+			// window is used up from this moment, before any token exists.
+			if d.settle(StateApproved, w.ID) {
+				p.markUsed(w.ID, w.ExpiresAt)
+			}
 			break
 		}
 		ask()
 		select {
-		case allow = <-d.answer:
-			state = StateDenied
-			if allow {
-				state = StateApproved
-			}
+		case <-d.done:
+			waiting = false
 		case ok := <-shown:
 			if !ok {
 				// No screen to ask on. Only a paired phone can still answer.
 				if list, err := p.Devices.List(); err != nil || len(list) == 0 {
-					state = StateUnattended
+					d.settle(StateUnattended, "")
 				}
 			}
 		case <-ctx.Done():
-			state = StateTimeout
+			d.settle(StateTimeout, "")
 		case <-t.C:
 		}
 	}
 	cancel()
 
+	state, windowID := d.outcome()
 	e := &pending{state: state}
 	res := Result{WindowID: windowID, DeviceName: d.q.DeviceName, Match: d.q.Match}
 	switch state {
@@ -218,8 +267,14 @@ func (p *Pairer) awaitDirect(id string, d *direct) {
 		res.Reason = "timeout"
 	}
 	if windowID != "" {
-		// The window is used up, and the pair command reads who came in.
+		// The pair command reads who came in.
 		p.finish(res)
+	}
+
+	// Told before the place in the line is free again: whoever counts the
+	// outcome has counted it when the next request comes.
+	if ended != nil {
+		ended(e.state)
 	}
 
 	ttl := p.CollectTTL
@@ -242,6 +297,9 @@ func (p *Pairer) Pending() []Question {
 	if p.direct == nil {
 		return []Question{}
 	}
+	if st, _ := p.direct.outcome(); st != StatePending {
+		return []Question{} // settled a moment ago: nothing left to answer
+	}
 	return []Question{p.direct.q}
 }
 
@@ -253,6 +311,9 @@ func (p *Pairer) Answer(questionID string, allow bool) error {
 	if d == nil || questionID == "" || d.q.ID != questionID {
 		return ErrUnknownRequest
 	}
-	d.decide(allow)
+	if !d.settle(answerState(allow), "") {
+		// Settled already: the screen, a window, another phone or the time.
+		return ErrUnknownRequest
+	}
 	return nil
 }

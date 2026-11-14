@@ -19,6 +19,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"text/tabwriter"
 	"time"
 	"unicode/utf8"
@@ -479,7 +480,11 @@ func pair(dir string, args []string, in io.Reader, out io.Writer) error {
 	// A click in a classic console window must not freeze the question (#37).
 	defer holdConsole()()
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	// The window must not outlive this command (#58): it takes a phone
+	// without a question. A closed terminal (SIGHUP; on Windows the close of
+	// the console arrives as SIGTERM) ends it like Ctrl+C, and so does a
+	// stop from outside.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 	defer stop()
 
 	host, port := node.Name, node.Port
@@ -488,7 +493,15 @@ func pair(dir string, args []string, in io.Reader, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	defer pairing.Close(dir)
+	defer pairing.CloseWindow(dir, w.ID)
+	// A command that is killed closes nothing. So it says every second that
+	// it runs, and the agent lets a phone in by this window only while it
+	// hears that.
+	alive, err := pairing.KeepAlive(dir)
+	if err != nil {
+		return err
+	}
+	defer alive()
 	link := PairURL(host, port, code)
 	say(out, m("Pairing window open. In the Askorus app on your phone (signed in to the same Tailscale account), open 'Pair with a PC' and tap this PC: it is taken at once, with no question here.",
 		"짝 맺기 창을 열었습니다. 폰의 Askorus 앱에서(같은 Tailscale 계정으로 로그인) 'PC와 짝 맺기'를 열고 이 PC를 누르세요. 여기서 묻지 않고 바로 받습니다."))

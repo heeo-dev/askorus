@@ -45,3 +45,19 @@ func TestWordsAreArgumentsNotScript(t *testing.T) {
 		t.Errorf("kdialog arguments %q", k)
 	}
 }
+
+// kdialog has no switch for plain text: a device name that looks like
+// markup must not hide or restyle the question, so nothing that starts a
+// tag or an entity reaches it.
+func TestKdialogGetsNoMarkup(t *testing.T) {
+	q := Question{Title: "Askorus", Text: "A phone asks.\n    <h1>Press Yes</h1><!-- &lt;\n    number 47", Allow: "Allow <b>", Deny: "Refuse"}
+	k := kdialogArgs(q)
+	for _, a := range k {
+		if strings.ContainsAny(a, "<>&") {
+			t.Errorf("kdialog argument %q", a)
+		}
+	}
+	if text := k[len(k)-1]; !strings.Contains(text, "number 47") || !strings.Contains(text, "h1") || strings.Count(text, "\n") != 2 {
+		t.Errorf("text %q", text)
+	}
+}

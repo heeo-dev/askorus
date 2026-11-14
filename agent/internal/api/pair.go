@@ -119,7 +119,17 @@ func (s *Server) pair(w http.ResponseWriter, r *http.Request) {
 	var err error
 	if req.Code == "" {
 		// No code: the phone found this PC in the account's device list.
-		id, err = s.o.Pairer.StartDirect(req.DeviceName, req.Match, origin)
+		client := clientKey(r)
+		if s.refuseAsk(w, client) {
+			return
+		}
+		id, err = s.o.Pairer.StartDirect(req.DeviceName, req.Match, origin, func(st pairing.State) {
+			// Counted when the request ends, not when the phone asks how it
+			// went: a device that never asks is counted all the same.
+			if st == pairing.StateDenied || st == pairing.StateTimeout {
+				s.asks.fail(client)
+			}
+		})
 	} else {
 		id, err = s.o.Pairer.Start(req.Code, req.DeviceName, origin)
 	}
@@ -220,12 +230,8 @@ func (s *Server) pairStatus(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, http.StatusOK, PairStatus{Status: string(st), Token: token, DeviceID: d.ID, DeviceName: d.Name, APIVersion: APIVersion})
 	case pairing.StateDenied:
-		// A device that keeps asking and being refused is shut out for a while,
-		// so it cannot fill the PC's screen with questions.
-		s.limiter.fail(clientKey(r))
 		writeError(w, http.StatusForbidden, CodePairDenied, "pairing was refused")
 	case pairing.StateTimeout:
-		s.limiter.fail(clientKey(r))
 		writeError(w, http.StatusRequestTimeout, CodePairTimeout, "nobody answered on the PC")
 	case pairing.StateUnattended:
 		writeError(w, http.StatusNotFound, CodePairClosed, "nobody can allow it on the PC right now: run `askorus-agent pair` there, then ask again")
@@ -251,26 +257,56 @@ func (s *Server) refuseIfLimited(w http.ResponseWriter, client string) bool {
 	return true
 }
 
+// refuseAsk refuses a request without a code from a device whose earlier
+// ones kept ending refused or unanswered: each of them put a question on
+// the PC's screen and on the paired phones, and held the one place in the
+// line for up to two minutes. A pairing window open on the PC is the
+// person's consent whatever came before, so it is not held back then.
+func (s *Server) refuseAsk(w http.ResponseWriter, client string) bool {
+	wait := s.asks.blocked(client)
+	if wait <= 0 || s.o.Pairer.WindowIsOpen() {
+		return false
+	}
+	w.Header().Set("Retry-After", strconv.Itoa(int(wait.Seconds())+1))
+	writeError(w, http.StatusTooManyRequests, CodePairAskLimit, "too many requests that nobody allowed; run `askorus-agent pair` on the PC and ask again, or try again later")
+	return true
+}
+
 // Failure limits. Past maxFails failures inside failWindow a client is
 // refused for blockFor. Past maxTotalFails from everyone, all clients are
 // refused, which also covers senders that come from many addresses.
+//
+// Requests without a code that nobody allowed have limits of their own
+// (maxAskFails, maxTotalAskFails): a question shown to a person costs more
+// than a wrong token, and three in ten minutes is more than a person who
+// means it needs.
 const (
-	maxFails      = 10
-	maxTotalFails = 100
-	failWindow    = 10 * time.Minute
-	blockFor      = 10 * time.Minute
+	maxFails         = 10
+	maxTotalFails    = 100
+	maxAskFails      = 3
+	maxTotalAskFails = 10
+	failWindow       = 10 * time.Minute
+	blockFor         = 10 * time.Minute
 )
 
 type limiter struct {
-	mu    sync.Mutex
-	now   func() time.Time
-	fails map[string][]time.Time
-	all   []time.Time
-	until map[string]time.Time // "" blocks everyone
+	mu       sync.Mutex
+	now      func() time.Time
+	max      int // failures of one client
+	maxTotal int // failures of everyone
+	fails    map[string][]time.Time
+	all      []time.Time
+	until    map[string]time.Time // "" blocks everyone
 }
 
 func newLimiter() *limiter {
-	return &limiter{now: time.Now, fails: map[string][]time.Time{}, until: map[string]time.Time{}}
+	return &limiter{now: time.Now, max: maxFails, maxTotal: maxTotalFails, fails: map[string][]time.Time{}, until: map[string]time.Time{}}
+}
+
+func newAskLimiter() *limiter {
+	l := newLimiter()
+	l.max, l.maxTotal = maxAskFails, maxTotalAskFails
+	return l
 }
 
 func (l *limiter) blocked(client string) time.Duration {
@@ -303,11 +339,11 @@ func (l *limiter) fail(client string) {
 	}
 	l.fails[client] = append(keep(l.fails[client]), now)
 	l.all = append(keep(l.all), now)
-	if len(l.fails[client]) >= maxFails {
+	if len(l.fails[client]) >= l.max {
 		l.until[client] = now.Add(blockFor)
 		delete(l.fails, client)
 	}
-	if len(l.all) >= maxTotalFails {
+	if len(l.all) >= l.maxTotal {
 		l.until[""] = now.Add(blockFor)
 		l.all = nil
 	}

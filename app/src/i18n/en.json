@@ -27,6 +27,7 @@
   "error.pair_denied": "Declined on the PC.",
   "error.pair_timeout": "No answer on the PC within 2 minutes.",
   "error.pair_unknown": "The pairing request ended or expired. Run pair on the PC again.",
+  "error.pair_ask_limit": "This phone's requests were not allowed several times, so the PC is not asking for a while. Run askorus-agent pair on the PC, then tap this PC again, or try again in 10 minutes.",
   "error.pair_not_tailnet": "The PC could not confirm this phone as a device of your Tailscale account.",
   "error.tailnet_login": "This phone is not signed in to Tailscale. Sign in at Settings > Tailscale.",
   "error.tailnet_not_own": "This PC is not in your Tailscale account. Check that the PC's agent is running and signed in with the same account as this app.",

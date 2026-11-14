@@ -489,7 +489,7 @@ func uninstallCmd(dir string, args []string, in io.Reader, out io.Writer) error 
 			return err
 		}
 	}
-	for _, f := range []string{devices.FileName, "pairing.json", "pairing-request.json", "pairing-decision.json", "pairing-result.json", "pairing-qr.png"} {
+	for _, f := range []string{devices.FileName, "pairing.json", "pairing-request.json", "pairing-decision.json", "pairing-result.json", "pairing-alive", "pairing-qr.png"} {
 		os.Remove(filepath.Join(dir, f))
 	}
 	// The agent is stopped, so none of its one-off calls runs. Without

@@ -96,6 +96,8 @@ test('unknown codes from a newer agent still show', () => {
 test('errors are explained in words', () => {
   setLang('ko');
   expect(errorText(new AgentError('pair_denied', 403))).toBe('PC에서 거절했습니다.');
+  // #58: the PC stops asking about a phone whose requests kept ending refused or unanswered.
+  expect(errorText(new AgentError('pair_ask_limit', 429))).toContain('askorus-agent pair를 실행한 뒤');
   expect(errorText(new NetworkError())).toContain('PC에 닿지 않습니다');
   // #57: the app's own Tailscale node says why it could not send.
   expect(errorText(new NetworkError(new TailnetError('tailnet_login')))).toContain('Tailscale에 로그인되어 있지 않습니다');

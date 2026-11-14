@@ -45,7 +45,7 @@ func TestPairWindowTakesAPhoneWithoutAQuestion(t *testing.T) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	if _, err := p.StartDirect("Galaxy S23", "47", pairing.Origin{Login: "me@example.com", RemoteIP: "100.64.0.9"}); err != nil {
+	if _, err := p.StartDirect("Galaxy S23", "47", pairing.Origin{Login: "me@example.com", RemoteIP: "100.64.0.9"}, nil); err != nil {
 		t.Fatal(err)
 	}
 	select {

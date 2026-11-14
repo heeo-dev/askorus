@@ -3,6 +3,8 @@ package pairing
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -17,14 +19,11 @@ func TestDirectIntoAnOpenWindow(t *testing.T) {
 	p, dir := newPairer(t)
 	asked := atomic.Int32{}
 	p.Confirm = func(context.Context, Question) (bool, bool) { asked.Add(1); return false, true }
-	_, w, err := Open(dir, time.Now())
-	if err != nil {
-		t.Fatal(err)
-	}
+	w := openHeld(t, dir)
 	if !p.WindowIsOpen() {
 		t.Fatal("the window is not seen as open")
 	}
-	id, err := p.StartDirect(" Galaxy S23 ", "47", phone)
+	id, err := p.StartDirect(" Galaxy S23 ", "47", phone, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,11 +50,24 @@ func TestDirectIntoAnOpenWindow(t *testing.T) {
 	}
 }
 
+// openHeld opens a pairing window as a pair command that runs does.
+func openHeld(t *testing.T, dir string) Window {
+	t.Helper()
+	_, w, err := Open(dir, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Hold(dir, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	return w
+}
+
 func mustStart(t *testing.T, p *Pairer, name, match string) string {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)
 	for {
-		id, err := p.StartDirect(name, match, phone)
+		id, err := p.StartDirect(name, match, phone, nil)
 		if err == nil {
 			return id
 		}
@@ -73,7 +85,7 @@ func TestDirectAskedOnTheScreen(t *testing.T) {
 		p, _ := newPairer(t)
 		var got Question
 		p.Confirm = func(_ context.Context, q Question) (bool, bool) { got = q; return allow, true }
-		id, err := p.StartDirect("Galaxy S23", "47", phone)
+		id, err := p.StartDirect("Galaxy S23", "47", phone, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -103,7 +115,7 @@ func TestDirectAnsweredByAPairedPhone(t *testing.T) {
 		close(gone)
 		return false, true
 	}
-	id, err := p.StartDirect("New phone", "08", phone)
+	id, err := p.StartDirect("New phone", "08", phone, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,17 +164,14 @@ func TestDirectLetInByAWindowOpenedLater(t *testing.T) {
 	if _, _, err := p.Devices.Add("Old phone"); err != nil {
 		t.Fatal(err)
 	}
-	id, err := p.StartDirect("New phone", "31", phone)
+	id, err := p.StartDirect("New phone", "31", phone, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if st, _, _, _ := p.Status(id); st != StatePending {
 		t.Fatalf("state before the window = %s", st)
 	}
-	_, w, err := Open(dir, time.Now())
-	if err != nil {
-		t.Fatal(err)
-	}
+	w := openHeld(t, dir)
 	if st, _, _ := waitFinal(t, p, id); st != StateApproved {
 		t.Fatalf("state = %s", st)
 	}
@@ -175,12 +184,12 @@ func TestDirectLetInByAWindowOpenedLater(t *testing.T) {
 // answer: the phone is told at once instead of waiting two minutes.
 func TestDirectWithNobodyToAnswer(t *testing.T) {
 	p, _ := newPairer(t)
-	if _, err := p.StartDirect("Galaxy S23", "47", phone); !errors.Is(err, ErrNoApprover) {
+	if _, err := p.StartDirect("Galaxy S23", "47", phone, nil); !errors.Is(err, ErrNoApprover) {
 		t.Errorf("no dialog, no devices: %v", err)
 	}
 	// A dialog that turns out not to show (no display): the same, a moment later.
 	p.Confirm = func(context.Context, Question) (bool, bool) { return false, false }
-	id, err := p.StartDirect("Galaxy S23", "47", phone)
+	id, err := p.StartDirect("Galaxy S23", "47", phone, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -200,7 +209,7 @@ func TestDirectTimesOut(t *testing.T) {
 	p, _ := newPairer(t)
 	p.Timeout = 60 * time.Millisecond
 	p.Confirm = func(ctx context.Context, _ Question) (bool, bool) { <-ctx.Done(); return false, true }
-	id, err := p.StartDirect("Galaxy S23", "47", phone)
+	id, err := p.StartDirect("Galaxy S23", "47", phone, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -216,19 +225,246 @@ func TestDirectRefusesBadInput(t *testing.T) {
 	p, _ := newPairer(t)
 	p.Confirm = func(context.Context, Question) (bool, bool) { return true, true }
 	for _, match := range []string{"", "4", "474", "4a", "٤٧", " 7"} {
-		if _, err := p.StartDirect("Galaxy S23", match, phone); !errors.Is(err, ErrBadMatch) {
+		if _, err := p.StartDirect("Galaxy S23", match, phone, nil); !errors.Is(err, ErrBadMatch) {
 			t.Errorf("match %q: %v", match, err)
 		}
 	}
-	if _, err := p.StartDirect("  ", "47", phone); !errors.Is(err, ErrBadName) {
+	if _, err := p.StartDirect("  ", "47", phone, nil); !errors.Is(err, ErrBadName) {
 		t.Errorf("empty name: %v", err)
 	}
 	// One at a time: a second request while one waits is told to come back.
 	p.Confirm = func(ctx context.Context, _ Question) (bool, bool) { <-ctx.Done(); return false, true }
-	if _, err := p.StartDirect("First", "10", phone); err != nil {
+	if _, err := p.StartDirect("First", "10", phone, nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := p.StartDirect("Second", "11", phone); !errors.Is(err, ErrBusy) {
+	if _, err := p.StartDirect("Second", "11", phone, nil); !errors.Is(err, ErrBusy) {
 		t.Errorf("second request: %v", err)
+	}
+}
+
+// R-109. A window takes a phone without a question only while the pair
+// command that opened it runs. A command that was killed, or whose terminal
+// was closed, leaves its file behind: that file alone lets nobody in.
+func TestDirectNeedsALivePairCommand(t *testing.T) {
+	p, dir := newPairer(t)
+	asked := atomic.Int32{}
+	p.Confirm = func(context.Context, Question) (bool, bool) { asked.Add(1); return false, true }
+
+	// The window file with nothing that says the command runs.
+	if _, _, err := Open(dir, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if p.WindowIsOpen() {
+		t.Fatal("a window nobody holds counts as open")
+	}
+	if st, tok, _ := waitFinal(t, p, mustStart(t, p, "Galaxy S23", "47")); st != StateDenied || tok != "" {
+		t.Errorf("into a window nobody holds: state %s, token %q", st, tok)
+	}
+	if asked.Load() != 1 {
+		t.Errorf("the screen was asked %d times", asked.Load())
+	}
+
+	// The command said so a while ago and then went away.
+	if err := Hold(dir, time.Now().Add(-AliveFor-time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if p.WindowIsOpen() {
+		t.Error("a window whose command stopped saying that it runs counts as open")
+	}
+	// It runs: the window counts.
+	if err := Hold(dir, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if !p.WindowIsOpen() {
+		t.Error("a held window does not count as open")
+	}
+	if list, _ := p.Devices.List(); len(list) != 0 {
+		t.Errorf("%d devices", len(list))
+	}
+}
+
+// The pair command keeps saying that it runs until it stops, and what it
+// leaves behind is gone once the files are closed.
+func TestKeepAlive(t *testing.T) {
+	p, dir := newPairer(t)
+	if _, _, err := Open(dir, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	stop, err := KeepAlive(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !p.WindowIsOpen() {
+		t.Error("the window of a running command is not open")
+	}
+	// Seen from later, with no new sign of life, the window does not count.
+	p.Now = func() time.Time { return time.Now().Add(AliveFor + time.Second) }
+	if p.WindowIsOpen() {
+		t.Error("the window counts long after the last sign of life")
+	}
+	p.Now = nil
+	stop()
+	stop() // twice is fine
+	Close(dir)
+	if _, err := os.Stat(filepath.Join(dir, aliveFile)); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("the sign of life stayed after Close: %v", err)
+	}
+}
+
+// A pair command that ends takes away its own window, not the one another
+// command opened in the meantime.
+func TestCloseWindowLeavesAnotherWindow(t *testing.T) {
+	p, dir := newPairer(t)
+	first := openHeld(t, dir)
+	second := openHeld(t, dir)
+	CloseWindow(dir, first.ID)
+	if !WindowOpen(dir, second.ID) || !p.WindowIsOpen() {
+		t.Fatal("ending the first command closed the second one's window")
+	}
+	CloseWindow(dir, second.ID)
+	if WindowOpen(dir, second.ID) || p.WindowIsOpen() {
+		t.Error("the window stayed after its own command ended")
+	}
+}
+
+// R-110. A window is good for one request even when its file could not be
+// deleted (on Windows a file that is being read at that moment stays): the
+// agent remembers that it was used.
+func TestAUsedWindowLetsNobodyElseIn(t *testing.T) {
+	p, dir := newPairer(t)
+	asked := atomic.Int32{}
+	p.Confirm = func(context.Context, Question) (bool, bool) { asked.Add(1); return false, true }
+	code, w, err := Open(dir, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Hold(dir, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if st, _, _ := waitFinal(t, p, mustStart(t, p, "Galaxy S23", "47")); st != StateApproved {
+		t.Fatalf("first request: %s", st)
+	}
+	// The file is still there, as if deleting it had failed.
+	if err := writeJSON(filepath.Join(dir, windowFile), w); err != nil {
+		t.Fatal(err)
+	}
+	if err := Hold(dir, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if p.WindowIsOpen() {
+		t.Error("the used window counts as open again")
+	}
+	if st, tok, _ := waitFinal(t, p, mustStart(t, p, "Other", "11")); st != StateDenied || tok != "" {
+		t.Errorf("second request into the same window: state %s, token %q", st, tok)
+	}
+	if asked.Load() != 1 {
+		t.Errorf("the screen was asked %d times for the second request", asked.Load())
+	}
+	// Nor does its code work any more.
+	if _, err := p.Start(code, "Third", phone); !errors.Is(err, ErrNoWindow) {
+		t.Errorf("the code of the used window: %v", err)
+	}
+	if list, _ := p.Devices.List(); len(list) != 1 {
+		t.Errorf("%d devices", len(list))
+	}
+}
+
+// The same for a window used with its code: once the person answered, a
+// window file that stayed lets no second device in, with or without a code.
+func TestAWindowUsedWithItsCodeIsUsedUp(t *testing.T) {
+	p, dir := newPairer(t)
+	code, w, err := Open(dir, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, err := p.Start(code, "Galaxy S23", phone)
+	if err != nil {
+		t.Fatal(err)
+	}
+	<-answer(t, dir, w.ID, true)
+	if st, _, _ := waitFinal(t, p, id); st != StateApproved {
+		t.Fatalf("state %s", st)
+	}
+	if err := writeJSON(filepath.Join(dir, windowFile), w); err != nil {
+		t.Fatal(err)
+	}
+	if err := Hold(dir, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if p.WindowIsOpen() {
+		t.Error("the used window counts as open")
+	}
+	if _, err := p.Start(code, "Other", phone); !errors.Is(err, ErrNoWindow) {
+		t.Errorf("the code a second time: %v", err)
+	}
+}
+
+// R-112. The first answer settles the request: a refusal is not undone by a
+// window that opens a moment later, the window stays for the phone it was
+// opened for, and a later answer is an error.
+func TestTheFirstAnswerSettlesIt(t *testing.T) {
+	p, dir := newPairer(t)
+	p.Poll = time.Hour // nothing looks for a window by itself during this test
+	if _, _, err := p.Devices.Add("Old phone"); err != nil {
+		t.Fatal(err)
+	}
+	ended := make(chan State, 2)
+	id, err := p.StartDirect("New phone", "31", phone, func(st State) { ended <- st })
+	if err != nil {
+		t.Fatal(err)
+	}
+	q := p.Pending()[0]
+	if err := p.Answer(q.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	openHeld(t, dir) // too late
+	if err := p.Answer(q.ID, true); !errors.Is(err, ErrUnknownRequest) {
+		t.Errorf("an answer after the first one = %v", err)
+	}
+	if st, tok, _ := waitFinal(t, p, id); st != StateDenied || tok != "" {
+		t.Errorf("state %s, token %q", st, tok)
+	}
+	if st := <-ended; st != StateDenied {
+		t.Errorf("ended with %s", st)
+	}
+	if !p.WindowIsOpen() {
+		t.Error("the refused request used up the window")
+	}
+	if list, _ := p.Devices.List(); len(list) != 1 {
+		t.Errorf("%d devices", len(list))
+	}
+
+	// settle itself: once.
+	d := &direct{done: make(chan struct{}), state: StatePending}
+	if !d.settle(StateDenied, "") || d.settle(StateApproved, "w1") || d.settle(StateTimeout, "") {
+		t.Error("a request was settled more than once")
+	}
+	if st, w := d.outcome(); st != StateDenied || w != "" {
+		t.Errorf("outcome %s %q", st, w)
+	}
+}
+
+// The outcome is told when the request ends, also for a phone that never
+// asks how it went (R-111 counts on this).
+func TestEndedIsCalledWithoutAStatusCall(t *testing.T) {
+	p, _ := newPairer(t)
+	p.Timeout = 60 * time.Millisecond
+	p.Confirm = func(ctx context.Context, _ Question) (bool, bool) { <-ctx.Done(); return false, true }
+	ended := make(chan State, 2)
+	if _, err := p.StartDirect("Galaxy S23", "47", phone, func(st State) { ended <- st }); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case st := <-ended:
+		if st != StateTimeout {
+			t.Errorf("ended with %s", st)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("the end was never told")
+	}
+	select {
+	case st := <-ended:
+		t.Errorf("told twice: %s", st)
+	case <-time.After(50 * time.Millisecond):
 	}
 }

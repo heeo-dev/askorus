@@ -47,6 +47,9 @@ const (
 	CodePairDenied     = "pair_denied"
 	CodePairTimeout    = "pair_timeout"
 	CodePairUnknown    = "pair_unknown"
+	// CodePairAskLimit: this device's requests without a code kept ending
+	// refused or unanswered, so nobody is asked about it for a while (#58).
+	CodePairAskLimit = "pair_ask_limit"
 )
 
 // TokenVerifier checks device tokens.
@@ -59,7 +62,7 @@ type Pairer interface {
 	Start(code, deviceName string, o pairing.Origin) (requestID string, err error)
 	Status(requestID string) (pairing.State, string, devices.Device, error)
 	// Pairing without a code (#58).
-	StartDirect(deviceName, match string, o pairing.Origin) (requestID string, err error)
+	StartDirect(deviceName, match string, o pairing.Origin, ended func(pairing.State)) (requestID string, err error)
 	WindowIsOpen() bool
 	Pending() []pairing.Question
 	Answer(questionID string, allow bool) error
@@ -123,8 +126,11 @@ type Options struct {
 type Server struct {
 	o       Options
 	limiter *limiter
-	jobs    *jobs.Manager
-	runs    *runs.Manager
+	// asks counts the requests to pair without a code that somebody had to
+	// be asked about and that ended refused or unanswered.
+	asks *limiter
+	jobs *jobs.Manager
+	runs *runs.Manager
 	// gate decides which AIs write combined answers; /v1/info and the
 	// comparisons share it.
 	gate     compares.Gate
@@ -136,6 +142,7 @@ func New(o Options) *Server {
 	s := &Server{
 		o:       o,
 		limiter: newLimiter(),
+		asks:    newAskLimiter(),
 		jobs:    jobs.NewManager(),
 		runs:    runs.NewManager(),
 	}
