@@ -5,6 +5,8 @@
 
 import { tailnetFetch } from '@/tailnet/node';
 
+import { agentBase, markRefused, tokenRefused } from './refused';
+
 import type {
   Comparison,
   ComparisonRequest,
@@ -86,7 +88,7 @@ const maxMisses = 30;
 // the phone's node and the PC's and knows who is on each end, so the PC
 // needs no certificate (and no name in the public certificate logs).
 export function baseUrl(host: string, port: number): string {
-  return `http://${host}:${port}`;
+  return agentBase(host, port);
 }
 
 export function defaultSleep(ms: number, signal?: AbortSignal): Promise<void> {
@@ -128,6 +130,8 @@ export class AgentClient {
   }
 
   async request<T>(method: string, path: string, body?: unknown, signal?: AbortSignal, timeoutMs = this.timeoutMs): Promise<T> {
+    // A token this agent refused stays refused: nothing more is sent with it (R-115).
+    if (this.token && tokenRefused(this.base, this.token)) throw new AgentError('unauthorized', 401);
     const headers: Record<string, string> = { Accept: 'application/json' };
     if (this.token) headers.Authorization = `Bearer ${this.token}`;
     if (body !== undefined) headers['Content-Type'] = 'application/json';
@@ -159,6 +163,7 @@ export class AgentClient {
       // not JSON: a proxy error page or an empty body
     }
     if (!res.ok) {
+      if (res.status === 401 && this.token) markRefused(this.base, this.token);
       const err = (data as { error?: { code?: string; message?: string } } | null)?.error;
       throw new AgentError(err?.code || `http_${res.status}`, res.status, err?.message);
     }

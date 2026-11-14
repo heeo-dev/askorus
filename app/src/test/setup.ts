@@ -6,6 +6,7 @@
 
 import { conversations } from '@/ask/conversations';
 import { setLang } from '@/i18n';
+import { resetRefused } from '@/api/refused';
 import { resetTailnet } from '@/tailnet/node';
 import { resetMockTailnet } from './tailnet';
 import { resetPCs } from '@/ui/shell/pcs';
@@ -119,6 +120,7 @@ jest.spyOn(require('react-native').AccessibilityInfo, 'isReduceMotionEnabled').m
 setLang('en');
 
 beforeEach(() => {
+  resetRefused();
   mockSecure.clear();
   // The person signed in to Tailscale on this phone before (tailnet/node):
   // the screens under test are those of a phone that can reach its PCs.

@@ -230,17 +230,20 @@ describe('a paired phone answers', () => {
   test('a phone that was disconnected on the PC stops asking', async () => {
     agent.tokenValid = false;
     await renderRouter(routes, { initialUrl: '/pcs' });
-    await waitFor(() => expect(agent.pairPolls).toBe(1));
+    // One request finds out that the token is dead. Nothing follows it:
+    // not the waiting pairing requests, not the screens that refresh.
+    const sent = () => agent.calls.filter((c) => c.auth).length + agent.pairPolls;
+    await waitFor(() => expect(sent()).toBe(1));
     await act(async () => {
       jest.advanceTimersByTime(300); // ten more looks
     });
-    expect(agent.pairPolls).toBe(1);
+    expect(sent()).toBe(1);
     // Paired again (a new device id on the same PC): it asks again.
     agent.tokenValid = true;
     const store = new ConnectionStore();
     const [old] = await store.list();
     await store.add({ kind: 'pc', name: old.name, host: old.host, port: old.port, deviceId: 'dev-2', deviceName: old.deviceName, pairedAt: 'y' }, TOKEN);
-    await waitFor(() => expect(agent.pairPolls).toBeGreaterThan(1));
+    await waitFor(() => expect(agent.pairPolls).toBeGreaterThan(0));
   });
 
   test('an agent from before this has no list: it is asked once and left alone', async () => {

@@ -6,6 +6,8 @@
 import * as Crypto from 'expo-crypto';
 import * as SecureStore from 'expo-secure-store';
 
+import { agentBase, forgetRefused } from '@/api/refused';
+
 export type ConnectionKind = 'pc';
 
 export type Connection = {
@@ -79,6 +81,8 @@ export class ConnectionStore {
     const conn: Connection = { ...c, ...(old?.named ? { name: old.name, named: true } : {}), id: old?.id ?? back?.id ?? newId() };
     if (back) await this.kv.set(goneKey, JSON.stringify(gone.filter((g) => g !== back)));
     await this.kv.set(tokenKey(conn.id), token);
+    // Paired (again): whatever that agent refused before no longer counts.
+    forgetRefused(agentBase(c.host, c.port));
     const next = list.filter((x) => x.id !== conn.id).concat(conn);
     await this.kv.set(listKey, JSON.stringify(next));
     return conn;
