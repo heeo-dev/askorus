@@ -680,7 +680,7 @@ describe('pairing', () => {
     }) as typeof fetch;
     await renderRouter(routes, { initialUrl: `/pair?v=2&host=${HOST}&port=${PORT}&code=${CODE}` });
     await user.press(await screen.findByRole('button', { name: 'Pair', disabled: false }));
-    expect(await screen.findByText('No answer on the PC within 2 minutes.')).toBeTruthy();
+    expect(await screen.findByText('Nobody answered within 2 minutes.')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Start over' })).toBeTruthy();
     expect(await new ConnectionStore().list()).toEqual([]);
   });

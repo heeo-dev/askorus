@@ -93,7 +93,7 @@ test('a PC found in the account is paired by a tap: no QR code, and the two digi
   const digits = await screen.findByTestId('pair-match');
   await waitFor(() => expect(agent.lastMatch).toMatch(/^[1-9]\d$/));
   expect(digits).toHaveTextContent(agent.lastMatch);
-  expect(screen.getByText(/Allow it if the PC shows the same number/)).toBeTruthy();
+  expect(screen.getByText(/Allow it where the same number shows/)).toBeTruthy();
   const sent = agent.calls.find((c) => c.method === 'POST' && c.path === '/v1/pair');
   expect(sent?.body).toEqual({ deviceName: expect.any(String), match: agent.lastMatch });
 
