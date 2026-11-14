@@ -98,7 +98,11 @@ test('a PC found in the account is paired by a tap: no QR code, and the two digi
   const digits = await screen.findByTestId('pair-match');
   await waitFor(() => expect(agent.lastMatch).toMatch(/^[1-9]\d$/));
   expect(digits).toHaveTextContent(agent.lastMatch);
-  expect(screen.getByText(/Allow it where the same number shows/)).toBeTruthy();
+  expect(screen.getByText('Allow it in one of these places, where the same number shows.')).toBeTruthy();
+  // The three places, as a numbered list.
+  expect(screen.getByText('The window that opens on the PC')).toBeTruthy();
+  expect(screen.getByText(/Askorus on a phone that is already paired/)).toBeTruthy();
+  expect(screen.getByText(/askorus-agent pair running: it goes through without a question/)).toBeTruthy();
   const sent = agent.calls.find((c) => c.method === 'POST' && c.path === '/v1/pair');
   expect(sent?.body).toEqual({ deviceName: expect.any(String), match: agent.lastMatch });
 

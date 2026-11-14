@@ -460,7 +460,20 @@ export default function Pair() {
                 {match}
               </Text>
             ) : null}
-            <Text style={[s.intro, s.centerText]}>{t(match ? 'pair.waitingFound' : 'pair.waitingBody')}</Text>
+            {match ? (
+              <View style={s.ways}>
+                <Text style={s.intro}>{t('pair.waitingLead')}</Text>
+                {(['pair.waitingWay1', 'pair.waitingWay2', 'pair.waitingWay3'] as const).map((k, i) => (
+                  <View key={k} style={s.way}>
+                    <Text style={s.wayNumber}>{i + 1}</Text>
+                    <Text style={s.wayText}>{t(k)}</Text>
+                  </View>
+                ))}
+                <Text style={s.caption}>{t('pair.waitingLimit')}</Text>
+              </View>
+            ) : (
+              <Text style={[s.intro, s.centerText]}>{t('pair.waitingBody')}</Text>
+            )}
             <Button variant="outline" label={t('pair.cancel')} onPress={() => abort.current?.abort()} style={s.wide} />
           </View>
         )}
@@ -665,6 +678,10 @@ const styles = themed((th) =>
     waiting: { alignItems: 'center', gap: 16, paddingTop: 48 },
     waitTitle: { fontSize: 18, fontWeight: '600', lineHeight: 24, letterSpacing: -0.18, color: th.text, textAlign: 'center' },
     centerText: { textAlign: 'center' },
+    ways: { alignSelf: 'stretch', gap: 10 },
+    way: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+    wayNumber: { width: 24, height: 24, borderRadius: 12, textAlign: 'center', lineHeight: 24, fontSize: 13, fontWeight: '600', color: th.text, backgroundColor: th.surface, overflow: 'hidden' },
+    wayText: { flex: 1, fontSize: 15, lineHeight: 23, color: th.text },
     match: { fontSize: 48, fontWeight: '700', lineHeight: 56, letterSpacing: 8, color: th.text },
     finding: { flexDirection: 'row', alignItems: 'center', gap: 10 },
     found: { borderRadius: 14, backgroundColor: th.surface, overflow: 'hidden' },
