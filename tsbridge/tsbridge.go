@@ -358,14 +358,17 @@ type peerInfo struct {
 // every request.
 func Peer(host string) (string, error) {
 	mu.Lock()
-	c := lc
+	c, t0 := lc, started
 	mu.Unlock()
 	if c == nil {
 		return "", coded(CodeNotStarted, "not started")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	p, err := lookPeer(ctx, c, host, true)
+	// Always a fresh list: the answer decides whether a pairing code is sent.
+	p, err := awaitPeer(ctx, host, t0, func(ctx context.Context, _ bool) (*ipnstate.Status, error) {
+		return peerStatus(ctx, c, true)
+	})
 	if err != nil {
 		return "", err
 	}
@@ -401,18 +404,82 @@ func peerStatus(ctx context.Context, c *local.Client, fresh bool) (*ipnstate.Sta
 	return st, nil
 }
 
-// lookPeer finds host among the tailnet's devices. The name is matched
-// against the tailnet's own name table, never resolved through the phone's
-// DNS: a name outside the tailnet is simply not there.
-func lookPeer(ctx context.Context, c *local.Client, host string, fresh bool) (peerInfo, error) {
-	st, err := peerStatus(ctx, c, fresh)
+// How long a request waits for the list of the tailnet's devices right
+// after the node started (peerWait), and until when a list counts as
+// possibly not there yet (settleFor after Start, or while the node is not
+// running).
+const (
+	settleFor  = 20 * time.Second
+	stateReady = "Running"
+)
+
+// Variables so a test need not wait as long as a person does.
+var (
+	peerWait = 8 * time.Second
+	peerPoll = 250 * time.Millisecond
+)
+
+// awaitPeer finds host among the tailnet's devices for a request that is
+// about to be sent. The name is matched against the tailnet's own name
+// table, never resolved through the phone's DNS: a name outside the tailnet
+// is simply not there.
+//
+// Right after the app starts, the node is up a moment before the list of
+// the tailnet's devices has arrived: the person's own PC was then "not a
+// device of your network", and the screen said so until the person tried
+// again (found on a real phone, R-113). So while the node is still coming
+// up, a name that is not there (or a tailnet that is not up yet) is asked
+// for again for a few seconds, and a node that never got there says that
+// the tailnet is not up, not that the device is someone else's. A node that
+// has been running for a while answers at once, as before: a name it does
+// not know is not one of its devices.
+func awaitPeer(ctx context.Context, host string, since time.Time, read func(ctx context.Context, fresh bool) (*ipnstate.Status, error)) (peerInfo, error) {
+	st, err := read(ctx, false)
 	if err != nil {
 		return peerInfo{}, err
 	}
-	return matchPeer(st, host)
+	p, err := matchPeer(st, host)
+	if err == nil && p.Known {
+		return p, nil
+	}
+	deadline := time.Now().Add(peerWait)
+	for {
+		// The device may have joined since the list was read.
+		st, rerr := read(ctx, true)
+		if rerr != nil {
+			return peerInfo{}, rerr
+		}
+		p, err = matchPeer(st, host)
+		if err == nil && p.Known {
+			return p, nil
+		}
+		if errorCode(err) == CodeNeedsLogin {
+			return p, err // signing in is the person's step: nothing to wait for
+		}
+		up := st.BackendState == stateReady
+		comingUp := !up || time.Since(since) < settleFor
+		if !comingUp {
+			return p, err
+		}
+		done := !time.Now().Before(deadline)
+		if !done {
+			select {
+			case <-ctx.Done():
+				done = true
+			case <-time.After(peerPoll):
+			}
+		}
+		if done {
+			if err == nil && !up {
+				// The list never came: that says nothing about whose device it is.
+				return peerInfo{}, coded(CodeNotConnected, "the tailnet is not up yet (%s)", st.BackendState)
+			}
+			return p, err
+		}
+	}
 }
 
-// matchPeer is lookPeer on a list already read.
+// matchPeer looks host up in a list already read.
 func matchPeer(st *ipnstate.Status, host string) (peerInfo, error) {
 	if st.BackendState == "NeedsLogin" || st.BackendState == "NoState" && st.Self == nil {
 		return peerInfo{}, coded(CodeNeedsLogin, "not signed in to Tailscale")
@@ -562,7 +629,7 @@ func targetOf(u *url.URL, p peerInfo) (string, error) {
 // knows who is on the other end.
 func Fetch(method, rawURL, headers, body string, timeoutMs int) (*Response, error) {
 	mu.Lock()
-	c, hc := lc, httpc
+	c, hc, since := lc, httpc, started
 	mu.Unlock()
 	if hc == nil {
 		return nil, coded(CodeNotStarted, "not started")
@@ -580,11 +647,9 @@ func Fetch(method, rawURL, headers, body string, timeoutMs int) (*Response, erro
 	if u.Scheme != "http" {
 		return nil, coded(CodeBadRequest, "only http inside the tailnet")
 	}
-	p, err := lookPeer(ctx, c, u.Hostname(), false)
-	if err == nil && !p.Known {
-		// The device may have joined since the list was read.
-		p, err = lookPeer(ctx, c, u.Hostname(), true)
-	}
+	p, err := awaitPeer(ctx, u.Hostname(), since, func(ctx context.Context, fresh bool) (*ipnstate.Status, error) {
+		return peerStatus(ctx, c, fresh)
+	})
 	if err != nil {
 		return nil, err
 	}

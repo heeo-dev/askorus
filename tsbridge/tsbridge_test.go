@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"tailscale.com/ipn/ipnstate"
 	"tailscale.com/tailcfg"
@@ -90,6 +91,80 @@ func TestMatchPeerStates(t *testing.T) {
 	}
 	if got, _ := matchPeer(st, "askorus-pc.tail0.ts.net"); got.SameUser {
 		t.Errorf("a node without a user owns %+v", got)
+	}
+}
+
+// R-113. Right after the app starts the node is up before the list of the
+// tailnet's devices has arrived. A request made then waits for the list
+// instead of saying that the person's own PC is not one of their devices.
+func TestAwaitPeerWaitsForTheListAfterStart(t *testing.T) {
+	const pc = "askorus-pc.tail0.ts.net"
+	oldWait, oldPoll := peerWait, peerPoll
+	peerWait, peerPoll = 400*time.Millisecond, 10*time.Millisecond
+	defer func() { peerWait, peerPoll = oldWait, oldPoll }()
+	ctx := context.Background()
+
+	// The list is empty for the first few reads (the node is coming up), then it is there.
+	empty := &ipnstate.Status{BackendState: "Starting", Self: &ipnstate.PeerStatus{UserID: 1}}
+	notYet := &ipnstate.Status{BackendState: "Starting"}
+	reads := 0
+	late := func(context.Context, bool) (*ipnstate.Status, error) {
+		reads++
+		switch {
+		case reads <= 2:
+			return notYet, nil
+		case reads <= 4:
+			return empty, nil
+		}
+		return tailnet(), nil
+	}
+	p, err := awaitPeer(ctx, pc, time.Now(), late)
+	if err != nil || !p.Known || !p.SameUser || reads != 5 {
+		t.Errorf("after the list arrived: %+v, %v (%d reads)", p, err, reads)
+	}
+
+	// A node that has been running for a while answers at once: a name it
+	// does not know is not one of its devices. One fresh read, no waiting.
+	reads = 0
+	up := func(context.Context, bool) (*ipnstate.Status, error) { reads++; return tailnet(), nil }
+	t0 := time.Now()
+	p, err = awaitPeer(ctx, "evil.example.com", time.Now().Add(-time.Hour), up)
+	if err != nil || p.Known || reads != 2 || time.Since(t0) > 200*time.Millisecond {
+		t.Errorf("an unknown name on a running node: %+v, %v (%d reads, %s)", p, err, reads, time.Since(t0))
+	}
+	// Someone else's device is known at once, and not the person's.
+	if p, err := awaitPeer(ctx, "friend-pc.tail9.ts.net", time.Now(), up); err != nil || !p.Known || p.SameUser {
+		t.Errorf("a friend's device: %+v, %v", p, err)
+	}
+
+	// A node that just started and really has no such device: it waits its
+	// few seconds, then says so.
+	reads = 0
+	p, err = awaitPeer(ctx, "evil.example.com", time.Now(), up)
+	if err != nil || p.Known || reads < 5 {
+		t.Errorf("an unknown name right after the start: %+v, %v (%d reads)", p, err, reads)
+	}
+
+	// A node that never comes up (the phone is offline): the tailnet is not
+	// up, which is not the same as "not your device".
+	stuck := func(context.Context, bool) (*ipnstate.Status, error) { return empty, nil }
+	if _, err := awaitPeer(ctx, pc, time.Now(), stuck); errorCode(err) != CodeNotConnected {
+		t.Errorf("a node that never came up: %v", err)
+	}
+	// Not signed in: nothing to wait for.
+	t0 = time.Now()
+	login := func(context.Context, bool) (*ipnstate.Status, error) {
+		return &ipnstate.Status{BackendState: "NeedsLogin"}, nil
+	}
+	if _, err := awaitPeer(ctx, pc, time.Now(), login); errorCode(err) != CodeNeedsLogin || time.Since(t0) > 200*time.Millisecond {
+		t.Errorf("not signed in: %v after %s", err, time.Since(t0))
+	}
+	// The request's own time limit ends the wait.
+	short, cancel := context.WithTimeout(ctx, 30*time.Millisecond)
+	defer cancel()
+	t0 = time.Now()
+	if _, err := awaitPeer(short, pc, time.Now(), stuck); errorCode(err) != CodeNotConnected || time.Since(t0) > 300*time.Millisecond {
+		t.Errorf("a request whose time is up: %v after %s", err, time.Since(t0))
 	}
 }
 

@@ -43,6 +43,10 @@ const (
 	decisionFile = "pairing-decision.json"
 	resultFile   = "pairing-result.json"
 	aliveFile    = "pairing-alive"
+	// usedFile holds the windows that took their one request (id and when
+	// they would have expired). The agent writes it, and reads it when it
+	// starts: a used window must stay used across a restart. Close leaves it.
+	usedFile = "pairing-used.json"
 
 	// WindowTTL is how long a pairing code works.
 	WindowTTL = 5 * time.Minute
@@ -233,8 +237,18 @@ type Pairer struct {
 	// have expired. A window is good for one request, and that must hold
 	// even when its file could not be deleted (on Windows a file somebody
 	// is reading at that moment stays).
-	used map[string]time.Time
+	used       map[string]time.Time
+	usedLoaded bool // usedFile was read
+	// The sign of life of the pair command as last seen, and when (by this
+	// process's own clock): the same sign seen again much later is an old
+	// one, whatever the PC's clock says now.
+	aliveSeen   time.Time
+	aliveSeenAt time.Time
 }
+
+// sinceSeen is how long ago t was, by the process's own (monotonic) clock.
+// A variable so a test can let time pass.
+var sinceSeen = time.Since
 
 // CollectTimeout is how long an issued token waits for the phone to fetch
 // it. A device whose token was never fetched is removed again.
@@ -387,7 +401,7 @@ func (p *Pairer) claim(code string) (Window, error) {
 		os.Remove(path)
 		return Window{}, ErrNoWindow
 	}
-	if _, used := p.used[w.ID]; used {
+	if p.isUsedLocked(w.ID) {
 		return Window{}, ErrNoWindow
 	}
 	code = strings.ToUpper(strings.TrimSpace(code))
@@ -450,16 +464,48 @@ func (p *Pairer) markUsed(id string, until time.Time) {
 	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	p.loadUsedLocked()
+	p.used[id] = until
+	// Kept on disk too, before any token exists: an agent that is started
+	// again must not take the same window a second time. A failed write
+	// leaves the record in memory.
+	_ = writeJSON(filepath.Join(p.Dir, usedFile), p.used)
+}
+
+// isUsedLocked reports whether window id took its request already. The
+// caller holds p.mu.
+func (p *Pairer) isUsedLocked(id string) bool {
+	p.loadUsedLocked()
+	_, used := p.used[id]
+	return used
+}
+
+// loadUsedLocked reads the used windows once and forgets the ones that
+// would have expired by now. The caller holds p.mu.
+func (p *Pairer) loadUsedLocked() {
+	if !p.usedLoaded {
+		p.usedLoaded = true
+		var saved map[string]time.Time
+		if readJSON(filepath.Join(p.Dir, usedFile), &saved) == nil {
+			for k, t := range saved {
+				if _, ok := p.used[k]; !ok {
+					if p.used == nil {
+						p.used = map[string]time.Time{}
+					}
+					p.used[k] = t
+				}
+			}
+		}
+	}
+	if p.used == nil {
+		p.used = map[string]time.Time{}
+	}
 	now := p.now()
 	for k, t := range p.used {
 		if !now.Before(t) {
 			delete(p.used, k)
 		}
 	}
-	if p.used == nil {
-		p.used = map[string]time.Time{}
-	}
-	p.used[id] = until
 }
 
 // removeFile deletes a file, trying again for a moment when it is in use.

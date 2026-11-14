@@ -120,16 +120,21 @@ func (s *Server) pair(w http.ResponseWriter, r *http.Request) {
 	if req.Code == "" {
 		// No code: the phone found this PC in the account's device list.
 		client := clientKey(r)
+		s.askMu.Lock()
 		if s.refuseAsk(w, client) {
+			s.askMu.Unlock()
 			return
 		}
 		id, err = s.o.Pairer.StartDirect(req.DeviceName, req.Match, origin, func(st pairing.State) {
 			// Counted when the request ends, not when the phone asks how it
 			// went: a device that never asks is counted all the same.
 			if st == pairing.StateDenied || st == pairing.StateTimeout {
+				s.askMu.Lock()
 				s.asks.fail(client)
+				s.askMu.Unlock()
 			}
 		})
+		s.askMu.Unlock()
 	} else {
 		id, err = s.o.Pairer.Start(req.Code, req.DeviceName, origin)
 	}

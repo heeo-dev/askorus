@@ -56,8 +56,9 @@ type Question struct {
 
 // direct is the code-less request that waits for an answer; at most one.
 type direct struct {
-	q    Question
-	done chan struct{} // closed when the request is settled
+	q        Question
+	done     chan struct{} // closed when the request is settled
+	deadline time.Time     // an answer counts until then
 
 	mu       sync.Mutex
 	state    State  // StatePending until settled
@@ -65,16 +66,22 @@ type direct struct {
 }
 
 // settle records the outcome if there is none yet, and reports whether it
-// did: the first answer counts, whoever gave it.
+// did: the first answer counts, whoever gave it. An allowance or a refusal
+// that comes when the time is up is too late, even when it gets here before
+// the timeout does: the request is then settled as timed out.
 func (d *direct) settle(st State, windowID string) bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.state != StatePending {
 		return false
 	}
+	late := (st == StateApproved || st == StateDenied) && !d.deadline.IsZero() && !time.Now().Before(d.deadline)
+	if late {
+		st, windowID = StateTimeout, ""
+	}
 	d.state, d.windowID = st, windowID
 	close(d.done)
-	return true
+	return !late
 }
 
 func (d *direct) outcome() (State, string) {
@@ -111,7 +118,7 @@ func (p *Pairer) openWindow() (Window, bool) {
 		return Window{}, false
 	}
 	p.mu.Lock()
-	_, used := p.used[w.ID]
+	used := p.isUsedLocked(w.ID)
 	p.mu.Unlock()
 	if used {
 		return Window{}, false
@@ -120,7 +127,19 @@ func (p *Pairer) openWindow() (Window, bool) {
 	if err != nil {
 		return Window{}, false
 	}
-	if age := now.Sub(fi.ModTime()); age >= AliveFor || age <= -AliveFor {
+	sign := fi.ModTime()
+	if age := now.Sub(sign); age >= AliveFor || age <= -AliveFor {
+		return Window{}, false
+	}
+	// The PC's clock may have been set back onto an old sign of life. A sign
+	// that has not moved for AliveFor of this process's own time is old.
+	p.mu.Lock()
+	if !sign.Equal(p.aliveSeen) {
+		p.aliveSeen, p.aliveSeenAt = sign, time.Now()
+	}
+	old := sinceSeen(p.aliveSeenAt) >= AliveFor
+	p.mu.Unlock()
+	if old {
 		return Window{}, false
 	}
 	return w, true
@@ -169,10 +188,15 @@ func (p *Pairer) StartDirect(deviceName, match string, o Origin, ended func(Stat
 			return "", ErrNoApprover
 		}
 	}
+	timeout := p.Timeout
+	if timeout == 0 {
+		timeout = DecisionTimeout
+	}
 	d := &direct{
-		q:     Question{ID: qid, DeviceName: name, Match: match, Login: o.Login, RemoteIP: o.RemoteIP, At: p.now().UTC()},
-		done:  make(chan struct{}),
-		state: StatePending,
+		q:        Question{ID: qid, DeviceName: name, Match: match, Login: o.Login, RemoteIP: o.RemoteIP, At: p.now().UTC()},
+		done:     make(chan struct{}),
+		deadline: time.Now().Add(timeout),
+		state:    StatePending,
 	}
 	p.mu.Lock()
 	if p.reqs == nil {
@@ -189,15 +213,11 @@ func (p *Pairer) StartDirect(deviceName, match string, o Origin, ended func(Stat
 // person opens while the phone waits), the question on the PC's screen, or
 // a paired phone. Then it records the outcome for Status.
 func (p *Pairer) awaitDirect(id string, d *direct, ended func(State)) {
-	timeout := p.Timeout
-	if timeout == 0 {
-		timeout = DecisionTimeout
-	}
 	poll := p.Poll
 	if poll == 0 {
 		poll = 200 * time.Millisecond
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithDeadline(context.Background(), d.deadline)
 	defer cancel()
 
 	// The question on the screen. It is taken away (ctx) as soon as the

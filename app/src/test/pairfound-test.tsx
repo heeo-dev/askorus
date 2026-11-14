@@ -17,7 +17,7 @@ import { findPCs, newMatch } from '@/connections/discover';
 import { ConnectionStore } from '@/connections/store';
 import { FakeAgent, HOST, PORT, TOKEN, session } from '@/test/fakeAgent';
 import { mockTailnet, neverSignedIn } from '@/test/tailnet';
-import { pairAsk } from '@/ui/PairRequests';
+import { ownAsk, pairAsk } from '@/ui/PairRequests';
 
 let agent: FakeAgent;
 
@@ -188,6 +188,40 @@ describe('a paired phone answers', () => {
     });
     expect(screen.queryByTestId('pair-ask')).toBeNull();
     expect(agent.pairAnswers).toEqual([]);
+  });
+
+  // Found on a real phone: allowed on the PC's screen, the question stayed on
+  // the paired phone with buttons that did nothing.
+  test('a question that was answered elsewhere goes away by itself', async () => {
+    agent.pairQuestions = [question];
+    await renderRouter(routes, { initialUrl: '/pcs' });
+    expect(await screen.findByTestId('pair-ask')).toBeTruthy();
+    agent.pairQuestions = []; // answered on the PC, or its time is up
+    await waitFor(() => expect(screen.queryByTestId('pair-ask')).toBeNull());
+    expect(agent.pairAnswers).toEqual([]);
+    // The next phone's question shows as usual.
+    agent.pairQuestions = [{ ...question, id: 'q2', deviceName: 'Third phone' }];
+    expect(within(await screen.findByTestId('pair-ask')).getByText('Third phone')).toBeTruthy();
+  });
+
+  test('a phone is not asked about its own request', async () => {
+    ownAsk.name = 'New phone';
+    ownAsk.match = '47';
+    try {
+      agent.pairQuestions = [question];
+      await renderRouter(routes, { initialUrl: '/pcs' });
+      await screen.findByText('Fix the login bug');
+      await act(async () => {
+        jest.advanceTimersByTime(300); // ten looks
+      });
+      expect(screen.queryByTestId('pair-ask')).toBeNull();
+      // Another phone that happens to have the same name shows another number.
+      agent.pairQuestions = [question, { ...question, id: 'q2', match: '48' }];
+      expect(within(await screen.findByTestId('pair-ask')).getByText('48')).toBeTruthy();
+    } finally {
+      ownAsk.name = '';
+      ownAsk.match = '';
+    }
   });
 
   test('an agent from before this has no list: it is asked once and left alone', async () => {

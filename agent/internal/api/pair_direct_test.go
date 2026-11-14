@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -294,6 +295,36 @@ func TestPairDirectAskLimit(t *testing.T) {
 	}
 	if st := e.poll(t, started.RequestID); st.Status != string(pairing.StateApproved) || st.Token == "" {
 		t.Errorf("into an open window: %+v", st)
+	}
+}
+
+// Many requests at once do not get past the limit: "is this device held
+// back?" and taking the place in the line are one step, so no request slips
+// in between the refusal that fills the limit and the check (R-111).
+func TestPairDirectAskLimitHoldsUnderManyRequests(t *testing.T) {
+	e := newDirectEnv(t)
+	var asked atomic.Int32
+	e.pairer.Confirm = func(context.Context, pairing.Question) (bool, bool) { asked.Add(1); return false, true }
+	body := `{"deviceName":"Galaxy S23","match":"47"}`
+	var wg sync.WaitGroup
+	stop := time.Now().Add(400 * time.Millisecond)
+	for i := 0; i < 16; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for time.Now().Before(stop) {
+				e.serve(viaServe("POST", "/v1/pair", body, nil))
+			}
+		}()
+	}
+	wg.Wait()
+	// Let the last request end.
+	for deadline := time.Now().Add(3 * time.Second); len(e.pairer.Pending()) != 0 && time.Now().Before(deadline); {
+		time.Sleep(5 * time.Millisecond)
+	}
+	time.Sleep(50 * time.Millisecond)
+	if n := asked.Load(); n != maxAskFails {
+		t.Errorf("the screen was asked %d times, the limit is %d", n, maxAskFails)
 	}
 }
 

@@ -19,32 +19,55 @@ import { themed, useTheme } from './theme';
 /** How often the current PC is asked (tests shorten it). */
 export const pairAsk = { everyMs: 5000 };
 
-type Asked = { pcName: string; client: AgentClient; q: PairQuestion };
+type Asked = { pcId: string; pcName: string; client: AgentClient; q: PairQuestion };
 
 // PCs whose agent has no such list (older than #58): not asked again.
 const without = new Set<string>();
+
+/**
+ * The request this phone itself is making right now (the pairing screen
+ * sets it while it waits): a phone that is paired already and pairs again
+ * is not "another phone" to ask itself about.
+ */
+export const ownAsk = { name: '', match: '' };
 
 export function PairRequests() {
   const s = styles(useTheme());
   const [asked, setAsked] = useState<Asked | null>(null);
   const [busy, setBusy] = useState(false);
   const seen = useRef(new Set<string>()); // requests this phone has answered or closed
-  const open = useRef(false);
+  const shown = useRef<Asked | null>(null); // what the sheet shows now
+
+  const close = useCallback(() => {
+    if (shown.current) seen.current.add(shown.current.q.id);
+    shown.current = null;
+    setAsked(null);
+    setBusy(false);
+  }, []);
 
   useEffect(() => {
     let live = true;
     const look = async () => {
-      if (!live || open.current || AppState.currentState === 'background') return;
+      if (!live || AppState.currentState === 'background') return;
       let pcId = '';
       try {
         const cur = await currentPC();
         if (!live || !cur || without.has(cur.conn.id)) return;
         pcId = cur.conn.id;
         const list = await cur.client.pairRequests();
-        const q = list.find((x) => !seen.current.has(x.id));
-        if (live && q && !open.current) {
-          open.current = true;
-          setAsked({ pcName: cur.conn.name, client: cur.client, q });
+        if (!live) return;
+        const now = shown.current;
+        if (now) {
+          // Answered elsewhere (the PC's screen, a pairing window, another
+          // phone) or its time is up: the question goes away by itself (found
+          // on a real phone: it stayed, with buttons that did nothing).
+          if (now.pcId === pcId && !list.some((x) => x.id === now.q.id)) close();
+          return;
+        }
+        const q = list.find((x) => !seen.current.has(x.id) && !(x.match === ownAsk.match && x.deviceName === ownAsk.name));
+        if (q) {
+          shown.current = { pcId, pcName: cur.conn.name, client: cur.client, q };
+          setAsked(shown.current);
         }
       } catch (e) {
         // An agent from before #58 has no list. Anything else (not signed in,
@@ -57,16 +80,7 @@ export function PairRequests() {
       live = false;
       clearInterval(timer);
     };
-  }, []);
-
-  const close = useCallback(() => {
-    open.current = false;
-    setAsked((a) => {
-      if (a) seen.current.add(a.q.id);
-      return null;
-    });
-    setBusy(false);
-  }, []);
+  }, [close]);
 
   const answer = async (allow: boolean) => {
     if (!asked) return;

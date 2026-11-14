@@ -442,6 +442,96 @@ func TestTheFirstAnswerSettlesIt(t *testing.T) {
 	if st, w := d.outcome(); st != StateDenied || w != "" {
 		t.Errorf("outcome %s %q", st, w)
 	}
+
+	// An answer that comes when the time is up is too late, even when it
+	// gets here before the timeout does: no device, no window used.
+	for _, st := range []State{StateApproved, StateDenied} {
+		late := &direct{done: make(chan struct{}), state: StatePending, deadline: time.Now().Add(-time.Millisecond)}
+		if late.settle(st, "w1") {
+			t.Errorf("a late %s was taken", st)
+		}
+		if got, w := late.outcome(); got != StateTimeout || w != "" {
+			t.Errorf("a late %s: outcome %s %q", st, got, w)
+		}
+	}
+	early := &direct{done: make(chan struct{}), state: StatePending, deadline: time.Now().Add(time.Minute)}
+	if !early.settle(StateApproved, "w1") {
+		t.Error("an answer in time was not taken")
+	}
+}
+
+// A used window stays used when the agent is started again: the record is
+// on disk before any token exists (R-110).
+func TestAUsedWindowStaysUsedAfterARestart(t *testing.T) {
+	p, dir := newPairer(t)
+	p.Confirm = func(context.Context, Question) (bool, bool) { return false, true }
+	code, w, err := Open(dir, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Hold(dir, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if st, _, _ := waitFinal(t, p, mustStart(t, p, "Galaxy S23", "47")); st != StateApproved {
+		t.Fatalf("first request: %s", st)
+	}
+	// The window file stayed, its pair command still runs, and the agent starts again.
+	if err := writeJSON(filepath.Join(dir, windowFile), w); err != nil {
+		t.Fatal(err)
+	}
+	if err := Hold(dir, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	again := &Pairer{Dir: dir, Devices: p.Devices, Poll: 10 * time.Millisecond, Timeout: 2 * time.Second}
+	again.Confirm = func(context.Context, Question) (bool, bool) { return false, true }
+	if again.WindowIsOpen() {
+		t.Error("after a restart the used window counts as open")
+	}
+	if st, tok, _ := waitFinal(t, again, mustStart(t, again, "Other", "11")); st != StateDenied || tok != "" {
+		t.Errorf("after a restart, into the used window: state %s, token %q", st, tok)
+	}
+	if _, err := again.Start(code, "Third", phone); !errors.Is(err, ErrNoWindow) {
+		t.Errorf("after a restart, the code of the used window: %v", err)
+	}
+	// A pair command that ends removes its files, not the record.
+	Close(dir)
+	if _, err := os.Stat(filepath.Join(dir, usedFile)); err != nil {
+		t.Errorf("the record of used windows went with Close: %v", err)
+	}
+	// A new window is a new window.
+	openHeld(t, dir)
+	if !again.WindowIsOpen() {
+		t.Error("a new window does not count as open")
+	}
+}
+
+// A sign of life that does not move is an old one, whatever the PC's clock
+// says: a clock set back onto the time of a killed pair command's last sign
+// must not open its window again (R-109).
+func TestAnOldSignOfLifeStaysOldWhenTheClockIsSetBack(t *testing.T) {
+	p, dir := newPairer(t)
+	openHeld(t, dir)
+	if !p.WindowIsOpen() {
+		t.Fatal("the held window is not open")
+	}
+	// The pair command is killed. Later the PC's clock is set back, so by
+	// the clock the last sign looks fresh. By the agent's own time it is old.
+	passed := time.Duration(0)
+	old := sinceSeen
+	sinceSeen = func(t time.Time) time.Duration { return time.Since(t) + passed }
+	defer func() { sinceSeen = old }()
+	passed = AliveFor + time.Second
+	if p.WindowIsOpen() {
+		t.Error("an old sign of life opened the window because the clock agrees with it")
+	}
+	// A pair command that runs moves its sign: the window counts again.
+	passed = 0
+	if err := Hold(dir, time.Now().Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if !p.WindowIsOpen() {
+		t.Error("a sign of life that moved does not count")
+	}
 }
 
 // The outcome is told when the request ends, also for a phone that never

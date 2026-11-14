@@ -13,6 +13,7 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/heeo-dev/askorus/agent/internal/compares"
@@ -127,10 +128,14 @@ type Server struct {
 	o       Options
 	limiter *limiter
 	// asks counts the requests to pair without a code that somebody had to
-	// be asked about and that ended refused or unanswered.
-	asks *limiter
-	jobs *jobs.Manager
-	runs *runs.Manager
+	// be asked about and that ended refused or unanswered. askMu makes
+	// "is this device held back?" and "take the place in the line" one step,
+	// and counting an outcome another: a request cannot slip in between the
+	// refusal that fills the limit and the check that would have seen it.
+	asks  *limiter
+	askMu sync.Mutex
+	jobs  *jobs.Manager
+	runs  *runs.Manager
 	// gate decides which AIs write combined answers; /v1/info and the
 	// comparisons share it.
 	gate     compares.Gate

@@ -35,6 +35,7 @@ import { FormScroll } from '@/ui/FormScroll';
 import { TopBar } from '@/ui/Header';
 import { Icon, IconButton } from '@/ui/Icon';
 import { useSafeInsets } from '@/ui/keyboard';
+import { ownAsk } from '@/ui/PairRequests';
 import { Sheet } from '@/ui/Sheet';
 import { QrScanner, scannerAvailable, useCameraPermission } from '@/ui/QrScanner';
 import { pickPC } from '@/ui/shell/pcs';
@@ -200,6 +201,9 @@ export default function Pair() {
         return;
       }
       const before = await store.list().catch(() => []);
+      // A phone that is paired already is not asked about its own request.
+      ownAsk.name = cleanDeviceName(deviceName);
+      ownAsk.match = digits;
       const saved = await pairWithPC(link, deviceName, { store }, { signal: ctl.signal }, digits);
       // The first PC, or the same PC paired again, is the current one. With
       // another PC already paired the questions stay with the current PC until
@@ -216,6 +220,9 @@ export default function Pair() {
       // A found PC with nobody to answer: no window, no screen, no paired phone.
       const nobody = !link.code && e instanceof AgentError && e.code === 'pair_closed';
       setStep({ kind: 'failed', link, text: nobody ? t('pair.noApprover') : errorText(e) });
+    } finally {
+      ownAsk.name = '';
+      ownAsk.match = '';
     }
   };
 
