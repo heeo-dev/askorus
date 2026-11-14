@@ -269,13 +269,26 @@ func TestPairDirectAskLimit(t *testing.T) {
 		t.Errorf("hello while asking is held back: %d %s", w.Code, w.Body)
 	}
 	// Another device of the account is not held back.
-	if w := ask(map[string]string{hdrCallerIP: "100.64.0.77"}); w.Code != http.StatusAccepted {
-		t.Errorf("another device: %d %s", w.Code, w.Body)
+	other := map[string]string{hdrCallerIP: "100.64.0.77"}
+	w = ask(other)
+	var started PairStarted
+	if w.Code != http.StatusAccepted || json.Unmarshal(w.Body.Bytes(), &started) != nil {
+		t.Fatalf("another device: %d %s", w.Code, w.Body)
+	}
+	// Its request is refused on the screen too. Wait for that: a request that
+	// still waits would be the one a window opened now lets in.
+	for deadline := time.Now().Add(3 * time.Second); ; time.Sleep(5 * time.Millisecond) {
+		w := e.serve(viaServe("POST", "/v1/pair/status", `{"requestId":"`+started.RequestID+`"}`, other))
+		if w.Code == http.StatusForbidden {
+			break
+		}
+		if w.Code != 200 || time.Now().After(deadline) {
+			t.Fatalf("the other device's request: %d %s", w.Code, w.Body)
+		}
 	}
 	// The person opens a pairing window: the held-back device is taken.
 	e.openWindow(t)
 	w = ask(nil)
-	var started PairStarted
 	if w.Code != http.StatusAccepted || json.Unmarshal(w.Body.Bytes(), &started) != nil {
 		t.Fatalf("into an open window: %d %s", w.Code, w.Body)
 	}
