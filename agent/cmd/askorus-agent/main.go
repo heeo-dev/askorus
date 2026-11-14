@@ -31,6 +31,7 @@ import (
 	"github.com/heeo-dev/askorus/agent/internal/config"
 	"github.com/heeo-dev/askorus/agent/internal/core"
 	"github.com/heeo-dev/askorus/agent/internal/devices"
+	"github.com/heeo-dev/askorus/agent/internal/dialog"
 	"github.com/heeo-dev/askorus/agent/internal/hidden"
 	"github.com/heeo-dev/askorus/agent/internal/logx"
 	"github.com/heeo-dev/askorus/agent/internal/pairing"
@@ -52,8 +53,11 @@ Usage / 사용법:
       이 PC를 링크로 Tailscale에 로그인합니다 (한 번). logout은 로그아웃합니다.
       계정을 바꾸려면 logout 뒤 login
   askorus-agent pair [-light-terminal]
-      show a QR code for 5 minutes to pair a phone
-      폰과 짝을 맺는 QR을 5분 동안 보여 줍니다
+      open a pairing window for 5 minutes: a phone signed in to the same
+      Tailscale account taps this PC in the app and is taken at once
+      (the QR code is there for a phone that does not list the PC)
+      짝 맺기 창을 5분 동안 엽니다. 같은 Tailscale 계정으로 로그인한 폰이 앱에서
+      이 PC를 누르면 바로 받습니다 (QR은 PC가 목록에 안 보이는 폰을 위한 것)
   askorus-agent sessions [-state S] [-q TEXT] [-folder DIR] [-json]
       print the session list
       세션 목록을 보여 줍니다
@@ -121,6 +125,11 @@ Settings live in %s (override with ASKORUS_AGENT_DIR).
 var refineOn = false
 
 func main() {
+	// The agent runs itself to show a question on the screen (#58): see
+	// internal/dialog. Not a command for people, so it is not in the usage.
+	if len(os.Args) == 4 && os.Args[1] == dialog.SelfArg {
+		os.Exit(dialog.Show(os.Args[2], os.Args[3]))
+	}
 	if err := run(os.Args[1:], os.Stdin, os.Stdout); err != nil {
 		printError(os.Stderr, err)
 		os.Exit(1)
@@ -330,7 +339,7 @@ func serve(dir string, args []string) error {
 		Hostname:        host,
 		Adapters:        append([]core.Adapter{adapter}, askOnly...),
 		Devices:         store,
-		Pairer:          &pairing.Pairer{Dir: dir, Devices: store},
+		Pairer:          &pairing.Pairer{Dir: dir, Devices: store, Confirm: screenConfirm()},
 		Logger:          logger,
 		Hosts:           watch.hosts,
 		Owner:           watch.owner,
@@ -481,7 +490,9 @@ func pair(dir string, args []string, in io.Reader, out io.Writer) error {
 	}
 	defer pairing.Close(dir)
 	link := PairURL(host, port, code)
-	scan := m("Scan this with the Askorus app (Settings > Add PC):", "Askorus 앱으로 이 QR을 찍으세요(설정 > PC 추가):")
+	say(out, m("Pairing window open. In the Askorus app on your phone (signed in to the same Tailscale account), open 'Pair with a PC' and tap this PC: it is taken at once, with no question here.",
+		"짝 맺기 창을 열었습니다. 폰의 Askorus 앱에서(같은 Tailscale 계정으로 로그인) 'PC와 짝 맺기'를 열고 이 PC를 누르세요. 여기서 묻지 않고 바로 받습니다."))
+	scan := m("If the PC is not listed there, scan this instead:", "거기에 이 PC가 안 보이면 이 QR을 찍으세요:")
 	pngPath := filepath.Join(dir, "pairing-qr.png")
 	if png, err := qrPNG(link); err == nil && os.WriteFile(pngPath, png, 0o600) == nil {
 		defer os.Remove(pngPath)
@@ -626,6 +637,12 @@ var (
 )
 
 func reportResult(res pairing.Result, out io.Writer) error {
+	if res.OK && res.Match != "" {
+		// It came in without a question: the two digits say whether it is the phone in the person's hand.
+		say(out, m("Paired %s, number %s (id %s). The phone shows the same number. If this is not your phone: askorus-agent devices revoke %[3]s",
+			"%s 기기와 짝을 맺었습니다. 숫자 %s (id %s). 폰에 같은 숫자가 보입니다. 내 폰이 아니면: askorus-agent devices revoke %[3]s", res.DeviceName, res.Match, res.DeviceID))
+		return nil
+	}
 	if res.OK {
 		say(out, m("Paired %s (id %s). Disconnect it any time with: askorus-agent devices revoke %[2]s",
 			"%s 기기와 짝을 맺었습니다 (id %s). 끊으려면 언제든: askorus-agent devices revoke %[2]s", res.DeviceName, res.DeviceID))

@@ -87,6 +87,8 @@ type Result struct {
 	DeviceID   string `json:"deviceId,omitempty"`
 	DeviceName string `json:"deviceName,omitempty"`
 	Reason     string `json:"reason,omitempty"`
+	// Match is the two digits the phone showed, for a request without a code (#58).
+	Match string `json:"match,omitempty"`
 }
 
 var codeEnc = base32.StdEncoding.WithPadding(base32.NoPadding)
@@ -158,11 +160,17 @@ type Pairer struct {
 	Poll       time.Duration // how often to look for the decision
 	Timeout    time.Duration // DecisionTimeout by default
 	CollectTTL time.Duration // CollectTimeout by default
+	// Confirm puts the question about a request without a code on the
+	// PC's screen and waits for the answer (#58). shown is false when no
+	// question could be shown (no screen, no dialog program). It ends
+	// when ctx does. nil: this PC never asks on its screen.
+	Confirm func(ctx context.Context, q Question) (allow, shown bool)
 
 	mu     sync.Mutex
 	busy   bool                // a request waits for the PC
 	misses map[string]int      // wrong codes per window id
 	reqs   map[string]*pending // by request id
+	direct *direct             // the request without a code that waits
 }
 
 // CollectTimeout is how long an issued token waits for the phone to fetch

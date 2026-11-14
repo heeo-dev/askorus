@@ -58,6 +58,11 @@ type TokenVerifier interface {
 type Pairer interface {
 	Start(code, deviceName string, o pairing.Origin) (requestID string, err error)
 	Status(requestID string) (pairing.State, string, devices.Device, error)
+	// Pairing without a code (#58).
+	StartDirect(deviceName, match string, o pairing.Origin) (requestID string, err error)
+	WindowIsOpen() bool
+	Pending() []pairing.Question
+	Answer(questionID string, allow bool) error
 }
 
 // Options configures the server.
@@ -165,6 +170,9 @@ func (s *Server) Handler() http.Handler {
 	top.HandleFunc("/v1/pair", methodNotAllowed)
 	top.HandleFunc("POST /v1/pair/status", s.pairStatus)
 	top.HandleFunc("/v1/pair/status", methodNotAllowed)
+	// So is hello: a phone of the same Tailscale account lists this PC before it is paired (#58).
+	top.HandleFunc("GET /v1/hello", s.hello)
+	top.HandleFunc("/v1/hello", methodNotAllowed)
 	mux := http.NewServeMux()
 	top.Handle("/", s.authenticate(mux))
 	route := func(method, path string, h http.HandlerFunc) {
@@ -172,6 +180,9 @@ func (s *Server) Handler() http.Handler {
 		mux.HandleFunc(path, methodNotAllowed)
 	}
 	route("GET", "/v1/info", s.info)
+	// A paired phone answers a pairing request when nobody is at the PC (#58).
+	route("GET", "/v1/pair/requests", s.pairRequests)
+	route("POST", "/v1/pair/requests/answer", s.pairAnswer)
 	mux.HandleFunc("GET /v1/sessions", s.sessions)
 	mux.HandleFunc("POST /v1/sessions", s.startSession)
 	mux.HandleFunc("/v1/sessions", methodNotAllowed)
@@ -356,6 +367,16 @@ type InfoResponse struct {
 	// Moderator is there when the agent asks the moderator alone (#25):
 	// the phone offers '사회자' in the follow-up picker only then.
 	Moderator *ModeratorInfo `json:"moderator,omitempty"`
+	// Pairing is there when the agent takes pairing requests without a code
+	// and lets a paired phone answer them (#58): the phone looks for
+	// waiting requests only then.
+	Pairing *PairingInfo `json:"pairing,omitempty"`
+}
+
+// PairingInfo says what the agent's pairing can do beyond the QR code.
+type PairingInfo struct {
+	// Approve: GET /v1/pair/requests and POST /v1/pair/requests/answer exist.
+	Approve bool `json:"approve"`
 }
 
 // IntegrationInfo is one service outside the PC the agent would send to.
@@ -376,6 +397,9 @@ func (s *Server) info(w http.ResponseWriter, r *http.Request) {
 		Debate:       s.debateInfo(),
 		Context:      contextInfo(),
 		Moderator:    s.moderatorInfo(),
+	}
+	if s.o.Pairer != nil {
+		resp.Pairing = &PairingInfo{Approve: true}
 	}
 	// The CLI's info calls Announce too, so the two cannot disagree on
 	// the ask tiers or on which AIs write combined answers.
