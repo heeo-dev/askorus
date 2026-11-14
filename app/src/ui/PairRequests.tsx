@@ -21,7 +21,12 @@ export const pairAsk = { everyMs: 5000 };
 
 type Asked = { pcId: string; pcName: string; client: AgentClient; q: PairQuestion };
 
-// PCs whose agent has no such list (older than #58): not asked again.
+// Connections that are not asked again: the agent has no such list (older
+// than #58), or it refused this phone's token (the phone was disconnected on
+// the PC). Asking on with a dead token every few seconds fills the agent's
+// limit of failed attempts within a minute, and the phone then cannot even
+// pair again for ten minutes (found on a real phone, R-115). The key holds
+// the device id, so the same PC paired again is asked again.
 const without = new Set<string>();
 
 /**
@@ -50,9 +55,12 @@ export function PairRequests() {
     const look = async () => {
       if (!live || AppState.currentState === 'background') return;
       let pcId = '';
+      let key = '';
       try {
         const cur = await currentPC();
-        if (!live || !cur || without.has(cur.conn.id)) return;
+        if (!live || !cur) return;
+        key = `${cur.conn.id}:${cur.conn.deviceId}`;
+        if (without.has(key)) return;
         pcId = cur.conn.id;
         const list = await cur.client.pairRequests();
         if (!live) return;
@@ -70,9 +78,10 @@ export function PairRequests() {
           setAsked(shown.current);
         }
       } catch (e) {
-        // An agent from before #58 has no list. Anything else (not signed in,
-        // the PC is off) is asked again later.
-        if (pcId && e instanceof AgentError && (e.status === 404 || e.status === 405)) without.add(pcId);
+        // An agent from before #58 has no list, and a refused token stays
+        // refused. Anything else (not signed in, the PC is off, too many
+        // attempts) is asked again later.
+        if (key && e instanceof AgentError && [401, 404, 405].includes(e.status)) without.add(key);
       }
     };
     const timer = setInterval(look, pairAsk.everyMs);

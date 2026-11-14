@@ -224,6 +224,25 @@ describe('a paired phone answers', () => {
     }
   });
 
+  // R-115, found on a real phone: disconnected on the PC, the phone went on
+  // asking every five seconds with its dead token, the agent counted ten
+  // failed attempts within a minute, and the phone could not pair again.
+  test('a phone that was disconnected on the PC stops asking', async () => {
+    agent.tokenValid = false;
+    await renderRouter(routes, { initialUrl: '/pcs' });
+    await waitFor(() => expect(agent.pairPolls).toBe(1));
+    await act(async () => {
+      jest.advanceTimersByTime(300); // ten more looks
+    });
+    expect(agent.pairPolls).toBe(1);
+    // Paired again (a new device id on the same PC): it asks again.
+    agent.tokenValid = true;
+    const store = new ConnectionStore();
+    const [old] = await store.list();
+    await store.add({ kind: 'pc', name: old.name, host: old.host, port: old.port, deviceId: 'dev-2', deviceName: old.deviceName, pairedAt: 'y' }, TOKEN);
+    await waitFor(() => expect(agent.pairPolls).toBeGreaterThan(1));
+  });
+
   test('an agent from before this has no list: it is asked once and left alone', async () => {
     const real = agent.fetch;
     let asks = 0;
