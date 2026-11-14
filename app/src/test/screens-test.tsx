@@ -594,7 +594,7 @@ describe('pairing', () => {
 
     await user.press(screen.getByRole('button', { name: 'Sign in to Tailscale' }));
     await waitFor(() => expect(open).toHaveBeenCalledWith(LOGIN_URL));
-    expect(mockTailnet.calls[0]).toBe('start askorus-test-phone');
+    expect(mockTailnet.calls[0]).toBe('start askorus-sm-test');
     expect(await screen.findByText('Finish signing in in the browser, then come back to this app.')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Open the browser again' })).toBeTruthy();
     expect(open).toHaveBeenCalledTimes(1);

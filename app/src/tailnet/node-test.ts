@@ -21,6 +21,13 @@ afterEach(() => jest.restoreAllMocks());
 
 const native = () => jest.requireMock('@/tailnet/native').nativeTailnet();
 
+// The name sent to Tailscale's servers is the phone's model, never the name
+// the person gave the phone (it can hold their name). setup.ts: deviceName
+// 'Test Phone', modelName 'SM-TEST'.
+test("the phone's name in the tailnet is its model, not the name the person gave it", () => {
+  expect(tailnetHostName()).toBe('askorus-sm-test');
+});
+
 test("the phone's name in the tailnet is made of what a DNS label may hold", () => {
   expect(tailnetHostName('Pixel 9 Pro')).toBe('askorus-pixel-9-pro');
   expect(tailnetHostName("Sam's Phone")).toBe('askorus-sams-phone');
@@ -55,7 +62,7 @@ test('a phone that never signed in starts nothing and sends nothing', async () =
 test('signing in starts the node, brings the link, and is remembered for the next launch', async () => {
   await neverSignedIn();
   await loginTailnet();
-  expect(mockTailnet.calls).toEqual(['start askorus-test-phone', 'login']);
+  expect(mockTailnet.calls).toEqual(['start askorus-sm-test', 'login']);
   expect(await readTailnet()).toEqual({ state: 'needsLogin', loginURL: LOGIN_URL });
   expect(await SecureStore.getItemAsync('tailnet.on.v1')).toBe('1');
 
@@ -66,7 +73,7 @@ test('signing in starts the node, brings the link, and is remembered for the nex
   mockTailnet.calls = [];
   resetTailnet();
   await resumeTailnet();
-  expect(mockTailnet.calls).toEqual(['start askorus-test-phone']);
+  expect(mockTailnet.calls).toEqual(['start askorus-sm-test']);
   expect((await readTailnet()).state).toBe('running');
 });
 

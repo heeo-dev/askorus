@@ -86,8 +86,14 @@ export function tailnetAvailable(): boolean {
   return nativeTailnet() !== null;
 }
 
-/** This phone's device name in the tailnet: "askorus-" and what a DNS label may hold. */
-export function tailnetHostName(device: string | null | undefined = Device.deviceName ?? Device.modelName): string {
+/**
+ * This phone's device name in the tailnet: "askorus-" and what a DNS label
+ * may hold of the phone's model. Not the name the person gave the phone: that
+ * name ("Sam's phone") can hold a person's name, and this one goes to
+ * Tailscale's servers. The name the PC lists stays the person's to choose
+ * (pairing), and that one goes only to their own PC.
+ */
+export function tailnetHostName(device: string | null | undefined = Device.modelName): string {
   const label = (device ?? '')
     .toLowerCase()
     .replace(/[\s._]+/g, '-')
