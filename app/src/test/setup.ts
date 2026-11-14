@@ -52,6 +52,8 @@ jest.mock('@/tailnet/native', () => {
     status: { state: 'Running', name: 'askorus-test-phone.tail0.ts.net', owner: 'me@example.com' } as Record<string, unknown>,
     // What the tailnet says of a host; the default is one of the person's own devices.
     peers: {} as Record<string, { known: boolean; sameUser: boolean }>,
+    // The other devices of the account, as the node lists them (#58); none unless a test puts some.
+    devices: [] as Array<{ name: string; host: string; online: boolean; os?: string }>,
     // What login makes of the status (the link arrives a moment after the button).
     afterLogin: null as Record<string, unknown> | null,
     calls: [] as string[],
@@ -72,6 +74,7 @@ jest.mock('@/tailnet/native', () => {
       state.calls.push(`peer ${host}`);
       return JSON.stringify(state.peers[host] ?? { known: true, sameUser: true, online: true });
     },
+    peers: async () => JSON.stringify(state.devices),
     fetch: async (method: string, url: string, headers: string, body: string) => {
       const res = await globalThis.fetch(url, { method, headers: JSON.parse(headers), body: body || undefined });
       return { status: res.status, headers: '{}', body: await res.text() };

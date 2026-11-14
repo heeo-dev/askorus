@@ -8,6 +8,7 @@ import { resumeTailnet } from '@/tailnet/node';
 
 import { setRootBottom } from '@/ui/keyboard';
 import { LaunchCover } from '@/ui/LaunchCover';
+import { PairRequests } from '@/ui/PairRequests';
 import { applyNavigationBar } from '@/ui/navigationBar';
 import { palettes, resolveScheme, ThemeProvider, useTheme, useThemeChoice } from '@/ui/theme';
 
@@ -44,6 +45,7 @@ function Root() {
     <View style={styles.root} onLayout={(e) => setRootBottom(e.nativeEvent.layout.y + e.nativeEvent.layout.height)}>
       <StatusBar style={th.scheme === 'dark' ? 'light' : 'dark'} />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: th.bg } }} />
+      <PairRequests />
       {/* Until the saved theme is read, the phone's background covers the
           screens, so a dark choice never flashes light (the stack stays mounted). */}
       {ready ? null : <View style={[StyleSheet.absoluteFill, { backgroundColor: palettes[resolveScheme('system', system)].bg }]} />}

@@ -16,6 +16,8 @@ export type NativeTailnet = {
   logout(): Promise<void>;
   /** JSON: {known, sameUser, online, name, ip} for a MagicDNS name. */
   peer(host: string): Promise<string>;
+  /** The other devices of the person's own account, as JSON (#58). */
+  peers(): Promise<string>;
   fetch(method: string, url: string, headers: string, body: string, timeoutMs: number): Promise<NativeFetchResult>;
   recentLog(): Promise<string>;
 };

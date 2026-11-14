@@ -83,7 +83,23 @@ export type Info = {
   context?: ContextInfo;
   /** The agent asks the moderator alone (#25); an older agent leaves it out, and the phone offers no '사회자'. */
   moderator?: ModeratorInfo;
+  /** The agent lets a paired phone answer a pairing request (#58); an older agent leaves it out. */
+  pairing?: { approve: boolean };
 };
+
+/** /v1/hello: what a phone of the same Tailscale account may know of a PC before it is paired (#58). */
+export type Hello = {
+  name: string;
+  version: string;
+  apiVersion: number;
+  hostname: string;
+  os: string;
+  /** 'window': a pairing window is open on the PC and takes the phone at once. 'ask': someone is asked. */
+  pairing: 'window' | 'ask' | (string & {});
+};
+
+/** A pairing request without a code that waits for an answer, as a paired phone sees it (#58). */
+export type PairQuestion = { id: string; deviceName: string; match: string; at: string };
 
 /** /v1/info's moderator: the limits of the answers a moderator ask carries. */
 export type ModeratorInfo = { maxAnswers: number; maxAnswerBytes: number; rules: string };

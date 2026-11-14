@@ -21,7 +21,9 @@ import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Linking, Platform, Pressable, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { CancelledError, NetworkError } from '@/api/client';
+import { AgentError, CancelledError, NetworkError } from '@/api/client';
+import { findPCs, type FoundPC, newMatch } from '@/connections/discover';
+import { osName } from '@/connections/label';
 import { cleanDeviceName, pairWithPC } from '@/connections/pair';
 import { isOldPairLink, type PairLink, parsePairLink } from '@/connections/pairLink';
 import { ConnectionStore } from '@/connections/store';
@@ -81,6 +83,34 @@ export default function Pair() {
   // person signed in); a build without it cannot pair.
   const signedIn = useTailnet().state === 'running';
   const abort = useRef<AbortController | null>(null);
+  // The PCs found among the devices of the person's own Tailscale account
+  // (#58): null while the first look is on its way.
+  const [found, setFound] = useState<FoundPC[] | null>(null);
+  const [qrOpen, setQrOpen] = useState(false);
+  // The two digits shown while a found PC is asked; the PC shows the same.
+  const [match, setMatch] = useState('');
+  const starting = step.kind === 'start';
+  useEffect(() => {
+    if (!signedIn || !starting) return;
+    let live = true;
+    const look = async () => {
+      try {
+        const list = await findPCs(await store.list().catch(() => []));
+        if (live) setFound(list);
+      } catch {
+        if (live) setFound((f) => f ?? []);
+      }
+    };
+    void look();
+    // The PC may be signing in just now: look again while the screen waits.
+    const timer = setInterval(look, 5000);
+    return () => {
+      live = false;
+      clearInterval(timer);
+    };
+  }, [signedIn, starting]);
+  // With a PC in the list the QR code steps fold away until asked for.
+  const showQR = qrOpen || pasteOpen || !signedIn || !found || found.length === 0;
   // Back only when there is somewhere to go back to (not when the link opened
   // the app here). Read once the screen has focus: the router is not ready
   // during the first render, and only knows this screen once it is focused.
@@ -139,6 +169,8 @@ export default function Pair() {
     abort.current?.abort();
     const ctl = new AbortController();
     abort.current = ctl;
+    const digits = link.code ? '' : newMatch();
+    setMatch(digits);
     setStep({ kind: 'waiting', link });
     try {
       // The code goes only to one of the person's own devices (#42): the
@@ -160,7 +192,7 @@ export default function Pair() {
         return;
       }
       const before = await store.list().catch(() => []);
-      const saved = await pairWithPC(link, deviceName, { store }, { signal: ctl.signal });
+      const saved = await pairWithPC(link, deviceName, { store }, { signal: ctl.signal }, digits);
       // The first PC, or the same PC paired again, is the current one. With
       // another PC already paired the questions stay with the current PC until
       // the person picks the new one: the PC picker opens with both (R-94).
@@ -172,7 +204,9 @@ export default function Pair() {
         setStep({ kind: 'confirm', link });
         return;
       }
-      setStep({ kind: 'failed', link, text: errorText(e) });
+      // A found PC with nobody to answer: no window, no screen, no paired phone.
+      const nobody = !link.code && e instanceof AgentError && e.code === 'pair_closed';
+      setStep({ kind: 'failed', link, text: nobody ? t('pair.noApprover') : errorText(e) });
     }
   };
 
@@ -245,55 +279,99 @@ export default function Pair() {
                 <TailnetLogin manage />
               </View>
               <View style={s.step}>
-                <StepHead n={2} text={t('pair.step1')} />
-                <View style={s.code}>
-                  <Text style={s.codeText} selectable>
-                    {pairCommand}
-                  </Text>
-                  <IconButton name={copied ? 'check' : 'copy'} label={t('sheet.copy')} onPress={copy} size={20} color={copied ? th.ok : th.textSub} />
-                </View>
-                {copied ? <Text style={s.caption}>{t('sheet.copied')}</Text> : null}
-              </View>
-              <View style={s.step}>
-                <StepHead n={3} text={t('pair.step2')} />
-                <Button icon="camera" label={t('pair.scan')} onPress={() => setStep({ kind: 'scan' })} disabled={!signedIn} />
-                {signedIn ? null : <Text style={s.caption}>{t('pair.loginFirst')}</Text>}
+                <StepHead n={2} text={t('pair.stepPick')} />
+                {!signedIn ? (
+                  <Text style={s.caption}>{t('pair.pickAfterLogin')}</Text>
+                ) : found === null ? (
+                  <View style={s.finding}>
+                    <Spinner size={18} />
+                    <Text style={s.caption}>{t('pair.finding')}</Text>
+                  </View>
+                ) : found.length === 0 ? (
+                  <Text style={s.caption}>{t('pair.noneFound')}</Text>
+                ) : (
+                  <View style={s.found} testID="found-pcs">
+                    {found.map((pc) => (
+                      <Pressable
+                        key={pc.host}
+                        onPress={() => setStep({ kind: 'confirm', link: { host: pc.host, port: pc.port, code: '' } })}
+                        accessibilityRole="button"
+                        accessibilityLabel={pc.name}
+                        style={({ pressed }) => [s.foundRow, pressed && s.pressed]}
+                      >
+                        <Icon name="pc" size={20} color={th.text} />
+                        <View style={s.foundTexts}>
+                          <Text style={s.foundName}>{pc.name}</Text>
+                          <Text style={s.caption}>{[osName(pc.os), pc.host.split('.')[0]].filter(Boolean).join(' · ')}</Text>
+                        </View>
+                        {pc.paired ? <Text style={s.caption}>{t('pair.already')}</Text> : null}
+                        <Icon name="chevronRight" size={16} color={th.textSub} />
+                      </Pressable>
+                    ))}
+                  </View>
+                )}
               </View>
             </View>
 
-            <View style={s.pasteBlock}>
-              {pasteOpen ? (
-                <>
-                  <Text style={s.label}>
-                    {t('pair.linkLabel')}
-                  </Text>
-                  <View style={s.inputRow}>
-                    <TextInput
-                      style={[s.input, s.inputWithButton]}
-                      value={pasted}
-                      onChangeText={(v) => {
-                        setPasted(v);
-                        setPasteError('');
-                      }}
-                      placeholder="askorus://pair?…"
-                      placeholderTextColor={th.caption}
-                      accessibilityLabel={t('pair.linkLabel')}
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      autoFocus
-                      keyboardType="url"
-                      returnKeyType="go"
-                      onSubmitEditing={pairWithPasted}
-                    />
-                    <IconButton name="paste" label={t('pair.paste')} onPress={paste} size={20} style={s.pasteButton} />
+            {/* The QR code and the link are for a PC that is not in the list. */}
+            {showQR ? (
+              <>
+                <Text style={s.alt}>{t('pair.qrTitle')}</Text>
+                <View style={s.steps}>
+                  <View style={s.step}>
+                    <Text style={s.label}>{t('pair.step1')}</Text>
+                    <View style={s.code}>
+                      <Text style={s.codeText} selectable>
+                        {pairCommand}
+                      </Text>
+                      <IconButton name={copied ? 'check' : 'copy'} label={t('sheet.copy')} onPress={copy} size={20} color={copied ? th.ok : th.textSub} />
+                    </View>
+                    {copied ? <Text style={s.caption}>{t('sheet.copied')}</Text> : null}
                   </View>
-                  {pasteError ? <Text style={s.error}>{pasteError}</Text> : null}
-                  {pasted ? <Button variant="outline" label={t('pair.usePasted')} onPress={pairWithPasted} /> : null}
-                </>
-              ) : (
-                <Button variant="quiet" icon="paste" label={t('pair.pasteLink')} onPress={() => setPasteOpen(true)} style={s.center} />
-              )}
-            </View>
+                  <View style={s.step}>
+                    <Text style={s.label}>{t('pair.step2')}</Text>
+                    <Button icon="camera" label={t('pair.scan')} onPress={() => setStep({ kind: 'scan' })} disabled={!signedIn} />
+                    {signedIn ? null : <Text style={s.caption}>{t('pair.loginFirst')}</Text>}
+                  </View>
+                </View>
+
+                <View style={s.pasteBlock}>
+                  {pasteOpen ? (
+                    <>
+                      <Text style={s.label}>
+                        {t('pair.linkLabel')}
+                      </Text>
+                      <View style={s.inputRow}>
+                        <TextInput
+                          style={[s.input, s.inputWithButton]}
+                          value={pasted}
+                          onChangeText={(v) => {
+                            setPasted(v);
+                            setPasteError('');
+                          }}
+                          placeholder="askorus://pair?…"
+                          placeholderTextColor={th.caption}
+                          accessibilityLabel={t('pair.linkLabel')}
+                          autoCapitalize="none"
+                          autoCorrect={false}
+                          autoFocus
+                          keyboardType="url"
+                          returnKeyType="go"
+                          onSubmitEditing={pairWithPasted}
+                        />
+                        <IconButton name="paste" label={t('pair.paste')} onPress={paste} size={20} style={s.pasteButton} />
+                      </View>
+                      {pasteError ? <Text style={s.error}>{pasteError}</Text> : null}
+                      {pasted ? <Button variant="outline" label={t('pair.usePasted')} onPress={pairWithPasted} /> : null}
+                    </>
+                  ) : (
+                    <Button variant="quiet" icon="paste" label={t('pair.pasteLink')} onPress={() => setPasteOpen(true)} style={s.center} />
+                  )}
+                </View>
+              </>
+            ) : (
+              <Button variant="quiet" icon="camera" label={t('pair.useQR')} onPress={() => setQrOpen(true)} style={s.center} />
+            )}
           </>
         )}
 
@@ -307,11 +385,15 @@ export default function Pair() {
               <Text style={s.host}>{step.link.host}</Text>
               <Text style={s.caption}>{t('pair.port', { port: step.link.port })}</Text>
             </View>
-            <View style={s.warn} testID="pair-warn">
-              <Icon name="alert" size={18} color={th.danger} />
-              <Text style={s.warnText}>{t('pair.confirmWarn')}</Text>
-            </View>
-            <Text style={s.intro}>{t('pair.confirmBody')}</Text>
+            {step.link.code ? (
+              <View style={s.warn} testID="pair-warn">
+                <Icon name="alert" size={18} color={th.danger} />
+                <Text style={s.warnText}>{t('pair.confirmWarn')}</Text>
+              </View>
+            ) : (
+              <Text style={s.caption}>{t('pair.foundNote')}</Text>
+            )}
+            <Text style={s.intro}>{t(step.link.code ? 'pair.confirmBody' : 'pair.confirmBodyFound')}</Text>
             <View style={s.field}>
               <Text style={s.label}>{t('pair.deviceName')}</Text>
               <TextInput
@@ -326,7 +408,7 @@ export default function Pair() {
             {/* The link opened the app before the person signed in: the sign-in comes first. */}
             {signedIn ? null : <TailnetLogin />}
             <Button label={t('pair.send')} onPress={() => send(step.link)} disabled={!deviceName.trim() || !signedIn} />
-            <Button variant="outline" label={t('pair.otherQR')} onPress={() => setStep({ kind: 'start' })} />
+            <Button variant="outline" label={t(step.link.code ? 'pair.otherQR' : 'pair.otherPC')} onPress={() => setStep({ kind: 'start' })} />
           </>
         )}
 
@@ -336,7 +418,12 @@ export default function Pair() {
             <Text style={s.waitTitle} accessibilityRole="header">
               {t('pair.waitingTitle')}
             </Text>
-            <Text style={[s.intro, s.centerText]}>{t('pair.waitingBody')}</Text>
+            {match ? (
+              <Text style={s.match} testID="pair-match" accessibilityLabel={t('pairAsk.number', { n: match })}>
+                {match}
+              </Text>
+            ) : null}
+            <Text style={[s.intro, s.centerText]}>{t(match ? 'pair.waitingFound' : 'pair.waitingBody')}</Text>
             <Button variant="outline" label={t('pair.cancel')} onPress={() => abort.current?.abort()} style={s.wide} />
           </View>
         )}
@@ -528,6 +615,13 @@ const styles = themed((th) =>
     waiting: { alignItems: 'center', gap: 16, paddingTop: 48 },
     waitTitle: { fontSize: 18, fontWeight: '600', lineHeight: 24, letterSpacing: -0.18, color: th.text, textAlign: 'center' },
     centerText: { textAlign: 'center' },
+    match: { fontSize: 48, fontWeight: '700', lineHeight: 56, letterSpacing: 8, color: th.text },
+    finding: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+    found: { borderRadius: 14, backgroundColor: th.surface, overflow: 'hidden' },
+    foundRow: { minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 10 },
+    foundTexts: { flex: 1, minWidth: 0 },
+    foundName: { fontSize: 16, fontWeight: '600', lineHeight: 22, color: th.text },
+    alt: { fontSize: 15, fontWeight: '600', lineHeight: 21, color: th.text, marginTop: 4 },
     wide: { alignSelf: 'stretch' },
     foot: { gap: 2, paddingHorizontal: 20 },
     pressed: { backgroundColor: th.raised },

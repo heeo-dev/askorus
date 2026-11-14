@@ -256,6 +256,27 @@ export async function ownDevice(host: string): Promise<PeerAnswer> {
   }
 }
 
+/** One other device of the person's own Tailscale account. */
+export type OwnDevice = { name: string; host: string; online: boolean; os?: string };
+
+/**
+ * The other devices of the account this phone is signed in as: where the
+ * app looks for the person's PCs, so pairing needs no QR code to say where
+ * the PC is (#58). Only these devices can get a request at all.
+ */
+export async function ownDevices(): Promise<OwnDevice[]> {
+  const native = nativeTailnet();
+  if (!native) return [];
+  if (!started && !(await enabled())) throw new TailnetError('tailnet_login');
+  try {
+    await start(native);
+    const list = JSON.parse(await native.peers()) as OwnDevice[];
+    return Array.isArray(list) ? list : [];
+  } catch (e) {
+    throw coded(e);
+  }
+}
+
 // A request the client gave up on (its own timeout, or the person leaving)
 // rejects at once; the native call ends on its own a little later.
 const nativeTimeoutMs = 90_000;

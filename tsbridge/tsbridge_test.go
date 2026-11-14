@@ -194,3 +194,33 @@ func TestBuildTagsMatch(t *testing.T) {
 		}
 	}
 }
+
+// The app finds its PCs in this list instead of in a QR code (#58): only
+// the devices a request may go to are in it, so a friend's shared PC or a
+// tagged server is never offered for pairing.
+func TestOwnDevices(t *testing.T) {
+	list, err := ownDevices(tailnet())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, d := range list {
+		names = append(names, d.Name)
+	}
+	if want := "askorus-pc.tail0.ts.net asleep-pc.tail0.ts.net"; strings.Join(names, " ") != want {
+		t.Errorf("own devices = %q, want %q", names, want)
+	}
+	if list[0].Host != "askorus-pc" || !list[0].Online || list[1].Online {
+		t.Errorf("devices = %+v", list)
+	}
+	// Not signed in: an error with its code, not an empty list.
+	if _, err := ownDevices(&ipnstate.Status{BackendState: "NeedsLogin"}); errorCode(err) != CodeNeedsLogin {
+		t.Errorf("not signed in: %v", err)
+	}
+	if _, err := ownDevices(&ipnstate.Status{BackendState: "Starting"}); errorCode(err) != CodeNotConnected {
+		t.Errorf("starting: %v", err)
+	}
+	if _, err := Peers(); errorCode(err) != CodeNotStarted {
+		t.Errorf("not started: %v", err)
+	}
+}

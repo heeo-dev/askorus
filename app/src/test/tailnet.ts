@@ -6,6 +6,7 @@ type MockState = {
   available: boolean;
   status: Record<string, unknown>;
   peers: Record<string, { known: boolean; sameUser: boolean }>;
+  devices: Array<{ name: string; host: string; online: boolean; os?: string }>;
   afterLogin: Record<string, unknown> | null;
   calls: string[];
 };
@@ -20,6 +21,7 @@ export function resetMockTailnet() {
   mockTailnet.available = true;
   mockTailnet.status = { ...signedIn };
   mockTailnet.peers = {};
+  mockTailnet.devices = [];
   mockTailnet.afterLogin = null;
   mockTailnet.calls = [];
 }

@@ -10,11 +10,13 @@ import type {
   ComparisonRequest,
   Debate,
   DebateRequest,
+  Hello,
   FolderList,
   Info,
   Job,
   JobStarted,
   OpenResult,
+  PairQuestion,
   PairStarted,
   PairStatus,
   Preview,
@@ -410,6 +412,31 @@ export class AgentClient {
       wait.signal,
     );
     return this.waitPair(started, wait);
+  }
+
+  /**
+   * Asks to pair without a code (#58): the PC was found among the devices of
+   * the person's own Tailscale account. match is the two digits this phone
+   * shows; the PC shows them where it asks or reports.
+   */
+  async pairDirect(deviceName: string, match: string, wait: WaitOptions = {}): Promise<Paired> {
+    const started = await this.request<PairStarted>('POST', 'pair', { deviceName, match }, wait.signal);
+    return this.waitPair(started, wait);
+  }
+
+  /** What a PC of the same Tailscale account says of itself before pairing (#58). */
+  hello(signal?: AbortSignal) {
+    return this.request<Hello>('GET', 'hello', undefined, signal);
+  }
+
+  /** The pairing request that waits on the PC, for this paired phone to answer (#58). */
+  async pairRequests(signal?: AbortSignal): Promise<PairQuestion[]> {
+    const r = await this.request<{ requests?: PairQuestion[] }>('GET', 'pair/requests', undefined, signal);
+    return r?.requests ?? [];
+  }
+
+  async answerPair(id: string, allow: boolean): Promise<void> {
+    await this.request<unknown>('POST', 'pair/requests/answer', { id, allow });
   }
 
   async waitPair(started: Pick<PairStarted, 'requestId' | 'pollAfterMs'>, wait: WaitOptions = {}): Promise<Paired> {

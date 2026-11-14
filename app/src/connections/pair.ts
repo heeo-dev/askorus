@@ -43,9 +43,13 @@ export async function pairWithPC(
   deviceName: string,
   deps: PairDeps,
   wait: WaitOptions = {},
+  /** The two digits shown while a PC found in the account is asked (#58); with a code there are none. */
+  match = '',
 ): Promise<Connection> {
   const client = new AgentClient(baseUrl(link.host, link.port), { fetch: deps.fetch, sleep: deps.sleep });
-  const paired = await client.pair(link.code, cleanDeviceName(deviceName), wait);
+  const paired = link.code
+    ? await client.pair(link.code, cleanDeviceName(deviceName), wait)
+    : await client.pairDirect(cleanDeviceName(deviceName), match, wait);
 
   // The PC's own name for the list. Pairing already worked, so a failure
   // here only means the host name is shown instead.

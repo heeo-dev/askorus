@@ -27,6 +27,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -438,13 +439,74 @@ func matchPeer(st *ipnstate.Status, host string) (peerInfo, error) {
 		// another user id, a tagged one has no person behind it, and a
 		// device listed only because this account shares with its owner
 		// (ShareeNode) is not the person's either.
-		p.SameUser = peer.UserID == st.Self.UserID && peer.UserID != 0 && peer.ShareeNode == false && len(peerTags(peer)) == 0
+		p.SameUser = ownPeer(st, peer)
 		if len(peer.TailscaleIPs) > 0 {
 			p.IP = peer.TailscaleIPs[0].String()
 		}
 		return p, nil
 	}
 	return peerInfo{}, nil
+}
+
+// ownPeer reports whether peer is a device of the account this phone is
+// signed in as: the same user, no tags, and not one that is listed only
+// because the account shares with its owner.
+func ownPeer(st *ipnstate.Status, peer *ipnstate.PeerStatus) bool {
+	return st.Self != nil && peer.UserID == st.Self.UserID && peer.UserID != 0 && !peer.ShareeNode && len(peerTags(peer)) == 0
+}
+
+// ownDevice is one device of the person's own account, as Peers lists it.
+type ownDevice struct {
+	// Name is its name in the tailnet (MagicDNS), lowercase, without the last dot.
+	Name string `json:"name"`
+	// Host is its host name (what the device calls itself).
+	Host   string `json:"host"`
+	Online bool   `json:"online"`
+	OS     string `json:"os,omitempty"`
+}
+
+// Peers lists, as JSON, the other devices of the account this phone is
+// signed in as: the only devices a request may go to (Fetch). The app
+// looks among them for the person's PCs, so pairing needs no QR code to
+// say where the PC is (#58). The list is read fresh.
+func Peers() (string, error) {
+	mu.Lock()
+	c := lc
+	mu.Unlock()
+	if c == nil {
+		return "", coded(CodeNotStarted, "not started")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	st, err := peerStatus(ctx, c, true)
+	if err != nil {
+		return "", err
+	}
+	list, err := ownDevices(st)
+	if err != nil {
+		return "", err
+	}
+	b, err := json.Marshal(list)
+	return string(b), err
+}
+
+// ownDevices is Peers on a list already read, sorted by name.
+func ownDevices(st *ipnstate.Status) ([]ownDevice, error) {
+	if st.BackendState == "NeedsLogin" || st.BackendState == "NoState" && st.Self == nil {
+		return nil, coded(CodeNeedsLogin, "not signed in to Tailscale")
+	}
+	if st.Self == nil {
+		return nil, coded(CodeNotConnected, "the tailnet is not up yet (%s)", st.BackendState)
+	}
+	out := []ownDevice{}
+	for _, peer := range st.Peer {
+		if !ownPeer(st, peer) || dnsName(peer.DNSName) == "" {
+			continue
+		}
+		out = append(out, ownDevice{Name: dnsName(peer.DNSName), Host: peer.HostName, Online: peer.Online, OS: peer.OS})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out, nil
 }
 
 func peerTags(p *ipnstate.PeerStatus) []string {

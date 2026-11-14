@@ -82,6 +82,8 @@ class TailnetModule : Module() {
 
     // JSON: {known, sameUser, online, name, ip} for a MagicDNS name.
     AsyncFunction("peer") Coroutine { host: String -> call { Tsbridge.peer(host) } }
+    // The other devices of the person's own account, as JSON (#58).
+    AsyncFunction("peers") Coroutine { -> call { Tsbridge.peers() } }
 
     AsyncFunction("fetch") Coroutine { method: String, url: String, headers: String, body: String, timeoutMs: Int ->
       call {
