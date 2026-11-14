@@ -74,7 +74,7 @@ describe('My PC', () => {
     const user = userEvent.setup();
     const r = await renderRouter(routes, { initialUrl: '/pcs' });
     expect(await screen.findByText('No PC is paired yet.')).toBeTruthy();
-    expect(screen.getByText(/askorus-agent pair/)).toBeTruthy();
+    expect(screen.getByText(/sign in to Tailscale, then tap your PC in the list/)).toBeTruthy();
     expect(screen.getByRole('tab', { name: 'My PCs' })).toBeSelected();
     await user.press(screen.getByRole('button', { name: 'Pair with a PC' }));
     await waitFor(() => expect(r.getPathname()).toBe('/pair'));
@@ -521,7 +521,7 @@ describe('pairing', () => {
     await renderRouter(routes, { initialUrl: `/pair?v=2&host=${HOST}&port=${PORT}&code=${CODE}` });
     const warn = within(await screen.findByTestId('pair-warn'));
     expect(warn.getByText(/Pair only if this address matches the one on your own PC's screen\. Do not pair from a link or QR code someone sent you\./)).toBeTruthy();
-    expect(screen.getByText('When you tap Pair, your PC asks whether to allow this phone.')).toBeTruthy();
+    expect(screen.getByText('When you tap Pair, the terminal on the PC asks whether to allow this phone.')).toBeTruthy();
     expect(agent.calls).toHaveLength(0);
   });
 
@@ -584,6 +584,9 @@ describe('pairing', () => {
     await neverSignedIn();
     await renderRouter(routes, { initialUrl: '/pair' });
     expect(await screen.findByRole('header', { name: 'Sign in to Tailscale' })).toBeTruthy();
+    // Before the sign-in the QR code steps stay folded: one thing to do at a time.
+    expect(screen.queryByRole('button', { name: 'Scan QR code' })).toBeNull();
+    await user.press(screen.getByRole('button', { name: 'Pair with a QR code or a link' }));
     expect(screen.getByRole('button', { name: 'Scan QR code' })).toBeDisabled();
     expect(screen.getByText('Sign in to Tailscale above first.')).toBeTruthy();
     expect(screen.getByText(/There is no other app to install\./)).toBeTruthy();
@@ -623,12 +626,12 @@ describe('pairing', () => {
   test('a pairing link of an older agent says to update the agent', async () => {
     const user = userEvent.setup();
     await renderRouter(routes, { initialUrl: `/pair?v=1&host=${HOST}&port=${PORT}&code=${CODE}` });
-    expect(await screen.findByText(/This QR code is from an older agent\. Update the Askorus agent on the PC/)).toBeTruthy();
+    expect(await screen.findByText(/This QR code or link is from an older agent\. Update the Askorus agent on the PC/)).toBeTruthy();
     expect(screen.queryByText('Is this your PC?')).toBeNull();
     // Pasted, the same.
     await user.type(screen.getByLabelText('The link on the PC'), `askorus://pair?v=1&host=${HOST}&port=${PORT}&code=${CODE}`);
     await user.press(screen.getByRole('button', { name: 'Pair with this link' }));
-    expect(await screen.findByText(/This QR code is from an older agent/)).toBeTruthy();
+    expect(await screen.findByText(/This QR code or link is from an older agent/)).toBeTruthy();
     expect(agent.calls).toHaveLength(0);
   });
 
@@ -637,6 +640,7 @@ describe('pairing', () => {
     resetTailnet();
     await renderRouter(routes, { initialUrl: '/pair' });
     expect(await screen.findByText('This build has no Tailscale inside, so it cannot connect to a PC.')).toBeTruthy();
+    await userEvent.setup().press(screen.getByRole('button', { name: 'Pair with a QR code or a link' }));
     expect(screen.getByRole('button', { name: 'Scan QR code' })).toBeDisabled();
     expect(screen.queryByRole('button', { name: 'Sign in to Tailscale' })).toBeNull();
   });
@@ -662,7 +666,7 @@ describe('pairing', () => {
     agent.pairAnswer = 'deny';
     await renderRouter(routes, { initialUrl: `/pair?v=2&host=${HOST}&port=${PORT}&code=${CODE}` });
     await user.press(await screen.findByRole('button', { name: 'Pair', disabled: false }));
-    expect(await screen.findByText('The request was declined.')).toBeTruthy();
+    expect(await screen.findByText('The request was refused.')).toBeTruthy();
     expect(screen.getByText("Couldn't pair")).toBeTruthy();
     expect(await new ConnectionStore().list()).toEqual([]);
     await user.press(screen.getByRole('button', { name: 'Start over' }));
@@ -680,7 +684,7 @@ describe('pairing', () => {
     }) as typeof fetch;
     await renderRouter(routes, { initialUrl: `/pair?v=2&host=${HOST}&port=${PORT}&code=${CODE}` });
     await user.press(await screen.findByRole('button', { name: 'Pair', disabled: false }));
-    expect(await screen.findByText('Nobody answered within 2 minutes.')).toBeTruthy();
+    expect(await screen.findByText(/^Nobody answered within 2 minutes./)).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Start over' })).toBeTruthy();
     expect(await new ConnectionStore().list()).toEqual([]);
   });
@@ -762,7 +766,7 @@ describe('pairing', () => {
     const unixLine = 'curl -fsSL https://github.com/heeo-dev/askorus/releases/latest/download/install.sh | sh';
     expect(sheet.getByText(line)).toBeTruthy();
     expect(sheet.getByText(unixLine)).toBeTruthy();
-    expect(sheet.getByText(/run the line for its system.*scan it here/)).toBeTruthy();
+    expect(sheet.getByText(/run the line for its system.*come back here and tap your PC/)).toBeTruthy();
     expect(sheet.getByText('Windows: in PowerShell (a normal window, not as administrator)')).toBeTruthy();
     expect(sheet.getByText('macOS, Linux: in a terminal (as yourself, without sudo)')).toBeTruthy();
     expect(sheet.queryByText(/Windows only/)).toBeNull();

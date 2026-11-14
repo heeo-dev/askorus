@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Issues are public. Take your account, PC name, addresses and folder paths out of what you paste, and never post a pairing link or code. A security problem goes in private: see SECURITY.md.
+        Issues are public. Take your account, PC name, addresses and folder paths out of what you paste, and never post a pairing link or code, or a Tailscale sign-in link. A security problem goes in private: see SECURITY.md.
         이슈는 공개됩니다. 붙여 넣는 글에서 계정, PC 이름, 주소, 폴더 경로는 지워 주세요. 짝 맺기 링크와 코드는 올리지 마세요. 보안 문제는 SECURITY.md의 방법으로 비공개로 알려 주세요.
   - type: textarea
     id: what
@@ -31,7 +31,7 @@ body:
     attributes:
       label: Versions / 판
       description: "`askorus-agent version` on the PC, and the app's version (Settings > About). PC에서 `askorus-agent version`, 앱은 설정 > 정보."
-      placeholder: "agent 0.2.0, app 0.2.0"
+      placeholder: "agent 0.3.0, app 0.3.0"
   - type: textarea
     id: check
     attributes:

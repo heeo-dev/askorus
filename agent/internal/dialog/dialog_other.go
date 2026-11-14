@@ -40,5 +40,17 @@ func confirm(ctx context.Context, q Question) (allow, shown bool) {
 	return false, false
 }
 
+// Missing names what this PC lacks to show the question at all: the dialog
+// programs, when neither is installed. A display is the running agent's to
+// have, so it is not looked at here.
+func Missing() string {
+	for _, name := range []string{"zenity", "kdialog"} {
+		if _, err := exec.LookPath(name); err == nil {
+			return ""
+		}
+	}
+	return "zenity, kdialog"
+}
+
 // Show is the Windows child; elsewhere there is nothing to show this way.
 func Show(string, string) int { return ExitFailed }

@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"runtime"
 
 	"github.com/heeo-dev/askorus/agent/internal/dialog"
 	"github.com/heeo-dev/askorus/agent/internal/pairing"
@@ -27,15 +28,18 @@ func screenConfirm() func(context.Context, pairing.Question) (allow, shown bool)
 }
 
 // pairQuestion words the dialog, in both languages as the commands do.
-// Windows shows its own Yes and No buttons, so the text says which is which.
+// Windows shows its own Yes and No buttons, so there the text says which is
+// which; macOS and Linux show the labels given here.
 func pairQuestion(q pairing.Question) dialog.Question {
 	text := fmt.Sprintf("A phone asks to connect to this PC.\n\n"+
 		"    %s\n    number %s\n    Tailscale account %s, address %s\n\n"+
-		"Allow it only if you just asked for this on your own phone and the phone shows the same number.\n"+
-		"Yes allows it. No refuses.\n\n"+
-		"폰이 이 PC에 연결하려고 합니다.\n"+
-		"방금 내 폰에서 요청했고 폰에 같은 숫자(%[2]s)가 보일 때만 허용하세요.\n"+
-		"예: 허용, 아니요: 거절",
+		"Allow it only if you just asked for this on your own phone and the phone shows the same number.\n\n"+
+		"폰이 이 PC에 연결하려고 합니다.\n\n"+
+		"    %[1]s\n    숫자 %[2]s\n    Tailscale 계정 %[3]s, 주소 %[4]s\n\n"+
+		"방금 내 폰에서 요청했고 폰에 같은 숫자가 보일 때만 허용하세요.",
 		q.DeviceName, q.Match, q.Login, q.RemoteIP)
+	if runtime.GOOS == "windows" {
+		text += "\n\nYes allows it. No refuses.\n예: 허용, 아니요: 거절"
+	}
 	return dialog.Question{Title: "Askorus", Text: text, Allow: "허용 Allow", Deny: "거절 Refuse"}
 }

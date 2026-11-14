@@ -13,9 +13,9 @@ import (
 )
 
 // Question refining (질문 정제; milestone C, design C-1..C-6 in "마일스톤 C"
-// of docs/phase2-plan.md). Before a run's AIs answer, the moderator — the
+// of docs/phase2-plan.md). Before a run's AIs answer, the moderator (the
 // AI that writes the combined answer, picked by the same rule and only
-// among the AIs asked — fills in a question spec with the writer's locked
+// among the AIs asked) fills in a question spec with the writer's locked
 // command (core.SynthRequest.Refine) and the quick tier's model. The run
 // then asks every AI the question with the spec's answer template under
 // it (judge.RefinedQuestion), and its combined answer follows the spec.

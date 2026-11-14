@@ -119,8 +119,8 @@ func runSetup(ctx context.Context, cfg config.Config, env setupEnv, in io.Reader
 
 	step(1, m("This PC", "이 PC"))
 	if env.elevated() {
-		return stop(m("this terminal runs as administrator; open a normal PowerShell window (not \"Run as administrator\")",
-			"이 터미널은 관리자 권한입니다. 일반 PowerShell 창을 여세요 (\"관리자 권한으로 실행\"이 아닌 창)"))
+		return stop(m("this terminal runs as administrator (or root); open a normal terminal window (on Windows: PowerShell, not \"Run as administrator\")",
+			"이 터미널은 관리자(또는 root) 권한입니다. 일반 터미널 창을 여세요 (Windows에서는 \"관리자 권한으로 실행\"이 아닌 PowerShell 창)"))
 	}
 	c.line("ok", m("normal user rights", "일반 사용자 권한"))
 	dir, err := env.exeDir()
@@ -214,8 +214,8 @@ func runSetup(ctx context.Context, cfg config.Config, env setupEnv, in io.Reader
 		if err := env.autoSet(exe); err != nil {
 			return err
 		}
-		c.line("ok", m("the agent now starts when you sign in to Windows, with normal rights (turn it off: askorus-agent autostart off)",
-			"이제 Windows에 로그인하면 에이전트가 일반 권한으로 켜집니다 (끄려면: askorus-agent autostart off)"))
+		c.line("ok", m("the agent now starts when you sign in to this computer, with normal rights (turn it off: askorus-agent autostart off)",
+			"이제 이 컴퓨터에 로그인하면 에이전트가 일반 권한으로 켜집니다 (끄려면: askorus-agent autostart off)"))
 	}
 
 	step(4, m("Tailscale sign-in (how the phone reaches this PC)", "Tailscale 로그인 (폰이 이 PC에 닿는 길)"))
@@ -235,7 +235,7 @@ func runSetup(ctx context.Context, cfg config.Config, env setupEnv, in io.Reader
 
 	step(5, m("Pair the phone", "폰과 짝 맺기"))
 	if n := env.paired(); n > 0 {
-		c.line("ok", m("%d paired devices; to add a phone: askorus-agent pair", "짝 맺은 기기 %d개. 폰을 더 하려면: askorus-agent pair", n))
+		c.line("ok", m("%d paired devices; to add a phone, tap this PC in the Askorus app on that phone (with askorus-agent pair open here, nothing asks)", "짝 맺은 기기 %d개. 폰을 더 하려면 그 폰의 Askorus 앱에서 이 PC를 누르세요 (여기서 askorus-agent pair를 열어 두면 묻지 않습니다)", n))
 	} else {
 		say(out, m("On the phone, install the Askorus app and open it. It asks you to sign in to Tailscale: use the same account as on this PC. Nothing else needs installing on the phone.",
 			"폰에 Askorus 앱을 설치하고 여세요. 앱이 Tailscale 로그인을 안내합니다. 이 PC와 같은 계정으로 로그인하세요. 폰에 따로 설치할 것은 없습니다."))

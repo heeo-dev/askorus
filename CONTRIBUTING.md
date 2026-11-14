@@ -8,7 +8,7 @@ Askorus is maintained by one person in spare time. Bug reports and ideas help th
 
 - Open an [issue](https://github.com/heeo-dev/askorus/issues/new/choose). English or Korean, either is fine.
 - For a bug, say what you did, what you expected and what happened, with the system (Windows, macOS, Linux), the agent's version (`askorus-agent version`) and the output of `askorus-agent check`.
-- Issues are public. Take your account, PC name, addresses and folder paths out of what you paste, and never post a pairing link or code.
+- Issues are public. Take your account, PC name, addresses and folder paths out of what you paste, and never post a pairing link or code, or a Tailscale sign-in link.
 - A security problem goes in private: see [SECURITY.md](SECURITY.md).
 
 ## Changing the code
@@ -18,7 +18,7 @@ Please open an issue first and say what you want to change. The design is writte
 Build:
 
 ```sh
-cd agent && go build ./cmd/askorus-agent     # the PC agent, Go 1.27
+cd agent && go build -trimpath -tags ts_omit_peerapiserver,ts_omit_c2n,ts_omit_logtail ./cmd/askorus-agent     # the PC agent, Go 1.27 (the tags are required, see the README)
 cd app && npm ci                             # the phone app, Node 24
 ```
 
@@ -27,7 +27,7 @@ Test before you send a change:
 | Where | Run | What it covers |
 |---|---|---|
 | Windows | `powershell -File scripts\test-all.ps1` | Everything: the agent's tests, the install script, the app's type check and tests. It must end with `ALL PASSED`. |
-| macOS, Linux | `cd agent && go vet ./... && go test ./...` | The agent, with the pretend AI programs the tests bring along |
+| macOS, Linux | `cd agent && go vet -tags ts_omit_peerapiserver,ts_omit_c2n,ts_omit_logtail ./... && go test -tags ts_omit_peerapiserver,ts_omit_c2n,ts_omit_logtail ./...` (the same in `tsbridge`) | The agent and the app's Tailscale bridge, with the pretend AI programs the tests bring along. The tests never sign in to Tailscale or talk to its servers. |
 | macOS, Linux | `bash scripts/test-install.sh` and `bash scripts/test-unix.sh` | The install script, and start, stop, path and logon start for real, inside a temp folder |
 | Any | `cd app && npx tsc --noEmit && npx jest` | The app |
 
@@ -53,7 +53,7 @@ Askorus는 한 사람이 남는 시간에 돌보는 프로젝트입니다. 버�
 
 - [이슈](https://github.com/heeo-dev/askorus/issues/new/choose)를 열어 주세요. 한국어, 영어 모두 좋습니다.
 - 버그는 무엇을 했고, 무엇을 기대했고, 무슨 일이 일어났는지 적어 주세요. 운영체제(Windows, macOS, Linux), 에이전트 판(`askorus-agent version`), `askorus-agent check` 결과가 있으면 좋습니다.
-- 이슈는 공개됩니다. 붙여 넣는 글에서 계정, PC 이름, 주소, 폴더 경로는 지워 주세요. 짝 맺기 링크와 코드는 올리지 마세요.
+- 이슈는 공개됩니다. 붙여 넣는 글에서 계정, PC 이름, 주소, 폴더 경로는 지워 주세요. 짝 맺기 링크와 코드, Tailscale 로그인 링크는 올리지 마세요.
 - 보안 문제는 비공개로 알려 주세요: [SECURITY.md](SECURITY.md).
 
 ### 코드 고치기
@@ -63,7 +63,7 @@ Askorus는 한 사람이 남는 시간에 돌보는 프로젝트입니다. 버�
 빌드:
 
 ```sh
-cd agent && go build ./cmd/askorus-agent     # PC 에이전트, Go 1.27
+cd agent && go build -trimpath -tags ts_omit_peerapiserver,ts_omit_c2n,ts_omit_logtail ./cmd/askorus-agent     # PC 에이전트, Go 1.27 (태그는 꼭 붙입니다. README 참고)
 cd app && npm ci                             # 폰 앱, Node 24
 ```
 
@@ -72,7 +72,7 @@ cd app && npm ci                             # 폰 앱, Node 24
 | 어디서 | 실행 | 무엇을 보나 |
 |---|---|---|
 | Windows | `powershell -File scripts\test-all.ps1` | 전부: 에이전트 테스트, 설치 스크립트, 앱의 타입 검사와 테스트. `ALL PASSED`로 끝나야 합니다. |
-| macOS, Linux | `cd agent && go vet ./... && go test ./...` | 에이전트(테스트가 가져오는 가짜 AI 프로그램으로) |
+| macOS, Linux | `cd agent && go vet -tags ts_omit_peerapiserver,ts_omit_c2n,ts_omit_logtail ./... && go test -tags ts_omit_peerapiserver,ts_omit_c2n,ts_omit_logtail ./...` (`tsbridge`도 같게) | 에이전트와 앱의 Tailscale 다리(테스트가 가져오는 가짜 AI 프로그램으로). 테스트는 Tailscale에 로그인하거나 그 서버와 통신하지 않습니다. |
 | macOS, Linux | `bash scripts/test-install.sh`, `bash scripts/test-unix.sh` | 설치 스크립트, 그리고 켜기·끄기·PATH·로그인할 때 켜기를 임시 폴더 안에서 실제로 |
 | 어디서나 | `cd app && npx tsc --noEmit && npx jest` | 앱 |
 

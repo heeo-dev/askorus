@@ -25,3 +25,6 @@ func confirm(ctx context.Context, q Question) (allow, shown bool) {
 
 // Show is the Windows child; elsewhere there is nothing to show this way.
 func Show(string, string) int { return ExitFailed }
+
+// Missing names what this PC lacks to show the question: nothing here.
+func Missing() string { return "" }

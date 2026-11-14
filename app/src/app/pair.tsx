@@ -1,7 +1,9 @@
 // Pairing with a PC (F7, N4; S5c board F-Pair): sign in to Tailscale in the
-// app (once; it is built in, #57), run one command on the PC, scan the QR
-// it shows (the main way) or paste the link printed with it, check which PC
-// it is, send the code and wait until the person at the PC allows it.
+// app (once; it is built in, #57), tap the PC found in the account (the main
+// way, #58), check which PC it is, and wait with two digits on the screen
+// until a person allows it: in a window on the PC, in an open pairing
+// window, or on a phone that is already paired. A PC that is not listed is
+// paired with the QR code `askorus-agent pair` shows, or its link.
 // Opened from 내 PC, Settings, a PC's 'pair again', or by the askorus://pair
 // link itself. The first PC paired becomes the current one; a further PC is
 // added to the list and the PC picker opens, so questions never move to
@@ -92,6 +94,9 @@ export default function Pair() {
   // (#58): null while the first look is on its way.
   const [found, setFound] = useState<FoundPC[] | null>(null);
   const [qrOpen, setQrOpen] = useState(false);
+  // The PC the person tapped in the list: the confirm step shows its name
+  // (not an address and a port), and says so when a pairing window is open on it.
+  const [picked, setPicked] = useState<FoundPC | null>(null);
   // The two digits shown while a found PC is asked; the PC shows the same.
   const [match, setMatch] = useState('');
   const starting = step.kind === 'start';
@@ -114,8 +119,10 @@ export default function Pair() {
       clearInterval(timer);
     };
   }, [signedIn, starting]);
-  // With a PC in the list the QR code steps fold away until asked for.
-  const showQR = qrOpen || pasteOpen || !signedIn || !found || found.length === 0;
+  // The QR code steps show when asked for, and by themselves only once the
+  // look found no PC: before the sign-in and while looking they would be a
+  // third thing to read, with a button that cannot be pressed yet.
+  const showQR = qrOpen || pasteOpen || (signedIn && found !== null && found.length === 0);
   // Back only when there is somewhere to go back to (not when the link opened
   // the app here). Read once the screen has focus: the router is not ready
   // during the first render, and only knows this screen once it is focused.
@@ -250,6 +257,9 @@ export default function Pair() {
 
   if (step.kind === 'scan') return <Scanner onLink={accept} onCancel={() => setStep({ kind: 'start' })} />;
 
+  // The PC tapped in the list, while the step on the screen is about it.
+  const pickedPC = step.kind === 'confirm' && !step.link.code && picked?.host === step.link.host && picked.port === step.link.port ? picked : null;
+
   return (
     <View style={s.screen}>
       <TopBar brand onBack={canGoBack ? () => router.back() : undefined} />
@@ -310,7 +320,10 @@ export default function Pair() {
                     {found.map((pc) => (
                       <Pressable
                         key={pc.host}
-                        onPress={() => setStep({ kind: 'confirm', link: { host: pc.host, port: pc.port, code: '' } })}
+                        onPress={() => {
+                          setPicked(pc);
+                          setStep({ kind: 'confirm', link: { host: pc.host, port: pc.port, code: '' } });
+                        }}
                         accessibilityRole="button"
                         accessibilityLabel={pc.name}
                         style={({ pressed }) => [s.foundRow, pressed && s.pressed]}
@@ -396,11 +409,18 @@ export default function Pair() {
             <Text style={s.display} accessibilityRole="header">
               {t('pair.confirmTitle')}
             </Text>
-            <View style={s.card}>
-              <Text style={s.caption}>{t('pair.pcAddress')}</Text>
-              <Text style={s.host}>{step.link.host}</Text>
-              <Text style={s.caption}>{t('pair.port', { port: step.link.port })}</Text>
-            </View>
+            {pickedPC ? (
+              <View style={s.card}>
+                <Text style={s.host}>{pickedPC.name}</Text>
+                <Text style={s.caption}>{[osName(pickedPC.os), pickedPC.host.split('.')[0]].filter(Boolean).join(' · ')}</Text>
+              </View>
+            ) : (
+              <View style={s.card}>
+                <Text style={s.caption}>{t('pair.pcAddress')}</Text>
+                <Text style={s.host}>{step.link.host}</Text>
+                <Text style={s.caption}>{t('pair.port', { port: step.link.port })}</Text>
+              </View>
+            )}
             {step.link.code ? (
               <View style={s.warn} testID="pair-warn">
                 <Icon name="alert" size={18} color={th.danger} />
@@ -409,7 +429,7 @@ export default function Pair() {
             ) : (
               <Text style={s.caption}>{t('pair.foundNote')}</Text>
             )}
-            <Text style={s.intro}>{t(step.link.code ? 'pair.confirmBody' : 'pair.confirmBodyFound')}</Text>
+            <Text style={s.intro}>{t(step.link.code ? 'pair.confirmBody' : pickedPC?.window ? 'pair.confirmBodyWindow' : 'pair.confirmBodyFound')}</Text>
             <View style={s.field}>
               <Text style={s.label}>{t('pair.deviceName')}</Text>
               <TextInput

@@ -31,6 +31,11 @@ WHAT YOU NEED
 - At least one official AI program installed and signed in on the PC: Claude Code, Codex or OpenCode. Askorus uses the subscriptions and free accounts you already have.
 - The PC agent, askorus-agent. Where to get it and how to set it up is on the app's first screen and on GitHub.
 
+GETTING STARTED
+1. Install the PC agent with one line (shown in the app and on GitHub) and sign the PC in to Tailscale with the link it shows.
+2. Sign in to Tailscale in the app with the same account.
+3. Tap your PC in the list and allow the phone once on the PC.
+
 HOW IT WORKS
 1. Question: ask once, from your phone.
 2. Answers: the AIs on your PC each answer on their own.
@@ -49,8 +54,9 @@ FEATURES
 
 PRIVACY
 - Askorus has no server of its own. Your question goes from your phone to your PC, and the official AI programs on your PC send it to each AI company.
+- The phone and the PC connect through Tailscale, which is built into the app and the PC agent. Tailscale's servers sign the two devices in, let them find each other and, when they cannot connect directly, pass the encrypted traffic on. Tailscale learns your account, the device names and when and from where they connect. It cannot read your questions or answers.
 - Each AI company gets the questions sent to its AI. The company of the moderator AI gets the question and all the answers; in a debate, the companies of the AIs that answered get each other's answers and debate turns.
-- Your history is kept only on your phone. No analytics, ads or crash reporting.
+- The app keeps your history on your phone only. The AI programs on your PC may keep their own records. No analytics, ads or crash reporting.
 
 NOTE
 Askorus is an independent project. It is not an official product of any AI company and is not affiliated with or endorsed by Anthropic, OpenAI or others. Claude, Codex and other names are trademarks of their owners.

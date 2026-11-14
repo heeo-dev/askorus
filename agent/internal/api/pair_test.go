@@ -36,10 +36,10 @@ func newPairEnv(t *testing.T, owner string) pairEnv {
 	return pairEnv{h: viaNode(h), dir: dir}
 }
 
-// viaServe builds a request as it reaches the agent's Tailscale node from
+// fromPhone builds a request as it reaches the agent's Tailscale node from
 // the owner's phone (viaNode says who sent it; the test headers change
-// that). The name is from when tailscale serve stood in front.
-func viaServe(method, path, body string, hdr map[string]string) *http.Request {
+// that).
+func fromPhone(method, path, body string, hdr map[string]string) *http.Request {
 	r := httptest.NewRequest(method, path, strings.NewReader(body))
 	r.Host = "askorus-pc.tail.ts.net:8790"
 	r.RemoteAddr = testCallerIP + ":50000"
@@ -74,7 +74,7 @@ func TestPairFlow(t *testing.T) {
 			time.Sleep(5 * time.Millisecond)
 		}
 	}()
-	w := e.serve(viaServe("POST", "/v1/pair", `{"code":"`+code+`","deviceName":"Galaxy"}`, nil))
+	w := e.serve(fromPhone("POST", "/v1/pair", `{"code":"`+code+`","deviceName":"Galaxy"}`, nil))
 	if w.Code != 202 {
 		t.Fatalf("pair = %d %s", w.Code, w.Body)
 	}
@@ -88,17 +88,17 @@ func TestPairFlow(t *testing.T) {
 		t.Errorf("response = %+v", resp)
 	}
 
-	r := viaServe("GET", "/v1/info", "", map[string]string{"Authorization": "Bearer " + resp.Token})
+	r := fromPhone("GET", "/v1/info", "", map[string]string{"Authorization": "Bearer " + resp.Token})
 	if w := e.serve(r); w.Code != 200 {
 		t.Errorf("new token refused: %d", w.Code)
 	}
 
 	// The token is handed out once.
-	w = e.serve(viaServe("POST", "/v1/pair/status", `{"requestId":"`+started.RequestID+`"}`, nil))
+	w = e.serve(fromPhone("POST", "/v1/pair/status", `{"requestId":"`+started.RequestID+`"}`, nil))
 	if w.Code != 404 || errCode(t, w) != CodePairUnknown {
 		t.Errorf("second fetch = %d %s", w.Code, w.Body)
 	}
-	w = e.serve(viaServe("POST", "/v1/pair", `{"code":"`+code+`","deviceName":"Again"}`, nil))
+	w = e.serve(fromPhone("POST", "/v1/pair", `{"code":"`+code+`","deviceName":"Again"}`, nil))
 	if w.Code != 404 || errCode(t, w) != CodePairClosed {
 		t.Errorf("reused code = %d %s", w.Code, w.Body)
 	}
@@ -108,7 +108,7 @@ func TestPairFlow(t *testing.T) {
 func pollPair(t *testing.T, e pairEnv, id string) PairStatus {
 	t.Helper()
 	for i := 0; i < 300; i++ {
-		w := e.serve(viaServe("POST", "/v1/pair/status", `{"requestId":"`+id+`"}`, nil))
+		w := e.serve(fromPhone("POST", "/v1/pair/status", `{"requestId":"`+id+`"}`, nil))
 		if w.Code != 200 {
 			t.Fatalf("status = %d %s", w.Code, w.Body)
 		}
@@ -126,12 +126,12 @@ func pollPair(t *testing.T, e pairEnv, id string) PairStatus {
 func TestPairDeniedViaStatus(t *testing.T) {
 	e := newPairEnv(t, "owner@example.com")
 	code, win, _ := pairing.Open(e.dir, time.Now())
-	w := e.serve(viaServe("POST", "/v1/pair", `{"code":"`+code+`","deviceName":"phone"}`, nil))
+	w := e.serve(fromPhone("POST", "/v1/pair", `{"code":"`+code+`","deviceName":"phone"}`, nil))
 	var started PairStarted
 	json.Unmarshal(w.Body.Bytes(), &started)
 	pairing.Decide(e.dir, win.ID, false)
 	for i := 0; i < 300; i++ {
-		w = e.serve(viaServe("POST", "/v1/pair/status", `{"requestId":"`+started.RequestID+`"}`, nil))
+		w = e.serve(fromPhone("POST", "/v1/pair/status", `{"requestId":"`+started.RequestID+`"}`, nil))
 		if w.Code != 200 {
 			break
 		}
@@ -151,10 +151,10 @@ func TestPairStatusRefusals(t *testing.T) {
 		status int
 		code   string
 	}{
-		{"unknown id", viaServe("POST", "/v1/pair/status", body, nil), 404, CodePairUnknown},
-		{"not via the node", viaServe("POST", "/v1/pair/status", body, map[string]string{hdrNoCaller: "1"}), 403, CodeNotTailnet},
-		{"other account", viaServe("POST", "/v1/pair/status", body, map[string]string{hdrCallerLogin: "kid@example.com"}), 403, CodeWrongAccount},
-		{"GET", viaServe("GET", "/v1/pair/status", "", nil), 405, CodeMethod},
+		{"unknown id", fromPhone("POST", "/v1/pair/status", body, nil), 404, CodePairUnknown},
+		{"not via the node", fromPhone("POST", "/v1/pair/status", body, map[string]string{hdrNoCaller: "1"}), 403, CodeNotTailnet},
+		{"other account", fromPhone("POST", "/v1/pair/status", body, map[string]string{hdrCallerLogin: "kid@example.com"}), 403, CodeWrongAccount},
+		{"GET", fromPhone("GET", "/v1/pair/status", "", nil), 405, CodeMethod},
 	}
 	for _, c := range cases {
 		w := e.serve(c.r)
@@ -174,15 +174,15 @@ func TestPairRefusals(t *testing.T) {
 		status int
 		code   string
 	}{
-		{"nobody said who sent it (not through the node)", viaServe("POST", "/v1/pair", body, map[string]string{hdrNoCaller: "1"}), 403, CodeNotTailnet},
-		{"not from a tailnet address", viaServe("POST", "/v1/pair", body, map[string]string{hdrCallerIP: "192.168.0.5"}), 403, CodeNotTailnet},
-		{"headers a sender can write", viaServe("POST", "/v1/pair", body, map[string]string{hdrNoCaller: "1", "Tailscale-User-Login": testOwner, "X-Forwarded-For": testCallerIP}), 403, CodeNotTailnet},
-		{"other account", viaServe("POST", "/v1/pair", body, map[string]string{hdrCallerLogin: "kid@example.com"}), 403, CodeWrongAccount},
-		{"other account, forged header", viaServe("POST", "/v1/pair", body, map[string]string{hdrCallerLogin: "kid@example.com", "Tailscale-User-Login": testOwner}), 403, CodeWrongAccount},
-		{"bad json", viaServe("POST", "/v1/pair", `{"code":`, nil), 400, CodeBadRequest},
-		{"wrong code", viaServe("POST", "/v1/pair", `{"code":"AAAA","deviceName":"phone"}`, nil), 403, CodePairBadCode},
-		{"GET", viaServe("GET", "/v1/pair", "", nil), 405, CodeMethod},
-		{"browser", viaServe("POST", "/v1/pair", body, map[string]string{"Origin": "https://evil.example"}), 403, CodeCrossOrigin},
+		{"nobody said who sent it (not through the node)", fromPhone("POST", "/v1/pair", body, map[string]string{hdrNoCaller: "1"}), 403, CodeNotTailnet},
+		{"not from a tailnet address", fromPhone("POST", "/v1/pair", body, map[string]string{hdrCallerIP: "192.168.0.5"}), 403, CodeNotTailnet},
+		{"headers a sender can write", fromPhone("POST", "/v1/pair", body, map[string]string{hdrNoCaller: "1", "Tailscale-User-Login": testOwner, "X-Forwarded-For": testCallerIP}), 403, CodeNotTailnet},
+		{"other account", fromPhone("POST", "/v1/pair", body, map[string]string{hdrCallerLogin: "kid@example.com"}), 403, CodeWrongAccount},
+		{"other account, forged header", fromPhone("POST", "/v1/pair", body, map[string]string{hdrCallerLogin: "kid@example.com", "Tailscale-User-Login": testOwner}), 403, CodeWrongAccount},
+		{"bad json", fromPhone("POST", "/v1/pair", `{"code":`, nil), 400, CodeBadRequest},
+		{"wrong code", fromPhone("POST", "/v1/pair", `{"code":"AAAA","deviceName":"phone"}`, nil), 403, CodePairBadCode},
+		{"GET", fromPhone("GET", "/v1/pair", "", nil), 405, CodeMethod},
+		{"browser", fromPhone("POST", "/v1/pair", body, map[string]string{"Origin": "https://evil.example"}), 403, CodeCrossOrigin},
 	}
 	for _, c := range cases {
 		w := e.serve(c.r)
@@ -191,7 +191,7 @@ func TestPairRefusals(t *testing.T) {
 		}
 	}
 	// None of those consumed the window.
-	if w := e.serve(viaServe("POST", "/v1/pair", body, nil)); w.Code == 404 {
+	if w := e.serve(fromPhone("POST", "/v1/pair", body, nil)); w.Code == 404 {
 		t.Errorf("window closed by refused requests")
 	}
 }
@@ -199,7 +199,7 @@ func TestPairRefusals(t *testing.T) {
 func TestPairNeedsKnownOwner(t *testing.T) {
 	e := newPairEnv(t, "")
 	code, _, _ := pairing.Open(e.dir, time.Now())
-	w := e.serve(viaServe("POST", "/v1/pair", `{"code":"`+code+`","deviceName":"phone"}`, nil))
+	w := e.serve(fromPhone("POST", "/v1/pair", `{"code":"`+code+`","deviceName":"phone"}`, nil))
 	if w.Code != 503 || errCode(t, w) != CodeOwnerUnknown {
 		t.Errorf("unknown owner = %d %s", w.Code, w.Body)
 	}

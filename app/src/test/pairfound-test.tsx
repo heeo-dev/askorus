@@ -88,6 +88,11 @@ test('a PC found in the account is paired by a tap: no QR code, and the two digi
   expect(await screen.findByText('Is this your PC?')).toBeTruthy();
   expect(screen.getByText('This PC was found in your own Tailscale account.')).toBeTruthy();
   expect(screen.queryByTestId('pair-warn')).toBeNull(); // the warning is about links and QR codes someone sent
+  // The PC is shown by the name that was tapped, not by an address and a port.
+  expect(screen.getByText('DESKTOP-TEST')).toBeTruthy();
+  expect(screen.queryByText('PC address')).toBeNull();
+  expect(screen.queryByText(/^Port /)).toBeNull();
+  expect(screen.getByText(/Allow it on the PC if the PC shows the same number/)).toBeTruthy();
 
   await user.press(screen.getByRole('button', { name: 'Pair' }));
   const digits = await screen.findByTestId('pair-match');
@@ -107,6 +112,16 @@ test('a PC found in the account is paired by a tap: no QR code, and the two digi
   expect(pc).toMatchObject({ host: HOST, port: PORT, name: 'DESKTOP-TEST' });
   await user.press(screen.getByRole('button', { name: 'Done' }));
   expect(await screen.findByText('Fix the login bug')).toBeTruthy();
+});
+
+test('a PC with a pairing window open says that it takes the phone at once', async () => {
+  mockTailnet.devices = account;
+  agent.hello = 'window';
+  const user = userEvent.setup();
+  await renderRouter(routes, { initialUrl: '/pair' });
+  await user.press(within(await screen.findByTestId('found-pcs')).getByRole('button', { name: 'DESKTOP-TEST' }));
+  expect(await screen.findByText(/askorus-agent pair is open on this PC, so it takes this phone at once/)).toBeTruthy();
+  expect(screen.queryByText(/Allow it on the PC if the PC shows the same number/)).toBeNull();
 });
 
 test('the QR code is still there for a PC that is not listed', async () => {

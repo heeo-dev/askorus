@@ -20,6 +20,7 @@ import (
 	"github.com/heeo-dev/askorus/agent/internal/config"
 	"github.com/heeo-dev/askorus/agent/internal/core"
 	"github.com/heeo-dev/askorus/agent/internal/devices"
+	"github.com/heeo-dev/askorus/agent/internal/dialog"
 	"github.com/heeo-dev/askorus/agent/internal/tsnode"
 )
 
@@ -319,8 +320,14 @@ func checkCmd(dir string, out io.Writer) error {
 		if list, _ := store.List(); len(list) > 0 {
 			c.line("ok", m("%d paired devices", "짝 맺은 기기 %d개", len(list)))
 		} else {
-			c.line("warn", m("no paired phone yet: askorus-agent pair", "아직 짝 맺은 폰이 없습니다: askorus-agent pair"))
+			c.line("warn", m("no paired phone yet: in the Askorus app tap this PC (a window on this PC asks), or run askorus-agent pair",
+				"아직 짝 맺은 폰이 없습니다. Askorus 앱에서 이 PC를 누르거나(이 PC 화면에 묻는 창이 뜹니다) askorus-agent pair를 실행하세요"))
 		}
+	}
+	// The question about a phone that asks to pair needs a program to show it.
+	if missing := dialog.Missing(); missing != "" {
+		c.line("info", m("this PC has no program to show the pairing question on its screen (%s): to pair a phone, run askorus-agent pair, or allow it on a phone that is already paired",
+			"이 PC에는 화면에 짝 맺기 물음을 띄울 프로그램이 없습니다 (%s). 폰과 짝 맺으려면 askorus-agent pair를 실행하거나, 이미 짝 맺은 폰에서 허용하세요", missing))
 	}
 
 	if len(cfg.Folders) == 0 {
@@ -331,11 +338,11 @@ func checkCmd(dir string, out io.Writer) error {
 			c.line("bad", m("folder %q is missing: %s", "%q 폴더가 없습니다: %s", f.ID, f.Path))
 			continue
 		}
-		srv := ""
 		if f.Server.Enabled {
-			srv = " (kept open)"
+			c.line("ok", m("folder %q: %s (kept open)", "폴더 %q: %s (열어 둠)", f.ID, f.Path))
+		} else {
+			c.line("ok", m("folder %q: %s", "폴더 %q: %s", f.ID, f.Path))
 		}
-		c.line("ok", m("folder %q: %s%s", "폴더 %q: %s%s", f.ID, f.Path, srv))
 	}
 
 	switch s := sleepAfterAC(); {
@@ -478,8 +485,8 @@ func uninstallCmd(dir string, args []string, in io.Reader, out io.Writer) error 
 	os.Remove(filepath.Join(dir, nodeFile))
 	os.Remove(filepath.Join(dir, nodeRequestFile))
 	if hadKey && !signedOut {
-		say(out, m("the agent was not running, so Tailscale was not told: this PC's key is deleted here, but the device (askorus-…) stays listed in your Tailscale admin console until you remove it there",
-			"에이전트가 돌고 있지 않아 Tailscale에 알리지 못했습니다. 이 PC의 키는 지웠지만, Tailscale 관리 화면에는 기기(askorus-…)가 남아 있으니 거기서 직접 지우세요"))
+		say(out, m("Tailscale was not told (the agent was not running, or did not sign out in time): this PC's key is deleted here, but the device (askorus-…) stays listed in your Tailscale admin console until you remove it there",
+			"Tailscale에 알리지 못했습니다(에이전트가 돌고 있지 않았거나 제때 로그아웃하지 못함). 이 PC의 키는 지웠지만, Tailscale 관리 화면에는 기기(askorus-…)가 남아 있으니 거기서 직접 지우세요"))
 	}
 	if err := uninstallAutostart(); err != nil {
 		return err

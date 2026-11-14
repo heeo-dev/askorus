@@ -55,7 +55,7 @@ func TestBuildTagsEverywhere(t *testing.T) {
 	for _, f := range []string{
 		"scripts/release.ps1", "scripts/test-all.ps1", "scripts/test-unix.sh", "scripts/test-install.sh",
 		".github/workflows/agent-unix.yml", "tsbridge/build-android.sh", "tsbridge/tsbridge.go",
-		"app/scripts/go-libs.mjs", "README.md", "README.ko.md",
+		"app/scripts/go-libs.mjs", "README.md", "README.ko.md", "CONTRIBUTING.md",
 	} {
 		b, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(f)))
 		if err != nil {

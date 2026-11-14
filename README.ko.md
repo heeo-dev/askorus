@@ -63,7 +63,7 @@ Askorus(애스코러스)는 폰에서 질문 하나를 여러 AI에게 한 번�
 
 - **왜 필요한가요.** 폰이 밖에서도 집의 PC에 닿아야 합니다. 보통은 PC를 인터넷에 열거나 중간에 서버를 둬야 하는데, Askorus는 둘 다 하지 않습니다. 대신 폰과 PC가 같은 Tailscale 계정으로 로그인해 서로를 찾습니다.
 - **무엇이 지켜지나요.** 내 계정에 로그인한 기기만 PC에 닿습니다. 폰과 PC 사이는 암호화되어, Tailscale의 중계 서버를 거칠 때도 Tailscale은 내용을 읽지 못합니다. 그 위에 PC에서 한 번 허용한 폰만 받습니다.
-- **Tailscale이 아는 것.** 계정(메일), 두 기기의 이름, 접속한 주소와 시간입니다. 질문과 답은 모릅니다.
+- **Tailscale이 아는 것.** 계정(메일), 기기 이름, 접속한 주소와 시간입니다. 질문과 답은 모릅니다.
 - **비밀번호.** 로그인은 브라우저의 Tailscale 화면에서 합니다. Askorus는 비밀번호를 받지 않습니다.
 
 앱에서도 로그인을 물을 때 같은 설명을 볼 수 있습니다('Tailscale이 뭔가요?').
@@ -86,11 +86,11 @@ curl -fsSL https://github.com/heeo-dev/askorus/releases/latest/download/install.
 
 스크립트가 GitHub 배포판에서 내 운영체제에 맞는 에이전트를 받아 SHA-256을 확인하고, `%LOCALAPPDATA%\Programs\Askorus`(Windows)나 `~/.local/bin`(macOS, Linux)에 둔 뒤 `askorus-agent setup`을 시작합니다. 업데이트할 때도 같은 줄을 다시 실행하면 됩니다.
 
-setup은 차례로 안내합니다. 에이전트를 PATH에 넣고, AI 프로그램을 점검하고, 에이전트를 켜고 로그인할 때 켜지게 합니다. 그다음 이 PC를 Tailscale에 로그인할 링크를(같은 링크의 QR도) 보여 줍니다. 한 번만 하면 됩니다. 마지막으로 짝 맺기 창을 엽니다. 앱에서 같은 계정으로 Tailscale에 로그인하고 목록에 뜬 내 PC를 누르면 됩니다. QR을 찍을 필요는 없습니다(PC가 목록에 안 보이는 폰을 위해 QR도 같이 보여 줍니다).
+setup은 차례로 안내합니다. 에이전트를 PATH에 넣고, AI 프로그램을 점검하고, 에이전트를 켜고 로그인할 때 켜지게 합니다. 그다음 이 PC를 Tailscale에 로그인할 링크를(같은 링크의 QR도) 보여 줍니다. 한 번만 하면 됩니다. 마지막으로 짝 맺기 창을 엽니다. 앱에서 같은 계정으로 Tailscale에 로그인하고 목록에 뜬 내 PC를 누르면 됩니다. QR을 찍을 필요는 없습니다(PC가 목록에 안 보이는 폰을 위해 QR도 같이 보여 줍니다). 이 창은 5분 동안 열려 있습니다. 그때까지 앱이 준비되지 않아도 괜찮습니다. 나중에 앱에서 PC를 누르고 PC 화면에 뜨는 작은 창에서 허용하거나, `askorus-agent pair`를 다시 실행하면 됩니다.
 
 macOS와 Linux에서도 명령은 Windows와 같습니다. 운영체제마다 다른 점은 이렇습니다.
 
-- **Linux:** 로그인할 때 켜기는 systemd 사용자 단위입니다. 아무도 로그인하지 않는 컴퓨터에서는 `loginctl enable-linger`를 해 두면 부팅할 때 켜집니다.
+- **Linux:** 로그인할 때 켜기는 systemd 사용자 단위입니다. 아무도 로그인하지 않는 컴퓨터에서는 `loginctl enable-linger`를 해 두면 부팅할 때 켜집니다. 폰을 허용할지 묻는 창은 `zenity`나 `kdialog`와 화면이 있어야 뜹니다. 없으면 `askorus-agent pair`를 열어 두고 짝을 맺으세요.
 - **macOS:** 로그인할 때 켜기는 `~/Library/LaunchAgents`의 LaunchAgent입니다. 다음 로그인부터 적용되고, 지금 바로 켜려면 `askorus-agent start`를 실행합니다.
 - macOS용 에이전트는 클라우드의 Mac에서 자동 점검(Go 테스트, 설치 스크립트, launchd 아래에서 켜기·끄기·로그인할 때 켜기)으로 확인했습니다. 실제 AI 프로그램이 있는 사람의 Mac에서는 아직 써 보지 못했습니다. 안 되는 것이 있으면 [이슈로 알려 주세요](https://github.com/heeo-dev/askorus/issues).
 
@@ -178,14 +178,25 @@ PC의 Claude Code나 Codex에 내 운영체제에 맞는 글을 붙여 넣으세
 먼저 PC에서 `askorus-agent check`를 실행하세요. 빠진 것을 줄마다 할 일과 함께 알려 줍니다. `[X]`는 꼭 고쳐야 하는 것, `[!]`는 주의, `[i]`는 사람이 직접 해야 하는 것입니다.
 
 - **폰이 PC에 닿지 않는다고 합니다.** PC에서 에이전트가 돌고 있고 Tailscale에 로그인되어 있어야 합니다. `askorus-agent status`가 둘 다 보여 줍니다. 꺼져 있으면 `askorus-agent start`, 로그인이 안 되어 있으면 `askorus-agent login`을 실행하세요. 로그인할 때 켜지게 하려면 `askorus-agent autostart on`.
-- **앱의 목록에 내 PC가 안 보입니다.** 앱은 로그인한 Tailscale 계정의 기기 가운데에서 PC를 찾습니다. 에이전트가 켜져 있고 같은 계정으로 로그인돼 있는지 보세요(`askorus-agent status`). 포트를 8790이 아닌 값으로 바꾼 PC는 QR로 짝을 맺습니다. `askorus-agent pair`를 실행하고 앱에서 'QR이나 링크로 짝 맺기'를 쓰세요.
+- **앱의 목록에 내 PC가 안 보입니다.** 앱은 로그인한 Tailscale 계정의 기기 가운데에서 PC를 찾습니다. 에이전트가 켜져 있고 같은 계정으로 로그인돼 있는지 보세요(`askorus-agent status`). 포트를 8790이 아닌 값으로 바꾼 PC는 QR로 짝을 맺습니다. `askorus-agent pair`를 실행하고 앱에서 'QR이나 링크로 짝 맺기'를 쓰세요. Tailscale 망이 새 기기의 승인을 요구하면 Tailscale 관리 화면에서 폰과 PC를 승인하세요. 접근 규칙을 직접 써 둔 망이라면 내 기기끼리 8790 포트로 닿을 수 있어야 합니다.
 - **PC 앞에 없는데 폰을 추가하고 싶습니다.** 이미 짝 맺은 폰에서 허용할 수 있습니다. 그 폰에서 Askorus를 열면 새 폰의 이름과 두 자리 숫자가 함께 요청이 뜹니다.
 - **폰이 Tailscale에 로그인되어 있지 않다고 하거나, 이 PC가 내 Tailscale 계정에 없다고 합니다.** 앱의 설정 > Tailscale에서 PC의 에이전트와 같은 계정으로 로그인하세요(어느 계정인지는 PC에서 `askorus-agent status`). 계정을 바꾸려면 앱에서는 '로그아웃 / 계정 바꾸기'(설정 > Tailscale, 짝 맺기 화면, 'PC가 내 계정에 없습니다' 상자), PC에서는 `askorus-agent logout` 뒤 `askorus-agent login`입니다. 바꾼 뒤에는 다시 짝 맺습니다. 이미 Tailscale을 쓰고 있다면 Askorus에는 그 계정을 써도 되고 따로 만든 계정을 써도 됩니다. 앱과 에이전트만 같은 계정이면 됩니다. 브라우저가 이미 Tailscale에 로그인돼 있으면 그 계정으로 붙이겠냐고 묻습니다. 다른 계정을 쓰려면 그 화면에서 계정을 바꾸거나 시크릿 창에서 링크를 여세요.
+- **폰에 '지금 PC에서 허용해 줄 수 있는 곳이 없습니다'라고 나오거나, PC에 창이 뜨지 않습니다.** 작은 창은 화면이 있어야 뜹니다. Linux에서는 `zenity`나 `kdialog`도 있어야 하고, 서버나 SSH 접속에는 뜨지 않습니다. PC에서 `askorus-agent pair`를 실행한 뒤 앱에서 PC를 다시 누르세요. 실행해 둔 동안에는 묻지 않고 바로 받습니다. 이미 짝 맺은 폰에서 허용해도 됩니다.
+- **모르는 폰이 짝 맺어졌거나, 터미널의 숫자가 내 폰의 숫자와 다릅니다.** `askorus-agent devices`가 짝 맺은 폰을 보여 주고, `askorus-agent devices revoke <id나 이름>`으로 끊습니다.
+- **몇 달 잘 되다가 갑자기 안 됩니다.** Tailscale 로그인은 기본으로 약 180일 뒤 끝납니다. `askorus-agent check`가 2주 전부터 알리고, 앱의 설정 > Tailscale에 끝나는 날짜가 보입니다. 다시 로그인하거나(PC는 `askorus-agent login`, 앱은 설정 > Tailscale), Tailscale 관리 화면에서 기기의 키 만료를 끄세요. 짝 맺기는 그대로 남습니다.
 - **새 Claude Code 세션이 시작되지 않습니다.** Claude Code는 폴더마다 한 번 신뢰할지 묻습니다. PC에서 그 폴더로 가서 `claude`를 한 번 실행하고 허용하세요.
 - **폴더 열어 두기가 '켜는 중'에 머물거나 실패합니다.** Claude Code에서 Remote Control을 한 번 켜야 합니다. PC에서 `claude remote-control`을 실행해 `y`로 답하고 Ctrl+C로 끄세요.
 - **AI가 목록에 없습니다.** PC에 설치하고 로그인한 뒤 `check`를 다시 실행하세요. `autostart on` 뒤에 설치한 프로그램은 흔한 설치 폴더에서 찾습니다. 못 찾으면 `autostart on`을 다시 실행하세요.
 
-그래도 안 되면 `askorus-agent check` 결과를 붙여 [이슈를 열어 주세요](https://github.com/heeo-dev/askorus/issues/new/choose)(계정과 PC 이름은 지우고).
+그래도 안 되면 `askorus-agent check` 결과를 붙여 [이슈를 열어 주세요](https://github.com/heeo-dev/askorus/issues/new/choose)(계정, PC 이름, Tailscale 주소는 지우고).
+
+## 0.2.x에서 올리기
+
+0.3.0은 폰이 PC에 닿는 방식이 바뀌었습니다. Tailscale이 앱과 에이전트 안에 들어갔고, 짝 맺기는 앱에서 PC를 눌러서 합니다. 앱과 에이전트를 함께 올리고 짝을 다시 맺으세요.
+
+1. PC에서 설치 한 줄을 다시 실행합니다. 그다음 `askorus-agent login`을 한 번 실행하고 나오는 링크를 엽니다. 이 PC가 Tailscale에 로그인됩니다.
+2. 폰에 0.3.0 앱을 설치하고, 앱에서 같은 계정으로 Tailscale에 로그인한 뒤 'PC와 짝 맺기'에서 내 PC를 누릅니다. 설정에서 옛 PC 항목은 끊습니다.
+3. Askorus는 이제 폰의 Tailscale 앱과 PC의 Tailscale을 쓰지 않습니다. 다른 데 쓰고 있다면 그대로 두세요. 에이전트용으로 걸어 둔 옛 `tailscale serve` 설정은 저절로 지워지지 않습니다. PC에서 `tailscale serve status`로 볼 수 있고, `tailscale serve --https=<포트> off`로 끕니다.
 
 ## 지우기
 
@@ -193,7 +204,7 @@ PC의 Claude Code나 Codex에 내 운영체제에 맞는 글을 붙여 넣으세
 askorus-agent uninstall
 ```
 
-무엇을 되돌릴지 보여 주고 먼저 묻습니다. 이 PC를 Tailscale에서 로그아웃하고, 에이전트를 멈추고, 로그인할 때 켜기와 PATH 등록을 없애고, 짝 맺은 폰을 모두 끊습니다. `-all`을 붙이면 에이전트의 설정과 로그도 지웁니다. 그다음 프로그램 파일은 직접 지우세요(Windows는 `%LOCALAPPDATA%\Programs\Askorus`, macOS와 Linux는 `~/.local/bin/askorus-agent`). 폰에서는 설정에서 PC를 끊거나 앱을 지우면 됩니다.
+무엇을 되돌릴지 보여 주고 먼저 묻습니다. 이 PC를 Tailscale에서 로그아웃하고, 에이전트를 멈추고, 로그인할 때 켜기와 PATH 등록을 없애고, 짝 맺은 폰을 모두 끊습니다. `-all`을 붙이면 에이전트의 설정과 로그도 지웁니다. 그다음 프로그램 파일은 직접 지우세요(Windows는 `%LOCALAPPDATA%\Programs\Askorus`, macOS와 Linux는 `~/.local/bin/askorus-agent`). 폰에서는 설정에서 PC를 끊고 설정 > Tailscale에서 로그아웃하거나, 앱을 지우면 됩니다. 그 뒤에도 Tailscale 관리 화면에 'askorus-'로 시작하는 기기가 남아 있으면(로그아웃하지 않고 앱을 지웠거나 에이전트가 꺼져 있었을 때) 거기서 지우세요.
 
 ## 안드로이드 앱 설치
 
@@ -201,15 +212,15 @@ askorus-agent uninstall
 
 1. 폰에서 [최신 배포판](https://github.com/heeo-dev/askorus/releases/latest)을 열고 `askorus-android-<판>.apk`를 받습니다.
 2. 받은 파일을 엽니다. 안드로이드가 브라우저에서 앱을 설치해도 되는지 물으면 이번 설치에 허용합니다. Play 프로텍트가 앱을 먼저 검사하겠다고 물을 수 있습니다. 스토어 밖에서 받은 앱이면 늘 묻는 것입니다.
-3. Askorus를 열고 PC와 짝을 맺습니다. 앱이 안내하면 Tailscale에 로그인하고(PC와 같은 계정), 목록에 뜬 내 PC를 누릅니다. PC 화면에 작은 창이 떠서 이 폰을 허용할지 한 번 묻고, 폰과 PC에 같은 두 자리 숫자가 보입니다. (터미널에서 `askorus-agent pair`나 `setup`이 기다리는 동안에는 묻지 않고 바로 받습니다.)
+3. Askorus를 열고 PC와 짝을 맺습니다. 앱이 안내하면 Tailscale에 로그인하고(PC와 같은 계정), 목록에 뜬 내 PC를 누르고 '짝 맺기'를 누릅니다. 폰에 두 자리 숫자가 보입니다. PC 화면에 작은 창이 떠서 이 폰을 허용할지 한 번 묻고 같은 숫자를 보여 줍니다. 숫자가 같을 때만 허용하세요. 그다음 폰에는 '짝을 맺었습니다'와 숫자가 '확인'을 누를 때까지 보입니다. (터미널에서 `askorus-agent pair`나 `setup`이 기다리는 동안에는 묻지 않고 바로 받습니다.)
 
 미리보기 APK에서 알아 둘 것:
 
-- **자동 업데이트가 없습니다.** 새 APK를 받아 그 위에 설치하면 업데이트됩니다. 기록과 짝 맺기는 그대로 남습니다.
+- **자동 업데이트가 없습니다.** 새 APK를 받아 그 위에 설치하면 업데이트됩니다. 기록과 짝 맺기는 그대로 남습니다. (0.2.x에서 올릴 때는 예외입니다. [0.2.x에서 올리기](#02x에서-올리기)를 보세요.)
 - **나중에 Google Play 앱으로 옮길 때는 다시 설치해야 합니다.** Google Play는 앱을 다른 키로 서명해서, 이 앱 위에 Play 앱을 덮어 설치할 수 없습니다. 이 앱을 먼저 지워야 하고(앱에 둔 기록도 같이 지워집니다) 짝 맺기를 다시 합니다.
 - **파일을 직접 확인할 수 있습니다.** 배포 글에 APK의 SHA-256이 있습니다.
 
-앱을 만드는 데 쓰인 오픈소스는 설정 › 정보 › 오픈소스 라이선스에서 볼 수 있습니다.
+앱을 만드는 데 쓰인 오픈소스는 설정 > 정보 > 오픈소스 라이선스에서 볼 수 있습니다.
 
 ## 소스에서 빌드
 

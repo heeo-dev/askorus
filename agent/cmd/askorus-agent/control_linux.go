@@ -84,7 +84,7 @@ func unitText(exe, path, agentDir string) string {
 var systemctlUser = func(args ...string) error {
 	path, err := exec.LookPath("systemctl")
 	if err != nil {
-		return errors.New("systemctl was not found: starting at logon needs systemd")
+		return fail("systemctl was not found: starting at logon needs systemd", "systemctl을 찾지 못했습니다. 로그인할 때 켜기에는 systemd가 필요합니다")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -108,7 +108,8 @@ func autostartSet(exe string) error {
 	}
 	// Asked first: without this user's systemd there is nothing to turn on.
 	if err := systemctlUser("show-environment"); err != nil {
-		return fmt.Errorf("this user's systemd does not answer, so the agent cannot start at logon here (%v); keep `askorus-agent start` in your shell's start file instead", err)
+		return fail("this user's systemd does not answer, so the agent cannot start at logon here (%v); keep `askorus-agent start` in your shell's start file instead",
+			"이 사용자의 systemd가 답하지 않아 로그인할 때 켤 수 없습니다 (%v). 대신 셸 시작 파일에 `askorus-agent start`를 넣으세요", err)
 	}
 	p, err := unitPath()
 	if err != nil {

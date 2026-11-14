@@ -3,11 +3,12 @@
 #   irm https://github.com/heeo-dev/askorus/releases/latest/download/install.ps1 | iex
 #
 # What it does, and nothing more:
-#   1. downloads askorus-agent.exe and SHA256SUMS.txt from the GitHub release
+#   1. downloads askorus-agent-windows-amd64.exe (saved as askorus-agent.exe) and
+#      SHA256SUMS.txt from the GitHub release
 #   2. checks the exe's SHA-256 against SHA256SUMS.txt (a damaged download stops here)
 #   3. puts it in %LOCALAPPDATA%\Programs\Askorus, without administrator rights
 #   4. on a new install runs `askorus-agent setup`, which walks you through the
-#      rest (PATH, Claude Code, Tailscale, start, start at logon, pairing)
+#      rest (PATH, AI programs, start, start at logon, Tailscale sign-in, pairing)
 #   Run it again to update: it stops the agent, swaps the exe (the old one stays
 #   as askorus-agent.prev.exe) and starts the agent again. If setup stopped
 #   before it finished, it runs setup again.
@@ -160,6 +161,10 @@
         if ($env:ASKORUS_NO_SETUP -ne '1' -and @(& $exe autostart status)[0] -eq 'off') {
             Say 'setup did not finish before; running it again'
             Invoke-Setup $exe
+        }
+        # An agent from before 0.3.0 had no Tailscale inside: the PC was never signed in.
+        if ("$(& $exe status)" -match 'not signed in to Tailscale') {
+            Say 'this version has Tailscale built in: run "askorus-agent login" once, then pair the phone again in the app (tap this PC)'
         }
     } catch {
         Write-Host "askorus: $($_.Exception.Message)" -ForegroundColor Red

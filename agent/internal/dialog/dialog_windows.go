@@ -54,3 +54,6 @@ func Show(title, text string) int {
 	}
 	return ExitFailed
 }
+
+// Missing names what this PC lacks to show the question: nothing here.
+func Missing() string { return "" }

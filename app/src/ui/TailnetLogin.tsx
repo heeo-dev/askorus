@@ -42,7 +42,7 @@ export function tailnetLine(st: TailnetStatus): string {
     case 'starting':
       return t('tailnet.starting');
     case 'needsApproval':
-      return t('tailnet.waiting');
+      return t('tailnet.waitingApproval');
     case 'unavailable':
       return '';
     default:

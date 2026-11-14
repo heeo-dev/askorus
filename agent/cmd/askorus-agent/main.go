@@ -114,6 +114,8 @@ Usage / 사용법:
       undo the setup (logon entry, PATH entry, the Tailscale sign-in, paired phones)
       설치한 것을 되돌립니다 (자동 시작, PATH, Tailscale 로그인, 짝 맺은 폰)
   askorus-agent version
+      print the version
+      판 번호를 보여 줍니다
 
 Settings live in %s (override with ASKORUS_AGENT_DIR).
 설정 폴더: %s (ASKORUS_AGENT_DIR로 바꿀 수 있습니다)
@@ -372,8 +374,8 @@ func serve(dir string, args []string) error {
 	say(os.Stderr, m("askorus-agent %s is running (Ctrl+C to stop)", "askorus-agent %s가 돌고 있습니다 (Ctrl+C로 멈춤)", version))
 	watch.once(ctx) // says at once whether the PC is signed in to Tailscale
 	if list, _ := store.List(); len(list) == 0 {
-		say(os.Stderr, m("no paired devices yet: run `askorus-agent pair` in another window",
-			"아직 짝을 맺은 기기가 없습니다. 다른 창에서 `askorus-agent pair`를 실행하세요"))
+		say(os.Stderr, m("no paired phone yet: in the Askorus app tap this PC (a window on this PC asks), or run `askorus-agent pair` in another window",
+			"아직 짝 맺은 폰이 없습니다. Askorus 앱에서 이 PC를 누르거나(이 PC 화면에 묻는 창이 뜹니다) 다른 창에서 `askorus-agent pair`를 실행하세요"))
 	}
 
 	go adapter.Warm(ctx)
@@ -518,7 +520,7 @@ func pair(dir string, args []string, in io.Reader, out io.Writer) error {
 	if err := printQR(out, link, !*light); err != nil {
 		return err
 	}
-	fmt.Fprintf(out, "\nPC:                %s (port %d, Tailscale account %s)\n", host, port, node.Owner)
+	fmt.Fprintf(out, "\nPC:                %s (port / 포트 %d, Tailscale account / 계정 %s)\n", host, port, node.Owner)
 
 	fmt.Fprintf(out, "Link / 링크:       %s\n", link)
 	fmt.Fprintf(out, "Code / 코드:       %s\n", groupCode(code))
@@ -566,11 +568,11 @@ func pair(dir string, args []string, in io.Reader, out io.Writer) error {
 			return reportResult(res, out)
 		}
 		if !pairing.WindowOpen(dir, w.ID) {
-			return fail("the pairing window was closed (too many wrong codes); run pair again",
-				"틀린 코드가 너무 많아 짝 맺기 창이 닫혔습니다. pair를 다시 실행하세요")
+			return fail("the pairing window was closed (too many wrong codes, or another pair window was opened); run pair again",
+				"짝 맺기 창이 닫혔습니다 (틀린 코드가 너무 많았거나 다른 pair 창을 열었습니다). pair를 다시 실행하세요")
 		}
 		if time.Now().After(w.ExpiresAt) {
-			return fail("the code expired; run pair again", "코드가 만료됐습니다. pair를 다시 실행하세요")
+			return fail("the pairing window expired (5 minutes); run pair again", "짝 맺기 창이 만료됐습니다 (5분). pair를 다시 실행하세요")
 		}
 	}
 }

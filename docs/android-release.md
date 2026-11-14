@@ -1,6 +1,6 @@
 # Android 배포 (B2)
 
-2026-10-28 작성, 2026-11-10 고침. B2 관문은 'Play 내부 테스트 트랙으로 받은 앱을 본인 폰에서 1주일 실제 사용'이다(`phase1-plan.md` 2절, 15절). 이 문서는 빌드 설정과 출시 규칙만 다룬다. 작성자 계정으로 하는 등록과 순서는 작성자의 로컬 메모(`.local/play-console.md`, git에 올리지 않음)에 있다.
+2026-10-28 작성, 2026-11-14 고침. B2 관문은 'Play 내부 테스트 트랙으로 받은 앱을 본인 폰에서 1주일 실제 사용'이다(`phase1-plan.md` 2절, 15절). 이 문서는 빌드 설정과 출시 규칙만 다룬다. 작성자 계정으로 하는 등록과 순서는 작성자의 로컬 메모(`.local/play-console.md`, git에 올리지 않음)에 있다.
 
 ## 1. 설정
 
@@ -8,10 +8,10 @@
 | --- | --- | --- |
 | 패키지 이름 | `app.askorus` (2026-11-08 이름을 Askorus로 바꾸며 `app.asksemble`에서 바꿈, #31. Play에 처음 올리면 바꿀 수 없다) | `app/app.json` `android.package` |
 | Expo 프로젝트 | `@heeodev/askorus`(개인 계정 owner, 2026-11-08 `eas init`으로 만듦, #31). 옛 `@heeodev/asksemble`은 Expo에 그대로 남아 있다. 서명 키는 로컬 빌드와 같은 것(옛 프로젝트에서 EAS가 만든 키, SHA-256 7E:98…)을 같은 날 새 프로젝트의 app.askorus에 올렸다(`.local\eas-upload-key.cmd`, 사용자가 실행). 그래서 클라우드 빌드도 폰의 로컬 빌드 위에 덮어 깔린다 | `app/app.json` `owner`, `extra.eas.projectId` |
-| 보이는 버전 | `version` (지금 0.3.0, 2026-11-13) | `app/app.json` |
-| 빌드 번호(versionCode) | EAS가 보관하고 store 빌드마다 1씩 올린다. 로컬 빌드는 빌드할 때 번호를 준다(안 주면 1). Play는 앞에 올린 것보다 큰 번호만 받으므로, 로컬에서 만든 AAB를 올린 뒤 EAS로 넘어갈 때는 EAS의 번호를 그 위로 맞춘다. 2026-11-11 기준 로컬에서 만든 AAB는 2까지다 | `app/eas.json` `cli.appVersionSource: remote` |
-| 시험용 빌드 | `preview`: APK, 링크·QR로 폰에 바로 설치 | `npm run build:apk` |
-| 스토어 빌드 | `production`: AAB, Play 내부 테스트에 초안으로 올림 | `npm run build:aab`, `npm run eas -- submit -p android` |
+| 보이는 버전 | `version` (지금 0.3.0, 2026-11-14) | `app/app.json` |
+| 빌드 번호(versionCode) | EAS가 보관하고 store 빌드마다 1씩 올린다. 로컬 빌드는 빌드할 때 번호를 준다(안 주면 1). Play는 앞에 올린 것보다 큰 번호만 받으므로, 로컬에서 만든 AAB를 올린 뒤 EAS로 넘어갈 때는 EAS의 번호를 그 위로 맞춘다. 2026-11-14 기준 0.2.2가 5였고 0.3.0은 6이다 | `app/eas.json` `cli.appVersionSource: remote` |
+| 시험용 빌드 | `preview`: APK, 링크·QR로 폰에 바로 설치 (#57부터 EAS 클라우드 빌드에는 Tailscale 다리가 없어 Gradle이 `checkTsbridge`에서 멈춘다. 지금은 1.1절대로 다리를 만든 뒤 로컬에서 빌드한다) | `npm run build:apk` |
+| 스토어 빌드 | `production`: AAB, Play 내부 테스트에 초안으로 올림 (#57부터 EAS 클라우드 빌드에는 Tailscale 다리가 없어 Gradle이 `checkTsbridge`에서 멈춘다. 지금은 1.1절대로 다리를 만든 뒤 로컬에서 빌드한다) | `npm run build:aab`, `npm run eas -- submit -p android` |
 | 서명 키 | EAS가 처음 빌드 때 만들고 보관한다. Play에는 업로드 키로 쓰이고, Play가 배포용 키로 다시 서명한다 | EAS 계정 |
 | 권한 | 카메라(QR), 인터넷, 네트워크 상태(CameraX가 끌어오는 media3의 일반 권한)뿐이다(네트워크 상태는 앱의 Tailscale 모듈도 쓴다: 폰의 네트워크가 바뀐 것을 내장 기기에 알린다, #57. VPN 권한은 없다). Expo가 기본으로 넣는 저장소·다른 앱 위에 그리기·진동 권한과, 보안 저장소 라이브러리가 넣는 생체 인증 권한 두 개(`USE_BIOMETRIC`, `USE_FINGERPRINT`)는 뺀다(2026-11-11, #32: 앱은 생체 인증으로 잠그는 저장을 쓰지 않는다. 쓰게 되면 먼저 다시 넣는다). 빌드한 파일의 권한은 `aapt2 dump badging <apk>`로 확인한다 | `app/app.json` `blockedPermissions` |
 
@@ -56,8 +56,8 @@ tsbridge/build-android.sh arm64,arm,amd64,386   # 스토어에 올릴 AAB (네 �
 
 내부 테스트는 심사가 없어 대부분 나중에 채워도 되지만, 비공개·프로덕션 테스트 전에는 모두 필요하다.
 
-- **개인정보처리방침 URL**: 글의 기준은 `docs/privacy.md`, 웹페이지 원본은 `docs/privacy/index.html`. 공개 주소는 GitHub Pages의 `https://heeo-dev.github.io/askorus/privacy/`다(#40, main의 `/docs`). 시행일은 2026-11-11이고, 문의 연락처는 Play에 공개하는 개발자 이메일과 같은 주소를 쓴다(2026-11-11 적음). 글을 고치면 두 파일을 같이 고치고 시행일도 바꾼다.
-- **데이터 보안 양식**: 개발자가 받는 데이터 없음. **#57로 다시 답해야 한다**: 앱에 내장한 Tailscale이 사용자가 로그인한 뒤 Tailscale의 서버에 기기 이름과 IP 주소를 보낸다(기기 식별 정보, 앱 기능에 필요, 사용자가 직접 시작한 로그인). Play의 정의로는 앱에 든 라이브러리가 보내는 것도 앱이 보내는 것이다. 아래는 그 전의 답이다. 앱은 데이터를 수집·공유하지 않는다. 이 답이 사실이려면 앱에 들어가는 라이브러리도 아무것도 보내지 않아야 한다: QR은 앱의 모듈(`app/modules/qr-scanner`, CameraX + ZXing)이 폰 안에서 읽고, Google ML Kit·Play 서비스·Firebase처럼 진단이나 사용 통계를 보내는 라이브러리는 넣지 않는다(2026-11-11, #32, R-97. `licenses-test`가 릴리스 빌드의 라이브러리 목록에서 지킨다). 패키지를 더할 때는 `app/android`에서 의존성 목록을 다시 뽑아(2절의 라이선스 목록과 같은 명령) 새로 들어온 라이브러리를 본다. 짝 맺은 PC 주소와 기기 토큰은 폰의 보안 저장소에만 두고, 통신은 사용자의 Tailscale 망 안에서 사용자의 PC와만 한다. 카메라는 QR 읽기에만 쓰고 사진을 저장하거나 보내지 않는다.
+- **개인정보처리방침 URL**: 글의 기준은 `docs/privacy.md`, 웹페이지 원본은 `docs/privacy/index.html`. 공개 주소는 GitHub Pages의 `https://heeo-dev.github.io/askorus/privacy/`다(#40, main의 `/docs`). 시행일은 2026-11-14이고(내장 Tailscale #57, 짝 맺기 #58을 적은 판), 문의 연락처는 Play에 공개하는 개발자 이메일과 같은 주소를 쓴다(2026-11-11 적음). 글을 고치면 두 파일을 같이 고치고 시행일도 바꾼다.
+- **데이터 보안 양식**: 개발자가 받는 데이터 없음. **#57로 다시 답해야 한다(0.3.0을 Play에 올릴 때 메인테이너가 Play Console에서)**: 앱에 내장한 Tailscale이 사용자가 로그인한 뒤 Tailscale의 서버에 계정에 묶인 기기 이름과 IP 주소를 보낸다(기기 식별 정보, 앱 기능에 필요, 사용자가 직접 시작한 로그인). Play의 정의로는 앱에 든 라이브러리가 보내는 것도 앱이 보내는 것이다. 아래는 그 전의 답이다. 앱은 데이터를 수집·공유하지 않는다. 이 답이 사실이려면 앱에 들어가는 라이브러리도 아무것도 보내지 않아야 한다: QR은 앱의 모듈(`app/modules/qr-scanner`, CameraX + ZXing)이 폰 안에서 읽고, Google ML Kit·Play 서비스·Firebase처럼 진단이나 사용 통계를 보내는 라이브러리는 넣지 않는다(2026-11-11, #32, R-97. `licenses-test`가 릴리스 빌드의 라이브러리 목록에서 지킨다). 패키지를 더할 때는 `app/android`에서 의존성 목록을 다시 뽑아(2절의 라이선스 목록과 같은 명령) 새로 들어온 라이브러리를 본다. 짝 맺은 PC 주소와 기기 토큰은 폰의 보안 저장소에만 두고, 통신은 사용자의 Tailscale 망 안에서 사용자의 PC와만 한다. 카메라는 QR 읽기에만 쓰고 사진을 저장하거나 보내지 않는다.
 - **앱 이름·설명**: 칸마다 넣을 글은 `docs/store/listing-ko.md`·`listing-en.md`. 설명 끝에 '공식 Anthropic·Claude 제품이 아니다'를 적는다.
 - **그림**: 아이콘·대표 그림·스크린숏은 `docs/store/README.md`의 체크 목록. Claude·Anthropic 로고나 이름은 쓰지 않는다.
 - **콘텐츠 등급·대상 연령·광고 없음**: 설문으로 답한다.

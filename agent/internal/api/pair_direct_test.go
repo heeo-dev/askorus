@@ -66,7 +66,7 @@ func (e directEnv) poll(t *testing.T, requestID string) *PairStatus {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
-		w := e.serve(viaServe("POST", "/v1/pair/status", `{"requestId":"`+requestID+`"}`, nil))
+		w := e.serve(fromPhone("POST", "/v1/pair/status", `{"requestId":"`+requestID+`"}`, nil))
 		if w.Code != 200 {
 			t.Fatalf("status: %d %s", w.Code, w.Body)
 		}
@@ -85,7 +85,7 @@ func (e directEnv) poll(t *testing.T, requestID string) *PairStatus {
 
 func (e directEnv) ask(t *testing.T, name, match string) string {
 	t.Helper()
-	w := e.serve(viaServe("POST", "/v1/pair", `{"deviceName":"`+name+`","match":"`+match+`"}`, nil))
+	w := e.serve(fromPhone("POST", "/v1/pair", `{"deviceName":"`+name+`","match":"`+match+`"}`, nil))
 	if w.Code != http.StatusAccepted {
 		t.Fatalf("pair without a code: %d %s", w.Code, w.Body)
 	}
@@ -101,7 +101,7 @@ func (e directEnv) ask(t *testing.T, name, match string) string {
 // as for every other call.
 func TestHello(t *testing.T) {
 	e := newDirectEnv(t)
-	w := e.serve(viaServe("GET", "/v1/hello", "", nil))
+	w := e.serve(fromPhone("GET", "/v1/hello", "", nil))
 	var h HelloResponse
 	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &h) != nil {
 		t.Fatalf("hello: %d %s", w.Code, w.Body)
@@ -114,12 +114,12 @@ func TestHello(t *testing.T) {
 	if _, _, err := pairing.Open(e.dir, time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	w = e.serve(viaServe("GET", "/v1/hello", "", nil))
+	w = e.serve(fromPhone("GET", "/v1/hello", "", nil))
 	if json.Unmarshal(w.Body.Bytes(), &h); h.Pairing != "ask" {
 		t.Errorf("with a window nobody holds: %+v", h)
 	}
 	e.openWindow(t)
-	w = e.serve(viaServe("GET", "/v1/hello", "", nil))
+	w = e.serve(fromPhone("GET", "/v1/hello", "", nil))
 	if json.Unmarshal(w.Body.Bytes(), &h); h.Pairing != "window" {
 		t.Errorf("with a pairing window open: %+v", h)
 	}
@@ -128,11 +128,11 @@ func TestHello(t *testing.T) {
 		"no caller":       {hdrNoCaller: "1"},
 		"a browser page":  {"Origin": "https://evil.example"},
 	} {
-		if w := e.serve(viaServe("GET", "/v1/hello", "", hdr)); w.Code != 403 {
+		if w := e.serve(fromPhone("GET", "/v1/hello", "", hdr)); w.Code != 403 {
 			t.Errorf("%s: %d %s", name, w.Code, w.Body)
 		}
 	}
-	if w := e.serve(viaServe("POST", "/v1/hello", "", nil)); w.Code != 405 {
+	if w := e.serve(fromPhone("POST", "/v1/hello", "", nil)); w.Code != 405 {
 		t.Errorf("POST: %d", w.Code)
 	}
 }
@@ -147,7 +147,7 @@ func TestPairDirectIntoAnOpenWindow(t *testing.T) {
 		t.Fatalf("status = %+v", st)
 	}
 	// The token works.
-	if w := e.serve(viaServe("GET", "/v1/info", "", bearer(st.Token))); w.Code != 200 {
+	if w := e.serve(fromPhone("GET", "/v1/info", "", bearer(st.Token))); w.Code != 200 {
 		t.Errorf("info with the new token: %d %s", w.Code, w.Body)
 	}
 	if res, ok := pairing.ResultFor(e.dir, win.ID); !ok || !res.OK || res.Match != "47" {
@@ -166,15 +166,15 @@ func TestPairDirectAnsweredByAPairedPhone(t *testing.T) {
 	}
 	// The agent says that it can do this.
 	var info InfoResponse
-	if w := e.serve(viaServe("GET", "/v1/info", "", bearer(oldToken))); json.Unmarshal(w.Body.Bytes(), &info) != nil || info.Pairing == nil || !info.Pairing.Approve {
+	if w := e.serve(fromPhone("GET", "/v1/info", "", bearer(oldToken))); json.Unmarshal(w.Body.Bytes(), &info) != nil || info.Pairing == nil || !info.Pairing.Approve {
 		t.Fatalf("info.pairing = %+v (%s)", info.Pairing, w.Body)
 	}
-	if w := e.serve(viaServe("GET", "/v1/pair/requests", "", bearer(oldToken))); w.Code != 200 || !strings.Contains(w.Body.String(), `"requests":[]`) {
+	if w := e.serve(fromPhone("GET", "/v1/pair/requests", "", bearer(oldToken))); w.Code != 200 || !strings.Contains(w.Body.String(), `"requests":[]`) {
 		t.Errorf("no request yet: %d %s", w.Code, w.Body)
 	}
 
 	requestID := e.ask(t, "New phone", "08")
-	w := e.serve(viaServe("GET", "/v1/pair/requests", "", bearer(oldToken)))
+	w := e.serve(fromPhone("GET", "/v1/pair/requests", "", bearer(oldToken)))
 	var list PairQuestions
 	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &list) != nil || len(list.Requests) != 1 {
 		t.Fatalf("requests: %d %s", w.Code, w.Body)
@@ -184,23 +184,23 @@ func TestPairDirectAnsweredByAPairedPhone(t *testing.T) {
 		t.Errorf("request = %+v (the asking phone's id %s)", q, requestID)
 	}
 	// Without a token: nothing to see, nothing to answer.
-	if w := e.serve(viaServe("GET", "/v1/pair/requests", "", nil)); w.Code != 401 {
+	if w := e.serve(fromPhone("GET", "/v1/pair/requests", "", nil)); w.Code != 401 {
 		t.Errorf("list without a token: %d", w.Code)
 	}
-	if w := e.serve(viaServe("POST", "/v1/pair/requests/answer", `{"id":"`+q.ID+`","allow":true}`, nil)); w.Code != 401 {
+	if w := e.serve(fromPhone("POST", "/v1/pair/requests/answer", `{"id":"`+q.ID+`","allow":true}`, nil)); w.Code != 401 {
 		t.Errorf("answer without a token: %d", w.Code)
 	}
-	if w := e.serve(viaServe("POST", "/v1/pair/requests/answer", `{"id":"nope","allow":true}`, bearer(oldToken))); w.Code != 404 || errCode(t, w) != CodePairUnknown {
+	if w := e.serve(fromPhone("POST", "/v1/pair/requests/answer", `{"id":"nope","allow":true}`, bearer(oldToken))); w.Code != 404 || errCode(t, w) != CodePairUnknown {
 		t.Errorf("answer to another id: %d %s", w.Code, w.Body)
 	}
-	if w := e.serve(viaServe("POST", "/v1/pair/requests/answer", `{"id":"`+q.ID+`","allow":true}`, bearer(oldToken))); w.Code != 204 {
+	if w := e.serve(fromPhone("POST", "/v1/pair/requests/answer", `{"id":"`+q.ID+`","allow":true}`, bearer(oldToken))); w.Code != 204 {
 		t.Fatalf("answer: %d %s", w.Code, w.Body)
 	}
 	st := e.poll(t, requestID)
 	if st.Status != string(pairing.StateApproved) || st.Token == "" || st.Token == oldToken {
 		t.Fatalf("status = %+v", st)
 	}
-	if w := e.serve(viaServe("GET", "/v1/pair/requests", "", bearer(st.Token))); w.Code != 200 || !strings.Contains(w.Body.String(), `"requests":[]`) {
+	if w := e.serve(fromPhone("GET", "/v1/pair/requests", "", bearer(st.Token))); w.Code != 200 || !strings.Contains(w.Body.String(), `"requests":[]`) {
 		t.Errorf("after the answer: %d %s", w.Code, w.Body)
 	}
 }
@@ -212,7 +212,7 @@ func TestPairDirectRefused(t *testing.T) {
 	body := `{"requestId":"` + e.ask(t, "Galaxy S23", "47") + `"}`
 	var w *httptest.ResponseRecorder
 	for i := 0; i < 300; i++ {
-		w = e.serve(viaServe("POST", "/v1/pair/status", body, nil))
+		w = e.serve(fromPhone("POST", "/v1/pair/status", body, nil))
 		if w.Code != 200 {
 			break
 		}
@@ -242,7 +242,7 @@ func TestPairDirectAskLimit(t *testing.T) {
 		t.Helper()
 		deadline := time.Now().Add(3 * time.Second)
 		for {
-			w := e.serve(viaServe("POST", "/v1/pair", body, hdr))
+			w := e.serve(fromPhone("POST", "/v1/pair", body, hdr))
 			if w.Code != http.StatusConflict {
 				return w
 			}
@@ -266,7 +266,7 @@ func TestPairDirectAskLimit(t *testing.T) {
 		t.Errorf("the screen was asked %d times", asked.Load())
 	}
 	// Nothing else is shut: the device is not locked out of the rest.
-	if w := e.serve(viaServe("GET", "/v1/hello", "", nil)); w.Code != 200 {
+	if w := e.serve(fromPhone("GET", "/v1/hello", "", nil)); w.Code != 200 {
 		t.Errorf("hello while asking is held back: %d %s", w.Code, w.Body)
 	}
 	// Another device of the account is not held back.
@@ -279,7 +279,7 @@ func TestPairDirectAskLimit(t *testing.T) {
 	// Its request is refused on the screen too. Wait for that: a request that
 	// still waits would be the one a window opened now lets in.
 	for deadline := time.Now().Add(3 * time.Second); ; time.Sleep(5 * time.Millisecond) {
-		w := e.serve(viaServe("POST", "/v1/pair/status", `{"requestId":"`+started.RequestID+`"}`, other))
+		w := e.serve(fromPhone("POST", "/v1/pair/status", `{"requestId":"`+started.RequestID+`"}`, other))
 		if w.Code == http.StatusForbidden {
 			break
 		}
@@ -313,7 +313,7 @@ func TestPairDirectAskLimitHoldsUnderManyRequests(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for time.Now().Before(stop) {
-				e.serve(viaServe("POST", "/v1/pair", body, nil))
+				e.serve(fromPhone("POST", "/v1/pair", body, nil))
 			}
 		}()
 	}
@@ -332,17 +332,17 @@ func TestPairDirectAskLimitHoldsUnderManyRequests(t *testing.T) {
 // phone is told to open a window on the PC, at once.
 func TestPairDirectWithNobodyToAnswer(t *testing.T) {
 	e := newDirectEnv(t)
-	w := e.serve(viaServe("POST", "/v1/pair", `{"deviceName":"Galaxy S23","match":"47"}`, nil))
+	w := e.serve(fromPhone("POST", "/v1/pair", `{"deviceName":"Galaxy S23","match":"47"}`, nil))
 	if w.Code != 404 || errCode(t, w) != CodePairClosed || !strings.Contains(w.Body.String(), "askorus-agent pair") {
 		t.Errorf("nobody to answer: %d %s", w.Code, w.Body)
 	}
 	for _, body := range []string{`{"deviceName":"Galaxy S23"}`, `{"deviceName":"Galaxy S23","match":"4x"}`, `{"deviceName":"","match":"47"}`} {
-		if w := e.serve(viaServe("POST", "/v1/pair", body, nil)); w.Code != 400 {
+		if w := e.serve(fromPhone("POST", "/v1/pair", body, nil)); w.Code != 400 {
 			t.Errorf("%s: %d %s", body, w.Code, w.Body)
 		}
 	}
 	// Who sent it is checked before anything else, as with a code.
-	if w := e.serve(viaServe("POST", "/v1/pair", `{"deviceName":"x","match":"47"}`, map[string]string{hdrCallerLogin: "kid@example.com"})); w.Code != 403 || errCode(t, w) != CodeWrongAccount {
+	if w := e.serve(fromPhone("POST", "/v1/pair", `{"deviceName":"x","match":"47"}`, map[string]string{hdrCallerLogin: "kid@example.com"})); w.Code != 403 || errCode(t, w) != CodeWrongAccount {
 		t.Errorf("another account: %d %s", w.Code, w.Body)
 	}
 }

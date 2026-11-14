@@ -87,7 +87,7 @@ code { font-size: 0.92em; }
     <div class="wrap" style="padding-top:0">
       <header class="doc">
         <h1>Askorus 개인정보처리방침</h1>
-        <p class="meta">시행일 2026년 11월 13일</p>
+        <p class="meta">시행일 2026년 11월 14일</p>
         <p class="lead">Askorus는 질문 하나를 여러 AI에게 한 번에 묻고, 사회자 AI가 답을 정리하며, 의견이 다른 곳은 AI끼리 토론하게 하는 앱입니다. 폰에서 내 PC의 코딩 AI 세션을 보고 켜는 기능도 있습니다. 묻고, 정리하고, 토론시키는 일은 사용자의 PC가 합니다.</p>
       </header>
 
@@ -130,12 +130,17 @@ code { font-size: 0.92em; }
 
       <section aria-labelledby="ko-pc">
         <h2 id="ko-pc">PC에 보내는 정보</h2>
-        <p>짝 맺을 때 정한 폰 이름, 사용자가 누른 동작(목록 보기, 열기, 새 세션, 멈추기, 지우기, 폴더 열어 두기), 사용자가 쓴 질문, 종합 답변·토론·사회자에게 묻기 요청, 이어서 물을 때 그 대화의 결론 기록입니다. 통신은 앱에 들어 있는 Tailscale로, 사용자의 Tailscale 계정에 로그인한 사용자 자신의 PC와만 합니다. 두 기기 사이에서 암호화됩니다.</p>
+        <p>짝 맺을 때 정한 폰 이름과 화면에 보이는 두 자리 숫자, 사용자가 누른 동작(목록 보기, 열기, 새 세션, 멈추기, 지우기, 폴더 열어 두기), 사용자가 쓴 질문, 종합 답변·토론·사회자에게 묻기 요청, 이어서 물을 때 그 대화의 결론 기록입니다. 통신은 앱에 들어 있는 Tailscale로, 사용자의 Tailscale 계정에 로그인한 사용자 자신의 PC와만 합니다. 두 기기 사이에서 암호화됩니다.</p>
       </section>
 
       <section aria-labelledby="ko-tailscale">
         <h2 id="ko-tailscale">Tailscale</h2>
-        <p>앱과 PC 에이전트에는 Tailscale이 들어 있습니다(Tailscale Inc.가 만든, 내 기기끼리만 통하는 사설망 소프트웨어). 사용자가 앱에서 로그인을 누르기 전에는 앱이 Tailscale과 통신하지 않습니다. 로그인은 브라우저에서 사용자가 Tailscale의 화면에 직접 하며, 앱과 에이전트는 계정의 비밀번호를 받지 않습니다. 로그인한 뒤 폰과 PC는 Tailscale의 서버와 통신합니다. 두 기기를 등록하고 서로 찾게 해 주는 조정 서버와, 두 기기가 직접 연결되지 못할 때 암호화된 내용을 그대로 전달하는 중계 서버입니다. 이 과정에서 Tailscale은 기기 이름('askorus-'로 시작하는 폰과 PC의 이름), IP 주소, 연결한 때 같은 정보를 받습니다(Tailscale의 개인정보처리방침: <a href="https://tailscale.com/privacy-policy">tailscale.com/privacy-policy</a>). 질문과 답은 두 기기 사이에서 암호화되어 Tailscale도 읽지 못합니다. Tailscale로 보내는 진단 로그는 꺼 두었습니다. 폰의 VPN 기능은 쓰지 않으며, 폰의 다른 앱에는 영향이 없습니다. 기기 키는 폰에서는 앱 안의 저장소에, PC에서는 에이전트의 설정 폴더에 저장합니다. 로그아웃하거나(앱의 설정 > Tailscale, PC에서는 <code>askorus-agent logout</code>) 앱을 지우면 지워집니다.</p>
+        <p>앱과 PC 에이전트에는 Tailscale이 들어 있습니다(Tailscale Inc.가 만든, 내 기기끼리만 통하는 사설망 소프트웨어). 사용자가 앱에서 로그인을 누르기 전에는 앱이 Tailscale과 통신하지 않습니다. 로그인은 브라우저에서 사용자가 Tailscale의 화면에 직접 하며, 앱과 에이전트는 계정의 비밀번호를 받지 않습니다. 로그인한 뒤 폰과 PC는 Tailscale의 서버와 통신합니다. 두 기기를 등록하고 서로 찾게 해 주는 조정 서버와, 두 기기가 직접 연결되지 못할 때 암호화된 내용을 그대로 전달하는 중계 서버입니다. 이 과정에서 Tailscale은 로그인한 계정(메일), 기기 이름('askorus-'로 시작하는 폰과 PC의 이름), IP 주소, 연결한 때 같은 정보를 받습니다(Tailscale의 개인정보처리방침: <a href="https://tailscale.com/privacy-policy">tailscale.com/privacy-policy</a>). 질문과 답은 두 기기 사이에서 암호화되어 Tailscale도 읽지 못합니다. Tailscale로 보내는 진단 로그는 꺼 두었습니다. 폰의 VPN 기능은 쓰지 않으며, 폰의 다른 앱에는 영향이 없습니다. 기기 키는 폰에서는 앱 안의 저장소에, PC에서는 에이전트의 설정 폴더에 저장합니다. 로그아웃하거나(앱의 설정 > Tailscale, PC에서는 <code>askorus-agent logout</code>) 앱을 지우면 지워집니다.</p>
+      </section>
+
+      <section aria-labelledby="ko-pairing">
+        <h2 id="ko-pairing">짝 맺기</h2>
+        <p>Tailscale에 로그인하면 앱은 내 계정의 기기 목록(이름, 운영체제, 켜져 있는지)을 Tailscale에서 받아, 이름이 'askorus-'로 시작하는 기기에만 Askorus 에이전트인지 묻습니다. 에이전트는 같은 계정의 기기에만 PC 이름, 운영체제, 버전을 답합니다. 짝 맺기를 요청하면 PC는 폰 이름과 두 자리 숫자를 그 폰의 Tailscale 계정, 주소와 함께 PC 화면의 창이나 터미널에 보여 줍니다. 폰 이름과 숫자는 이미 짝 맺은 폰의 Askorus에도 보입니다(그 폰에서 허용할 수 있게). PC는 짝 맺은 폰의 이름과 토큰의 해시를 에이전트의 설정 폴더에 두고, 끊으면 지웁니다.</p>
       </section>
 
       <section aria-labelledby="ko-ask">
@@ -189,7 +194,7 @@ code { font-size: 0.92em; }
     <div class="wrap" style="padding-top:0">
       <header class="doc">
         <h1>Askorus Privacy Policy</h1>
-        <p class="meta">Effective November 13, 2026</p>
+        <p class="meta">Effective November 14, 2026</p>
         <p class="lead">Askorus asks one question to several AIs at once; a moderator AI sums up their answers, and where the AIs disagree, they debate. It also lets you see and start the coding AI sessions on your own PC from your phone. Your own PC does the asking, the summing up and the debating.</p>
       </header>
 
@@ -232,12 +237,17 @@ code { font-size: 0.92em; }
 
       <section aria-labelledby="en-pc">
         <h2 id="en-pc">Data sent to your PC</h2>
-        <p>The phone name you choose when pairing, the actions you take (list, open, new session, stop, remove, keep folder open), the questions you write, your requests for combined answers, debates and questions to the moderator, and, on follow-ups, the conversation's record of conclusions. Traffic goes only to your own PC, through the Tailscale built into the app: only to a device signed in to your own Tailscale account, encrypted between the two devices.</p>
+        <p>The phone name you choose when pairing and the two digits the screen shows, the actions you take (list, open, new session, stop, remove, keep folder open), the questions you write, your requests for combined answers, debates and questions to the moderator, and, on follow-ups, the conversation's record of conclusions. Traffic goes only to your own PC, through the Tailscale built into the app: only to a device signed in to your own Tailscale account, encrypted between the two devices.</p>
       </section>
 
       <section aria-labelledby="en-tailscale">
         <h2 id="en-tailscale">Tailscale</h2>
-        <p>The app and the PC agent have Tailscale built in (software by Tailscale Inc. that makes a private network between your own devices). Until you choose to sign in in the app, the app does not talk to Tailscale at all. You sign in on Tailscale's own page in your browser; the app and the agent never get your account's password. After that, the phone and the PC talk to Tailscale's servers: the coordination server, which registers the two devices and lets them find each other, and, when the two cannot connect directly, relay servers that pass the encrypted traffic on as it is. In doing so Tailscale gets information such as the devices' names (the phone's and the PC's, starting with askorus-), their IP addresses and when they connect (Tailscale's privacy policy: <a href="https://tailscale.com/privacy-policy">tailscale.com/privacy-policy</a>). Your questions and answers are encrypted between your two devices, and Tailscale cannot read them. Diagnostic logs to Tailscale are turned off. The phone's VPN is not used, and other apps on the phone are not affected. The device keys are kept in the app's own storage on the phone and in the agent's settings folder on the PC. Signing out (Settings > Tailscale in the app; <code>askorus-agent logout</code> on the PC) or uninstalling the app removes them.</p>
+        <p>The app and the PC agent have Tailscale built in (software by Tailscale Inc. that makes a private network between your own devices). Until you choose to sign in in the app, the app does not talk to Tailscale at all. You sign in on Tailscale's own page in your browser; the app and the agent never get your account's password. After that, the phone and the PC talk to Tailscale's servers: the coordination server, which registers the two devices and lets them find each other, and, when the two cannot connect directly, relay servers that pass the encrypted traffic on as it is. In doing so Tailscale gets information such as the account you signed in with (email), the devices' names (the phone's and the PC's, starting with askorus-), their IP addresses and when they connect (Tailscale's privacy policy: <a href="https://tailscale.com/privacy-policy">tailscale.com/privacy-policy</a>). Your questions and answers are encrypted between your two devices, and Tailscale cannot read them. Diagnostic logs to Tailscale are turned off. The phone's VPN is not used, and other apps on the phone are not affected. The device keys are kept in the app's own storage on the phone and in the agent's settings folder on the PC. Signing out (Settings > Tailscale in the app; <code>askorus-agent logout</code> on the PC) or uninstalling the app removes them.</p>
+      </section>
+
+      <section aria-labelledby="en-pairing">
+        <h2 id="en-pairing">Pairing</h2>
+        <p>Once you are signed in to Tailscale, the app gets the list of your account's devices from Tailscale (name, system, whether it is online) and asks only those whose name starts with askorus- whether they are an Askorus agent. An agent tells only a device of the same account its PC name, system and version. When you ask to pair, the PC shows the phone's name and the two digits, with the phone's Tailscale account and address, in a window on its screen or in the terminal. The name and the digits also show in Askorus on phones that are already paired, so that one of them can allow it. The PC keeps the name of each paired phone and a hash of its token in the agent's settings folder until you disconnect it.</p>
       </section>
 
       <section aria-labelledby="en-ask">

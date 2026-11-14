@@ -1,5 +1,6 @@
-// Pairing with a PC: send the QR code, wait for the person at the PC,
-// then save the connection. Kept apart from the screen so it can be tested.
+// Pairing with a PC: ask (without a code for a PC found in the account, or
+// with the code of a QR), wait until a person allows it, then save the
+// connection. Kept apart from the screen so it can be tested.
 
 import { AgentClient, type WaitOptions, baseUrl } from '../api/client';
 import type { PairLink } from './pairLink';

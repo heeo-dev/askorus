@@ -258,7 +258,7 @@ func (w *nodeWatch) once(ctx context.Context) {
 	changed := !sameNode(st, w.st)
 	w.st = st
 	// A node that has to sign in (first run, key expired, signed out) but
-	// has no link yet is asked for one, so `check` and `login` can show it.
+	// has no link yet is asked for one, so `login` and `setup` can show it.
 	needLink := st.State == tsnode.StateNeedsLogin && st.LoginURL == ""
 	ask := false
 	if !needLink {
@@ -407,8 +407,8 @@ func waitLogin(ctx context.Context, dir string, out io.Writer, limit time.Durati
 			}
 		case n.LoginURL != "" && n.LoginURL != shown:
 			if shown == "" {
-				say(out, m("Askorus connects your phone and this PC through Tailscale: a private network that only your own devices can join (a service by Tailscale Inc., free for personal use). No port of this PC is opened to the internet and no server of ours is in between. Tailscale learns your account, the device names and when they connect, not your questions or answers. More: the README (What is Tailscale?).",
-					"Askorus는 폰과 이 PC를 Tailscale로 잇습니다. 내 기기들만 들어오는 사설망입니다(Tailscale사의 서비스, 개인은 무료). 이 PC의 포트를 인터넷에 열지 않고, 중간에 우리 서버도 없습니다. Tailscale이 아는 것은 계정, 기기 이름, 접속한 때이고 질문과 답은 모릅니다. 자세한 것은 README의 'Tailscale이 뭔가요?'."))
+				say(out, m("Askorus connects your phone and this PC through Tailscale: a private network that only your own devices can join (a service by Tailscale Inc., free for personal use). No port of this PC is opened to the internet and no server of ours is in between. Tailscale learns your account (email), the device names, and the addresses and times of their connections, not your questions or answers. More: the README (What is Tailscale?).",
+					"Askorus는 폰과 이 PC를 Tailscale로 잇습니다. 내 기기들만 들어오는 사설망입니다(Tailscale사의 서비스, 개인은 무료). 이 PC의 포트를 인터넷에 열지 않고, 중간에 우리 서버도 없습니다. Tailscale이 아는 것은 계정(메일), 기기 이름, 접속한 주소와 시간이고 질문과 답은 모릅니다. 자세한 것은 README의 'Tailscale이 뭔가요?'."))
 			}
 			shown = n.LoginURL
 			say(out, m("Sign this PC in to Tailscale (once). Open this link in a browser, here or on the phone (the QR code is the same link), and sign in. Use the account the phone's Askorus app will use too; without one, you can make it on that page. Your password goes to Tailscale's page only. Nothing of Tailscale needs installing.",

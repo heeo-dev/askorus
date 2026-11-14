@@ -1,5 +1,7 @@
 # Phase 2 구현 계획 — 한 번에 묻기
 
+2026-11-13(#57), 11-14(#58): 아래 기록에 나오는 `tailscale serve`, 폰의 Tailscale 앱 안내, 시험 페이지(`/test/`), 'QR이 주 경로'는 지금 없다. 지금의 연결과 짝 맺기는 `phase1-plan.md` 25절, 26절이다.
+
 2026-10-29 작성. 기준은 Claude Docs '제품 방향과 Phase 설계'의 'Phase 2 — 한 번에 묻기' 절이다. Phase 1의 E(2차)에서 F8은 끝났고, F9(우리 쪽 알림)와 `tsnet`은 미뤘다(사용자 결정, `phase1-plan.md` 18절, Phase 1 설계 rev 65).
 
 ## 1. Phase 3를 먼저 하지 않는 이유

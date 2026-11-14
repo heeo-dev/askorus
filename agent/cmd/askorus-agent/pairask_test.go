@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"io"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -74,7 +75,14 @@ func TestPairWindowTakesAPhoneWithoutAQuestion(t *testing.T) {
 // the request came from, in both languages, and says which button allows.
 func TestPairQuestionWords(t *testing.T) {
 	q := pairQuestion(pairing.Question{DeviceName: "Galaxy S23", Match: "47", Login: "me@example.com", RemoteIP: "100.64.0.9"})
-	for _, s := range []string{"Galaxy S23", "number 47", "me@example.com", "100.64.0.9", "same number", "Yes allows it", "같은 숫자(47)", "예: 허용"} {
+	want := []string{"Galaxy S23", "number 47", "me@example.com", "100.64.0.9", "same number", "숫자 47", "Tailscale 계정 me@example.com", "같은 숫자"}
+	if runtime.GOOS == "windows" {
+		// Windows draws its own Yes and No buttons: the text says which is which.
+		want = append(want, "Yes allows it", "예: 허용")
+	} else if strings.Contains(q.Text, "Yes allows it") {
+		t.Error("the text names Yes and No where the buttons are labelled Allow and Refuse")
+	}
+	for _, s := range want {
 		if !strings.Contains(q.Text, s) {
 			t.Errorf("text lacks %q:\n%s", s, q.Text)
 		}

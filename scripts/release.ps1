@@ -9,7 +9,7 @@
 #   SHA256SUMS.txt                   "<sha-256>  <file name>" per file, as sha256sum
 # Every agent is built with -trimpath and the version. It only builds and
 # checks; publishing the GitHub release is a step of its own.
-#   powershell -NoProfile -File scripts\release.ps1 -Version 0.2.0 [-Out DIR]
+#   powershell -NoProfile -File scripts\release.ps1 -Version 0.3.0 [-Out DIR]
 # The default folder is .local\release\v<version> of this checkout. Keep this
 # file ASCII: Windows PowerShell 5.1 reads scripts without a BOM as the ANSI
 # code page.
@@ -113,4 +113,7 @@ Get-ChildItem $Out | ForEach-Object { '  {0,-34} {1,10:N0} bytes' -f $_.Name, $_
 Write-Output ''
 Write-Output 'To publish:'
 $files = ($names + 'SHA256SUMS.txt' | ForEach-Object { "`"$Out\$_`"" }) -join ' '
-Write-Output "  gh release create v$Version $files --title `"Askorus $Version`" --notes-file NOTES.md"
+Write-Output "  gh release create v$Version $files --title `"Askorus $Version`" --notes-file <notes file>"
+Write-Output ''
+Write-Output "Also attach askorus-android-$Version.apk, THIRD-PARTY-NOTICES.md and THIRD-PARTY-GO.md,"
+Write-Output 'and give the SHA-256 of the APK in the notes (README, Install the Android app).'

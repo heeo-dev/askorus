@@ -138,6 +138,10 @@ main() {
     say 'setup did not finish before; running it again'
     run_setup "$exe"
   fi
+  # An agent from before 0.3.0 had no Tailscale inside: the PC was never signed in.
+  if "$exe" status 2>/dev/null | grep -q 'not signed in to Tailscale'; then
+    say 'this version has Tailscale built in: run "askorus-agent login" once, then pair the phone again in the app (tap this PC)'
+  fi
 }
 
 # fetch <base> <name> <to>: from an https address or a folder.

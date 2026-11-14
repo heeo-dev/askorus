@@ -2,6 +2,9 @@
 # from the phone over Tailscale and from the emulator at 10.0.2.2. It runs
 # the app folder next to this script, so a worktree serves its own code.
 # Closing the window stops it. Keep this file ASCII.
+# A developer tool: unlike the app itself (built-in Tailscale since 0.3.0), this
+# still uses Tailscale installed on the PC and the Tailscale app on the phone.
+# Over USB, `adb reverse tcp:8081 tcp:8081` does without both.
 #   powershell -NoProfile -File scripts\dev-server.ps1
 $app = Join-Path (Split-Path -Parent $PSScriptRoot) 'app'
 $log = Join-Path $env:TEMP 'askorus-metro.log'

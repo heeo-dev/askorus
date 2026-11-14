@@ -32,6 +32,11 @@ Askorus server. Reports of these kinds are especially useful:
   someone else
 - an install script (`scripts/install.ps1`, `scripts/install.sh`) installing
   something other than the released file
+- getting a phone paired without the person allowing it (the window on the
+  PC, an open pairing window, or a paired phone)
+- reaching the agent from a device that is not in the PC owner's Tailscale
+  account, or the agent or the app sending anything outside the Tailscale
+  tunnel
 
 Not in scope: what an AI company's own program or service does with your
 question, problems that need administrator (root) rights or the same user account
@@ -69,6 +74,8 @@ Askorus는 PC 에이전트(`agent/`, 내 PC에서 돌며 내 AI 프로그램을 
 - 질문, 답, 이름을 통해 PC의 파일을 읽거나 바꾸는 것
 - 웹페이지, 링크, QR이 앱이나 에이전트를 남 대신 움직이게 하는 것
 - 설치 스크립트(`scripts/install.ps1`, `scripts/install.sh`)가 배포된 파일이 아닌 것을 설치하는 것
+- 사람이 허용하지 않았는데 폰이 짝 맺어지는 것(PC 화면의 창, 열어 둔 짝 맺기 창, 짝 맺은 폰)
+- PC 주인의 Tailscale 계정에 없는 기기가 에이전트에 닿는 것, 에이전트나 앱이 Tailscale 터널 밖으로 무언가를 보내는 것
 
 범위 밖: AI 회사의 프로그램과 서비스가 질문을 다루는 방식, 어느 운영체제든 PC의 관리자(root)
 권한이나 같은 사용자 계정이 있어야 되는 문제, 서명 없는 초기 배포판(예정된 일,
