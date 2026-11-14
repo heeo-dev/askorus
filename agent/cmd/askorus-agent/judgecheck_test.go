@@ -130,8 +130,8 @@ func noLineTwice(t *testing.T, lines []checkLine) {
 }
 
 const (
-	noOutside   = "the agent itself sends no request outside this PC"
-	noOutsideKo = "에이전트가 직접 밖으로 보내는 요청은 없습니다"
+	noOutside   = "the agent sends questions and answers only to your paired phones; its built-in Tailscale talks to Tailscale's servers to sign in and to connect your devices (no diagnostic logs)"
+	noOutsideKo = "에이전트는 질문과 답을 짝 맺은 폰에만 보냅니다. 내장된 Tailscale은 로그인과 기기 연결을 위해 Tailscale 서버와 통신합니다 (진단 로그는 보내지 않음)"
 	writeLine   = "combined answers: Claude Code · OpenCode can write them (the question's tier model)"
 	writeLineKo = "종합 답변을 쓸 수 있는 AI: Claude Code · OpenCode (질문 단계의 모델)"
 	company     = "when a combined answer is written, the writing AI's company receives the question and every answer with the AIs' names"

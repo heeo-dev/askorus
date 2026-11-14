@@ -10,7 +10,7 @@
 # Runs go to %LOCALAPPDATA%\Askorus\synth-eval\<run>, outside the repo. The
 # AIs answer in the agent's ask folder (as for the phone); the writers and
 # the AIs that score run in its judge folder. It never touches the running
-# agent, Tailscale serve or the
+# agent, its Tailscale sign-in or the
 # Claude services.
 #
 #   powershell -NoProfile -File scripts\synth-eval.ps1 questions -q agent\cmd\synth-eval\testdata\general.txt,.local\synth-eval\mine.txt

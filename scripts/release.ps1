@@ -37,12 +37,15 @@ $others = @(
 )
 
 # An agent: no local paths in it (-trimpath), no debug symbols, the version
-# in main.version (the app reads it from /v1/info).
+# in main.version (the app reads it from /v1/info). The tags leave out the
+# parts of the Tailscale library the agent must not carry (tsnode.BuildTags:
+# a port on the PC's own addresses, diagnostics, the log uploader).
+$tsTags = 'ts_omit_peerapiserver,ts_omit_c2n,ts_omit_logtail'
 function Build([string]$file, [string]$os, [string]$arch) {
     $env:GOOS = $os; $env:GOARCH = $arch; $env:CGO_ENABLED = '0'
     Push-Location (Join-Path $root 'agent')
     try {
-        & go build -trimpath -ldflags "-s -w -X main.version=$Version" -o $file ./cmd/askorus-agent
+        & go build -trimpath -tags $tsTags -ldflags "-s -w -X main.version=$Version" -o $file ./cmd/askorus-agent
         if ($LASTEXITCODE -ne 0) { throw "go build failed for $os/$arch" }
     } finally {
         Pop-Location

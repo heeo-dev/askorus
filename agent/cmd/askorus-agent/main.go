@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -20,6 +19,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"text/tabwriter"
 	"time"
 	"unicode/utf8"
@@ -32,27 +32,33 @@ import (
 	"github.com/heeo-dev/askorus/agent/internal/config"
 	"github.com/heeo-dev/askorus/agent/internal/core"
 	"github.com/heeo-dev/askorus/agent/internal/devices"
+	"github.com/heeo-dev/askorus/agent/internal/dialog"
 	"github.com/heeo-dev/askorus/agent/internal/hidden"
 	"github.com/heeo-dev/askorus/agent/internal/logx"
 	"github.com/heeo-dev/askorus/agent/internal/pairing"
-	"github.com/heeo-dev/askorus/agent/internal/tailnet"
 )
 
 // version is set at release time with -ldflags "-X main.version=...".
-var version = "0.2.2-dev"
+var version = "0.3.0-dev"
 
 const usage = `Askorus PC agent (not an official Anthropic product)
 Askorus PC 에이전트 (Anthropic의 공식 제품이 아닙니다)
 
 Usage / 사용법:
-  askorus-agent serve [-port N] [-test-page]
-      start the API on 127.0.0.1
-      127.0.0.1에서 API를 엽니다
-      (-test-page: phone-browser test page at /test/ / 폰 브라우저 시험 페이지를 /test/에 엽니다)
-  askorus-agent pair [-host H] [-port N] [-light-terminal] [-test-page]
-      show a QR code for 5 minutes to pair a phone
-      폰과 짝을 맺는 QR을 5분 동안 보여 줍니다
-      (-test-page: the QR opens the test page / QR이 시험 페이지를 엽니다)
+  askorus-agent serve [-port N]
+      run the agent in this window; phones reach it inside your Tailscale network only
+      이 창에서 에이전트를 돌립니다. 폰은 내 Tailscale 망 안에서만 닿습니다
+  askorus-agent login | logout [-yes]
+      sign this PC in to Tailscale with a link (once), or sign it out.
+      To change the account: logout, then login
+      이 PC를 링크로 Tailscale에 로그인합니다 (한 번). logout은 로그아웃합니다.
+      계정을 바꾸려면 logout 뒤 login
+  askorus-agent pair [-light-terminal]
+      open a pairing window for 5 minutes: a phone signed in to the same
+      Tailscale account taps this PC in the app and is taken at once
+      (the QR code is there for a phone that does not list the PC)
+      짝 맺기 창을 5분 동안 엽니다. 같은 Tailscale 계정으로 로그인한 폰이 앱에서
+      이 PC를 누르면 바로 받습니다 (QR은 PC가 목록에 안 보이는 폰을 위한 것)
   askorus-agent sessions [-state S] [-q TEXT] [-folder DIR] [-json]
       print the session list
       세션 목록을 보여 줍니다
@@ -90,23 +96,23 @@ Usage / 사용법:
       sessions removed from the list
       목록에서 지운 세션
   askorus-agent setup
-      set up this PC step by step: PATH, Claude Code, Tailscale, start, logon, pairing
-      이 PC를 차례로 설정합니다: PATH, Claude Code, Tailscale, 켜기, 로그인할 때 켜기, 짝 맺기
+      set up this PC step by step: PATH, AI programs, start, logon, Tailscale sign-in, pairing
+      이 PC를 차례로 설정합니다: PATH, AI 프로그램, 켜기, 로그인할 때 켜기, Tailscale 로그인, 짝 맺기
   askorus-agent check
       check everything the agent needs and print fixes
       에이전트에 필요한 것을 점검하고 고칠 방법을 보여 줍니다
-  askorus-agent start [-test-page] | shutdown | status
+  askorus-agent start | shutdown | status
       run the agent in the background, stop it, or show whether it runs
       에이전트를 백그라운드로 켜고, 끄고, 상태를 봅니다
-  askorus-agent autostart on [-test-page] | off | status
+  askorus-agent autostart on | off | status
       start the agent at logon, with normal rights
       로그인할 때 에이전트를 일반 권한으로 켭니다
   askorus-agent path on | off | status
       put the folder of this askorus-agent program on this user's PATH
       이 askorus-agent 프로그램이 있는 폴더를 이 사용자의 PATH에 넣습니다
   askorus-agent uninstall [-yes] [-all]
-      undo the setup (logon entry, PATH entry, the agent's serve port, paired phones)
-      설치한 것을 되돌립니다 (자동 시작, PATH, 에이전트 serve 포트, 짝 맺은 폰)
+      undo the setup (logon entry, PATH entry, the Tailscale sign-in, paired phones)
+      설치한 것을 되돌립니다 (자동 시작, PATH, Tailscale 로그인, 짝 맺은 폰)
   askorus-agent version
 
 Settings live in %s (override with ASKORUS_AGENT_DIR).
@@ -120,6 +126,11 @@ Settings live in %s (override with ASKORUS_AGENT_DIR).
 var refineOn = false
 
 func main() {
+	// The agent runs itself to show a question on the screen (#58): see
+	// internal/dialog. Not a command for people, so it is not in the usage.
+	if len(os.Args) == 4 && os.Args[1] == dialog.SelfArg {
+		os.Exit(dialog.Show(os.Args[2], os.Args[3]))
+	}
 	if err := run(os.Args[1:], os.Stdin, os.Stdout); err != nil {
 		printError(os.Stderr, err)
 		os.Exit(1)
@@ -143,6 +154,10 @@ func run(args []string, in io.Reader, out io.Writer) error {
 		return serve(dir, args[1:])
 	case "pair":
 		return pair(dir, args[1:], in, out)
+	case "login":
+		return loginCmd(dir, out)
+	case "logout":
+		return logoutCmd(dir, args[1:], in, out)
 	case "sessions":
 		return sessions(dir, args[1:], out)
 	case "info":
@@ -251,38 +266,9 @@ func loadAdapter(dir string) (*claude.Adapter, error) {
 	return newAdapter(cfg)
 }
 
-// tailnetInfo is what serve and pair learn from the tailscale CLI.
-type tailnetInfo struct {
-	status  tailnet.Status
-	serve   tailnet.Serve
-	served  bool  // tailscale serve proxies to our port
-	problem error // nil when tailscale could be read
-}
-
-func lookTailnet(ctx context.Context, localPort int) tailnetInfo {
-	c, err := tailnet.New()
-	if err != nil {
-		return tailnetInfo{problem: fail("tailscale CLI not found", "tailscale 명령을 찾지 못했습니다")}
-	}
-	var ti tailnetInfo
-	if ti.status, err = c.Status(ctx); err != nil {
-		ti.problem = fail("tailscale status failed", "tailscale status가 실패했습니다")
-		return ti
-	}
-	if !ti.status.Running {
-		ti.problem = fail("tailscale is not connected", "Tailscale이 연결되어 있지 않습니다")
-		return ti
-	}
-	if ti.serve, ti.served, err = c.ServeFor(ctx, localPort); err != nil {
-		ti.problem = fail("tailscale serve status failed", "tailscale serve status가 실패했습니다")
-	}
-	return ti
-}
-
 func serve(dir string, args []string) error {
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
-	port := fs.Int("port", 0, "port on 127.0.0.1 (default from settings)")
-	testPage := fs.Bool("test-page", false, "serve the phone-browser test page at /test/")
+	port := fs.Int("port", 0, "port inside the Tailscale network (default from settings)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -300,6 +286,11 @@ func serve(dir string, args []string) error {
 			return err
 		}
 	}
+	if agentRunning(cfg.Port) {
+		return fail("an agent already runs with port %d; stop it first: askorus-agent shutdown",
+			"포트 %d로 에이전트가 이미 돌고 있습니다. 먼저 끄세요: askorus-agent shutdown", cfg.Port)
+	}
+	detached := os.Getenv(detachedEnv) == "1" // openLog takes the mark away
 	logger, closeLog, err := openLog(dir)
 	if err != nil {
 		return err
@@ -308,32 +299,18 @@ func serve(dir string, args []string) error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
+	stopReq := listenStop(cfg.Port) // `askorus-agent shutdown`; also what marks the agent as running
 
-	// Tailscale tells us the owner account and our MagicDNS name. Without
-	// it the API still works locally, but phones cannot pair.
-	ti := lookTailnet(ctx, cfg.Port)
-	if ti.served && ti.serve.Funnel {
-		return fail("tailscale funnel exposes this port to the internet; turn it off first (%s funnel --https=%d off)",
-			"tailscale funnel이 이 포트를 인터넷에 열어 두었습니다. 먼저 끄세요 (%s funnel --https=%d off)", tsCmd, ti.serve.HTTPSPort)
+	// The agent's own device on the person's Tailscale network (#57): the
+	// only way phones reach the API, and what says who each request is from.
+	host, _ := os.Hostname()
+	node, err := startNode(dir, host)
+	if err != nil {
+		return fail("cannot start the agent's Tailscale node (%v)", "에이전트의 Tailscale 기기를 켜지 못했습니다 (%v)", err)
 	}
-	owner := cfg.TailscaleOwner
-	if owner == "" {
-		owner = ti.status.OwnerLogin
-	}
-	hosts := append([]string{}, cfg.ServeHosts...)
-	if ti.status.DNSName != "" {
-		hosts = append(hosts, ti.status.DNSName)
-	}
-	var be biError
-	if errors.As(ti.problem, &be) {
-		say(os.Stderr, msg{
-			"warning: " + be.en + "; phones cannot pair until it is fixed",
-			"경고: " + be.ko + ". 고칠 때까지 폰과 짝을 맺을 수 없습니다",
-		})
-	} else if !ti.served {
-		say(os.Stderr, m("note: tailscale serve does not point at 127.0.0.1:%d yet, so phones cannot reach the agent",
-			"참고: tailscale serve가 아직 127.0.0.1:%d를 가리키지 않아 폰에서 에이전트에 닿을 수 없습니다", cfg.Port))
-	}
+	defer node.Close()
+	watch := &nodeWatch{node: node, dir: dir, port: cfg.Port, logger: logger, out: os.Stderr, quiet: detached}
+	defer os.Remove(filepath.Join(dir, nodeFile))
 
 	store, err := devices.Open(dir)
 	if err != nil {
@@ -347,7 +324,6 @@ func serve(dir string, args []string) error {
 	if err != nil {
 		return err
 	}
-	host, _ := os.Hostname()
 	rec := newReconciler(dir, adapter, logger)
 	adapter.OnServerState(func(folder string, st core.ServeStatus) {
 		logger.Info("folder server", "folder", folder, "state", st.State, "restarts", st.Restarts, "err", claude.ServeLogReason(st))
@@ -364,12 +340,11 @@ func serve(dir string, args []string) error {
 		Hostname:        host,
 		Adapters:        append([]core.Adapter{adapter}, askOnly...),
 		Devices:         store,
-		Pairer:          &pairing.Pairer{Dir: dir, Devices: store},
+		Pairer:          &pairing.Pairer{Dir: dir, Devices: store, Confirm: screenConfirm()},
 		Logger:          logger,
-		ServeHosts:      hosts,
-		TailscaleOwner:  owner,
+		Hosts:           watch.hosts,
+		Owner:           watch.owner,
 		HiddenFolders:   cfg.HiddenFolders,
-		TestPage:        *testPage,
 		Hidden:          hid,
 		Folders:         foldersFrom(dir, cfg.Folders),
 		SetFolderServer: setFolderServer(dir),
@@ -384,23 +359,21 @@ func serve(dir string, args []string) error {
 		JudgeMinVersions: judgeMinVersions(),
 		Refine:           refineOn,
 	})
-	srv := api.HTTPServer(apiSrv.Handler())
-	ln, err := api.Listen(cfg.Port)
+	// The API listens inside the tailnet only: no port is opened on the
+	// PC's own addresses, not even 127.0.0.1.
+	ln, err := node.Listen(cfg.Port)
 	if err != nil {
-		return fail("cannot listen on 127.0.0.1:%d (%v)", "127.0.0.1:%d를 열 수 없습니다 (%v)", cfg.Port, err)
+		return fail("cannot listen on port %d of the Tailscale node (%v)", "Tailscale 기기의 포트 %d를 열 수 없습니다 (%v)", cfg.Port, err)
 	}
+	srv := api.HTTPServer(viaNode(node, apiSrv.Handler()))
+	logger.Info("listening", "port", cfg.Port, "version", version)
+	_ = config.WriteFileAtomic(filepath.Join(dir, pidFile), []byte(strconv.Itoa(os.Getpid())+"\n"))
+	defer os.Remove(filepath.Join(dir, pidFile))
+	say(os.Stderr, m("askorus-agent %s is running (Ctrl+C to stop)", "askorus-agent %s가 돌고 있습니다 (Ctrl+C로 멈춤)", version))
+	watch.once(ctx) // says at once whether the PC is signed in to Tailscale
 	if list, _ := store.List(); len(list) == 0 {
 		say(os.Stderr, m("no paired devices yet: run `askorus-agent pair` in another window",
 			"아직 짝을 맺은 기기가 없습니다. 다른 창에서 `askorus-agent pair`를 실행하세요"))
-	}
-	logger.Info("listening", "addr", ln.Addr().String(), "version", version, "tailscale_served", ti.served)
-	_ = config.WriteFileAtomic(filepath.Join(dir, pidFile), []byte(strconv.Itoa(os.Getpid())+"\n"))
-	defer os.Remove(filepath.Join(dir, pidFile))
-	say(os.Stderr, m("askorus-agent %s listening on http://%s (Ctrl+C to stop)",
-		"askorus-agent %s가 http://%s에서 기다립니다 (Ctrl+C로 멈춤)", version, ln.Addr()))
-	if *testPage {
-		say(os.Stderr, m("test page is on at /test/ (for trying pairing in a phone browser; leave it off otherwise)",
-			"시험 페이지가 /test/에 켜져 있습니다 (폰 브라우저로 짝 맺기를 시험할 때만 켜세요)"))
 	}
 
 	go adapter.Warm(ctx)
@@ -409,16 +382,8 @@ func serve(dir string, args []string) error {
 	}
 	recCtx, stopRec := context.WithCancel(ctx)
 	go rec.run(recCtx)
-	exposed := make(chan struct{})
-	go funnelWatch(recCtx, cfg.Port, time.Minute, func() { close(exposed) }, func(err error) {
-		if err != nil {
-			logger.Warn("funnel watch cannot read tailscale", "err", err.Error())
-		} else {
-			logger.Info("funnel watch reads tailscale again")
-		}
-	})
+	go watch.run(recCtx)
 	go awakeWatch(recCtx, dir, adapter, adapter, time.Minute)
-	stopReq := listenStop(cfg.Port) // `askorus-agent shutdown`
 	errc := make(chan error, 1)
 	go func() { errc <- srv.Serve(ln) }()
 	var serveErr error
@@ -430,10 +395,6 @@ func serve(dir string, args []string) error {
 	case <-ctx.Done():
 	case <-stopReq:
 		logger.Info("stop requested")
-	case <-exposed:
-		logger.Error("tailscale funnel exposes the agent port; stopping")
-		serveErr = fail("tailscale funnel now exposes the agent port to the internet; stopped. Turn it off first",
-			"tailscale funnel이 에이전트 포트를 인터넷에 열어서 멈췄습니다. 먼저 끄세요")
 	}
 	shutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -486,27 +447,20 @@ func openLog(dir string) (*slog.Logger, func(), error) {
 }
 
 // PairURL is what the QR code holds. The app also opens it as a deep link.
+// v=2 (#57): host is the agent's own Tailscale node and the app reaches it
+// through its own node; a v=1 link named a `tailscale serve` address.
 func PairURL(host string, port int, code string) string {
 	q := url.Values{}
-	q.Set("v", "1")
+	q.Set("v", "2")
 	q.Set("host", host)
 	q.Set("port", strconv.Itoa(port))
 	q.Set("code", code)
 	return "askorus://pair?" + q.Encode()
 }
 
-// TestPageURL opens the test page with the code in the fragment, which the
-// browser never sends to the server.
-func TestPageURL(host string, port int, code string) string {
-	return "https://" + net.JoinHostPort(host, strconv.Itoa(port)) + "/test/#code=" + url.QueryEscape(code)
-}
-
 func pair(dir string, args []string, in io.Reader, out io.Writer) error {
 	fs := flag.NewFlagSet("pair", flag.ContinueOnError)
-	hostFlag := fs.String("host", "", "MagicDNS name the phone connects to (default from tailscale)")
-	portFlag := fs.Int("port", 0, "HTTPS port of tailscale serve (default from tailscale serve status)")
 	light := fs.Bool("light-terminal", false, "draw the QR code for a light terminal background")
-	testPage := fs.Bool("test-page", false, "make the QR open the test page (serve must run with -test-page)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -514,51 +468,44 @@ func pair(dir string, args []string, in io.Reader, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	conn, err := net.DialTimeout("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(cfg.Port)), time.Second)
-	if err != nil {
-		return fail("the agent is not running on 127.0.0.1:%d; start `askorus-agent serve` first",
-			"에이전트가 127.0.0.1:%d에서 돌고 있지 않습니다. 먼저 `askorus-agent serve`를 실행하세요", cfg.Port)
+	if !agentRunning(cfg.Port) {
+		return fail("the agent is not running; start it first: %s",
+			"에이전트가 돌고 있지 않습니다. 먼저 켜세요: %s", howToStart())
 	}
-	conn.Close()
+	node, ok := readNodeInfo(dir)
+	if !ok || !node.signedIn() {
+		return fail("this PC is not signed in to Tailscale yet, so phones cannot reach it; run: %s",
+			"이 PC가 아직 Tailscale에 로그인되지 않아 폰에서 닿을 수 없습니다. 실행하세요: %s", howToLogin())
+	}
 	// A click in a classic console window must not freeze the question (#37).
 	defer holdConsole()()
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	// The window must not outlive this command (#58): it takes a phone
+	// without a question. A closed terminal (SIGHUP; on Windows the close of
+	// the console arrives as SIGTERM) ends it like Ctrl+C, and so does a
+	// stop from outside.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 	defer stop()
 
-	host, port := *hostFlag, *portFlag
-	if host == "" || port == 0 {
-		ti := lookTailnet(ctx, cfg.Port)
-		if ti.problem != nil {
-			return ti.problem
-		}
-		if !ti.served {
-			return fail("tailscale serve does not point at the agent yet. Pick a free HTTPS port and run: %s serve --bg --https=<port> http://127.0.0.1:%d",
-				"tailscale serve가 아직 에이전트를 가리키지 않습니다. 빈 HTTPS 포트를 골라 실행하세요: %s serve --bg --https=<포트> http://127.0.0.1:%d", tsCmd, cfg.Port)
-		}
-		if ti.serve.Funnel {
-			return fail("tailscale funnel is on for the agent port; turn it off first",
-				"에이전트 포트에 tailscale funnel이 켜져 있습니다. 먼저 끄세요")
-		}
-		if host == "" {
-			host = ti.serve.Host
-		}
-		if port == 0 {
-			port = ti.serve.HTTPSPort
-		}
-	}
+	host, port := node.Name, node.Port
 
 	code, w, err := pairing.Open(dir, time.Now())
 	if err != nil {
 		return err
 	}
-	defer pairing.Close(dir)
-	link := PairURL(host, port, code)
-	scan := m("Scan this with the Askorus app (Settings > Add PC):", "Askorus 앱으로 이 QR을 찍으세요(설정 > PC 추가):")
-	if *testPage {
-		link = TestPageURL(host, port, code)
-		scan = m("Scan this with the phone camera; it opens the test page:", "폰 카메라로 이 QR을 찍으세요. 시험 페이지가 열립니다:")
+	defer pairing.CloseWindow(dir, w.ID)
+	// A command that is killed closes nothing. So it says every second that
+	// it runs, and the agent lets a phone in by this window only while it
+	// hears that.
+	alive, err := pairing.KeepAlive(dir)
+	if err != nil {
+		return err
 	}
+	defer alive()
+	link := PairURL(host, port, code)
+	say(out, m("Pairing window open. In the Askorus app on your phone (signed in to the same Tailscale account), open 'Pair with a PC' and tap this PC: it is taken at once, with no question here.",
+		"짝 맺기 창을 열었습니다. 폰의 Askorus 앱에서(같은 Tailscale 계정으로 로그인) 'PC와 짝 맺기'를 열고 이 PC를 누르세요. 여기서 묻지 않고 바로 받습니다."))
+	scan := m("If the PC is not listed there, scan this instead:", "거기에 이 PC가 안 보이면 이 QR을 찍으세요:")
 	pngPath := filepath.Join(dir, "pairing-qr.png")
 	if png, err := qrPNG(link); err == nil && os.WriteFile(pngPath, png, 0o600) == nil {
 		defer os.Remove(pngPath)
@@ -571,7 +518,8 @@ func pair(dir string, args []string, in io.Reader, out io.Writer) error {
 	if err := printQR(out, link, !*light); err != nil {
 		return err
 	}
-	fmt.Fprintf(out, "\nPC:                https://%s:%d\n", host, port)
+	fmt.Fprintf(out, "\nPC:                %s (port %d, Tailscale account %s)\n", host, port, node.Owner)
+
 	fmt.Fprintf(out, "Link / 링크:       %s\n", link)
 	fmt.Fprintf(out, "Code / 코드:       %s\n", groupCode(code))
 	if pngPath != "" {
@@ -702,6 +650,12 @@ var (
 )
 
 func reportResult(res pairing.Result, out io.Writer) error {
+	if res.OK && res.Match != "" {
+		// It came in without a question: the two digits say whether it is the phone in the person's hand.
+		say(out, m("Paired %s, number %s (id %s). The phone shows the same number. If this is not your phone: askorus-agent devices revoke %[3]s",
+			"%s 기기와 짝을 맺었습니다. 숫자 %s (id %s). 폰에 같은 숫자가 보입니다. 내 폰이 아니면: askorus-agent devices revoke %[3]s", res.DeviceName, res.Match, res.DeviceID))
+		return nil
+	}
 	if res.OK {
 		say(out, m("Paired %s (id %s). Disconnect it any time with: askorus-agent devices revoke %[2]s",
 			"%s 기기와 짝을 맺었습니다 (id %s). 끊으려면 언제든: askorus-agent devices revoke %[2]s", res.DeviceName, res.DeviceID))

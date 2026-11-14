@@ -190,7 +190,7 @@ test('a comparison stopped on the PC (from another device) before it was made is
   await screen.findByText('Answering…');
   await waitFor(() => expect(agent.comparisonIds()).toHaveLength(1));
   const [id] = agent.comparisonIds();
-  await agent.fetch(`https://${HOST}:${PORT}/v1/comparisons/${id}/cancel`, { method: 'POST', headers: { Authorization: `Bearer ${TOKEN}` } });
+  await agent.fetch(`http://${HOST}:${PORT}/v1/comparisons/${id}/cancel`, { method: 'POST', headers: { Authorization: `Bearer ${TOKEN}` } });
   agent.runLimit = Infinity;
 
   expect(await screen.findByText('The comparison was stopped.', {}, { timeout: 5000 })).toBeTruthy();

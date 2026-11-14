@@ -1,5 +1,6 @@
 // Settings (S5c, board F-Settings): paired PCs (a sheet each to check the
-// connection or unpair), what new sessions start with, pairing another PC;
+// connection or unpair), what new sessions start with, pairing another PC,
+// and the app's Tailscale sign-in (#57: built in, so this row is all of it);
 // the default ask tier; whether the moderator writes a combined answer once
 // the answers are in (S5b; since C6 the one switch) and which AI it is,
 // its model, and whether a follow-up carries the conclusions so far (#29)
@@ -25,6 +26,7 @@ import { loadPrefs, type Prefs, savePrefs } from '@/connections/prefs';
 import { pcDetail, pcLabel } from '@/connections/label';
 import { type Connection, ConnectionStore } from '@/connections/store';
 import { t } from '@/i18n';
+import { useTailnet } from '@/tailnet/node';
 import { ContactSheet } from '@/ui/ContactSheet';
 import { PillChoice, Segment, SwitchRow } from '@/ui/controls';
 import { DefaultsSheet, settingsLine } from '@/ui/DefaultsSheet';
@@ -37,6 +39,8 @@ import { PCSheet } from '@/ui/PCSheet';
 import { ModelSheet } from '@/ui/ModelSheet';
 import { Sheet } from '@/ui/Sheet';
 import { currentPC, usePCs } from '@/ui/shell/pcs';
+import { tailnetLine } from '@/ui/TailnetLogin';
+import { TailnetSheet } from '@/ui/TailnetSheet';
 import { themeChoices, themed, useAIColours, useTheme, useThemeChoice } from '@/ui/theme';
 
 export default function Settings() {
@@ -58,6 +62,8 @@ export default function Settings() {
   // The current PC's AIs, for the moderator model's list (11-06); null while loading or without a PC.
   const [pcAIs, setPCAIs] = useState<Asker[] | null>(null);
   const [modelOpen, setModelOpen] = useState(false);
+  const tailnet = useTailnet(3000);
+  const [tailnetOpen, setTailnetOpen] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -125,6 +131,13 @@ export default function Settings() {
               left={<Icon name="plus" size={20} color={th.accent} />}
               titleStyle={s.accent}
               onPress={() => router.push('/pair')}
+            />
+            <Row
+              title={t('tailnet.title')}
+              right={<Text style={s.value} numberOfLines={1}>{tailnetLine(tailnet)}</Text>}
+              chevron
+              onPress={() => setTailnetOpen(true)}
+              accessibilityValue={{ text: tailnetLine(tailnet) }}
             />
           </Group>
         </Section>
@@ -246,6 +259,7 @@ export default function Settings() {
         }}
       />
       <ContactSheet open={contactOpen} onClose={() => setContactOpen(false)} />
+      <TailnetSheet open={tailnetOpen} onClose={() => setTailnetOpen(false)} />
       <DefaultsSheet open={defaultsOpen} onClose={() => setDefaultsOpen(false)} prefs={prefs} onChange={change} />
       <ModelSheet
         agent={modelOpen && moderator ? moderator.agent : null}

@@ -1,4 +1,5 @@
 import { AgentClient, AgentError, CancelledError, NetworkError, baseUrl, comparisonPolling, normalizeCode } from './client';
+import { agentBase, forgetRefused, tokenRefused } from './refused';
 
 type Call = { url: string; method: string; headers: Record<string, string>; body?: unknown };
 
@@ -27,11 +28,13 @@ const json = (status: number, body: unknown) => () =>
 const dropped = () => () => new TypeError('Network request failed');
 const noSleep = async () => {};
 
-const base = 'https://pc.example.ts.net:8790';
+const base = 'http://pc.example.ts.net:8790';
 
-test('baseUrl leaves out the default port', () => {
-  expect(baseUrl('pc.example.ts.net', 443)).toBe('https://pc.example.ts.net');
+// #57: plain http inside the tailnet (the tailnet encrypts between the two
+// devices), always with the port.
+test('baseUrl is plain http to the node of the PC, with its port', () => {
   expect(baseUrl('pc.example.ts.net', 8790)).toBe(base);
+  expect(baseUrl('pc.example.ts.net', 443)).toBe('http://pc.example.ts.net:443');
 });
 
 test('requests carry the token and JSON body, and ignore unknown fields', async () => {
@@ -65,6 +68,29 @@ test('agent errors keep their code', async () => {
   expect(err).toBeInstanceOf(AgentError);
   expect(err.code).toBe('unauthorized');
   expect(err.status).toBe(401);
+});
+
+// R-115. A token the agent refused stays refused: nothing more is sent with
+// it. Every refused request counts as a failed attempt at the agent, and ten
+// of them shut the phone out of pairing again.
+test('a refused token is not sent again, until that PC is paired again', async () => {
+  const refuse = json(401, { error: { code: 'unauthorized', message: 'device token required' } });
+  const f = fakeFetch([refuse, json(200, { sessions: [], warnings: [] }), json(200, { name: 'askorus-agent' })]);
+  const dead = new AgentClient(base, { fetch: f.fn, token: 'dead' });
+  await expect(dead.info()).rejects.toMatchObject({ code: 'unauthorized', status: 401 });
+  await expect(dead.sessions()).rejects.toMatchObject({ code: 'unauthorized', status: 401 });
+  await expect(new AgentClient(base, { fetch: f.fn, token: 'dead' }).info()).rejects.toMatchObject({ status: 401 });
+  expect(f.calls).toHaveLength(1);
+  // Another token for the same PC, and calls without a token (pairing), go out.
+  await new AgentClient(base, { fetch: f.fn, token: 'fresh' }).sessions();
+  await new AgentClient(base, { fetch: f.fn }).info();
+  expect(f.calls).toHaveLength(3);
+  // The connection store clears the note when a pairing with that PC is saved.
+  const u = new URL(base);
+  expect(agentBase(u.hostname, Number(u.port))).toBe(base);
+  expect(tokenRefused(base, 'dead')).toBe(true);
+  forgetRefused(base);
+  expect(tokenRefused(base, 'dead')).toBe(false);
 });
 
 test('a non-JSON error page gets an http_ code', async () => {

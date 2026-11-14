@@ -1,13 +1,15 @@
-// Pairing with a PC (F7, N4; S5c board F-Pair): run one command on the PC,
-// scan the QR it shows (the main way) or paste the link printed with it,
-// check which PC it is, send the code and wait until the person at the PC
-// allows it. Opened from 내 PC, Settings, a PC's 'pair again', or by the
-// askorus://pair link itself. The first PC paired becomes the current one;
-// a further PC is added to the list and the PC picker opens, so questions
-// never move to another PC without a pick (R-94). The confirm step warns
-// about links and QR codes that came from someone else, and before the code
-// is sent the app checks that the PC is inside the person's own tailnet
-// (#42, connections/tailnetCheck). The QR is read by the app's own scanner
+// Pairing with a PC (F7, N4; S5c board F-Pair): sign in to Tailscale in the
+// app (once; it is built in, #57), run one command on the PC, scan the QR
+// it shows (the main way) or paste the link printed with it, check which PC
+// it is, send the code and wait until the person at the PC allows it.
+// Opened from 내 PC, Settings, a PC's 'pair again', or by the askorus://pair
+// link itself. The first PC paired becomes the current one; a further PC is
+// added to the list and the PC picker opens, so questions never move to
+// another PC without a pick (R-94). The confirm step warns about links and
+// QR codes that came from someone else, and before the code is sent the
+// app's own Tailscale node is asked whether the PC is one of the person's
+// own devices (#42, tailnet/node ownDevice); the node applies the same rule
+// to every request after. The QR is read by the app's own scanner
 // (ui/QrScanner): on the phone, with nothing sent anywhere (#32).
 // A PC without the agent yet: the install line and the guide's address,
 // the same as the README's (#37).
@@ -19,21 +21,25 @@ import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Linking, Platform, Pressable, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { CancelledError } from '@/api/client';
+import { AgentError, CancelledError, NetworkError } from '@/api/client';
+import { findPCs, type FoundPC, newMatch } from '@/connections/discover';
+import { osName } from '@/connections/label';
 import { cleanDeviceName, pairWithPC } from '@/connections/pair';
-import { type PairLink, parsePairLink } from '@/connections/pairLink';
+import { isOldPairLink, type PairLink, parsePairLink } from '@/connections/pairLink';
 import { ConnectionStore } from '@/connections/store';
-import { checkTailnetHost } from '@/connections/tailnetCheck';
 import { currentLang, errorText, t } from '@/i18n';
+import { ownDevice, type PeerAnswer, useTailnet } from '@/tailnet/node';
 import { Button } from '@/ui/Button';
 import { Spinner } from '@/ui/controls';
 import { FormScroll } from '@/ui/FormScroll';
 import { TopBar } from '@/ui/Header';
 import { Icon, IconButton } from '@/ui/Icon';
 import { useSafeInsets } from '@/ui/keyboard';
+import { ownAsk } from '@/ui/PairRequests';
 import { Sheet } from '@/ui/Sheet';
 import { QrScanner, scannerAvailable, useCameraPermission } from '@/ui/QrScanner';
 import { pickPC } from '@/ui/shell/pcs';
+import { TailnetLogin } from '@/ui/TailnetLogin';
 import { themed, useTheme } from '@/ui/theme';
 
 const store = new ConnectionStore();
@@ -52,11 +58,6 @@ function installGuide(): string {
     : 'https://github.com/heeo-dev/askorus#install-the-pc-agent';
 }
 
-const tailscaleStore =
-  Platform.OS === 'ios'
-    ? 'https://apps.apple.com/app/tailscale/id1470499037'
-    : 'https://play.google.com/store/apps/details?id=com.tailscale.ipn';
-
 const mono = Platform.select({ ios: 'Menlo', default: 'monospace' });
 
 type Step =
@@ -64,6 +65,10 @@ type Step =
   | { kind: 'scan' }
   | { kind: 'confirm'; link: PairLink }
   | { kind: 'waiting'; link: PairLink }
+  // Paired without a code: the two digits stay on the screen until the
+  // person goes on. A pairing window on the PC takes the phone at once, so
+  // this is where the number can be compared with what the PC said (#58).
+  | { kind: 'paired'; others: boolean }
   | { kind: 'failed'; link: PairLink; text: string };
 
 export default function Pair() {
@@ -76,11 +81,41 @@ export default function Pair() {
   const [pasted, setPasted] = useState('');
   const [pasteError, setPasteError] = useState('');
   const [copied, setCopied] = useState(false);
-  const [tailscaleOpen, setTailscaleOpen] = useState(false);
   const [installOpen, setInstallOpen] = useState(false);
   const [installCopied, setInstallCopied] = useState<string | null>(null); // the system whose line was copied
   const [deviceName, setDeviceName] = useState(() => cleanDeviceName(Device.deviceName ?? Device.modelName));
+  // The app's Tailscale node. A PC is reached only while it runs (the
+  // person signed in); a build without it cannot pair.
+  const signedIn = useTailnet().state === 'running';
   const abort = useRef<AbortController | null>(null);
+  // The PCs found among the devices of the person's own Tailscale account
+  // (#58): null while the first look is on its way.
+  const [found, setFound] = useState<FoundPC[] | null>(null);
+  const [qrOpen, setQrOpen] = useState(false);
+  // The two digits shown while a found PC is asked; the PC shows the same.
+  const [match, setMatch] = useState('');
+  const starting = step.kind === 'start';
+  useEffect(() => {
+    if (!signedIn || !starting) return;
+    let live = true;
+    const look = async () => {
+      try {
+        const list = await findPCs(await store.list().catch(() => []));
+        if (live) setFound(list);
+      } catch {
+        if (live) setFound((f) => f ?? []);
+      }
+    };
+    void look();
+    // The PC may be signing in just now: look again while the screen waits.
+    const timer = setInterval(look, 5000);
+    return () => {
+      live = false;
+      clearInterval(timer);
+    };
+  }, [signedIn, starting]);
+  // With a PC in the list the QR code steps fold away until asked for.
+  const showQR = qrOpen || pasteOpen || !signedIn || !found || found.length === 0;
   // Back only when there is somewhere to go back to (not when the link opened
   // the app here). Read once the screen has focus: the router is not ready
   // during the first render, and only knows this screen once it is focused.
@@ -111,51 +146,83 @@ export default function Pair() {
     }
     // A link the app refuses (R-94: a server outside ts.net, a bad code)
     // says so, and never leaves an earlier link's confirm step on the screen.
+    // A link of an agent from before Tailscale was built in says to update it.
     setStep({ kind: 'start' });
     setPasteOpen(true);
-    setPasteError(t('pair.badLink'));
+    setPasteError(t(params.v === '1' ? 'pair.oldAgent' : 'pair.badLink'));
   }, [params.v, params.host, params.port, params.code]);
 
   useEffect(() => () => abort.current?.abort(), []);
 
+  // Takes a scanned or pasted link. An old agent's link is taken too, in the
+  // sense that scanning stops: the screen then says to update the agent.
   const accept = (text: string): boolean => {
     const link = parsePairLink(text.trim());
-    if (!link) return false;
-    setStep({ kind: 'confirm', link });
+    if (link) {
+      setStep({ kind: 'confirm', link });
+      return true;
+    }
+    if (!isOldPairLink(text)) return false;
+    setStep({ kind: 'start' });
+    setPasteOpen(true);
+    setPasted('');
+    setPasteError(t('pair.oldAgent'));
     return true;
   };
+
+  // After pairing: to My PCs, with the PC picker open when another PC was
+  // paired before (R-94).
+  const leave = (others: boolean) => router.dismissTo(others ? { pathname: '/pcs', params: { pick: '1' } } : '/pcs');
 
   const send = async (link: PairLink) => {
     abort.current?.abort();
     const ctl = new AbortController();
     abort.current = ctl;
+    const digits = link.code ? '' : newMatch();
+    setMatch(digits);
     setStep({ kind: 'waiting', link });
     try {
-      // The code goes only to a PC inside the person's own tailnet (#42): the
-      // phone's network is asked where the name leads before anything is sent.
-      const where = await checkTailnetHost(link.host, link.port);
+      // The code goes only to one of the person's own devices (#42): the
+      // app's Tailscale node is asked whose device the name is before
+      // anything is sent. A name it does not know gets nothing either.
+      let where: PeerAnswer;
+      try {
+        where = await ownDevice(link.host);
+      } catch (e) {
+        setStep({ kind: 'failed', link, text: errorText(new NetworkError(e)) });
+        return;
+      }
       if (ctl.signal.aborted) {
         setStep({ kind: 'confirm', link });
         return;
       }
-      if (where === 'outside' || where === 'unresolved') {
-        setStep({ kind: 'failed', link, text: t(where === 'outside' ? 'pair.notTailnet' : 'pair.noAddress') });
+      if (where === 'other' || where === 'unknown') {
+        setStep({ kind: 'failed', link, text: t(where === 'other' ? 'pair.notTailnet' : 'pair.noAddress') });
         return;
       }
       const before = await store.list().catch(() => []);
-      const saved = await pairWithPC(link, deviceName, { store }, { signal: ctl.signal });
+      // A phone that is paired already is not asked about its own request.
+      ownAsk.name = cleanDeviceName(deviceName);
+      ownAsk.match = digits;
+      const saved = await pairWithPC(link, deviceName, { store }, { signal: ctl.signal }, digits);
       // The first PC, or the same PC paired again, is the current one. With
       // another PC already paired the questions stay with the current PC until
       // the person picks the new one: the PC picker opens with both (R-94).
       const others = before.some((c) => c.id !== saved.id);
       if (!others) await pickPC(saved.id).catch(() => undefined);
-      router.dismissTo(others ? { pathname: '/pcs', params: { pick: '1' } } : '/pcs');
+      if (digits) setStep({ kind: 'paired', others });
+      else leave(others);
     } catch (e) {
       if (e instanceof CancelledError) {
         setStep({ kind: 'confirm', link });
         return;
       }
-      setStep({ kind: 'failed', link, text: errorText(e) });
+      // A found PC with nobody to answer: no window, no screen, no paired phone.
+      const nobody = !link.code && e instanceof AgentError && e.code === 'pair_closed';
+      setStep({ kind: 'failed', link, text: nobody ? t('pair.noApprover') : errorText(e) });
+    } finally {
+      ownAsk.name = '';
+      ownAsk.match = '';
     }
   };
 
@@ -224,54 +291,103 @@ export default function Pair() {
 
             <View style={s.steps}>
               <View style={s.step}>
-                <StepHead n={1} text={t('pair.step1')} />
-                <View style={s.code}>
-                  <Text style={s.codeText} selectable>
-                    {pairCommand}
-                  </Text>
-                  <IconButton name={copied ? 'check' : 'copy'} label={t('sheet.copy')} onPress={copy} size={20} color={copied ? th.ok : th.textSub} />
-                </View>
-                {copied ? <Text style={s.caption}>{t('sheet.copied')}</Text> : null}
+                <StepHead n={1} text={t('pair.stepLogin')} />
+                <TailnetLogin manage />
               </View>
               <View style={s.step}>
-                <StepHead n={2} text={t('pair.step2')} />
-                <Button icon="camera" label={t('pair.scan')} onPress={() => setStep({ kind: 'scan' })} />
+                <StepHead n={2} text={t('pair.stepPick')} />
+                {!signedIn ? (
+                  <Text style={s.caption}>{t('pair.pickAfterLogin')}</Text>
+                ) : found === null ? (
+                  <View style={s.finding}>
+                    <Spinner size={18} />
+                    <Text style={s.caption}>{t('pair.finding')}</Text>
+                  </View>
+                ) : found.length === 0 ? (
+                  <Text style={s.caption}>{t('pair.noneFound')}</Text>
+                ) : (
+                  <View style={s.found} testID="found-pcs">
+                    {found.map((pc) => (
+                      <Pressable
+                        key={pc.host}
+                        onPress={() => setStep({ kind: 'confirm', link: { host: pc.host, port: pc.port, code: '' } })}
+                        accessibilityRole="button"
+                        accessibilityLabel={pc.name}
+                        style={({ pressed }) => [s.foundRow, pressed && s.pressed]}
+                      >
+                        <Icon name="pc" size={20} color={th.text} />
+                        <View style={s.foundTexts}>
+                          <Text style={s.foundName}>{pc.name}</Text>
+                          <Text style={s.caption}>{[osName(pc.os), pc.host.split('.')[0]].filter(Boolean).join(' · ')}</Text>
+                        </View>
+                        {pc.paired ? <Text style={s.caption}>{t('pair.already')}</Text> : null}
+                        <Icon name="chevronRight" size={16} color={th.textSub} />
+                      </Pressable>
+                    ))}
+                  </View>
+                )}
               </View>
             </View>
 
-            <View style={s.pasteBlock}>
-              {pasteOpen ? (
-                <>
-                  <Text style={s.label}>
-                    {t('pair.linkLabel')}
-                  </Text>
-                  <View style={s.inputRow}>
-                    <TextInput
-                      style={[s.input, s.inputWithButton]}
-                      value={pasted}
-                      onChangeText={(v) => {
-                        setPasted(v);
-                        setPasteError('');
-                      }}
-                      placeholder="askorus://pair?…"
-                      placeholderTextColor={th.caption}
-                      accessibilityLabel={t('pair.linkLabel')}
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      autoFocus
-                      keyboardType="url"
-                      returnKeyType="go"
-                      onSubmitEditing={pairWithPasted}
-                    />
-                    <IconButton name="paste" label={t('pair.paste')} onPress={paste} size={20} style={s.pasteButton} />
+            {/* The QR code and the link are for a PC that is not in the list. */}
+            {showQR ? (
+              <>
+                <Text style={s.alt}>{t('pair.qrTitle')}</Text>
+                <View style={s.steps}>
+                  <View style={s.step}>
+                    <Text style={s.label}>{t('pair.step1')}</Text>
+                    <View style={s.code}>
+                      <Text style={s.codeText} selectable>
+                        {pairCommand}
+                      </Text>
+                      <IconButton name={copied ? 'check' : 'copy'} label={t('sheet.copy')} onPress={copy} size={20} color={copied ? th.ok : th.textSub} />
+                    </View>
+                    {copied ? <Text style={s.caption}>{t('sheet.copied')}</Text> : null}
                   </View>
-                  {pasteError ? <Text style={s.error}>{pasteError}</Text> : null}
-                  {pasted ? <Button variant="outline" label={t('pair.usePasted')} onPress={pairWithPasted} /> : null}
-                </>
-              ) : (
-                <Button variant="quiet" icon="paste" label={t('pair.pasteLink')} onPress={() => setPasteOpen(true)} style={s.center} />
-              )}
-            </View>
+                  <View style={s.step}>
+                    <Text style={s.label}>{t('pair.step2')}</Text>
+                    <Button icon="camera" label={t('pair.scan')} onPress={() => setStep({ kind: 'scan' })} disabled={!signedIn} />
+                    {signedIn ? null : <Text style={s.caption}>{t('pair.loginFirst')}</Text>}
+                  </View>
+                </View>
+
+                <View style={s.pasteBlock}>
+                  {pasteOpen ? (
+                    <>
+                      <Text style={s.label}>
+                        {t('pair.linkLabel')}
+                      </Text>
+                      <View style={s.inputRow}>
+                        <TextInput
+                          style={[s.input, s.inputWithButton]}
+                          value={pasted}
+                          onChangeText={(v) => {
+                            setPasted(v);
+                            setPasteError('');
+                          }}
+                          placeholder="askorus://pair?…"
+                          placeholderTextColor={th.caption}
+                          accessibilityLabel={t('pair.linkLabel')}
+                          autoCapitalize="none"
+                          autoCorrect={false}
+                          autoFocus
+                          keyboardType="url"
+                          returnKeyType="go"
+                          onSubmitEditing={pairWithPasted}
+                        />
+                        <IconButton name="paste" label={t('pair.paste')} onPress={paste} size={20} style={s.pasteButton} />
+                      </View>
+                      {pasteError ? <Text style={s.error}>{pasteError}</Text> : null}
+                      {pasted ? <Button variant="outline" label={t('pair.usePasted')} onPress={pairWithPasted} /> : null}
+                    </>
+                  ) : (
+                    <Button variant="quiet" icon="paste" label={t('pair.pasteLink')} onPress={() => setPasteOpen(true)} style={s.center} />
+                  )}
+                </View>
+              </>
+            ) : (
+              <Button variant="quiet" icon="camera" label={t('pair.useQR')} onPress={() => setQrOpen(true)} style={s.center} />
+            )}
           </>
         )}
 
@@ -285,11 +401,15 @@ export default function Pair() {
               <Text style={s.host}>{step.link.host}</Text>
               <Text style={s.caption}>{t('pair.port', { port: step.link.port })}</Text>
             </View>
-            <View style={s.warn} testID="pair-warn">
-              <Icon name="alert" size={18} color={th.danger} />
-              <Text style={s.warnText}>{t('pair.confirmWarn')}</Text>
-            </View>
-            <Text style={s.intro}>{t('pair.confirmBody')}</Text>
+            {step.link.code ? (
+              <View style={s.warn} testID="pair-warn">
+                <Icon name="alert" size={18} color={th.danger} />
+                <Text style={s.warnText}>{t('pair.confirmWarn')}</Text>
+              </View>
+            ) : (
+              <Text style={s.caption}>{t('pair.foundNote')}</Text>
+            )}
+            <Text style={s.intro}>{t(step.link.code ? 'pair.confirmBody' : 'pair.confirmBodyFound')}</Text>
             <View style={s.field}>
               <Text style={s.label}>{t('pair.deviceName')}</Text>
               <TextInput
@@ -301,8 +421,10 @@ export default function Pair() {
                 placeholderTextColor={th.caption}
               />
             </View>
-            <Button label={t('pair.send')} onPress={() => send(step.link)} disabled={!deviceName.trim()} />
-            <Button variant="outline" label={t('pair.otherQR')} onPress={() => setStep({ kind: 'start' })} />
+            {/* The link opened the app before the person signed in: the sign-in comes first. */}
+            {signedIn ? null : <TailnetLogin />}
+            <Button label={t('pair.send')} onPress={() => send(step.link)} disabled={!deviceName.trim() || !signedIn} />
+            <Button variant="outline" label={t(step.link.code ? 'pair.otherQR' : 'pair.otherPC')} onPress={() => setStep({ kind: 'start' })} />
           </>
         )}
 
@@ -312,8 +434,26 @@ export default function Pair() {
             <Text style={s.waitTitle} accessibilityRole="header">
               {t('pair.waitingTitle')}
             </Text>
-            <Text style={[s.intro, s.centerText]}>{t('pair.waitingBody')}</Text>
+            {match ? (
+              <Text style={s.match} testID="pair-match" accessibilityLabel={t('pairAsk.number', { n: match })}>
+                {match}
+              </Text>
+            ) : null}
+            <Text style={[s.intro, s.centerText]}>{t(match ? 'pair.waitingFound' : 'pair.waitingBody')}</Text>
             <Button variant="outline" label={t('pair.cancel')} onPress={() => abort.current?.abort()} style={s.wide} />
+          </View>
+        )}
+
+        {step.kind === 'paired' && (
+          <View style={s.waiting}>
+            <Text style={s.waitTitle} accessibilityRole="header">
+              {t('pair.pairedTitle')}
+            </Text>
+            <Text style={s.match} testID="pair-match" accessibilityLabel={t('pairAsk.number', { n: match })}>
+              {match}
+            </Text>
+            <Text style={[s.intro, s.centerText]}>{t('pair.pairedBody')}</Text>
+            <Button label={t('pair.pairedDone')} onPress={() => leave(step.others)} style={s.wide} />
           </View>
         )}
 
@@ -329,25 +469,8 @@ export default function Pair() {
       </FormScroll>
 
       <View style={[s.foot, { paddingBottom: 16 + insets.bottom }]}>
-        <Pressable
-          onPress={() => setTailscaleOpen(true)}
-          accessibilityRole="button"
-          accessibilityLabel={t('pair.tailscaleNote')}
-          style={({ pressed }) => [s.note, pressed && s.pressed]}
-        >
-          <Icon name="shield" size={18} color={th.textSub} />
-          <Text style={s.noteText}>{t('pair.tailscaleNote')}</Text>
-          <Icon name="chevronRight" size={16} color={th.textSub} />
-        </Pressable>
         <Text style={s.caption}>{t('app.notOfficial')}</Text>
       </View>
-
-      <Sheet open={tailscaleOpen} onClose={() => setTailscaleOpen(false)} title={t('pair.tailscaleTitle')} testID="tailscale-sheet">
-        <View style={s.sheetBody}>
-          <Text style={s.intro}>{t('pair.tailscaleBody')}</Text>
-          <Button variant="outline" icon="open" label={t('pair.tailscaleGet')} onPress={() => Linking.openURL(tailscaleStore).catch(() => undefined)} />
-        </View>
-      </Sheet>
 
       <Sheet open={installOpen} onClose={() => setInstallOpen(false)} title={t('pair.installTitle')} testID="install-sheet">
         <View style={s.sheetBody}>
@@ -521,11 +644,16 @@ const styles = themed((th) =>
     waiting: { alignItems: 'center', gap: 16, paddingTop: 48 },
     waitTitle: { fontSize: 18, fontWeight: '600', lineHeight: 24, letterSpacing: -0.18, color: th.text, textAlign: 'center' },
     centerText: { textAlign: 'center' },
+    match: { fontSize: 48, fontWeight: '700', lineHeight: 56, letterSpacing: 8, color: th.text },
+    finding: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+    found: { borderRadius: 14, backgroundColor: th.surface, overflow: 'hidden' },
+    foundRow: { minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 10 },
+    foundTexts: { flex: 1, minWidth: 0 },
+    foundName: { fontSize: 16, fontWeight: '600', lineHeight: 22, color: th.text },
+    alt: { fontSize: 15, fontWeight: '600', lineHeight: 21, color: th.text, marginTop: 4 },
     wide: { alignSelf: 'stretch' },
     foot: { gap: 2, paddingHorizontal: 20 },
-    note: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: -8, paddingHorizontal: 8, borderRadius: 22 },
     pressed: { backgroundColor: th.raised },
-    noteText: { flex: 1, fontSize: 13, lineHeight: 18.2, color: th.textSub },
     sheetBody: { gap: 14, paddingTop: 6, paddingHorizontal: 20, paddingBottom: 8 },
     cameraAsk: { flex: 1, justifyContent: 'center', gap: 14, paddingHorizontal: 24 },
     scanner: { flex: 1, backgroundColor: '#000000' },

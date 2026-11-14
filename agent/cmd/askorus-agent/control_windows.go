@@ -99,21 +99,17 @@ const (
 	runValueName = "Askorus Agent"
 )
 
-func autostartCommand(exe string, testPage bool) string {
-	c := `"` + exe + `" start`
-	if testPage {
-		c += " -test-page"
-	}
-	return c
+func autostartCommand(exe string) string {
+	return `"` + exe + `" start`
 }
 
-func autostartSet(exe string, testPage bool) error {
+func autostartSet(exe string) error {
 	k, _, err := registry.CreateKey(registry.CURRENT_USER, runKey, registry.SET_VALUE)
 	if err != nil {
 		return err
 	}
 	defer k.Close()
-	return k.SetStringValue(runValueName, autostartCommand(exe, testPage))
+	return k.SetStringValue(runValueName, autostartCommand(exe))
 }
 
 func autostartRemove() error {

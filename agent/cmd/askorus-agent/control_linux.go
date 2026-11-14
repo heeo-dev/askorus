@@ -42,10 +42,7 @@ func unitPath() (string, error) {
 	return filepath.Join(base, "systemd", "user", unitName), nil
 }
 
-func autostartCommand(exe string, testPage bool) string {
-	if testPage {
-		return selfCommand(exe, "serve", "-test-page")
-	}
+func autostartCommand(exe string) string {
 	return selfCommand(exe, "serve")
 }
 
@@ -60,13 +57,10 @@ func unitQuote(s string) string {
 
 // unitText is the unit file. A value with a line break in it is left out
 // rather than written: it could add a line of its own to the file.
-func unitText(exe string, testPage bool, path, agentDir string) string {
+func unitText(exe, path, agentDir string) string {
 	exec := unitQuote(exe) + " serve"
-	if testPage {
-		exec += " -test-page"
-	}
 	var b strings.Builder
-	b.WriteString(commandMark + autostartCommand(exe, testPage) + "\n")
+	b.WriteString(commandMark + autostartCommand(exe) + "\n")
 	b.WriteString("# Written by `askorus-agent autostart on`; `askorus-agent autostart off` removes it.\n")
 	b.WriteString("[Unit]\nDescription=Askorus agent\n\n[Service]\nType=simple\n")
 	b.WriteString("ExecStart=" + exec + "\n")
@@ -76,6 +70,10 @@ func unitText(exe string, testPage bool, path, agentDir string) string {
 	}
 	if agentDir != "" && !strings.ContainsAny(agentDir, "\r\n") {
 		b.WriteString("Environment=" + unitQuote(agentDirEnv+"="+agentDir) + "\n")
+	}
+	// A test run without the Tailscale node stays one under systemd.
+	if os.Getenv(noNodeEnv) == "1" {
+		b.WriteString("Environment=" + unitQuote(noNodeEnv+"=1") + "\n")
 	}
 	b.WriteString("Restart=on-failure\nRestartSec=5\n\n[Install]\nWantedBy=default.target\n")
 	return b.String()
@@ -104,7 +102,7 @@ func unitErrLine(out string, err error) string {
 	return err.Error()
 }
 
-func autostartSet(exe string, testPage bool) error {
+func autostartSet(exe string) error {
 	if strings.ContainsAny(exe, "\r\n") {
 		return errors.New("the agent's path has a line break in it")
 	}
@@ -119,7 +117,7 @@ func autostartSet(exe string, testPage bool) error {
 	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 		return err
 	}
-	if err := os.WriteFile(p, []byte(unitText(exe, testPage, os.Getenv("PATH"), os.Getenv(agentDirEnv))), 0o644); err != nil {
+	if err := os.WriteFile(p, []byte(unitText(exe, os.Getenv("PATH"), os.Getenv(agentDirEnv))), 0o644); err != nil {
 		return err
 	}
 	err = systemctlUser("daemon-reload")

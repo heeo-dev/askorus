@@ -125,7 +125,11 @@ func writerLines(st []writerStatus, off bool) []checkLine {
 			}
 		}
 	}
-	add("ok", m("the agent itself sends no request outside this PC", "에이전트가 직접 밖으로 보내는 요청은 없습니다"))
+	// N1 (#57): the agent's own requests are its Tailscale node's, to sign
+	// in and to connect the person's devices. Questions and answers go to
+	// the paired phones only, encrypted between the two devices.
+	add("ok", m("the agent sends questions and answers only to your paired phones; its built-in Tailscale talks to Tailscale's servers to sign in and to connect your devices (no diagnostic logs)",
+		"에이전트는 질문과 답을 짝 맺은 폰에만 보냅니다. 내장된 Tailscale은 로그인과 기기 연결을 위해 Tailscale 서버와 통신합니다 (진단 로그는 보내지 않음)"))
 	return lines
 }
 

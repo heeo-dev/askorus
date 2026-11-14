@@ -3,27 +3,24 @@ package main
 import (
 	"bufio"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
+	"os/signal"
 	"strings"
 
 	"github.com/heeo-dev/askorus/agent/internal/adapter/claude"
 	"github.com/heeo-dev/askorus/agent/internal/config"
 	"github.com/heeo-dev/askorus/agent/internal/core"
 	"github.com/heeo-dev/askorus/agent/internal/devices"
-	"github.com/heeo-dev/askorus/agent/internal/tailnet"
 )
 
 // setup walks a new PC through what the agent needs, in order (#37). It
 // only strings together what the other commands do (path on, the needs
-// check reports, start, autostart on, pair) and stops at the first step the
-// person has to fix, saying how; running it again picks up from there. The
-// one Tailscale setting it may change is the serve port to the agent, and
-// only after the person typed y (2026-11-09 decision); Just Enter prints
-// the command for the person to run, as check does.
+// check reports, start, autostart on, login, pair) and stops at the first
+// step the person has to fix, saying how; running it again picks up from
+// there. It changes nothing outside the agent: Tailscale is inside the
+// agent (#57), and signing in is the person's own step in a browser.
 func setupCmd(dir string, args []string, in io.Reader, out io.Writer) error {
 	if len(args) != 0 {
 		return fail("usage: askorus-agent setup", "사용법: askorus-agent setup")
@@ -50,21 +47,16 @@ func setupCmd(dir string, args []string, in io.Reader, out io.Writer) error {
 			}
 			return out
 		},
-		tailnet:   lookTailnet,
-		servePort: suggestServePort,
-		serveOn: func(ctx context.Context, httpsPort, localPort int) error {
-			c, err := tailnet.New()
-			if err != nil {
-				return err
-			}
-			return c.ServeOn(ctx, httpsPort, localPort)
+		running: func(port int) bool { return agentRunning(port) },
+		start:   func(out io.Writer) error { return startCmd(dir, nil, out) },
+		autoGet: autostartGet,
+		autoSet: autostartSet,
+		node:    func() (nodeInfo, bool) { return readNodeInfo(dir) },
+		login: func(ctx context.Context, out io.Writer) error {
+			ctx, stop := signal.NotifyContext(ctx, os.Interrupt)
+			defer stop()
+			return waitLogin(ctx, dir, out, loginWait)
 		},
-		listening: agentListening,
-		ours:      agentOnPort,
-		settings:  filepath.Join(dir, config.FileName),
-		start:     func(out io.Writer) error { return startCmd(dir, nil, out) },
-		autoGet:   autostartGet,
-		autoSet:   func(exe string) error { return autostartSet(exe, false) },
 		paired: func() int {
 			store, err := devices.Open(dir)
 			if err != nil {
@@ -81,24 +73,21 @@ func setupCmd(dir string, args []string, in io.Reader, out io.Writer) error {
 // setupEnv is what setup looks at and changes; tests replace it so they
 // never touch the real PATH, logon entry, Tailscale or agent.
 type setupEnv struct {
-	elevated  func() bool
-	exe       func() (string, error)
-	exeDir    func() (string, error)
-	pathHas   func(dir string) bool
-	pathAdd   func(dir string) (bool, error)
-	claude    func(ctx context.Context) core.AdapterInfo
-	others    func(ctx context.Context) []namedInfo // the AIs that only answer asks (Codex, OpenCode)
-	tailnet   func(ctx context.Context, port int) tailnetInfo
-	servePort func(ctx context.Context, port int) int
-	serveOn   func(ctx context.Context, httpsPort, localPort int) error
-	listening func(port int) bool
-	ours      func(port int) bool // the program on the port is an agent (agentOnPort)
-	settings  string              // the settings file, where the port is set
-	start     func(out io.Writer) error
-	autoGet   func() string
-	autoSet   func(exe string) error
-	paired    func() int
-	pair      func(in io.Reader, out io.Writer) error
+	elevated func() bool
+	exe      func() (string, error)
+	exeDir   func() (string, error)
+	pathHas  func(dir string) bool
+	pathAdd  func(dir string) (bool, error)
+	claude   func(ctx context.Context) core.AdapterInfo
+	others   func(ctx context.Context) []namedInfo // the AIs that only answer asks (Codex, OpenCode)
+	running  func(port int) bool                   // an agent with that port runs
+	start    func(out io.Writer) error
+	autoGet  func() string
+	autoSet  func(exe string) error
+	node     func() (nodeInfo, bool)                        // the running agent's Tailscale node
+	login    func(ctx context.Context, out io.Writer) error // shows the login link and waits
+	paired   func() int
+	pair     func(in io.Reader, out io.Writer) error
 }
 
 // namedInfo is one AI program as setup shows it.
@@ -198,77 +187,12 @@ func runSetup(ctx context.Context, cfg config.Config, env setupEnv, in io.Reader
 			"AI 프로그램이 하나뿐입니다. 묻기는 되지만 종합 답변과 토론은 둘 이상일 때 나옵니다"))
 	}
 
-	step(3, m("Tailscale (how the phone reaches this PC)", "Tailscale (폰이 이 PC에 닿는 길)"))
-	// Tailscale passes the phone's requests to this port: another program
-	// on it would be opened to the tailnet instead of the agent.
-	if env.listening(cfg.Port) && !env.ours(cfg.Port) {
-		return stop(m("another program already uses 127.0.0.1:%d, the agent's port: set a free \"port\" in %s",
-			"다른 프로그램이 에이전트 포트 127.0.0.1:%d를 이미 씁니다. %s에서 \"port\"를 빈 포트로 바꾸세요", cfg.Port, env.settings))
-	}
-	serveNotYet := m("tailscale serve does not point at the agent yet", "tailscale serve가 아직 에이전트를 가리키지 않습니다")
-	triedServe := false // setup turns serve on once at most; then the person does
-	for {
-		ti := env.tailnet(ctx, cfg.Port)
-		var be biError
-		if errors.As(ti.problem, &be) {
-			return stop(msg{"Tailscale: " + be.en + ". Install Tailscale from https://tailscale.com/download and sign in, on this PC and on the phone with the same account",
-				"Tailscale: " + be.ko + ". https://tailscale.com/download 에서 Tailscale을 설치하고, 이 PC와 폰에서 같은 계정으로 로그인하세요"})
-		}
-		if ti.problem != nil {
-			return ti.problem
-		}
-		if !ti.status.HTTPS {
-			return stop(m("HTTPS certificates are off for your tailnet: in the Tailscale admin console (DNS page) turn on MagicDNS and HTTPS Certificates",
-				"tailnet에 HTTPS 인증서가 꺼져 있습니다. Tailscale 관리 화면(DNS 쪽)에서 MagicDNS와 HTTPS Certificates를 켜세요"))
-		}
-		if ti.served && ti.serve.Funnel {
-			return stop(m("tailscale funnel opens the agent port to the internet; turn it off: %s funnel --https=%d off",
-				"tailscale funnel이 에이전트 포트를 인터넷에 엽니다. 끄세요: %s funnel --https=%d off", tsCmd, ti.serve.HTTPSPort))
-		}
-		if ti.served {
-			c.line("ok", m("Tailscale connected as %s; phones reach the agent at https://%s:%d", "Tailscale 연결됨: %s. 폰은 https://%s:%d로 에이전트에 닿습니다",
-				ti.status.OwnerLogin, ti.serve.Host, ti.serve.HTTPSPort))
-			break
-		}
-		port := env.servePort(ctx, cfg.Port)
-		c.line("warn", m("Tailscale is connected (account %s), but it does not pass the phone's requests to the agent yet. This Tailscale setting does it, once per PC:",
-			"Tailscale은 연결됐지만(계정 %s), 아직 폰의 요청을 에이전트로 넘기지 않습니다. 이 Tailscale 설정이 그 일을 합니다 (PC마다 한 번):", ti.status.OwnerLogin))
-		fmt.Fprintf(out, "\n      %s serve --bg --https=%d http://127.0.0.1:%d\n\n", tsCmd, port, cfg.Port)
-		say(out, m("It passes https://%s:%d to the agent, for devices on your own tailnet only (not the internet). Your other serve settings stay as they are.",
-			"https://%s:%d로 오는 요청을 에이전트로 넘깁니다. 내 tailnet의 기기만 닿고 인터넷에는 열지 않습니다. 다른 serve 설정은 그대로입니다.", ti.status.DNSName, port))
-		yourself := triedServe
-		if !triedServe {
-			yesNoPrompt(out, m("Type y and press Enter to let setup turn it on now. Just Enter shows how to do it yourself.",
-				"setup이 지금 켜게 하려면 y를 누르고 Enter, 직접 하려면 그냥 Enter를 누르세요."))
-			line, err := br.ReadString('\n')
-			if err != nil && line == "" {
-				fmt.Fprintln(out)
-				return stop(serveNotYet)
-			}
-			yourself = !yesAnswers[normalizeAnswer(line)]
-			if !yourself {
-				triedServe = true
-				if err := env.serveOn(ctx, port, cfg.Port); err != nil {
-					c.line("warn", msg{"tailscale could not turn it on: " + err.Error(), "tailscale이 켜지 못했습니다: " + err.Error()})
-					yourself = true
-				} else {
-					c.line("ok", m("turned it on; looking again", "켰습니다. 다시 확인합니다"))
-					continue
-				}
-			}
-		}
-		if yourself {
-			say(out, m("Run the line above in another PowerShell window; if it shows a link to turn on Serve for your tailnet, open it first. Press Enter here when it is done (Ctrl+C stops setup).",
-				"위 줄을 다른 PowerShell 창에서 실행하세요. tailnet에 Serve를 켜라는 링크가 나오면 먼저 그 링크를 여세요. 다 되면 여기서 Enter를 누르세요 (Ctrl+C는 설정을 멈춤)."))
-			if _, err := br.ReadString('\n'); err != nil {
-				return stop(serveNotYet)
-			}
-		}
-	}
-
-	step(4, m("Run the agent", "에이전트 켜기"))
-	if env.listening(cfg.Port) {
-		c.line("ok", m("the agent runs on 127.0.0.1:%d", "에이전트가 127.0.0.1:%d에서 돌고 있습니다", cfg.Port))
+	// The agent carries Tailscale inside (#57), so there is nothing of
+	// Tailscale to install or set on the PC: the agent is started first,
+	// then signed in with a link.
+	step(3, m("Run the agent", "에이전트 켜기"))
+	if env.running(cfg.Port) {
+		c.line("ok", m("the agent runs", "에이전트가 돌고 있습니다"))
 	} else if err := env.start(out); err != nil {
 		return err
 	}
@@ -279,7 +203,7 @@ func runSetup(ctx context.Context, cfg config.Config, env setupEnv, in io.Reader
 	// The logon entry must start this exe: one left by an older copy in
 	// another folder would start that one, or nothing.
 	switch entry := env.autoGet(); {
-	case strings.EqualFold(entry, autostartCommand(exe, false)) || strings.EqualFold(entry, autostartCommand(exe, true)):
+	case strings.EqualFold(entry, autostartCommand(exe)):
 		c.line("ok", m("starts at logon", "로그인할 때 켜짐"))
 	case entry != "":
 		if err := env.autoSet(exe); err != nil {
@@ -294,12 +218,27 @@ func runSetup(ctx context.Context, cfg config.Config, env setupEnv, in io.Reader
 			"이제 Windows에 로그인하면 에이전트가 일반 권한으로 켜집니다 (끄려면: askorus-agent autostart off)"))
 	}
 
+	step(4, m("Tailscale sign-in (how the phone reaches this PC)", "Tailscale 로그인 (폰이 이 PC에 닿는 길)"))
+	if n, ok := env.node(); ok && n.signedIn() {
+		c.line("ok", m("signed in to Tailscale as %s; phones reach this PC as %s, inside your Tailscale network only",
+			"Tailscale에 %s 계정으로 로그인됨. 폰은 내 Tailscale 망 안에서만 %s로 이 PC에 닿습니다", n.Owner, n.Name))
+	} else {
+		say(out, m("The phone reaches this PC through Tailscale, a private network between your own devices. The agent has it built in: you only sign in, with a Tailscale account (free; you can make one with a Google, Microsoft, GitHub or Apple account on the sign-in page).",
+			"폰은 내 기기끼리만 통하는 사설망인 Tailscale로 이 PC에 닿습니다. 에이전트에 들어 있어서 로그인만 하면 됩니다. Tailscale 계정이 필요합니다 (무료. 로그인 화면에서 Google, Microsoft, GitHub, Apple 계정으로 만들 수 있습니다)."))
+		if err := env.login(ctx, out); err != nil {
+			return err
+		}
+		if n, ok := env.node(); !ok || !n.signedIn() {
+			return stop(m("this PC is not signed in to Tailscale yet", "이 PC가 아직 Tailscale에 로그인되지 않았습니다"))
+		}
+	}
+
 	step(5, m("Pair the phone", "폰과 짝 맺기"))
 	if n := env.paired(); n > 0 {
 		c.line("ok", m("%d paired devices; to add a phone: askorus-agent pair", "짝 맺은 기기 %d개. 폰을 더 하려면: askorus-agent pair", n))
 	} else {
-		say(out, m("On the phone, install Tailscale and the Askorus app, and sign in to Tailscale with the same account as this PC.",
-			"폰에 Tailscale과 Askorus 앱을 설치하고, Tailscale에는 이 PC와 같은 계정으로 로그인하세요."))
+		say(out, m("On the phone, install the Askorus app and open it. It asks you to sign in to Tailscale: use the same account as on this PC. Nothing else needs installing on the phone.",
+			"폰에 Askorus 앱을 설치하고 여세요. 앱이 Tailscale 로그인을 안내합니다. 이 PC와 같은 계정으로 로그인하세요. 폰에 따로 설치할 것은 없습니다."))
 		if err := env.pair(br, out); err != nil {
 			return err
 		}

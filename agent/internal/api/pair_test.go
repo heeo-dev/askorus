@@ -29,18 +29,20 @@ func newPairEnv(t *testing.T, owner string) pairEnv {
 	p := &pairing.Pairer{Dir: dir, Devices: store, Poll: 10 * time.Millisecond, Timeout: 2 * time.Second}
 	h := New(Options{
 		Adapters: []core.Adapter{fakeAdapter{}}, Devices: store, Pairer: p,
-		Logger: logx.Discard(), TailscaleOwner: owner, ServeHosts: []string{"pc.tail.ts.net"},
+		Logger: logx.Discard(),
+		Hosts:  func() []string { return testHosts },
+		Owner:  func() string { return owner },
 	}).Handler()
-	return pairEnv{h: h, dir: dir}
+	return pairEnv{h: viaNode(h), dir: dir}
 }
 
-// viaServe builds a request as tailscale serve would forward it.
+// viaServe builds a request as it reaches the agent's Tailscale node from
+// the owner's phone (viaNode says who sent it; the test headers change
+// that). The name is from when tailscale serve stood in front.
 func viaServe(method, path, body string, hdr map[string]string) *http.Request {
 	r := httptest.NewRequest(method, path, strings.NewReader(body))
-	r.Host = "pc.tail.ts.net:8800"
-	r.RemoteAddr = "127.0.0.1:50000"
-	r.Header.Set("Tailscale-User-Login", "owner@example.com")
-	r.Header.Set("X-Forwarded-For", "100.64.0.9")
+	r.Host = "askorus-pc.tail.ts.net:8790"
+	r.RemoteAddr = testCallerIP + ":50000"
 	for k, v := range hdr {
 		if v == "" {
 			r.Header.Del(k)
@@ -150,8 +152,8 @@ func TestPairStatusRefusals(t *testing.T) {
 		code   string
 	}{
 		{"unknown id", viaServe("POST", "/v1/pair/status", body, nil), 404, CodePairUnknown},
-		{"not via tailscale", viaServe("POST", "/v1/pair/status", body, map[string]string{"Tailscale-User-Login": ""}), 403, CodeNotTailnet},
-		{"other account", viaServe("POST", "/v1/pair/status", body, map[string]string{"Tailscale-User-Login": "kid@example.com"}), 403, CodeWrongAccount},
+		{"not via the node", viaServe("POST", "/v1/pair/status", body, map[string]string{hdrNoCaller: "1"}), 403, CodeNotTailnet},
+		{"other account", viaServe("POST", "/v1/pair/status", body, map[string]string{hdrCallerLogin: "kid@example.com"}), 403, CodeWrongAccount},
 		{"GET", viaServe("GET", "/v1/pair/status", "", nil), 405, CodeMethod},
 	}
 	for _, c := range cases {
@@ -172,10 +174,11 @@ func TestPairRefusals(t *testing.T) {
 		status int
 		code   string
 	}{
-		{"no login header (direct local call)", viaServe("POST", "/v1/pair", body, map[string]string{"Tailscale-User-Login": ""}), 403, CodeNotTailnet},
-		{"not from a tailnet address", viaServe("POST", "/v1/pair", body, map[string]string{"X-Forwarded-For": "192.168.0.5"}), 403, CodeNotTailnet},
-		{"spoofed first hop", viaServe("POST", "/v1/pair", body, map[string]string{"X-Forwarded-For": "100.64.0.9, 192.168.0.5"}), 403, CodeNotTailnet},
-		{"other account", viaServe("POST", "/v1/pair", body, map[string]string{"Tailscale-User-Login": "kid@example.com"}), 403, CodeWrongAccount},
+		{"nobody said who sent it (not through the node)", viaServe("POST", "/v1/pair", body, map[string]string{hdrNoCaller: "1"}), 403, CodeNotTailnet},
+		{"not from a tailnet address", viaServe("POST", "/v1/pair", body, map[string]string{hdrCallerIP: "192.168.0.5"}), 403, CodeNotTailnet},
+		{"headers a sender can write", viaServe("POST", "/v1/pair", body, map[string]string{hdrNoCaller: "1", "Tailscale-User-Login": testOwner, "X-Forwarded-For": testCallerIP}), 403, CodeNotTailnet},
+		{"other account", viaServe("POST", "/v1/pair", body, map[string]string{hdrCallerLogin: "kid@example.com"}), 403, CodeWrongAccount},
+		{"other account, forged header", viaServe("POST", "/v1/pair", body, map[string]string{hdrCallerLogin: "kid@example.com", "Tailscale-User-Login": testOwner}), 403, CodeWrongAccount},
 		{"bad json", viaServe("POST", "/v1/pair", `{"code":`, nil), 400, CodeBadRequest},
 		{"wrong code", viaServe("POST", "/v1/pair", `{"code":"AAAA","deviceName":"phone"}`, nil), 403, CodePairBadCode},
 		{"GET", viaServe("GET", "/v1/pair", "", nil), 405, CodeMethod},
@@ -204,7 +207,7 @@ func TestPairNeedsKnownOwner(t *testing.T) {
 
 func TestFailureLimit(t *testing.T) {
 	e := newEnv(t, fakeAdapter{}, nil)
-	bad := map[string]string{"Authorization": "Bearer ask_guess", "X-Forwarded-For": "100.64.0.20"}
+	bad := map[string]string{"Authorization": "Bearer ask_guess", hdrCallerIP: "100.64.0.20"}
 	for i := 0; i < maxFails; i++ {
 		if w := e.do("GET", "/v1/info", bad); w.Code != 401 {
 			t.Fatalf("try %d = %d", i, w.Code)
@@ -217,7 +220,7 @@ func TestFailureLimit(t *testing.T) {
 		t.Errorf("blocked client = %d %s", w.Code, w.Body)
 	}
 	// ...but other addresses still work.
-	if w := e.do("GET", "/v1/info", map[string]string{"X-Forwarded-For": "100.64.0.21"}); w.Code != 200 {
+	if w := e.do("GET", "/v1/info", map[string]string{hdrCallerIP: "100.64.0.21"}); w.Code != 200 {
 		t.Errorf("other client = %d", w.Code)
 	}
 }

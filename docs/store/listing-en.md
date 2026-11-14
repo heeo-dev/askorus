@@ -27,7 +27,7 @@ You need your own PC. Askorus asks the AI programs installed on your PC (Claude 
 
 WHAT YOU NEED
 - A PC with Windows, macOS or Linux
-- Tailscale on the PC and the phone (free for personal use)
+- A Tailscale account (free for personal use). Nothing of Tailscale needs installing: it is built into the app and the PC agent, with no VPN to turn on
 - At least one official AI program installed and signed in on the PC: Claude Code, Codex or OpenCode. Askorus uses the subscriptions and free accounts you already have.
 - The PC agent, askorus-agent. Where to get it and how to set it up is on the app's first screen and on GitHub.
 

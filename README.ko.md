@@ -53,9 +53,20 @@ Askorus(애스코러스)는 폰에서 질문 하나를 여러 AI에게 한 번�
 ## 필요한 것
 
 - Windows, macOS, Linux 중 하나를 쓰는 PC
-- PC와 폰에 [Tailscale](https://tailscale.com)
+- [Tailscale](https://tailscale.com) 계정(개인은 무료). Tailscale을 따로 설치하지 않습니다. 앱과 PC 에이전트 안에 들어 있고, 폰에서 VPN을 켤 필요도 없습니다. 양쪽에서 한 번씩 로그인하면 됩니다
 - PC에 설치하고 로그인해 둔 공식 AI 프로그램 하나 이상: Claude Code, Codex, OpenCode. 둘 이상이면 종합 답변과 토론이 나오고, '내 PC'(Claude Code 세션)에는 Claude Code가 있어야 합니다. 이미 쓰는 구독과 무료 계정을 그대로 쓰며, 그 로그인 정보는 읽거나 옮기지 않습니다.
 - 안드로이드 폰 (iOS는 나중에)
+
+### Tailscale이 뭔가요?
+
+내 기기들만 들어오는 사설망을 만들어 주는 서비스입니다(Tailscale사, 개인은 무료). Askorus 안에 들어 있습니다.
+
+- **왜 필요한가요.** 폰이 밖에서도 집의 PC에 닿아야 합니다. 보통은 PC를 인터넷에 열거나 중간에 서버를 둬야 하는데, Askorus는 둘 다 하지 않습니다. 대신 폰과 PC가 같은 Tailscale 계정으로 로그인해 서로를 찾습니다.
+- **무엇이 지켜지나요.** 내 계정에 로그인한 기기만 PC에 닿습니다. 폰과 PC 사이는 암호화되어, Tailscale의 중계 서버를 거칠 때도 Tailscale은 내용을 읽지 못합니다. 그 위에 PC에서 한 번 허용한 폰만 받습니다.
+- **Tailscale이 아는 것.** 계정(메일), 두 기기의 이름, 접속한 주소와 시간입니다. 질문과 답은 모릅니다.
+- **비밀번호.** 로그인은 브라우저의 Tailscale 화면에서 합니다. Askorus는 비밀번호를 받지 않습니다.
+
+앱에서도 로그인을 물을 때 같은 설명을 볼 수 있습니다('Tailscale이 뭔가요?').
 
 ## PC 에이전트 설치
 
@@ -75,13 +86,13 @@ curl -fsSL https://github.com/heeo-dev/askorus/releases/latest/download/install.
 
 스크립트가 GitHub 배포판에서 내 운영체제에 맞는 에이전트를 받아 SHA-256을 확인하고, `%LOCALAPPDATA%\Programs\Askorus`(Windows)나 `~/.local/bin`(macOS, Linux)에 둔 뒤 `askorus-agent setup`을 시작합니다. 업데이트할 때도 같은 줄을 다시 실행하면 됩니다.
 
-setup은 차례로 안내합니다. 에이전트를 PATH에 넣고, AI 프로그램과 Tailscale을 점검하고, 에이전트를 켜고 로그인할 때 켜지게 합니다. 폰의 요청을 에이전트로 넘기는 Tailscale 설정은 켜기 전에 묻습니다. 마지막으로 앱으로 QR을 찍어 폰과 짝을 맺습니다.
+setup은 차례로 안내합니다. 에이전트를 PATH에 넣고, AI 프로그램을 점검하고, 에이전트를 켜고 로그인할 때 켜지게 합니다. 그다음 이 PC를 Tailscale에 로그인할 링크를(같은 링크의 QR도) 보여 줍니다. 한 번만 하면 됩니다. 마지막으로 짝 맺기 창을 엽니다. 앱에서 같은 계정으로 Tailscale에 로그인하고 목록에 뜬 내 PC를 누르면 됩니다. QR을 찍을 필요는 없습니다(PC가 목록에 안 보이는 폰을 위해 QR도 같이 보여 줍니다).
 
 macOS와 Linux에서도 명령은 Windows와 같습니다. 운영체제마다 다른 점은 이렇습니다.
 
-- **Linux:** Tailscale 설정은 `sudo`가 있어야 바뀌므로, setup이 직접 실행할 명령 하나(`sudo tailscale serve ...`)를 보여 줍니다. 로그인할 때 켜기는 systemd 사용자 단위입니다. 아무도 로그인하지 않는 컴퓨터에서는 `loginctl enable-linger`를 해 두면 부팅할 때 켜집니다.
+- **Linux:** 로그인할 때 켜기는 systemd 사용자 단위입니다. 아무도 로그인하지 않는 컴퓨터에서는 `loginctl enable-linger`를 해 두면 부팅할 때 켜집니다.
 - **macOS:** 로그인할 때 켜기는 `~/Library/LaunchAgents`의 LaunchAgent입니다. 다음 로그인부터 적용되고, 지금 바로 켜려면 `askorus-agent start`를 실행합니다.
-- macOS용 에이전트는 클라우드의 Mac에서 자동 점검(Go 테스트, 설치 스크립트, launchd 아래에서 켜기·끄기·로그인할 때 켜기)으로 확인했습니다. 실제 AI 프로그램과 Tailscale이 있는 사람의 Mac에서는 아직 써 보지 못했습니다. 안 되는 것이 있으면 [이슈로 알려 주세요](https://github.com/heeo-dev/askorus/issues).
+- macOS용 에이전트는 클라우드의 Mac에서 자동 점검(Go 테스트, 설치 스크립트, launchd 아래에서 켜기·끄기·로그인할 때 켜기)으로 확인했습니다. 실제 AI 프로그램이 있는 사람의 Mac에서는 아직 써 보지 못했습니다. 안 되는 것이 있으면 [이슈로 알려 주세요](https://github.com/heeo-dev/askorus/issues).
 
 <details>
 <summary>실행하기 전에 스크립트 읽어 보기</summary>
@@ -123,14 +134,15 @@ PC의 Claude Code나 Codex에 내 운영체제에 맞는 글을 붙여 넣으세
 3. 그다음 명령은 모두 설치된 파일의 전체 경로로 실행해 줘:
    & "$env:LOCALAPPDATA\Programs\Askorus\askorus-agent.exe" <명령>
    "path on", "check" 순서로 실행하고, [X]와 [!] 줄마다 무슨 뜻인지와 내가 할 일을 쉬운 말로, [i] 줄 중 내가 직접 할 일(Remote Control 동의, 폴더 신뢰)도 알려 줘.
-4. check에 [X]가 없어지면 "start"와 "autostart on"을 실행해 줘.
-5. 마지막으로, 내 PowerShell 창에서 "askorus-agent pair"를 실행하고 Askorus 앱으로 QR을 찍은 뒤, 요청한 기기가 내 폰인지 보고 직접 허용하라고 알려 줘.
+4. check에 [X]가 없어지면 "start"와 "autostart on"을 실행하고, "check"를 한 번 더 실행해 줘. 이제 이 PC가 Tailscale에 로그인됐는지 나와.
+5. 로그인되어 있지 않으면, 내 PowerShell 창에서 "askorus-agent login"을 실행하고 나오는 링크를 열라고 알려 줘. 로그인은 내가 직접 해. Tailscale을 따로 설치할 필요는 없어.
+6. 마지막으로, 내 PowerShell 창에서 "askorus-agent pair"를 실행하고 Askorus 앱(같은 Tailscale 계정으로 로그인)에서 이 PC를 누르라고 알려 줘. 어느 폰이 들어왔는지와 내 폰에도 보이는 두 자리 숫자가 나오니, 내 폰이 맞는지는 내가 확인할게.
 지킬 것:
 - 위의 명령만 실행하고, 실행하기 전마다 나에게 물어 줘.
 - 관리자 권한으로 실행하지 말고, 너(AI)의 권한 확인이나 샌드박스를 건너뛰는 옵션은 절대 쓰지 마.
 - 어떤 AI 프로그램의 로그인 파일도 읽거나 옮기지 마(예: ~/.claude/.credentials.json).
-- Tailscale 설정, Claude 서비스·세션 끄기, 동의 질문은 내 몫이야. 할 일을 보여 주고 내가 하게 해 줘.
-- "setup"과 "pair"는 실행하지 마.
+- Tailscale 로그인, Claude 서비스·세션 끄기, 동의 질문은 내 몫이야. 할 일을 보여 주고 내가 하게 해 줘.
+- "setup", "login", "pair"는 실행하지 마.
 ```
 
 </details>
@@ -148,14 +160,15 @@ PC의 Claude Code나 Codex에 내 운영체제에 맞는 글을 붙여 넣으세
 3. 그다음 명령은 모두 설치된 파일의 전체 경로로 실행해 줘:
    "$HOME/.local/bin/askorus-agent" <명령>
    "path on", "check" 순서로 실행하고, [X]와 [!] 줄마다 무슨 뜻인지와 내가 할 일을 쉬운 말로, [i] 줄 중 내가 직접 할 일(Remote Control 동의, 폴더 신뢰)도 알려 줘.
-4. check에 [X]가 없어지면 "start"와 "autostart on"을 실행해 줘.
-5. 마지막으로, 내 터미널 창에서 "askorus-agent pair"를 실행하고 Askorus 앱으로 QR을 찍은 뒤, 요청한 기기가 내 폰인지 보고 직접 허용하라고 알려 줘.
+4. check에 [X]가 없어지면 "start"와 "autostart on"을 실행하고, "check"를 한 번 더 실행해 줘. 이제 이 PC가 Tailscale에 로그인됐는지 나와.
+5. 로그인되어 있지 않으면, 내 터미널 창에서 "askorus-agent login"을 실행하고 나오는 링크를 열라고 알려 줘. 로그인은 내가 직접 해. Tailscale을 따로 설치할 필요는 없어.
+6. 마지막으로, 내 터미널 창에서 "askorus-agent pair"를 실행하고 Askorus 앱(같은 Tailscale 계정으로 로그인)에서 이 PC를 누르라고 알려 줘. 어느 폰이 들어왔는지와 내 폰에도 보이는 두 자리 숫자가 나오니, 내 폰이 맞는지는 내가 확인할게.
 지킬 것:
 - 위의 명령만 실행하고, 실행하기 전마다 나에게 물어 줘.
 - sudo나 root로 실행하지 말고, 너(AI)의 권한 확인이나 샌드박스를 건너뛰는 옵션은 절대 쓰지 마.
 - 어떤 AI 프로그램의 로그인 파일도 읽거나 옮기지 마(예: ~/.claude/.credentials.json).
-- Tailscale 설정(Linux에서는 check가 sudo로 시작하는 명령을 보여 줘), Claude 서비스·세션 끄기, 동의 질문은 내 몫이야. 할 일을 보여 주고 내가 하게 해 줘.
-- "setup"과 "pair"는 실행하지 마.
+- Tailscale 로그인, Claude 서비스·세션 끄기, 동의 질문은 내 몫이야. 할 일을 보여 주고 내가 하게 해 줘.
+- "setup", "login", "pair"는 실행하지 마.
 ```
 
 </details>
@@ -164,8 +177,10 @@ PC의 Claude Code나 Codex에 내 운영체제에 맞는 글을 붙여 넣으세
 
 먼저 PC에서 `askorus-agent check`를 실행하세요. 빠진 것을 줄마다 할 일과 함께 알려 줍니다. `[X]`는 꼭 고쳐야 하는 것, `[!]`는 주의, `[i]`는 사람이 직접 해야 하는 것입니다.
 
-- **폰이 PC에 닿지 않는다고 합니다.** 폰과 PC 모두 Tailscale이 켜져 있고 같은 계정이어야 합니다. PC에서는 `tailscale serve`가 에이전트 포트를 넘겨야 합니다. 실행할 명령은 `check`가 그대로 보여 줍니다(Linux에서는 `sudo`로 시작합니다).
-- **PC는 켜져 있는데 에이전트가 돌고 있지 않다고 합니다.** `askorus-agent start`를 실행하세요. 로그인할 때 켜지게 하려면 `askorus-agent autostart on`.
+- **폰이 PC에 닿지 않는다고 합니다.** PC에서 에이전트가 돌고 있고 Tailscale에 로그인되어 있어야 합니다. `askorus-agent status`가 둘 다 보여 줍니다. 꺼져 있으면 `askorus-agent start`, 로그인이 안 되어 있으면 `askorus-agent login`을 실행하세요. 로그인할 때 켜지게 하려면 `askorus-agent autostart on`.
+- **앱의 목록에 내 PC가 안 보입니다.** 앱은 로그인한 Tailscale 계정의 기기 가운데에서 PC를 찾습니다. 에이전트가 켜져 있고 같은 계정으로 로그인돼 있는지 보세요(`askorus-agent status`). 포트를 8790이 아닌 값으로 바꾼 PC는 QR로 짝을 맺습니다. `askorus-agent pair`를 실행하고 앱에서 'QR이나 링크로 짝 맺기'를 쓰세요.
+- **PC 앞에 없는데 폰을 추가하고 싶습니다.** 이미 짝 맺은 폰에서 허용할 수 있습니다. 그 폰에서 Askorus를 열면 새 폰의 이름과 두 자리 숫자가 함께 요청이 뜹니다.
+- **폰이 Tailscale에 로그인되어 있지 않다고 하거나, 이 PC가 내 Tailscale 계정에 없다고 합니다.** 앱의 설정 > Tailscale에서 PC의 에이전트와 같은 계정으로 로그인하세요(어느 계정인지는 PC에서 `askorus-agent status`). 계정을 바꾸려면 앱에서는 '로그아웃 / 계정 바꾸기'(설정 > Tailscale, 짝 맺기 화면, 'PC가 내 계정에 없습니다' 상자), PC에서는 `askorus-agent logout` 뒤 `askorus-agent login`입니다. 바꾼 뒤에는 다시 짝 맺습니다. 이미 Tailscale을 쓰고 있다면 Askorus에는 그 계정을 써도 되고 따로 만든 계정을 써도 됩니다. 앱과 에이전트만 같은 계정이면 됩니다. 브라우저가 이미 Tailscale에 로그인돼 있으면 그 계정으로 붙이겠냐고 묻습니다. 다른 계정을 쓰려면 그 화면에서 계정을 바꾸거나 시크릿 창에서 링크를 여세요.
 - **새 Claude Code 세션이 시작되지 않습니다.** Claude Code는 폴더마다 한 번 신뢰할지 묻습니다. PC에서 그 폴더로 가서 `claude`를 한 번 실행하고 허용하세요.
 - **폴더 열어 두기가 '켜는 중'에 머물거나 실패합니다.** Claude Code에서 Remote Control을 한 번 켜야 합니다. PC에서 `claude remote-control`을 실행해 `y`로 답하고 Ctrl+C로 끄세요.
 - **AI가 목록에 없습니다.** PC에 설치하고 로그인한 뒤 `check`를 다시 실행하세요. `autostart on` 뒤에 설치한 프로그램은 흔한 설치 폴더에서 찾습니다. 못 찾으면 `autostart on`을 다시 실행하세요.
@@ -178,7 +193,7 @@ PC의 Claude Code나 Codex에 내 운영체제에 맞는 글을 붙여 넣으세
 askorus-agent uninstall
 ```
 
-무엇을 되돌릴지 보여 주고 먼저 묻습니다. 에이전트를 멈추고, 로그인할 때 켜기와 PATH 등록을 없애고, 에이전트의 `tailscale serve` 포트를 끄고, 짝 맺은 폰을 모두 끊습니다. `-all`을 붙이면 에이전트의 설정과 로그도 지웁니다. 그다음 프로그램 파일은 직접 지우세요(Windows는 `%LOCALAPPDATA%\Programs\Askorus`, macOS와 Linux는 `~/.local/bin/askorus-agent`). 폰에서는 설정에서 PC를 끊거나 앱을 지우면 됩니다.
+무엇을 되돌릴지 보여 주고 먼저 묻습니다. 이 PC를 Tailscale에서 로그아웃하고, 에이전트를 멈추고, 로그인할 때 켜기와 PATH 등록을 없애고, 짝 맺은 폰을 모두 끊습니다. `-all`을 붙이면 에이전트의 설정과 로그도 지웁니다. 그다음 프로그램 파일은 직접 지우세요(Windows는 `%LOCALAPPDATA%\Programs\Askorus`, macOS와 Linux는 `~/.local/bin/askorus-agent`). 폰에서는 설정에서 PC를 끊거나 앱을 지우면 됩니다.
 
 ## 안드로이드 앱 설치
 
@@ -186,7 +201,7 @@ askorus-agent uninstall
 
 1. 폰에서 [최신 배포판](https://github.com/heeo-dev/askorus/releases/latest)을 열고 `askorus-android-<판>.apk`를 받습니다.
 2. 받은 파일을 엽니다. 안드로이드가 브라우저에서 앱을 설치해도 되는지 물으면 이번 설치에 허용합니다. Play 프로텍트가 앱을 먼저 검사하겠다고 물을 수 있습니다. 스토어 밖에서 받은 앱이면 늘 묻는 것입니다.
-3. Askorus를 열고 PC와 짝을 맺습니다. PC에서 `askorus-agent pair`를 실행하고 QR을 찍습니다.
+3. Askorus를 열고 PC와 짝을 맺습니다. 앱이 안내하면 Tailscale에 로그인하고(PC와 같은 계정), 목록에 뜬 내 PC를 누릅니다. PC 화면에 작은 창이 떠서 이 폰을 허용할지 한 번 묻고, 폰과 PC에 같은 두 자리 숫자가 보입니다. (터미널에서 `askorus-agent pair`나 `setup`이 기다리는 동안에는 묻지 않고 바로 받습니다.)
 
 미리보기 APK에서 알아 둘 것:
 
@@ -202,26 +217,29 @@ PC 에이전트는 Go 프로그램 하나입니다(Go 1.27).
 
 ```powershell
 cd agent
-go build -trimpath -o askorus-agent.exe ./cmd/askorus-agent
-.\askorus-agent.exe setup         # PATH, 점검, 켜기, 로그인할 때 켜기, 짝 맺기를 차례로
+go build -trimpath -tags ts_omit_peerapiserver,ts_omit_c2n,ts_omit_logtail -o askorus-agent.exe ./cmd/askorus-agent
+.\askorus-agent.exe setup         # PATH, 점검, 켜기, 로그인할 때 켜기, Tailscale 로그인, 짝 맺기를 차례로
 ```
 
 macOS와 Linux에서는:
 
 ```sh
 cd agent
-go build -trimpath -o askorus-agent ./cmd/askorus-agent
+go build -trimpath -tags ts_omit_peerapiserver,ts_omit_c2n,ts_omit_logtail -o askorus-agent ./cmd/askorus-agent
 ./askorus-agent setup
 ```
 
-하나씩 하려면: `path on`(PATH에 넣기), `check`(빠진 것과 고치는 방법), `start`(백그라운드로 켜기, 일반 권한), `autostart on`(로그인할 때 켜기), `pair`(QR을 띄우고 앱으로 찍기). 세 운영체제의 배포 파일은 `scripts/release.ps1`이 만듭니다.
+태그는 에이전트가 넣지 말아야 할 Tailscale 라이브러리의 부분(PC 주소에 여는 포트, 진단, 로그 올리기)을 뺍니다. 태그 없이 빌드한 것은 Tailscale 기기를 켜지 않습니다.
 
-앱은 React Native와 Expo로 만들었습니다(`app/`). 안드로이드 앱 빌드는 [docs/android-release.md](docs/android-release.md)를 보세요.
+하나씩 하려면: `path on`(PATH에 넣기), `check`(빠진 것과 고치는 방법), `start`(백그라운드로 켜기, 일반 권한), `autostart on`(로그인할 때 켜기), `login`(이 PC를 링크로 Tailscale에 로그인), `pair`(짝 맺기 창 열기: 앱에서 이 PC를 누른 폰을 묻지 않고 받습니다. PC가 목록에 안 보이는 폰을 위해 QR도 보여 줍니다). 세 운영체제의 배포 파일은 `scripts/release.ps1`이 만듭니다.
+
+앱은 React Native와 Expo로 만들었습니다(`app/`). 앱의 Tailscale 부분은 Go 라이브러리(`tsbridge/`)이고 안드로이드 앱 안에 함께 빌드됩니다. 안드로이드 앱 빌드는 [docs/android-release.md](docs/android-release.md)를 보세요.
 
 ## 개인정보
 
 - 우리 서버, 분석, 광고, 오류 보고 도구가 없습니다.
-- 질문은 Tailscale로 폰에서 내 PC로 가고, PC의 공식 AI 프로그램이 각 AI 회사로 보냅니다.
+- 질문은 앱과 에이전트에 들어 있는 Tailscale을 거쳐 폰에서 내 PC로 갑니다. 두 기기 사이에서 암호화되고, 내 Tailscale 계정에 로그인한 기기끼리만 통합니다. PC의 공식 AI 프로그램이 각 AI 회사로 보냅니다.
+- 앱과 에이전트는 로그인하고 서로를 찾기 위해 Tailscale의 서버와 통신합니다. 두 기기가 직접 연결되지 못할 때는 Tailscale의 중계 서버가 암호화된 내용을 그대로 전달합니다. Tailscale로 진단 로그를 보내지 않습니다.
 - 사회자 AI의 회사는 질문과 모든 답을 받고, 토론하면 답한 AI들의 회사가 서로의 답을 받습니다.
 - 앱의 대화 기록은 폰에 저장됩니다. PC의 AI 프로그램에도 자체 기록이 남을 수 있고, 에이전트는 답을 PC 메모리에 하루 둡니다.
 
@@ -231,8 +249,9 @@ go build -trimpath -o askorus-agent ./cmd/askorus-agent
 
 | 폴더 | 내용 |
 |---|---|
-| `agent/` | PC 에이전트(Go): `tailscale serve` 뒤의 API, AI 프로그램마다의 어댑터 |
+| `agent/` | PC 에이전트(Go): 자기 Tailscale 기기에서 여는 API, AI 프로그램마다의 어댑터 |
 | `app/` | 폰 앱(React Native, Expo) |
+| `tsbridge/` | 앱의 Tailscale 부분(Go, 안드로이드 앱 안에 빌드됨) |
 | `docs/` | 계획, 테스트, 개인정보, 스토어 설명, 브랜드(`docs/brand`) |
 | `scripts/` | 테스트와 도구(main에 합치기 전 기준은 `scripts/test-all.ps1`, macOS와 Linux에서는 [CONTRIBUTING.md](CONTRIBUTING.md) 참고) |
 
@@ -250,4 +269,4 @@ Askorus는 독립 프로젝트입니다. 어떤 AI 회사의 공식 제품도 �
 
 ## 라이선스
 
-Apache-2.0. [LICENSE](LICENSE)를 보세요. Askorus에 들어 있거나 Askorus를 만드는 데 쓰인 다른 사람의 저작물은 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)에 적었습니다.
+Apache-2.0. [LICENSE](LICENSE)를 보세요. Askorus에 들어 있거나 Askorus를 만드는 데 쓰인 다른 사람의 저작물은 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)에, 내장 Tailscale의 Go 모듈은 [THIRD-PARTY-GO.md](THIRD-PARTY-GO.md)에 적었습니다.

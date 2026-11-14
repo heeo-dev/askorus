@@ -6,6 +6,8 @@
 import * as Crypto from 'expo-crypto';
 import * as SecureStore from 'expo-secure-store';
 
+import { agentBase, forgetRefused } from '@/api/refused';
+
 export type ConnectionKind = 'pc';
 
 export type Connection = {
@@ -14,8 +16,8 @@ export type Connection = {
   name: string; // the PC's host name until the person gives it another (#53)
   os?: string; // the PC's system as its agent says it (windows, linux, darwin); absent until it was read (#53)
   named?: boolean; // the person gave the name: pairing again keeps it (#53)
-  host: string; // MagicDNS name
-  port: number; // serve HTTPS port
+  host: string; // the name of the PC agent's own Tailscale node (MagicDNS)
+  port: number; // the port it listens on there
   deviceId: string; // this phone's id on that PC
   deviceName: string;
   pairedAt: string; // RFC 3339
@@ -79,6 +81,8 @@ export class ConnectionStore {
     const conn: Connection = { ...c, ...(old?.named ? { name: old.name, named: true } : {}), id: old?.id ?? back?.id ?? newId() };
     if (back) await this.kv.set(goneKey, JSON.stringify(gone.filter((g) => g !== back)));
     await this.kv.set(tokenKey(conn.id), token);
+    // Paired (again): whatever that agent refused before no longer counts.
+    forgetRefused(agentBase(c.host, c.port));
     const next = list.filter((x) => x.id !== conn.id).concat(conn);
     await this.kv.set(listKey, JSON.stringify(next));
     return conn;

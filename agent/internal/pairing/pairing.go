@@ -7,6 +7,8 @@
 //	pairing-request.json   server: a phone sent the right code
 //	pairing-decision.json  pair command: the person at the PC allowed or refused
 //	pairing-result.json    server: the device that was added, or why not
+//	pairing-alive          pair command: its modification time is touched every
+//	                       second while the command runs (#58)
 //
 // The code is 128 random bits, valid for 5 minutes, and used at most once:
 // the first request with the right code consumes the window whether or not
@@ -40,6 +42,11 @@ const (
 	requestFile  = "pairing-request.json"
 	decisionFile = "pairing-decision.json"
 	resultFile   = "pairing-result.json"
+	aliveFile    = "pairing-alive"
+	// usedFile holds the windows that took their one request (id and when
+	// they would have expired). The agent writes it, and reads it when it
+	// starts: a used window must stay used across a restart. Close leaves it.
+	usedFile = "pairing-used.json"
 
 	// WindowTTL is how long a pairing code works.
 	WindowTTL = 5 * time.Minute
@@ -47,6 +54,13 @@ const (
 	MaxBadCodes = 5
 	// DecisionTimeout is how long the phone waits for the person at the PC.
 	DecisionTimeout = 2 * time.Minute
+	// AliveEvery is how often the pair command says that it still runs, and
+	// AliveFor how long the server believes it. A window takes a request
+	// without a code only while the command that opened it is alive: a
+	// closed terminal or a killed command must not leave a window behind
+	// that lets a device in with nobody looking (#58).
+	AliveEvery = time.Second
+	AliveFor   = 5 * time.Second
 )
 
 var (
@@ -87,6 +101,8 @@ type Result struct {
 	DeviceID   string `json:"deviceId,omitempty"`
 	DeviceName string `json:"deviceName,omitempty"`
 	Reason     string `json:"reason,omitempty"`
+	// Match is the two digits the phone showed, for a request without a code (#58).
+	Match string `json:"match,omitempty"`
 }
 
 var codeEnc = base32.StdEncoding.WithPadding(base32.NoPadding)
@@ -113,9 +129,57 @@ func Open(dir string, now time.Time) (code string, w Window, err error) {
 
 // Close removes every pairing file.
 func Close(dir string) {
-	for _, f := range []string{windowFile, requestFile, decisionFile, resultFile} {
+	for _, f := range []string{windowFile, requestFile, decisionFile, resultFile, aliveFile} {
 		os.Remove(filepath.Join(dir, f))
 	}
+}
+
+// CloseWindow removes the pairing files if window id is still the open one.
+// A pair command that ends must not take away the window another one opened
+// in the meantime.
+func CloseWindow(dir, id string) {
+	var w Window
+	if readJSON(filepath.Join(dir, windowFile), &w) == nil && w.ID != id {
+		return
+	}
+	Close(dir)
+}
+
+// Hold says that the command that opened the window runs at time now.
+func Hold(dir string, now time.Time) error {
+	path := filepath.Join(dir, aliveFile)
+	if _, err := os.Stat(path); err != nil {
+		if err := os.WriteFile(path, nil, 0o600); err != nil {
+			return err
+		}
+	}
+	return os.Chtimes(path, now, now)
+}
+
+// KeepAlive says so now and every AliveEvery from then on, until stop is
+// called. It only touches the file Hold made: once the files are closed it
+// does nothing.
+func KeepAlive(dir string) (stop func(), err error) {
+	if err := Hold(dir, time.Now()); err != nil {
+		return nil, err
+	}
+	path := filepath.Join(dir, aliveFile)
+	quit, done := make(chan struct{}), make(chan struct{})
+	go func() {
+		defer close(done)
+		t := time.NewTicker(AliveEvery)
+		defer t.Stop()
+		for {
+			select {
+			case <-quit:
+				return
+			case now := <-t.C:
+				_ = os.Chtimes(path, now, now) // a miss is made up for by the next one
+			}
+		}
+	}()
+	var once sync.Once
+	return func() { once.Do(func() { close(quit); <-done }) }, nil
 }
 
 // PendingRequest returns the request for window id, if a phone is waiting.
@@ -158,12 +222,33 @@ type Pairer struct {
 	Poll       time.Duration // how often to look for the decision
 	Timeout    time.Duration // DecisionTimeout by default
 	CollectTTL time.Duration // CollectTimeout by default
+	// Confirm puts the question about a request without a code on the
+	// PC's screen and waits for the answer (#58). shown is false when no
+	// question could be shown (no screen, no dialog program). It ends
+	// when ctx does. nil: this PC never asks on its screen.
+	Confirm func(ctx context.Context, q Question) (allow, shown bool)
 
 	mu     sync.Mutex
 	busy   bool                // a request waits for the PC
 	misses map[string]int      // wrong codes per window id
 	reqs   map[string]*pending // by request id
+	direct *direct             // the request without a code that waits
+	// used holds the windows that took a request, by id, until they would
+	// have expired. A window is good for one request, and that must hold
+	// even when its file could not be deleted (on Windows a file somebody
+	// is reading at that moment stays).
+	used       map[string]time.Time
+	usedLoaded bool // usedFile was read
+	// The sign of life of the pair command as last seen, and when (by this
+	// process's own clock): the same sign seen again much later is an old
+	// one, whatever the PC's clock says now.
+	aliveSeen   time.Time
+	aliveSeenAt time.Time
 }
+
+// sinceSeen is how long ago t was, by the process's own (monotonic) clock.
+// A variable so a test can let time pass.
+var sinceSeen = time.Since
 
 // CollectTimeout is how long an issued token waits for the phone to fetch
 // it. A device whose token was never fetched is removed again.
@@ -316,6 +401,9 @@ func (p *Pairer) claim(code string) (Window, error) {
 		os.Remove(path)
 		return Window{}, ErrNoWindow
 	}
+	if p.isUsedLocked(w.ID) {
+		return Window{}, ErrNoWindow
+	}
 	code = strings.ToUpper(strings.TrimSpace(code))
 	if len(code) > 64 || subtle.ConstantTimeCompare([]byte(hashCode(code)), []byte(w.CodeHash)) != 1 {
 		if p.misses == nil {
@@ -360,10 +448,74 @@ func (p *Pairer) waitDecision(ctx context.Context, id string) (bool, error) {
 // finish consumes the window and leaves only the result for the pair
 // command to read.
 func (p *Pairer) finish(res Result) {
-	for _, f := range []string{windowFile, requestFile, decisionFile} {
-		os.Remove(filepath.Join(p.Dir, f))
-	}
+	p.markUsed(res.WindowID, p.now().Add(WindowTTL))
+	// The result first: the pair command must never see the window gone
+	// with no result to read.
 	_ = writeJSON(filepath.Join(p.Dir, resultFile), res)
+	for _, f := range []string{windowFile, requestFile, decisionFile} {
+		removeFile(filepath.Join(p.Dir, f))
+	}
+}
+
+// markUsed records that window id took its one request.
+func (p *Pairer) markUsed(id string, until time.Time) {
+	if id == "" {
+		return
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.loadUsedLocked()
+	p.used[id] = until
+	// Kept on disk too, before any token exists: an agent that is started
+	// again must not take the same window a second time. A failed write
+	// leaves the record in memory.
+	_ = writeJSON(filepath.Join(p.Dir, usedFile), p.used)
+}
+
+// isUsedLocked reports whether window id took its request already. The
+// caller holds p.mu.
+func (p *Pairer) isUsedLocked(id string) bool {
+	p.loadUsedLocked()
+	_, used := p.used[id]
+	return used
+}
+
+// loadUsedLocked reads the used windows once and forgets the ones that
+// would have expired by now. The caller holds p.mu.
+func (p *Pairer) loadUsedLocked() {
+	if !p.usedLoaded {
+		p.usedLoaded = true
+		var saved map[string]time.Time
+		if readJSON(filepath.Join(p.Dir, usedFile), &saved) == nil {
+			for k, t := range saved {
+				if _, ok := p.used[k]; !ok {
+					if p.used == nil {
+						p.used = map[string]time.Time{}
+					}
+					p.used[k] = t
+				}
+			}
+		}
+	}
+	if p.used == nil {
+		p.used = map[string]time.Time{}
+	}
+	now := p.now()
+	for k, t := range p.used {
+		if !now.Before(t) {
+			delete(p.used, k)
+		}
+	}
+}
+
+// removeFile deletes a file, trying again for a moment when it is in use.
+func removeFile(path string) {
+	for i := 0; i < 5; i++ {
+		if err := os.Remove(path); err == nil || errors.Is(err, os.ErrNotExist) {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
 }
 
 func (p *Pairer) now() time.Time {

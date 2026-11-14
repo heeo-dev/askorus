@@ -119,7 +119,7 @@ func TestStartDetachedRunsOnItsOwnAndLogs(t *testing.T) {
 }
 
 func TestSelfCommand(t *testing.T) {
-	if got := selfCommand("/home/a b/askorus-agent", "serve", "-test-page"); got != `"/home/a b/askorus-agent" serve -test-page` {
+	if got := selfCommand("/home/a b/askorus-agent", "serve", "-port"); got != `"/home/a b/askorus-agent" serve -port` {
 		t.Errorf("selfCommand = %s", got)
 	}
 }

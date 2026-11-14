@@ -2,9 +2,11 @@
 # into a temp folder (#37): a new install through iex (as `irm | iex` runs
 # it), a damaged download, a refused address, an update while the agent runs
 # and one while it does not. Nothing of the real install is touched: the
-# install folder, the agent folder (ASKORUS_AGENT_DIR, with a port of its
-# own) and the ask folder are temp folders, and setup is not run
-# (ASKORUS_NO_SETUP). Exit code 0 only if all pass.
+# install folder, the agent folder (ASKORUS_AGENT_DIR, with a port number of
+# its own to tell it from the real agent) and the ask folder are temp
+# folders, and setup is not run (ASKORUS_NO_SETUP). The test agent runs
+# without its Tailscale node (ASKORUS_TEST_NO_TAILNET): it signs in nowhere,
+# talks to no server and no phone can reach it. Exit code 0 only if all pass.
 #   powershell -NoProfile -File scripts\test-install.ps1 [-Keep] [-Shell pwsh]
 # -Shell runs the installer and release.ps1 in another PowerShell, such as
 # PowerShell 7 (pwsh, or the full path of pwsh.exe). The default is Windows
@@ -23,9 +25,11 @@ function Check([string]$name, [bool]$ok, $detail) {
     if ($ok) { Write-Output "   ok   $name" } else { Write-Output "   FAIL $name"; if ($detail) { $detail | ForEach-Object { "        $_" } }; $script:failed += $name }
 }
 
-function Listening([int]$port) {
-    $c = New-Object Net.Sockets.TcpClient
-    try { $c.Connect('127.0.0.1', $port); return $true } catch { return $false } finally { $c.Close() }
+# Whether the test agent runs, as its own status says (it opens no port on
+# the PC that could be tried, #57).
+function Running() {
+    if (-not $script:exe -or -not (Test-Path $script:exe)) { return $false }
+    return (@(& $script:exe status)[0] -eq 'running')
 }
 
 # Runs install.ps1 in a new PowerShell ($Shell) with the ASKORUS_ variables
@@ -46,14 +50,15 @@ function Install([hashtable]$vars, [switch]$Iex) {
     }
 }
 
-# A port of its own for the test agent, so the real one is never asked to stop.
-$port = 18797
-while ((Listening $port) -and $port -lt 18897) { $port++ }
+# A port number of its own for the test agent, so the real one is never
+# asked to stop (the number names the running agent for start and shutdown).
+$port = 18797 + (Get-Random -Maximum 1000)
 $agentDir = Join-Path $T 'agent'
 New-Item -ItemType Directory -Path $agentDir, (Join-Path $T 'ask') | Out-Null
 $cfg = @{ port = $port; folders = @(); ask = @{ folder = (Join-Path $T 'ask') } } | ConvertTo-Json
 [IO.File]::WriteAllText((Join-Path $agentDir 'agent.json'), $cfg, (New-Object Text.UTF8Encoding $false))
 $env:ASKORUS_AGENT_DIR = $agentDir
+$env:ASKORUS_TEST_NO_TAILNET = '1'
 $exe = $null
 
 try {
@@ -106,14 +111,14 @@ try {
     $r = Install @{ ASKORUS_DOWNLOAD_BASE = 'http://example.com/x'; ASKORUS_INSTALL_DIR = $badDir; ASKORUS_NO_SETUP = '1' }
     Check 'refused' ($r.code -eq 1 -and $r.text -match 'https address or a folder') $r.out
 
-    Write-Output "== update while the agent runs, but its file is locked (test agent on 127.0.0.1:$port)"
+    Write-Output "== update while the agent runs, but its file is locked (test agent, port number $port)"
     & $exe start | Out-Null
-    Check 'the test agent runs' (Listening $port) $null
+    Check 'the test agent runs' (Running) $null
     $lock = [IO.File]::Open($exe, 'Open', 'Read', 'Read') # no delete sharing: the file cannot be renamed
     try { $r = Install @{ ASKORUS_DOWNLOAD_BASE = $rel2; ASKORUS_INSTALL_DIR = $dir; ASKORUS_NO_SETUP = '1' } } finally { $lock.Close() }
     Check 'exit code 1, says the old one stays and runs again' ($r.code -eq 1 -and $r.text -match 'Could not put the new agent in place' -and $r.text -match 'the old one stays and runs again') $r.out
     Check 'the old exe is still in place' (((& $exe version) -join '') -eq 'askorus-agent 0.0.1-test') $null
-    Check 'the agent runs again' (Listening $port) $null
+    Check 'the agent runs again' (Running) $null
     Check 'no askorus-agent.new.exe is left' (-not (Test-Path (Join-Path $dir 'askorus-agent.new.exe'))) $null
 
     Write-Output "== update while the agent runs"
@@ -122,19 +127,20 @@ try {
     Check 'stopped it, updated, kept the old one' ($r.text -match 'stopping the agent' -and $r.text -match 'updated askorus-agent 0\.0\.1-test to askorus-agent 0\.0\.2-test') $r.out
     Check 'the new exe is in place' (((& $exe version) -join '') -eq 'askorus-agent 0.0.2-test') $null
     Check 'the old exe is askorus-agent.prev.exe' (((& (Join-Path $dir 'askorus-agent.prev.exe') version) -join '') -eq 'askorus-agent 0.0.1-test') $null
-    Check 'the agent runs again, from the new exe' ((Listening $port) -and [bool](Get-Process -Name 'askorus-agent' -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $exe })) $r.out
+    Check 'the agent runs again, from the new exe' ((Running) -and [bool](Get-Process -Name 'askorus-agent' -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $exe })) $r.out
     & $exe shutdown | Out-Null
 
     Write-Output '== update while the agent does not run'
     $r = Install @{ ASKORUS_DOWNLOAD_BASE = $rel2; ASKORUS_INSTALL_DIR = $dir; ASKORUS_NO_SETUP = '1' }
     Check 'exit code 0, no stop' ($r.code -eq 0 -and $r.text -notmatch 'stopping') $r.out
-    Check 'does not start it' (-not (Listening $port)) $null
+    Check 'does not start it' (-not (Running)) $null
 } catch {
     Write-Output "   FAIL $($_.Exception.Message)"
     $failed += 'error'
 } finally {
-    if ($exe -and (Test-Path $exe) -and (Listening $port)) { & $exe shutdown | Out-Null }
+    if (Running) { & $exe shutdown | Out-Null }
     Remove-Item Env:ASKORUS_AGENT_DIR -ErrorAction SilentlyContinue
+    Remove-Item Env:ASKORUS_TEST_NO_TAILNET -ErrorAction SilentlyContinue
     if ($Keep) { Write-Output "kept $T" } else { Remove-Item $T -Recurse -Force -ErrorAction SilentlyContinue }
 }
 

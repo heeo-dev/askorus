@@ -1,6 +1,7 @@
 import { AgentError, NetworkError } from '../api/client';
 import { compareCodes, synthCodes } from '../ask/compare';
 import en from './en.json';
+import { TailnetError } from '../tailnet/node';
 import { errorText, has, label, pickLang, setLang, t } from './index';
 import ko from './ko.json';
 
@@ -94,8 +95,15 @@ test('unknown codes from a newer agent still show', () => {
 
 test('errors are explained in words', () => {
   setLang('ko');
-  expect(errorText(new AgentError('pair_denied', 403))).toBe('PC에서 거절했습니다.');
-  expect(errorText(new NetworkError())).toContain('Tailscale');
+  expect(errorText(new AgentError('pair_denied', 403))).toBe('요청이 거절됐습니다.');
+  // #58: the PC stops asking about a phone whose requests kept ending refused or unanswered.
+  expect(errorText(new AgentError('pair_ask_limit', 429))).toContain('askorus-agent pair를 실행한 뒤');
+  expect(errorText(new NetworkError())).toContain('PC에 닿지 않습니다');
+  // #57: the app's own Tailscale node says why it could not send.
+  expect(errorText(new NetworkError(new TailnetError('tailnet_login')))).toContain('Tailscale에 로그인되어 있지 않습니다');
+  expect(errorText(new NetworkError(new TailnetError('tailnet_not_own')))).toContain('내 Tailscale 계정에 없습니다');
+  expect(errorText(new NetworkError(new TailnetError('tailnet_unknown_host')))).toContain('내 Tailscale 계정에 없습니다');
+  expect(errorText(new NetworkError(new TailnetError('tailnet_network')))).toContain('PC에 닿지 않습니다');
   // R-88: the agent caps the sessions it opens or starts at once.
   expect(errorText(new AgentError('too_many_jobs', 429))).toBe('PC가 다른 세션을 열거나 시작하는 중입니다. 잠시 뒤에 다시 하세요.');
   setLang('en');

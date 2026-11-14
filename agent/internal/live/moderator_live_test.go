@@ -11,6 +11,7 @@ import (
 	"github.com/heeo-dev/askorus/agent/internal/adapter/claude"
 	"github.com/heeo-dev/askorus/agent/internal/adapter/codex"
 	"github.com/heeo-dev/askorus/agent/internal/api"
+	"github.com/heeo-dev/askorus/agent/internal/api/apitest"
 	"github.com/heeo-dev/askorus/agent/internal/core"
 	"github.com/heeo-dev/askorus/agent/internal/devices"
 	"github.com/heeo-dev/askorus/agent/internal/logx"
@@ -34,10 +35,10 @@ func TestLT13ModeratorAsk(t *testing.T) {
 		t.Fatal(err)
 	}
 	adapters := []core.Adapter{claude.New(claude.Options{ClaudeDir: claudeDir}), codex.New(codex.Options{SchemaDir: t.TempDir()})}
-	srv := httptest.NewServer(api.New(api.Options{
+	srv := httptest.NewServer(apitest.AsOwner(api.New(apitest.Node(api.Options{
 		Version: "live", Hostname: "PC", Adapters: adapters, Devices: store, Logger: logx.Discard(), AskFolder: folder,
 		JudgeMinVersions: map[string]string{claude.Name: claude.JudgeMinVersion, codex.Name: codex.JudgeMinVersion},
-	}).Handler())
+	})).Handler()))
 	t.Cleanup(srv.Close)
 	e := &liveEnv{t: t, srv: srv, token: token, folder: folder}
 

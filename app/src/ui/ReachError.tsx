@@ -4,6 +4,8 @@
 // tokens; the words and the order are unchanged). With several PCs (#53)
 // it names the PC it is about and offers picking another. How to start
 // the agent is the same on every system (#52: `askorus-agent start`).
+// When the phone itself is not signed in to Tailscale (#57) the sign-in is
+// offered right here.
 
 import { router } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
@@ -13,12 +15,14 @@ import { type MessageKey, t } from '@/i18n';
 
 import { Button } from './Button';
 import { Icon } from './Icon';
+import { TailnetLogin } from './TailnetLogin';
 import { themed, useTheme } from './theme';
 
 const title: Record<Cause, MessageKey> = {
   unpaired: 'reach.unpaired',
   wrong_account: 'reach.wrong_account',
-  agent_down: 'reach.agent_down',
+  tailnet_login: 'reach.tailnet_login',
+  not_own_pc: 'reach.not_own_pc',
   phone_offline: 'reach.offline',
   pc_unreachable: 'reach.offline',
   other: 'reach.other',
@@ -27,7 +31,7 @@ const title: Record<Cause, MessageKey> = {
 const check: Partial<Record<Cause, MessageKey>> = {
   phone_offline: 'reach.check.phone',
   pc_unreachable: 'reach.check.pc',
-  agent_down: 'reach.check.agent',
+  not_own_pc: 'reach.check.not_own',
   wrong_account: 'reach.check.account',
 };
 
@@ -68,6 +72,8 @@ export function ReachError({
           {t(k)}
         </Text>
       ))}
+      {/* Not signed in, or signed in with an account the PC is not in: both are settled at the sign-in. */}
+      {cause === 'tailnet_login' || cause === 'not_own_pc' ? <TailnetLogin onSignedIn={onRetry} manage /> : null}
       {cause === 'unpaired' ? (
         <Button label={t('sessions.repair')} onPress={() => router.push('/pair')} style={s.button} />
       ) : onRetry ? (

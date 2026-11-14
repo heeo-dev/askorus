@@ -1,0 +1,5 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!-- To tell the node when the phone's network changes (Wi-Fi to mobile
+       data). No VPN permission: the node lives inside the app. -->
+  <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+</manifest>

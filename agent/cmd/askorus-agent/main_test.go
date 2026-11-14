@@ -20,21 +20,37 @@ import (
 	"github.com/heeo-dev/askorus/agent/internal/core"
 )
 
+// The pairing link is version 2 (#57): its host is the agent's own
+// Tailscale node, which the app reaches through its own node. An app that
+// only knows version 1 (a `tailscale serve` address) must not take it.
 func TestPairURL(t *testing.T) {
-	link := PairURL("pc.example.ts.net", 8800, "ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+	link := PairURL("askorus-pc.example.ts.net", 8790, "ABCDEFGHIJKLMNOPQRSTUVWXYZ")
 	u, err := url.Parse(link)
 	if err != nil {
 		t.Fatal(err)
 	}
 	q := u.Query()
-	if u.Scheme != "askorus" || u.Host != "pair" || q.Get("v") != "1" || q.Get("host") != "pc.example.ts.net" || q.Get("port") != "8800" || q.Get("code") != "ABCDEFGHIJKLMNOPQRSTUVWXYZ" {
+	if u.Scheme != "askorus" || u.Host != "pair" || q.Get("v") != "2" || q.Get("host") != "askorus-pc.example.ts.net" || q.Get("port") != "8790" || q.Get("code") != "ABCDEFGHIJKLMNOPQRSTUVWXYZ" {
 		t.Errorf("link = %s", link)
 	}
 }
 
-func TestTestPageURL(t *testing.T) {
-	if got := TestPageURL("pc.example.ts.net", 8790, "ABC234"); got != "https://pc.example.ts.net:8790/test/#code=ABC234" {
-		t.Errorf("TestPageURL = %q", got)
+// help names nothing of the Tailscale app or `tailscale serve` (#57): the
+// agent carries Tailscale inside and only asks for a sign-in.
+func TestHelpIsEmbeddedOnly(t *testing.T) {
+	var b bytes.Buffer
+	if err := run([]string{"help"}, strings.NewReader(""), &b); err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range []string{"test-page", "127.0.0.1", "serve port", "-host"} {
+		if strings.Contains(b.String(), s) {
+			t.Errorf("help still has %q:\n%s", s, b.String())
+		}
+	}
+	for _, s := range []string{"askorus-agent login | logout", "Tailscale 로그인"} {
+		if !strings.Contains(b.String(), s) {
+			t.Errorf("help lacks %q:\n%s", s, b.String())
+		}
 	}
 }
 

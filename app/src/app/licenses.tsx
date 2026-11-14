@@ -18,7 +18,7 @@ import { useSafeInsets } from '@/ui/keyboard';
 import { Sheet } from '@/ui/Sheet';
 import { font, themed, useTheme } from '@/ui/theme';
 
-export type LicenseKind = 'npm' | 'android' | 'other';
+export type LicenseKind = 'npm' | 'android' | 'go' | 'other';
 export type LicenseItem = { n: string; v: string; l: string; t: number | null; k: LicenseKind; u?: string };
 export type Licenses = { packages: LicenseItem[]; texts: string[] };
 
@@ -26,7 +26,7 @@ export type Licenses = { packages: LicenseItem[]; texts: string[] };
 // beyond the type above.
 const data = require('@/licenses/licenses.json') as Licenses;
 
-const kinds: LicenseKind[] = ['npm', 'android', 'other'];
+const kinds: LicenseKind[] = ['npm', 'android', 'go', 'other'];
 
 type Line = { key: string; head: LicenseKind; count: number } | { key: string; item: LicenseItem };
 

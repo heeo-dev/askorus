@@ -28,6 +28,7 @@ import (
 
 	"github.com/heeo-dev/askorus/agent/internal/adapter/claude"
 	"github.com/heeo-dev/askorus/agent/internal/api"
+	"github.com/heeo-dev/askorus/agent/internal/api/apitest"
 	"github.com/heeo-dev/askorus/agent/internal/config"
 	"github.com/heeo-dev/askorus/agent/internal/core"
 	"github.com/heeo-dev/askorus/agent/internal/devices"
@@ -81,12 +82,12 @@ func newLive(t *testing.T) *liveEnv {
 	}
 	hid, _ := hidden.Open(dir)
 	allowed := []config.Folder{{ID: "rc-test", Path: folder, Server: config.FolderServer{Spawn: config.SpawnSameDir, Capacity: 2}}}
-	h := api.New(api.Options{
+	h := apitest.AsOwner(api.New(apitest.Node(api.Options{
 		Version: "live", Hostname: "PC", Adapters: []core.Adapter{a}, Devices: store,
 		Logger: logx.Discard(), Hidden: hid,
 		Folders:        func() []config.Folder { return allowed },
 		HistoryFolders: func() bool { return false },
-	}).Handler()
+	})).Handler())
 	srv := httptest.NewServer(h)
 	t.Cleanup(srv.Close)
 	return &liveEnv{t: t, srv: srv, token: token, adapter: a, folder: folder}

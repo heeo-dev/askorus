@@ -157,7 +157,7 @@ test('compareErrorText looks in compare, then ask, then general words, then the 
   expect(compareErrorText('ask_folder_unavailable')).toBe('The PC could not make its ask folder.');
   expect(compareErrorText('workspace_not_trusted', 'C:/ask')).toContain('C:/ask');
   expect(compareErrorText('unauthorized')).toBe('This phone is no longer paired with the PC. Pair again.');
-  expect(compareErrorText('network')).toContain('Tailscale');
+  expect(compareErrorText('network')).toContain("Can't reach the PC");
   expect(compareErrorText('brand_new')).toBe('Something went wrong (brand_new).');
   // A judging error kept from before C6 still reads, with the AI's words.
   expect(compareErrorText('judge_failed', 'usage limit reached')).toBe('The judging AI reported an error.\nusage limit reached');

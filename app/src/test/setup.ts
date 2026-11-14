@@ -6,6 +6,9 @@
 
 import { conversations } from '@/ask/conversations';
 import { setLang } from '@/i18n';
+import { resetRefused } from '@/api/refused';
+import { resetTailnet } from '@/tailnet/node';
+import { resetMockTailnet } from './tailnet';
 import { resetPCs } from '@/ui/shell/pcs';
 import { resetPCStatus } from '@/ui/shell/pcStatus';
 
@@ -39,6 +42,48 @@ jest.mock('expo-crypto', () => ({
 }));
 
 jest.mock('expo-device', () => ({ deviceName: 'Test Phone', modelName: 'SM-TEST' }));
+
+// The app's own Tailscale node (#57, modules/tailnet): a stand-in that is
+// signed in and hands each request to the test's own `fetch` (fakeAgent).
+// Every PC name is one of the person's own devices unless a test says
+// otherwise through mockTailnet (test/tailnet.ts).
+jest.mock('@/tailnet/native', () => {
+  const state = {
+    available: true,
+    status: { state: 'Running', name: 'askorus-test-phone.tail0.ts.net', owner: 'me@example.com' } as Record<string, unknown>,
+    // What the tailnet says of a host; the default is one of the person's own devices.
+    peers: {} as Record<string, { known: boolean; sameUser: boolean }>,
+    // The other devices of the account, as the node lists them (#58); none unless a test puts some.
+    devices: [] as Array<{ name: string; host: string; online: boolean; os?: string }>,
+    // What login makes of the status (the link arrives a moment after the button).
+    afterLogin: null as Record<string, unknown> | null,
+    calls: [] as string[],
+  };
+  const mod = {
+    start: async (hostname: string) => void state.calls.push(`start ${hostname}`),
+    stop: async () => void state.calls.push('stop'),
+    status: async () => JSON.stringify(state.status),
+    login: async () => {
+      state.calls.push('login');
+      if (state.afterLogin) state.status = state.afterLogin;
+    },
+    logout: async () => {
+      state.calls.push('logout');
+      state.status = { state: 'NeedsLogin' };
+    },
+    peer: async (host: string) => {
+      state.calls.push(`peer ${host}`);
+      return JSON.stringify(state.peers[host] ?? { known: true, sameUser: true, online: true });
+    },
+    peers: async () => JSON.stringify(state.devices),
+    fetch: async (method: string, url: string, headers: string, body: string) => {
+      const res = await globalThis.fetch(url, { method, headers: JSON.parse(headers), body: body || undefined });
+      return { status: res.status, headers: '{}', body: await res.text() };
+    },
+    recentLog: async () => '',
+  };
+  return { __esModule: true, nativeTailnet: () => (state.available ? mod : null), mockTailnetState: state };
+});
 
 jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn(async () => true), getStringAsync: jest.fn(async () => '') }));
 
@@ -75,7 +120,13 @@ jest.spyOn(require('react-native').AccessibilityInfo, 'isReduceMotionEnabled').m
 setLang('en');
 
 beforeEach(() => {
+  resetRefused();
   mockSecure.clear();
+  // The person signed in to Tailscale on this phone before (tailnet/node):
+  // the screens under test are those of a phone that can reach its PCs.
+  mockSecure.set('tailnet.on.v1', '1');
+  resetMockTailnet();
+  resetTailnet();
   for (const m of mockSQLite.values()) m.clear();
   conversations.reset();
   resetPCs();

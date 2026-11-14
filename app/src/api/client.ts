@@ -1,16 +1,24 @@
 // Client for one PC agent's /v1 API. It returns data and stable error
-// codes only; the screens pick the words (N9).
+// codes only; the screens pick the words (N9). Requests go through the
+// app's own Tailscale node (tailnet/node, #57), never the phone's ordinary
+// network.
+
+import { tailnetFetch } from '@/tailnet/node';
+
+import { agentBase, markRefused, tokenRefused } from './refused';
 
 import type {
   Comparison,
   ComparisonRequest,
   Debate,
   DebateRequest,
+  Hello,
   FolderList,
   Info,
   Job,
   JobStarted,
   OpenResult,
+  PairQuestion,
   PairStarted,
   PairStatus,
   Preview,
@@ -35,7 +43,11 @@ export class AgentError extends Error {
   }
 }
 
-/** The request never got an answer: phone offline, Tailscale off, PC asleep, agent down. */
+/**
+ * The request never got an answer: phone offline, PC asleep, agent down,
+ * or the app's Tailscale node could not send it (cause is then a
+ * TailnetError with the reason: not signed in, not the person's own PC).
+ */
 export class NetworkError extends Error {
   constructor(
     readonly cause?: unknown,
@@ -72,8 +84,11 @@ export type WaitOptions = {
 // row before giving up (about half a minute at one poll a second).
 const maxMisses = 30;
 
+// Plain http, inside the tailnet only: Tailscale already encrypts between
+// the phone's node and the PC's and knows who is on each end, so the PC
+// needs no certificate (and no name in the public certificate logs).
 export function baseUrl(host: string, port: number): string {
-  return port === 443 ? `https://${host}` : `https://${host}:${port}`;
+  return agentBase(host, port);
 }
 
 export function defaultSleep(ms: number, signal?: AbortSignal): Promise<void> {
@@ -104,7 +119,7 @@ export class AgentClient {
     opts: ClientOptions = {},
   ) {
     this.token = opts.token;
-    this.fetchFn = opts.fetch ?? ((input, init) => fetch(input, init));
+    this.fetchFn = opts.fetch ?? tailnetFetch;
     this.sleep = opts.sleep ?? defaultSleep;
     this.timeoutMs = opts.timeoutMs ?? 15000;
   }
@@ -115,6 +130,8 @@ export class AgentClient {
   }
 
   async request<T>(method: string, path: string, body?: unknown, signal?: AbortSignal, timeoutMs = this.timeoutMs): Promise<T> {
+    // A token this agent refused stays refused: nothing more is sent with it (R-115).
+    if (this.token && tokenRefused(this.base, this.token)) throw new AgentError('unauthorized', 401);
     const headers: Record<string, string> = { Accept: 'application/json' };
     if (this.token) headers.Authorization = `Bearer ${this.token}`;
     if (body !== undefined) headers['Content-Type'] = 'application/json';
@@ -146,6 +163,7 @@ export class AgentClient {
       // not JSON: a proxy error page or an empty body
     }
     if (!res.ok) {
+      if (res.status === 401 && this.token) markRefused(this.base, this.token);
       const err = (data as { error?: { code?: string; message?: string } } | null)?.error;
       throw new AgentError(err?.code || `http_${res.status}`, res.status, err?.message);
     }
@@ -399,6 +417,31 @@ export class AgentClient {
       wait.signal,
     );
     return this.waitPair(started, wait);
+  }
+
+  /**
+   * Asks to pair without a code (#58): the PC was found among the devices of
+   * the person's own Tailscale account. match is the two digits this phone
+   * shows; the PC shows them where it asks or reports.
+   */
+  async pairDirect(deviceName: string, match: string, wait: WaitOptions = {}): Promise<Paired> {
+    const started = await this.request<PairStarted>('POST', 'pair', { deviceName, match }, wait.signal);
+    return this.waitPair(started, wait);
+  }
+
+  /** What a PC of the same Tailscale account says of itself before pairing (#58). */
+  hello(signal?: AbortSignal) {
+    return this.request<Hello>('GET', 'hello', undefined, signal);
+  }
+
+  /** The pairing request that waits on the PC, for this paired phone to answer (#58). */
+  async pairRequests(signal?: AbortSignal): Promise<PairQuestion[]> {
+    const r = await this.request<{ requests?: PairQuestion[] }>('GET', 'pair/requests', undefined, signal);
+    return r?.requests ?? [];
+  }
+
+  async answerPair(id: string, allow: boolean): Promise<void> {
+    await this.request<unknown>('POST', 'pair/requests/answer', { id, allow });
   }
 
   async waitPair(started: Pick<PairStarted, 'requestId' | 'pollAfterMs'>, wait: WaitOptions = {}): Promise<Paired> {

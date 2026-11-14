@@ -32,9 +32,12 @@ function Step($name, $dir, $exe, [string[]]$cmdArgs, $show) {
 
 $agent = Join-Path $root 'agent'
 $app = Join-Path $root 'app'
+# The app's Tailscale bridge (#57): a Go module of its own, built into the
+# Android app with gomobile (tsbridge/build-android.sh).
+$bridge = Join-Path $root 'tsbridge'
 
-$unformatted = & gofmt -l $agent
-if ($unformatted) { Write-Output '== agent: gofmt'; $unformatted; $failed += 'gofmt' }
+$unformatted = @(& gofmt -l $agent) + @(& gofmt -l $bridge)
+if ($unformatted) { Write-Output '== agent, tsbridge: gofmt'; $unformatted; $failed += 'gofmt' }
 # Personal values (addresses, machine names, user paths, private links)
 # never go into the repo. Their patterns live outside git, one extended
 # regex per line in .local\private-patterns.txt of the main checkout; no
@@ -58,14 +61,17 @@ if ($phoneWrites) {
   $phoneWrites | ForEach-Object { "   $($_.Filename):$($_.LineNumber): $($_.Line.Trim())" }
   $failed += 'e2e phone settings'
 }
-Step 'agent: go vet (windows)' $agent 'go' @('vet', './...')
+# The Tailscale library is built without the parts the agent and the app
+# must not carry (tsnode.BuildTags), so it is vetted and tested that way.
+$tsTags = 'ts_omit_peerapiserver,ts_omit_c2n,ts_omit_logtail'
+Step 'agent: go vet (windows)' $agent 'go' @('vet', '-tags', $tsTags, './...')
 $env:GOOS = 'linux'
-Step 'agent: go vet (linux)' $agent 'go' @('vet', './...')
+Step 'agent: go vet (linux)' $agent 'go' @('vet', '-tags', $tsTags, './...')
 # macOS (#52): the agent must keep building for it; its tests run on GitHub.
 $env:GOOS = 'darwin'
-Step 'agent: go vet (macos)' $agent 'go' @('vet', './...')
+Step 'agent: go vet (macos)' $agent 'go' @('vet', '-tags', $tsTags, './...')
 Remove-Item Env:GOOS
-Step 'agent: unit + scenario tests' $agent 'go' @('test', '-count=1', './...') '^(ok|FAIL)'
+Step 'agent: unit + scenario tests' $agent 'go' @('test', '-tags', $tsTags, '-count=1', './...') '^(ok|FAIL)'
 # synth-eval (agent/cmd/synth-eval, milestone C) is built only with -tags
 # syntheval: vetted on both systems and tested with the fake AI programs.
 Step 'agent: go vet syntheval (windows)' $agent 'go' @('vet', '-tags', 'syntheval', './cmd/synth-eval/...')
@@ -73,6 +79,13 @@ $env:GOOS = 'linux'
 Step 'agent: go vet syntheval (linux)' $agent 'go' @('vet', '-tags', 'syntheval', './cmd/synth-eval/...')
 Remove-Item Env:GOOS
 Step 'agent: synth-eval tests' $agent 'go' @('test', '-tags', 'syntheval', '-count=1', './cmd/synth-eval/...') '^(ok|FAIL)'
+
+# The bridge is vetted as the app builds it (Android) and tested here.
+Step 'tsbridge: go vet (windows)' $bridge 'go' @('vet', '-tags', $tsTags, './...')
+$env:GOOS = 'android'; $env:GOARCH = 'arm64'; $env:CGO_ENABLED = '0'
+Step 'tsbridge: go vet (android)' $bridge 'go' @('vet', '-tags', $tsTags, '.')
+Remove-Item Env:GOOS, Env:GOARCH, Env:CGO_ENABLED
+Step 'tsbridge: tests' $bridge 'go' @('test', '-tags', $tsTags, '-count=1', './...') '^(ok|FAIL)'
 
 # The installer (#37): release files built into a temp folder, installed and
 # updated there with a test agent on a port of its own.

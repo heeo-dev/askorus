@@ -30,7 +30,6 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 	in := Default()
 	in.DefaultModel = "opus"
 	in.DefaultEffort = "high"
-	in.ServeHosts = []string{"pc.example.ts.net"}
 	in.Folders = []Folder{
 		{Path: abs(t, "My App")},
 		{Path: abs(t, "my-app")},
@@ -75,7 +74,6 @@ func TestValidate(t *testing.T) {
 		"capacity": func(c *Config) {
 			c.Folders = []Folder{{ID: "a", Path: abs(t), Server: FolderServer{Spawn: SpawnSameDir, Capacity: 99}}}
 		},
-		"host":        func(c *Config) { c.ServeHosts = []string{"Evil.com:80"} },
 		"claude path": func(c *Config) { c.ClaudePath = "claude.exe" },
 	}
 	for name, mutate := range cases {

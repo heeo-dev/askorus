@@ -5,6 +5,13 @@
 #   powershell -NoProfile -File scripts\e2e.ps1 [-Flow 01] [-Prepare]
 #   powershell -NoProfile -File scripts\e2e.ps1 -Emulator [-Window] [-Keep]
 param([string]$Flow = '', [switch]$Emulator, [switch]$Window, [switch]$Keep, [switch]$Prepare)
+# 2026-11-13 (#57): this script cannot run for now. It drives the app in Expo
+# Go, and the app's Tailscale is a native module that Expo Go does not have,
+# so the app there cannot reach any PC. It has to be rebuilt to drive the
+# built app (app.askorus), signed in to Tailscale once by a person. Until
+# then the real-phone check stands in (docs/testing.md, MT-14).
+Write-Output 'e2e.ps1 does not run since #57: Tailscale is built into the app and Expo Go has no such module. See docs/testing.md, section 4.'
+exit 1
 # Phone: plugged into the PC with USB debugging on (or wireless debugging,
 # paired once with a QR in Developer options, same Wi-Fi as the PC),
 # Tailscale connected, screen lock None or Swipe.

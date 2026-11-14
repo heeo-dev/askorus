@@ -18,7 +18,7 @@ import (
 func TestRightTokenIsNeverLockedOut(t *testing.T) {
 	e := newEnv(t, fakeAdapter{}, nil)
 	const addr = "100.64.0.20"
-	bad := map[string]string{"Authorization": "Bearer ask_guess", "X-Forwarded-For": addr}
+	bad := map[string]string{"Authorization": "Bearer ask_guess", hdrCallerIP: addr}
 	for i := 0; i < maxFails; i++ {
 		if w := e.do("GET", "/v1/info", bad); w.Code != 401 {
 			t.Fatalf("try %d = %d", i, w.Code)
@@ -28,22 +28,22 @@ func TestRightTokenIsNeverLockedOut(t *testing.T) {
 	if w := e.do("GET", "/v1/info", bad); w.Code != 429 || errCode(t, w) != CodeTooMany {
 		t.Errorf("wrong token from a locked address = %d %s", w.Code, w.Body)
 	}
-	if w := e.do("GET", "/v1/info", map[string]string{"Authorization": "", "X-Forwarded-For": addr}); w.Code != 429 {
+	if w := e.do("GET", "/v1/info", map[string]string{"Authorization": "", hdrCallerIP: addr}); w.Code != 429 {
 		t.Errorf("no token from a locked address = %d %s", w.Code, w.Body)
 	}
 	// ...and the paired phone at the same address goes on working.
-	if w := e.do("GET", "/v1/info", map[string]string{"X-Forwarded-For": addr}); w.Code != 200 {
+	if w := e.do("GET", "/v1/info", map[string]string{hdrCallerIP: addr}); w.Code != 200 {
 		t.Errorf("right token from a locked address = %d %s", w.Code, w.Body)
 	}
 
 	// Past the total, every address is locked; the right token still works.
 	for i := 0; i < maxTotalFails; i++ {
-		e.do("GET", "/v1/info", map[string]string{"Authorization": "Bearer ask_guess", "X-Forwarded-For": "100.64.1." + strconv.Itoa(i)})
+		e.do("GET", "/v1/info", map[string]string{"Authorization": "Bearer ask_guess", hdrCallerIP: "100.64.1." + strconv.Itoa(i)})
 	}
-	if w := e.do("GET", "/v1/info", map[string]string{"Authorization": "Bearer ask_guess", "X-Forwarded-For": "100.64.9.9"}); w.Code != 429 {
+	if w := e.do("GET", "/v1/info", map[string]string{"Authorization": "Bearer ask_guess", hdrCallerIP: "100.64.9.9"}); w.Code != 429 {
 		t.Errorf("wrong token under the total lock = %d %s", w.Code, w.Body)
 	}
-	if w := e.do("GET", "/v1/info", map[string]string{"X-Forwarded-For": "100.64.9.9"}); w.Code != 200 {
+	if w := e.do("GET", "/v1/info", map[string]string{hdrCallerIP: "100.64.9.9"}); w.Code != 200 {
 		t.Errorf("right token under the total lock = %d %s", w.Code, w.Body)
 	}
 	// Refused requests are not counted again: the lock does not grow.
@@ -136,22 +136,5 @@ func TestHiddenFolderSessionsRefused(t *testing.T) {
 	}
 	if w := e.doBody("GET", "/v1/sessions/"+sid+"/preview", ""); w.Code != 200 {
 		t.Errorf("a session elsewhere = %d %s", w.Code, w.Body)
-	}
-}
-
-// R-104 (#46): a request tailscale marks as come through Funnel (from the
-// internet) is refused before anything else, even with the right token and
-// on the pairing route.
-func TestFunnelRequestsRefused(t *testing.T) {
-	e := newEnv(t, fakeAdapter{}, nil)
-	funnel := map[string]string{funnelHeader: "?1"}
-	if w := e.do("GET", "/v1/info", funnel); w.Code != 403 || errCode(t, w) != CodeFunnel {
-		t.Errorf("info through funnel = %d %s", w.Code, w.Body)
-	}
-	if w := e.do("POST", "/v1/pair", funnel); w.Code != 403 || errCode(t, w) != CodeFunnel {
-		t.Errorf("pair through funnel = %d %s", w.Code, w.Body)
-	}
-	if w := e.do("GET", "/v1/info", nil); w.Code != 200 {
-		t.Errorf("without the mark = %d %s", w.Code, w.Body)
 	}
 }

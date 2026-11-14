@@ -1,8 +1,9 @@
 // The pairing link the PC shows as a QR code:
-//   askorus://pair?v=1&host=<MagicDNS name>&port=<serve HTTPS port>&code=<code>
-// `askorus-agent pair -test-page` shows the test page instead:
-//   https://<host>:<port>/test/#code=<code>
-// Both are accepted, so the same PC window pairs the app or the browser.
+//   askorus://pair?v=2&host=<the agent's name in the tailnet>&port=<port>&code=<code>
+// Version 2 (#57): the host is the PC agent's own Tailscale node, which the
+// app reaches through its own node. A version 1 link came from an agent
+// behind `tailscale serve`; that way is gone, and the app says to update
+// the agent instead of trying it.
 
 export type PairLink = {
   host: string;
@@ -10,47 +11,40 @@ export type PairLink = {
   code: string;
 };
 
-// The PC's MagicDNS name, which `tailscale serve` answers on: a name under
-// ts.net and nothing else (R-94). A link someone sends could name any
-// server, and that server, not the person's own PC, would then "allow" the
-// pairing and get the questions. Nothing that could carry a path, a user
-// name or a different scheme either.
+// The agent's MagicDNS name: a name under ts.net and nothing else (R-94). A
+// link someone sends could name any server; whether the name is one of the
+// person's own devices is then asked of the tailnet itself before anything
+// is sent (tailnet/node ownDevice, and again on every request). Nothing
+// that could carry a path, a user name or a different scheme either.
 const hostRe = /^[a-z0-9]([a-z0-9-]{0,62})(\.[a-z0-9]([a-z0-9-]{0,62}))*\.ts\.net$/i;
 const codeRe = /^[A-Z2-7]{16,64}$/;
 
-export function parsePairLink(text: string): PairLink | null {
+function pairQuery(text: string): URLSearchParams | null {
   let u: URL;
   try {
     u = new URL(text.trim());
   } catch {
     return null;
   }
+  if (u.protocol !== 'askorus:') return null;
+  // URL puts "pair" in host or pathname depending on the runtime.
+  const what = (u.host || u.pathname.replace(/^\/+/, '')).toLowerCase();
+  return what === 'pair' ? new URLSearchParams(u.search) : null;
+}
 
-  let host: string;
-  let port: string;
-  let code: string | null;
-  if (u.protocol === 'askorus:') {
-    // URL puts "pair" in host or pathname depending on the runtime.
-    const what = (u.host || u.pathname.replace(/^\/+/, '')).toLowerCase();
-    if (what !== 'pair') return null;
-    const q = new URLSearchParams(u.search);
-    if (q.get('v') !== '1') return null;
-    host = q.get('host') ?? '';
-    port = q.get('port') ?? '';
-    code = q.get('code');
-  } else if (u.protocol === 'https:') {
-    if (!u.pathname.startsWith('/test')) return null;
-    host = u.hostname;
-    port = u.port || '443';
-    code = new URLSearchParams(u.hash.replace(/^#/, '')).get('code');
-  } else {
-    return null;
-  }
-
-  const p = Number(port);
-  code = (code ?? '').replace(/[-\s]/g, '').toUpperCase();
+export function parsePairLink(text: string): PairLink | null {
+  const q = pairQuery(text);
+  if (!q || q.get('v') !== '2') return null;
+  const host = q.get('host') ?? '';
+  const p = Number(q.get('port') ?? '');
+  const code = (q.get('code') ?? '').replace(/[-\s]/g, '').toUpperCase();
   if (!hostRe.test(host) || !Number.isInteger(p) || p < 1 || p > 65535 || !codeRe.test(code)) {
     return null;
   }
   return { host: host.toLowerCase(), port: p, code };
+}
+
+/** A pairing link of an agent older than 0.3 (version 1): the PC's agent has to be updated. */
+export function isOldPairLink(text: string): boolean {
+  return pairQuery(text)?.get('v') === '1';
 }

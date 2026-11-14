@@ -554,7 +554,7 @@ test('the questions go to the current PC; a conversation stays with the PC it wa
   const laptopHost = 'laptop.tail0.ts.net';
   globalThis.fetch = (async (u: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(u));
-    if (url.hostname === laptopHost) return laptop.fetch(`https://${HOST}:${PORT}${url.pathname}${url.search}`, init);
+    if (url.hostname === laptopHost) return laptop.fetch(`http://${HOST}:${PORT}${url.pathname}${url.search}`, init);
     return agent.fetch(u, init);
   }) as typeof fetch;
   const user = userEvent.setup();

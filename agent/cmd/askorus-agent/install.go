@@ -7,7 +7,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"net"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -21,30 +20,21 @@ import (
 	"github.com/heeo-dev/askorus/agent/internal/config"
 	"github.com/heeo-dev/askorus/agent/internal/core"
 	"github.com/heeo-dev/askorus/agent/internal/devices"
-	"github.com/heeo-dev/askorus/agent/internal/tailnet"
+	"github.com/heeo-dev/askorus/agent/internal/tsnode"
 )
 
 // Installing and running the agent on the PC (A5, design: PC 설치 흐름).
 
-// agentListening reports whether something answers on 127.0.0.1:port.
-func agentListening(port int) bool {
-	c, err := net.DialTimeout("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)), 500*time.Millisecond)
-	if err != nil {
-		return false
-	}
-	c.Close()
-	return true
-}
-
-func waitListening(port int, want bool, d time.Duration) bool {
+// waitRunning waits until an agent with that port runs (or no longer does).
+func waitRunning(port int, want bool, d time.Duration) bool {
 	deadline := time.Now().Add(d)
 	for time.Now().Before(deadline) {
-		if agentListening(port) == want {
+		if agentRunning(port) == want {
 			return true
 		}
 		time.Sleep(200 * time.Millisecond)
 	}
-	return agentListening(port) == want
+	return agentRunning(port) == want
 }
 
 // howToStart is the command that gets the agent running in the background.
@@ -52,17 +42,15 @@ func howToStart() string { return "askorus-agent start" }
 
 // startCmd runs `serve` in the background without a window.
 func startCmd(dir string, args []string, out io.Writer) error {
-	fs := flag.NewFlagSet("start", flag.ContinueOnError)
-	testPage := fs.Bool("test-page", false, "serve the phone-browser test page")
-	if err := fs.Parse(args); err != nil {
-		return err
+	if len(args) != 0 {
+		return fail("usage: askorus-agent start", "사용법: askorus-agent start")
 	}
 	cfg, err := config.Load(dir)
 	if err != nil {
 		return err
 	}
-	if agentListening(cfg.Port) {
-		say(out, m("the agent already runs on 127.0.0.1:%d", "에이전트가 이미 127.0.0.1:%d에서 돌고 있습니다", cfg.Port))
+	if agentRunning(cfg.Port) {
+		say(out, m("the agent already runs", "에이전트가 이미 돌고 있습니다"))
 		return nil
 	}
 	exe, err := os.Executable()
@@ -72,21 +60,32 @@ func startCmd(dir string, args []string, out io.Writer) error {
 	if err := os.MkdirAll(filepath.Join(dir, "logs"), 0o700); err != nil {
 		return err
 	}
-	serveArgs := []string{"serve"}
-	if *testPage {
-		serveArgs = append(serveArgs, "-test-page")
-	}
-	pid, err := startDetached(exe, serveArgs, dir, filepath.Join(dir, "logs", "background.out"))
+	pid, err := startDetached(exe, []string{"serve"}, dir, filepath.Join(dir, "logs", "background.out"))
 	if err != nil {
 		return err
 	}
-	if !waitListening(cfg.Port, true, 15*time.Second) {
-		return fail("the agent (pid %d) did not start listening; see %s", "에이전트(pid %d)가 열리지 않았습니다. %s를 보세요", pid, filepath.Join(dir, "logs", "background.out"))
+	if !waitRunning(cfg.Port, true, 15*time.Second) {
+		return fail("the agent (pid %d) did not start; see %s", "에이전트(pid %d)가 켜지지 않았습니다. %s를 보세요", pid, filepath.Join(dir, "logs", "background.out"))
 	}
-	say(out, m("the agent runs in the background on 127.0.0.1:%d (pid %d); stop it with: askorus-agent shutdown",
-		"에이전트가 백그라운드에서 127.0.0.1:%d로 돕니다 (pid %d). 끄려면: askorus-agent shutdown", cfg.Port, pid))
-	return nil
+	say(out, m("the agent runs in the background (pid %d); stop it with: askorus-agent shutdown",
+		"에이전트가 백그라운드에서 돕니다 (pid %d). 끄려면: askorus-agent shutdown", pid))
+	// Say whether phones can reach it yet. Signing in to Tailscale is a
+	// step of its own (login), so a PC not signed in is not an error here.
+	deadline := time.Now().Add(startNodeWait)
+	for {
+		n, ok := readNodeInfo(dir)
+		if ok && (n.signedIn() || n.State == tsnode.StateNeedsLogin || n.State == tsnode.StateNeedsApproval || n.State == stateNoNode) || time.Now().After(deadline) {
+			_, line := nodeLine(dir, true, time.Now())
+			say(out, line)
+			return nil
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
 }
+
+// startNodeWait is how long start waits to learn the node's state; tests
+// shorten it.
+var startNodeWait = 12 * time.Second
 
 // pidFile holds the running agent's process id while it serves.
 const pidFile = "agent.pid"
@@ -101,8 +100,8 @@ func readPID(dir string) int {
 }
 
 // shutdownCmd asks the running agent to stop and waits until its process
-// has ended: it closes the port at once, then stops its folder servers
-// with Ctrl+C.
+// has ended: it stops answering phones at once, then stops its folder
+// servers with Ctrl+C.
 func shutdownCmd(dir string, out io.Writer) error {
 	cfg, err := config.Load(dir)
 	if err != nil {
@@ -110,18 +109,14 @@ func shutdownCmd(dir string, out io.Writer) error {
 	}
 	pid := readPID(dir)
 	if err := signalStop(cfg.Port); err != nil {
-		if !agentListening(cfg.Port) {
-			say(out, m("the agent is not running", "에이전트가 돌고 있지 않습니다"))
-			return nil
-		}
-		return fail("the agent on 127.0.0.1:%d did not take the stop signal (started from another account?)",
-			"127.0.0.1:%d의 에이전트가 멈춤 신호를 받지 않았습니다 (다른 계정에서 켰나요?)", cfg.Port)
+		say(out, m("the agent is not running", "에이전트가 돌고 있지 않습니다"))
+		return nil
 	}
 	deadline := time.Now().Add(30 * time.Second)
-	for time.Now().Before(deadline) && (agentListening(cfg.Port) || (pid > 0 && processRunning(pid))) {
+	for time.Now().Before(deadline) && (agentRunning(cfg.Port) || (pid > 0 && processRunning(pid))) {
 		time.Sleep(200 * time.Millisecond)
 	}
-	if agentListening(cfg.Port) || (pid > 0 && processRunning(pid)) {
+	if agentRunning(cfg.Port) || (pid > 0 && processRunning(pid)) {
 		return fail("the agent is still running after 30 s", "30초가 지나도 에이전트가 돌고 있습니다")
 	}
 	say(out, m("the agent stopped", "에이전트를 멈췄습니다"))
@@ -133,8 +128,11 @@ func statusCmd(dir string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	if agentListening(cfg.Port) {
-		say(out, m("running on 127.0.0.1:%d", "127.0.0.1:%d에서 돌고 있습니다", cfg.Port))
+	running := agentRunning(cfg.Port)
+	if running {
+		say(out, m("running", "돌고 있습니다"))
+		_, line := nodeLine(dir, true, time.Now())
+		say(out, line)
 	} else {
 		say(out, m("not running", "돌고 있지 않습니다"))
 	}
@@ -147,9 +145,8 @@ func statusCmd(dir string, out io.Writer) error {
 }
 
 func autostartCmd(args []string, out io.Writer) error {
-	testPage := len(args) == 2 && args[0] == "on" && args[1] == "-test-page"
-	if !testPage && (len(args) != 1 || !slices.Contains([]string{"on", "off", "status"}, args[0])) {
-		return fail("usage: askorus-agent autostart on [-test-page] | off | status", "사용법: askorus-agent autostart on [-test-page] | off | status")
+	if len(args) != 1 || !slices.Contains([]string{"on", "off", "status"}, args[0]) {
+		return fail("usage: askorus-agent autostart on | off | status", "사용법: askorus-agent autostart on | off | status")
 	}
 	switch args[0] {
 	case "on":
@@ -161,10 +158,10 @@ func autostartCmd(args []string, out io.Writer) error {
 		if err != nil {
 			return err
 		}
-		if err := autostartSet(exe, testPage); err != nil {
+		if err := autostartSet(exe); err != nil {
 			return err
 		}
-		say(out, m("the agent starts at logon for this user, with normal rights: %s", "이 사용자로 로그인할 때 에이전트가 일반 권한으로 켜집니다: %s", autostartCommand(exe, testPage)))
+		say(out, m("the agent starts at logon for this user, with normal rights: %s", "이 사용자로 로그인할 때 에이전트가 일반 권한으로 켜집니다: %s", autostartCommand(exe)))
 	case "off":
 		if err := autostartRemove(); err != nil {
 			return err
@@ -291,33 +288,17 @@ func checkCmd(dir string, out io.Writer) error {
 		c.line(l.level, l.text)
 	}
 
-	ti := lookTailnet(ctx, cfg.Port)
-	var be biError
-	if errors.As(ti.problem, &be) {
-		c.line("bad", msg{"Tailscale: " + be.en, "Tailscale: " + be.ko})
-	} else {
-		c.line("ok", m("Tailscale connected as %s (%s)", "Tailscale 연결됨: %s (%s)", ti.status.OwnerLogin, ti.status.DNSName))
-		if !ti.status.HTTPS {
-			c.line("bad", m("HTTPS certificates are off for the tailnet: turn on MagicDNS and HTTPS in the Tailscale admin console",
-				"tailnet에 HTTPS 인증서가 꺼져 있습니다. Tailscale 관리 화면에서 MagicDNS와 HTTPS를 켜세요"))
-		}
-		switch {
-		case ti.served && ti.serve.Funnel:
-			c.line("bad", m("tailscale funnel exposes the agent port to the internet; turn it off: %s funnel --https=%d off",
-				"tailscale funnel이 에이전트 포트를 인터넷에 엽니다. 끄세요: %s funnel --https=%d off", tsCmd, ti.serve.HTTPSPort))
-		case ti.served:
-			c.line("ok", m("phones reach the agent at https://%s:%d", "폰은 https://%s:%d로 에이전트에 닿습니다", ti.serve.Host, ti.serve.HTTPSPort))
-		default:
-			port := suggestServePort(ctx, cfg.Port)
-			c.line("bad", m("tailscale serve does not point at the agent yet; run: %s serve --bg --https=%d http://127.0.0.1:%d",
-				"tailscale serve가 아직 에이전트를 가리키지 않습니다. 실행하세요: %s serve --bg --https=%d http://127.0.0.1:%d", tsCmd, port, cfg.Port))
-		}
-	}
-
-	if agentListening(cfg.Port) {
-		c.line("ok", m("the agent runs on 127.0.0.1:%d", "에이전트가 127.0.0.1:%d에서 돌고 있습니다", cfg.Port))
+	// The agent carries Tailscale inside (#57): whether the PC is signed
+	// in is known from the running agent only.
+	running := agentRunning(cfg.Port)
+	if running {
+		c.line("ok", m("the agent runs", "에이전트가 돌고 있습니다"))
 	} else {
 		c.line("warn", m("the agent is not running: %s", "에이전트가 돌고 있지 않습니다: %s", howToStart()))
+	}
+	if running {
+		level, line := nodeLine(dir, true, time.Now())
+		c.line(level, line)
 	}
 	if controlSupported() {
 		if autostartGet() != "" {
@@ -387,25 +368,6 @@ func checkCmd(dir string, out io.Writer) error {
 	return nil
 }
 
-// suggestServePort picks an HTTPS port tailscale serve does not use yet,
-// preferring the agent's own port number.
-func suggestServePort(ctx context.Context, localPort int) int {
-	used := map[int]bool{}
-	if c, err := tailnet.New(); err == nil {
-		if ports, err := c.ServePorts(ctx); err == nil {
-			for _, p := range ports {
-				used[p] = true
-			}
-		}
-	}
-	for p := localPort; p < localPort+100; p++ {
-		if !used[p] {
-			return p
-		}
-	}
-	return localPort
-}
-
 // uninstallAutostart, uninstallPath and uninstallJudgeCleanup are
 // replaced in tests so they never touch the real logon entry or PATH, or
 // run the real opencode against the real judge folder.
@@ -441,8 +403,8 @@ func cleanupJudgeFolder(ctx context.Context, cfg config.Config, folder string) e
 }
 
 // uninstallCmd undoes what installing set up: the background agent, the
-// logon entry, the agent's own tailscale serve port and the device token
-// hashes. Other serve settings and Claude Code are left alone.
+// logon entry, the agent's sign-in to Tailscale and the device token
+// hashes. Claude Code and the other AI programs are left alone.
 func uninstallCmd(dir string, args []string, in io.Reader, out io.Writer) error {
 	fs := flag.NewFlagSet("uninstall", flag.ContinueOnError)
 	yes := fs.Bool("yes", false, "do not ask")
@@ -455,8 +417,8 @@ func uninstallCmd(dir string, args []string, in io.Reader, out io.Writer) error 
 		return err
 	}
 	ctx := context.Background()
-	ti := lookTailnet(ctx, cfg.Port)
 	plan := []msg{
+		m("sign this PC out of Tailscale and delete its key there (%s)", "이 PC를 Tailscale에서 로그아웃하고 그 키를 지움 (%s)", filepath.Join(dir, nodeDir)),
 		m("stop the agent if it runs", "돌고 있으면 에이전트를 멈춤"),
 		m("remove the logon entry", "로그인할 때 켜기를 없앰"),
 		m("disconnect every paired phone (delete %s)", "짝 맺은 폰을 모두 끊음 (%s 삭제)", devices.FileName),
@@ -465,9 +427,6 @@ func uninstallCmd(dir string, args []string, in io.Reader, out io.Writer) error 
 	onPath := exeFolder != "" && userPathHas(exeFolder)
 	if onPath {
 		plan = append(plan, m("remove %s from this user's PATH", "이 사용자의 PATH에서 %s를 뺌", exeFolder))
-	}
-	if ti.served {
-		plan = append(plan, m("turn off tailscale serve on https://%s:%d (only this port)", "tailscale serve의 https://%s:%d만 끔 (이 포트만)", ti.serve.Host, ti.serve.HTTPSPort))
 	}
 	judgeFolder := ""
 	if ask, err := cfg.AskFolder(); err == nil {
@@ -496,10 +455,31 @@ func uninstallCmd(dir string, args []string, in io.Reader, out io.Writer) error 
 			return nil
 		}
 	}
-	if agentListening(cfg.Port) {
+	// Only the running agent can tell Tailscale that the device is gone.
+	// When it does not run, the key is deleted here and the device stays
+	// listed in the person's Tailscale admin console until they remove it.
+	signedOut := false
+	if agentRunning(cfg.Port) {
+		if n, ok := readNodeInfo(dir); ok && n.State != tsnode.StateNeedsLogin {
+			signedOut = nodeSignOut(dir, 20*time.Second)
+		} else {
+			signedOut = ok
+		}
 		if err := shutdownCmd(dir, out); err != nil {
 			return err
 		}
+	}
+	nodeKeyDir := filepath.Join(dir, nodeDir)
+	hadKey := false
+	if _, err := os.Stat(nodeKeyDir); err == nil {
+		hadKey = true
+	}
+	os.RemoveAll(nodeKeyDir)
+	os.Remove(filepath.Join(dir, nodeFile))
+	os.Remove(filepath.Join(dir, nodeRequestFile))
+	if hadKey && !signedOut {
+		say(out, m("the agent was not running, so Tailscale was not told: this PC's key is deleted here, but the device (askorus-…) stays listed in your Tailscale admin console until you remove it there",
+			"에이전트가 돌고 있지 않아 Tailscale에 알리지 못했습니다. 이 PC의 키는 지웠지만, Tailscale 관리 화면에는 기기(askorus-…)가 남아 있으니 거기서 직접 지우세요"))
 	}
 	if err := uninstallAutostart(); err != nil {
 		return err
@@ -509,7 +489,7 @@ func uninstallCmd(dir string, args []string, in io.Reader, out io.Writer) error 
 			return err
 		}
 	}
-	for _, f := range []string{devices.FileName, "pairing.json", "pairing-request.json", "pairing-decision.json", "pairing-result.json", "pairing-qr.png"} {
+	for _, f := range []string{devices.FileName, "pairing.json", "pairing-request.json", "pairing-decision.json", "pairing-result.json", "pairing-alive", "pairing-used.json", "pairing-qr.png"} {
 		os.Remove(filepath.Join(dir, f))
 	}
 	// The agent is stopped, so none of its one-off calls runs. Without
@@ -524,14 +504,6 @@ func uninstallCmd(dir string, args []string, in io.Reader, out io.Writer) error 
 	os.Remove(schemaFile)
 	os.Remove(synthSchemaFile)
 	os.Remove(refineSchemaFile)
-	if ti.served {
-		if c, err := tailnet.New(); err == nil {
-			if err := c.ServeOff(ctx, ti.serve.HTTPSPort); err != nil {
-				say(out, m("could not turn off tailscale serve (%v); run: %s serve --https=%d off",
-					"tailscale serve를 끄지 못했습니다 (%v). 직접 실행하세요: %s serve --https=%d off", err, tsCmd, ti.serve.HTTPSPort))
-			}
-		}
-	}
 	if *all {
 		if err := os.RemoveAll(dir); err != nil {
 			return err
@@ -549,39 +521,6 @@ func errCode(err error) string {
 	}
 	return core.ErrCodeInternal
 }
-
-// funnelWatch ends serve when tailscale funnel opens the agent port to
-// the internet while it runs (design 보안: Funnel이면 시작을 거부).
-//
-// When tailscale cannot be read the watch sees nothing. unread is then told
-// why, once each time it starts failing, and with nil when reading works
-// again (R-104, #46): agent.log shows that the watch was blind.
-func funnelWatch(ctx context.Context, port int, every time.Duration, onFunnel func(), unread func(error)) {
-	t := time.NewTicker(every)
-	defer t.Stop()
-	blind := false
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-t.C:
-		}
-		ti := lookTailnetFn(ctx, port)
-		if ti.served && ti.serve.Funnel {
-			onFunnel()
-			return
-		}
-		if now := ti.problem != nil; now != blind {
-			blind = now
-			if unread != nil {
-				unread(ti.problem)
-			}
-		}
-	}
-}
-
-// lookTailnetFn is lookTailnet; tests put their own in.
-var lookTailnetFn = lookTailnet
 
 // awakeWatch keeps the PC awake while a background session or a folder
 // server runs, when the settings ask for it.

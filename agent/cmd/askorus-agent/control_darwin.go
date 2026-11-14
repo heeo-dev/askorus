@@ -39,10 +39,7 @@ func plistPath() (string, error) {
 	return filepath.Join(home, "Library", "LaunchAgents", launchLabel+".plist"), nil
 }
 
-func autostartCommand(exe string, testPage bool) string {
-	if testPage {
-		return selfCommand(exe, "serve", "-test-page")
-	}
+func autostartCommand(exe string) string {
 	return selfCommand(exe, "serve")
 }
 
@@ -55,15 +52,12 @@ func xmlText(s string) string {
 // plistText is the launch agent's file. The command in the comment has no
 // "--" in it (a comment cannot hold one): the agent's flags start with one
 // dash.
-func plistText(exe string, testPage bool, path, agentDir, outFile string) string {
+func plistText(exe, path, agentDir, outFile string) string {
 	args := []string{exe, "serve"}
-	if testPage {
-		args = append(args, "-test-page")
-	}
 	var b strings.Builder
 	b.WriteString(`<?xml version="1.0" encoding="UTF-8"?>` + "\n")
 	b.WriteString(`<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">` + "\n")
-	b.WriteString(commandMark + strings.ReplaceAll(autostartCommand(exe, testPage), "--", "- -") + " -->\n")
+	b.WriteString(commandMark + strings.ReplaceAll(autostartCommand(exe), "--", "- -") + " -->\n")
 	b.WriteString("<!-- Written by `askorus-agent autostart on`; `askorus-agent autostart off` removes it. -->\n")
 	b.WriteString(`<plist version="1.0">` + "\n<dict>\n")
 	b.WriteString("\t<key>Label</key>\n\t<string>" + launchLabel + "</string>\n")
@@ -81,6 +75,10 @@ func plistText(exe string, testPage bool, path, agentDir, outFile string) string
 	if agentDir != "" {
 		b.WriteString("\t\t<key>" + agentDirEnv + "</key>\n\t\t<string>" + xmlText(agentDir) + "</string>\n")
 	}
+	// A test run without the Tailscale node stays one under launchd.
+	if os.Getenv(noNodeEnv) == "1" {
+		b.WriteString("\t\t<key>" + noNodeEnv + "</key>\n\t\t<string>1</string>\n")
+	}
 	b.WriteString("\t</dict>\n")
 	if outFile != "" {
 		b.WriteString("\t<key>StandardOutPath</key>\n\t<string>" + xmlText(outFile) + "</string>\n")
@@ -90,7 +88,7 @@ func plistText(exe string, testPage bool, path, agentDir, outFile string) string
 	return b.String()
 }
 
-func autostartSet(exe string, testPage bool) error {
+func autostartSet(exe string) error {
 	if strings.ContainsAny(exe, "\r\n") {
 		return errors.New("the agent's path has a line break in it")
 	}
@@ -105,7 +103,7 @@ func autostartSet(exe string, testPage bool) error {
 	if base, err := config.CacheBase(); err == nil && os.MkdirAll(base, 0o700) == nil {
 		outFile = filepath.Join(base, "background.out")
 	}
-	return os.WriteFile(p, []byte(plistText(exe, testPage, os.Getenv("PATH"), os.Getenv(agentDirEnv), outFile)), 0o644)
+	return os.WriteFile(p, []byte(plistText(exe, os.Getenv("PATH"), os.Getenv(agentDirEnv), outFile)), 0o644)
 }
 
 func autostartRemove() error {

@@ -24,6 +24,7 @@ import (
 	"github.com/heeo-dev/askorus/agent/internal/adapter/codex"
 	"github.com/heeo-dev/askorus/agent/internal/adapter/opencode"
 	"github.com/heeo-dev/askorus/agent/internal/api"
+	"github.com/heeo-dev/askorus/agent/internal/api/apitest"
 	"github.com/heeo-dev/askorus/agent/internal/compares"
 	"github.com/heeo-dev/askorus/agent/internal/config"
 	"github.com/heeo-dev/askorus/agent/internal/core"
@@ -141,15 +142,15 @@ func newRig(t *testing.T, mutate func(*rigOptions)) *rig {
 
 // start starts a new agent on the same adapters, folders and devices.
 func (r *rig) start() {
-	r.server = api.New(api.Options{
+	r.server = api.New(apitest.Node(api.Options{
 		Version: "it", Hostname: "PC", Adapters: r.adapters, Devices: r.store,
 		Logger:    logx.New(r.logs, slog.LevelDebug),
 		AskFolder: r.askDir, Judge: r.o.judge, Refine: r.o.refine,
 		JudgeMinVersions: map[string]string{
 			claude.Name: claude.JudgeMinVersion, codex.Name: codex.JudgeMinVersion, opencode.Name: opencode.JudgeMinVersion,
 		},
-	})
-	r.srv = httptest.NewServer(r.server.Handler())
+	}))
+	r.srv = httptest.NewServer(apitest.AsOwner(r.server.Handler()))
 }
 
 func (r *rig) stop() {

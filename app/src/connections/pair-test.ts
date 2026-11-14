@@ -38,9 +38,9 @@ test('pairing saves the PC under its own host name, with the token apart', async
   const c = await pairWithPC(link, 'S23', { store, fetch: fetchFn, sleep: noSleep, now });
 
   expect(urls).toEqual([
-    'https://desktop-x.tail1.ts.net:8790/v1/pair',
-    'https://desktop-x.tail1.ts.net:8790/v1/pair/status',
-    'https://desktop-x.tail1.ts.net:8790/v1/info',
+    'http://desktop-x.tail1.ts.net:8790/v1/pair',
+    'http://desktop-x.tail1.ts.net:8790/v1/pair/status',
+    'http://desktop-x.tail1.ts.net:8790/v1/info',
   ]);
   expect(auth).toEqual([undefined, undefined, 'Bearer secret']);
   expect(c).toMatchObject({

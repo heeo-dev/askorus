@@ -16,7 +16,7 @@ export const HOST = 'desktop-test.tail0.ts.net';
 export const PORT = 8790;
 export const CODE = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 export const TOKEN = 'device-token';
-export const PAIR_LINK = `askorus://pair?v=1&host=${HOST}&port=${PORT}&code=${CODE}`;
+export const PAIR_LINK = `askorus://pair?v=2&host=${HOST}&port=${PORT}&code=${CODE}`;
 
 export type Call = { method: string; path: string; query: URLSearchParams; body?: any; auth?: string };
 
@@ -84,6 +84,17 @@ export class FakeAgent {
   calls: Call[] = [];
   /** What the PC answers to pairing: approve, deny, or keep waiting. */
   pairAnswer: 'approve' | 'deny' | 'wait' = 'approve';
+  /** What /v1/hello says of pairing (#58): a window is open on the PC, or someone is asked. null: no agent answers hello. */
+  hello: 'window' | 'ask' | null = 'ask';
+  /** With false, a request without a code finds nobody who could answer it. */
+  canApprove = true;
+  /** Pairing requests that wait for a paired phone's answer, and the answers given. */
+  pairQuestions: Array<{ id: string; deviceName: string; match: string; at: string }> = [];
+  pairAnswers: Array<{ id: string; allow: boolean }> = [];
+  /** The two digits of the last request without a code. */
+  lastMatch = '';
+  /** How often the waiting requests were asked for. */
+  pairPolls = 0;
   /** When false, every token is refused, as after `devices revoke`. */
   tokenValid = true;
   /** The system this PC's info reports (#53). */
@@ -145,8 +156,8 @@ export class FakeAgent {
   private contextOn = false;
   private moderatorOn = false;
   private debates = new Map<string, FakeDebate>();
-  /** How the PC can be reached: fine, agent stopped behind serve, or not at all. */
-  reach: 'ok' | 'agent_down' | 'offline' = 'ok';
+  /** How the PC can be reached: fine, or not at all (off, asleep, or its agent stopped). */
+  reach: 'ok' | 'offline' = 'ok';
   private jobs = new Map<string, any>();
   private n = 0;
 
@@ -160,10 +171,11 @@ export class FakeAgent {
       body: init?.body ? JSON.parse(String(init.body)) : undefined,
       auth: headers.Authorization,
     };
-    this.calls.push(call);
+    // The app asks for waiting pairing requests every few seconds (#58):
+    // those are kept apart, so the tests' call lists show what a screen did.
+    if (call.method === 'GET' && call.path === '/v1/pair/requests') this.pairPolls++;
+    else this.calls.push(call);
     if (this.reach === 'offline' || url.host !== `${HOST}:${PORT}`) throw new TypeError('Network request failed');
-    // tailscale serve answers by itself when nothing listens behind it.
-    if (this.reach === 'agent_down') return new Response('<html>502 Bad Gateway</html>', { status: 502 });
     const res = this.route(call);
     const lost = `${call.method} ${call.path}` as keyof FakeAgent['loseReplies'];
     const left = this.loseReplies[lost] ?? 0;
@@ -653,6 +665,16 @@ export class FakeAgent {
 
   private route(c: Call): Response {
     const key = `${c.method} ${c.path}`;
+    if (key === 'GET /v1/hello') {
+      if (!this.hello) return err(404, 'not_found');
+      return json(200, { name: 'askorus-agent', version: '0.3.0', apiVersion: 1, hostname: 'DESKTOP-TEST', os: 'windows', pairing: this.hello });
+    }
+    if (key === 'POST /v1/pair' && !c.body?.code) {
+      if (!/^\d\d$/.test(c.body?.match ?? '')) return err(400, 'bad_request');
+      if (!this.canApprove) return err(404, 'pair_closed');
+      this.lastMatch = c.body.match;
+      return json(202, { requestId: 'req-2', status: 'pending', pollAfterMs: 1 });
+    }
     if (key === 'POST /v1/pair') {
       if (c.body?.code !== CODE) return err(403, 'pair_bad_code');
       return json(202, { requestId: 'req-1', status: 'pending', pollAfterMs: 1 });
@@ -670,6 +692,14 @@ export class FakeAgent {
     }
 
     if (!this.tokenValid || c.auth !== `Bearer ${TOKEN}`) return err(401, 'unauthorized');
+
+    if (key === 'GET /v1/pair/requests') return json(200, { requests: this.pairQuestions });
+    if (key === 'POST /v1/pair/requests/answer') {
+      if (!this.pairQuestions.some((q) => q.id === c.body?.id)) return err(404, 'pair_unknown');
+      this.pairAnswers.push({ id: c.body.id, allow: !!c.body.allow });
+      this.pairQuestions = this.pairQuestions.filter((q) => q.id !== c.body.id);
+      return new Response(null, { status: 204 });
+    }
 
     if (key === 'GET /v1/info') {
       return json(200, {
