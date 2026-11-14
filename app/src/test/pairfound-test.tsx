@@ -98,9 +98,15 @@ test('a PC found in the account is paired by a tap: no QR code, and the two digi
   expect(sent?.body).toEqual({ deviceName: expect.any(String), match: agent.lastMatch });
 
   agent.pairAnswer = 'approve'; // allowed on the PC
-  expect(await screen.findByText('Fix the login bug')).toBeTruthy();
+  // The number stays on the screen: a pairing window on the PC takes the
+  // phone at once, and this is where it can be compared with what the PC said.
+  expect(await screen.findByText('Paired')).toBeTruthy();
+  expect(screen.getByTestId('pair-match')).toHaveTextContent(agent.lastMatch);
+  expect(screen.getByText(/A different number there means another device came in instead/)).toBeTruthy();
   const [pc] = await new ConnectionStore().list();
   expect(pc).toMatchObject({ host: HOST, port: PORT, name: 'DESKTOP-TEST' });
+  await user.press(screen.getByRole('button', { name: 'Done' }));
+  expect(await screen.findByText('Fix the login bug')).toBeTruthy();
 });
 
 test('the QR code is still there for a PC that is not listed', async () => {

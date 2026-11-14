@@ -64,6 +64,10 @@ type Step =
   | { kind: 'scan' }
   | { kind: 'confirm'; link: PairLink }
   | { kind: 'waiting'; link: PairLink }
+  // Paired without a code: the two digits stay on the screen until the
+  // person goes on. A pairing window on the PC takes the phone at once, so
+  // this is where the number can be compared with what the PC said (#58).
+  | { kind: 'paired'; others: boolean }
   | { kind: 'failed'; link: PairLink; text: string };
 
 export default function Pair() {
@@ -165,6 +169,10 @@ export default function Pair() {
     return true;
   };
 
+  // After pairing: to My PCs, with the PC picker open when another PC was
+  // paired before (R-94).
+  const leave = (others: boolean) => router.dismissTo(others ? { pathname: '/pcs', params: { pick: '1' } } : '/pcs');
+
   const send = async (link: PairLink) => {
     abort.current?.abort();
     const ctl = new AbortController();
@@ -198,7 +206,8 @@ export default function Pair() {
       // the person picks the new one: the PC picker opens with both (R-94).
       const others = before.some((c) => c.id !== saved.id);
       if (!others) await pickPC(saved.id).catch(() => undefined);
-      router.dismissTo(others ? { pathname: '/pcs', params: { pick: '1' } } : '/pcs');
+      if (digits) setStep({ kind: 'paired', others });
+      else leave(others);
     } catch (e) {
       if (e instanceof CancelledError) {
         setStep({ kind: 'confirm', link });
@@ -425,6 +434,19 @@ export default function Pair() {
             ) : null}
             <Text style={[s.intro, s.centerText]}>{t(match ? 'pair.waitingFound' : 'pair.waitingBody')}</Text>
             <Button variant="outline" label={t('pair.cancel')} onPress={() => abort.current?.abort()} style={s.wide} />
+          </View>
+        )}
+
+        {step.kind === 'paired' && (
+          <View style={s.waiting}>
+            <Text style={s.waitTitle} accessibilityRole="header">
+              {t('pair.pairedTitle')}
+            </Text>
+            <Text style={s.match} testID="pair-match" accessibilityLabel={t('pairAsk.number', { n: match })}>
+              {match}
+            </Text>
+            <Text style={[s.intro, s.centerText]}>{t('pair.pairedBody')}</Text>
+            <Button label={t('pair.pairedDone')} onPress={() => leave(step.others)} style={s.wide} />
           </View>
         )}
 

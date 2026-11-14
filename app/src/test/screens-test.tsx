@@ -662,7 +662,7 @@ describe('pairing', () => {
     agent.pairAnswer = 'deny';
     await renderRouter(routes, { initialUrl: `/pair?v=2&host=${HOST}&port=${PORT}&code=${CODE}` });
     await user.press(await screen.findByRole('button', { name: 'Pair', disabled: false }));
-    expect(await screen.findByText('Declined on the PC.')).toBeTruthy();
+    expect(await screen.findByText('The request was declined.')).toBeTruthy();
     expect(screen.getByText("Couldn't pair")).toBeTruthy();
     expect(await new ConnectionStore().list()).toEqual([]);
     await user.press(screen.getByRole('button', { name: 'Start over' }));
