@@ -54,7 +54,7 @@ Askorus(애스코러스)는 폰에서 질문 하나를 여러 AI에게 한 번�
 
 - Windows, macOS, Linux 중 하나를 쓰는 PC
 - [Tailscale](https://tailscale.com) 계정(개인은 무료). Tailscale을 따로 설치하지 않습니다. 앱과 PC 에이전트 안에 들어 있고, 폰에서 VPN을 켤 필요도 없습니다. 양쪽에서 한 번씩 로그인하면 됩니다
-- PC에 설치하고 로그인해 둔 공식 AI 프로그램 하나 이상: Claude Code, Codex, OpenCode. 둘 이상이면 종합 답변과 토론이 나오고, '내 PC'(Claude Code 세션)에는 Claude Code가 있어야 합니다. 이미 쓰는 구독과 무료 계정을 그대로 쓰며, 그 로그인 정보는 읽거나 옮기지 않습니다.
+- PC에 설치하고 로그인해 둔 공식 AI 프로그램 하나 이상: Claude Code, Codex, OpenCode. 둘 이상이면 종합 답변과 토론이 나오고, '내 PC'(Claude Code 세션)에는 Claude Code가 있어야 합니다. 이미 쓰는 구독과 무료 계정을 그대로 쓰며, 그 로그인 정보는 읽거나 옮기지 않습니다. 데스크톱 앱만으로는 안 되고 CLI가 있어야 합니다([AI 프로그램 설치](#ai-프로그램-설치)).
 - 안드로이드 폰 (iOS는 나중에)
 
 ### Tailscale이 뭔가요?
@@ -67,6 +67,18 @@ Askorus(애스코러스)는 폰에서 질문 하나를 여러 AI에게 한 번�
 - **비밀번호.** 로그인은 브라우저의 Tailscale 화면에서 합니다. Askorus는 비밀번호를 받지 않습니다.
 
 앱에서도 로그인을 물을 때 같은 설명을 볼 수 있습니다('Tailscale이 뭔가요?').
+
+### AI 프로그램 설치
+
+Askorus는 PC에 설치한 각 AI의 공식 CLI(터미널 프로그램)로 묻습니다. **데스크톱 앱(Claude, Codex)만으로는 안 되고, CLI를 따로 설치하고 로그인해야 합니다.** 데스크톱 앱과 같은 계정, 같은 구독으로 쓸 수 있습니다. 하나 이상 있으면 되고, 둘 이상이면 종합 답변과 토론이 나옵니다.
+
+| AI | 설치(자세한 것은 공식 문서) | 로그인 |
+|---|---|---|
+| [Claude Code](https://code.claude.com/docs/en/setup) | Windows: `irm https://claude.ai/install.ps1 \| iex`<br>macOS, Linux: `curl -fsSL https://claude.ai/install.sh \| bash` | `claude auth login` (Claude 유료 요금제가 필요합니다) |
+| [Codex](https://developers.openai.com/codex/cli) | Windows: `powershell -ExecutionPolicy ByPass -c "irm https://chatgpt.com/codex/install.ps1 \| iex"`<br>macOS, Linux: `curl -fsSL https://chatgpt.com/codex/install.sh \| sh` | `codex login` |
+| [OpenCode](https://opencode.ai/docs) | 공식 문서의 운영체제별 방법(Windows는 내려받기) | `opencode`를 실행하고 `/connect` |
+
+설치하고 로그인한 뒤 PC에서 `askorus-agent check`를 실행하면, 찾았는지와 로그인되어 있는지를 AI마다 보여 줍니다. 앱의 설정 > PC > 연결 진단에도 나옵니다.
 
 ## PC 에이전트 설치
 
@@ -186,6 +198,7 @@ PC의 Claude Code나 Codex에 내 운영체제에 맞는 글을 붙여 넣으세
 - **몇 달 잘 되다가 갑자기 안 됩니다.** Tailscale 로그인은 기본으로 약 180일 뒤 끝납니다. `askorus-agent check`가 2주 전부터 알리고, 앱의 설정 > Tailscale에 끝나는 날짜가 보입니다. 다시 로그인하거나(PC는 `askorus-agent login`, 앱은 설정 > Tailscale), Tailscale 관리 화면에서 기기의 키 만료를 끄세요. 짝 맺기는 그대로 남습니다.
 - **새 Claude Code 세션이 시작되지 않습니다.** Claude Code는 폴더마다 한 번 신뢰할지 묻습니다. PC에서 그 폴더로 가서 `claude`를 한 번 실행하고 허용하세요.
 - **폴더 열어 두기가 '켜는 중'에 머물거나 실패합니다.** Claude Code에서 Remote Control을 한 번 켜야 합니다. PC에서 `claude remote-control`을 실행해 `y`로 답하고 Ctrl+C로 끄세요.
+- **한 AI만 '로그인되어 있지 않다'며 답하지 않습니다.** PC에서 그 AI의 CLI가 로그인되어 있지 않거나 로그인이 끝났습니다(Claude Code의 로그인은 끝나는 날이 있습니다). PC의 터미널에서 Claude Code는 `claude auth login`, Codex는 `codex login`을 실행하세요. 데스크톱 앱(Claude, Codex)에 로그인한 것과는 따로입니다. 앱의 연결 진단과 `askorus-agent check`가 로그인 상태와 곧 끝나는 날을 알려 줍니다.
 - **AI가 목록에 없습니다.** PC에 설치하고 로그인한 뒤 `check`를 다시 실행하세요. `autostart on` 뒤에 설치한 프로그램은 흔한 설치 폴더에서 찾습니다. 못 찾으면 `autostart on`을 다시 실행하세요.
 
 그래도 안 되면 `askorus-agent check` 결과를 붙여 [이슈를 열어 주세요](https://github.com/heeo-dev/askorus/issues/new/choose)(계정, PC 이름, Tailscale 주소는 지우고).

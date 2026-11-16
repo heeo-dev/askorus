@@ -431,12 +431,20 @@ func calls(t *testing.T, from int, kind, role string) []fakecli.Call {
 }
 
 // onlyAsksAndWriters fails the test for a recorded call that is no ask,
-// combined answer, refining, OpenCode session list or delete, or claude's
-// agents list: no judge runs (C6).
+// combined answer, refining, OpenCode session list or delete, claude's
+// agents list, or a sign-in check (#60): no judge runs (C6).
 func onlyAsksAndWriters(t *testing.T) {
 	t.Helper()
+	known := map[string]string{
+		fakecli.RoleClaude: "agents --json --all",
+	}
+	signIn := map[string]string{
+		fakecli.RoleClaude: "auth status --json",
+		fakecli.RoleCodex:  "login status",
+	}
 	for _, c := range calls(t, 0, kindOther, "") {
-		if c.Role != fakecli.RoleClaude || strings.Join(c.Args, " ") != "agents --json --all" {
+		args := strings.Join(c.Args, " ")
+		if args != known[c.Role] && args != signIn[c.Role] {
 			t.Errorf("a call that is no ask or writer: %s %q", c.Role, c.Args)
 		}
 	}

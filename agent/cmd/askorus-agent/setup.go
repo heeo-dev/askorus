@@ -172,19 +172,31 @@ func runSetup(ctx context.Context, cfg config.Config, env setupEnv, in io.Reader
 		}
 		c.line("ok", m("Claude Code %s found", "Claude Code %s 찾음", info.Version))
 	} else {
-		c.line("warn", m("Claude Code was not found: asks go to the other AIs, but My PCs (the PC's Claude Code sessions on the phone) needs it. To add it, install it (https://code.claude.com/docs/en/setup) and sign in (run claude once in a terminal)",
-			"Claude Code를 찾지 못했습니다. 묻기는 다른 AI로 하지만, '내 PC'(이 PC의 Claude Code 세션을 폰에서 쓰기)에는 Claude Code가 있어야 합니다. 쓰려면 설치하고(https://code.claude.com/docs/en/setup) 로그인하세요 (터미널에서 claude를 한 번 실행)"))
+		c.line("warn", m("Claude Code was not found: asks go to the other AIs, but My PCs (the PC's Claude Code sessions on the phone) needs it. To add it, install it (https://code.claude.com/docs/en/setup) and sign in (claude auth login in a terminal)",
+			"Claude Code를 찾지 못했습니다. 묻기는 다른 AI로 하지만, '내 PC'(이 PC의 Claude Code 세션을 폰에서 쓰기)에는 Claude Code가 있어야 합니다. 쓰려면 설치하고(https://code.claude.com/docs/en/setup) 로그인하세요 (터미널에서 claude auth login)"))
+	}
+	// Installed but not signed in (#60): it is found, but cannot answer.
+	ready := found
+	if info.Available && !signInLine(c, "Claude Code", info) {
+		ready--
 	}
 	for _, o := range others {
 		if o.info.Available {
 			c.line("ok", m("%s %s found (asks)", "%s %s 찾음 (묻기)", o.name, o.info.Version))
+			if !signInLine(c, o.name, o.info) {
+				ready--
+			}
 		} else {
-			c.line("info", m("%s not found (optional: asks use it when it is installed and signed in)", "%s 없음 (없어도 됩니다. 설치하고 로그인하면 묻기에 같이 씁니다)", o.name))
+			c.line("info", m("%[1]s not found (optional: asks use it when its CLI is installed and signed in; how: %[2]s)", "%[1]s 없음 (없어도 됩니다. CLI를 설치하고 로그인하면 묻기에 같이 씁니다. 방법: %[3]s)", o.name, aiGuide(true), aiGuide(false)))
 		}
 	}
-	if found == 1 {
-		c.line("warn", m("only one AI program: asks work, but combined answers and debates need two or more",
-			"AI 프로그램이 하나뿐입니다. 묻기는 되지만 종합 답변과 토론은 둘 이상일 때 나옵니다"))
+	if ready == 0 {
+		return stop(m("the AI programs on this PC are not signed in: sign in to at least one (the lines above say how), then run setup again",
+			"이 PC의 AI 프로그램이 모두 로그인되어 있지 않습니다. 하나 이상 로그인한 뒤(방법은 위 줄에 있습니다) setup을 다시 실행하세요"))
+	}
+	if ready == 1 {
+		c.line("warn", m("only one AI program can answer: asks work, but combined answers and debates need two or more",
+			"답할 수 있는 AI 프로그램이 하나뿐입니다. 묻기는 되지만 종합 답변과 토론은 둘 이상일 때 나옵니다"))
 	}
 
 	// The agent carries Tailscale inside (#57), so there is nothing of

@@ -13,13 +13,14 @@ import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { noticeText } from '@/api/agents';
 import type { AgentClient } from '@/api/client';
 import type { Folder, Session } from '@/api/types';
 import { pcDetail } from '@/connections/label';
 import { connect } from '@/connections/open';
 import { type Cause, cause } from '@/connections/reach';
 import { type Connection, ConnectionStore } from '@/connections/store';
-import { errorText, has, label, type MessageKey, t } from '@/i18n';
+import { errorText, has, label, t } from '@/i18n';
 import { Button } from '@/ui/Button';
 import { Chip, Spinner, StatusDot } from '@/ui/controls';
 import { ago, sessionStatus, sessionTitle } from '@/ui/format';
@@ -160,7 +161,8 @@ function Sessions({ conn, detail, onPick }: { conn: Connection; detail: string; 
       setCaps(i.capabilities);
       // Only the AIs whose sessions this list shows; one that only
       // answers questions is reported in the connection check.
-      setNotices(i.agents.filter((a) => a.capabilities.includes('list')).flatMap((a) => a.notices ?? []));
+      // Kept as words: a sign-in that ends soon carries its day (#60).
+      setNotices(i.agents.filter((a) => a.capabilities.includes('list')).flatMap((a) => (a.notices ?? []).map((n) => noticeText(n, a))));
     } catch (e) {
       setInfo({ state: 'error', cause: cause(e) });
       setCaps([]);
@@ -308,7 +310,7 @@ function Sessions({ conn, detail, onPick }: { conn: Connection; detail: string; 
       {warnings.includes('claude_agents_unavailable') ? <Text style={s.warning}>{t('sessions.agentsUnavailable')}</Text> : null}
       {notices.map((n) => (
         <Text key={n} style={s.notice}>
-          {has(`notice.${n}`) ? t(`notice.${n}` as MessageKey) : n}
+          {n}
         </Text>
       ))}
 

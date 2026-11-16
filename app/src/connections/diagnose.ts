@@ -1,9 +1,9 @@
 // Connection checks for one PC, in the order things break: can the phone
 // reach the PC, does the PC still know this phone, is Claude Code there.
 
-import { agentName } from '../api/agents';
+import { agentName, noticeIsNote, noticeText, signInNotice } from '../api/agents';
 import type { AgentClient } from '../api/client';
-import { errorText, has, type MessageKey, t } from '../i18n';
+import { errorText, type MessageKey, t } from '../i18n';
 import { cause, causesToCheck } from './reach';
 
 const checkKey: Record<string, MessageKey> = {
@@ -12,8 +12,12 @@ const checkKey: Record<string, MessageKey> = {
   not_own_pc: 'reach.check.not_own',
 };
 
-/** note: nothing is wrong, but something is missing (an optional AI). */
-export type Check = { ok: boolean; text: string; note?: boolean };
+/**
+ * note: nothing is wrong, but something is missing (an optional AI).
+ * ai: the line is about installing or signing in to an AI, so the sheet
+ * offers the README's guide (#60).
+ */
+export type Check = { ok: boolean; text: string; note?: boolean; ai?: boolean };
 
 // Claude Code runs the remote sessions; the other AIs only answer
 // questions for now (Phase 2), so a missing one is a note, not a failure.
@@ -56,7 +60,7 @@ export async function diagnose(client: AgentClient): Promise<Check[]> {
       out.push(
         a.available
           ? { ok: true, text: t('diag.claude', { version: a.version ?? '?' }) }
-          : { ok: false, text: t('error.agent_unavailable') },
+          : { ok: false, ai: true, text: t('notice.claude_not_found') },
       );
     } else if (a.available) {
       out.push({ ok: true, text: t('diag.askAgent', { name, version: a.version ?? '?' }) });
@@ -65,16 +69,16 @@ export async function diagnose(client: AgentClient): Promise<Check[]> {
       // its version check failed): a note either way, with the reason.
       const notices = a.notices ?? [];
       const missing = notices.every((n) => n === `${a.agent}_not_found`);
-      out.push({ ok: true, note: true, text: t(missing ? 'diag.askAgentMissing' : 'diag.askAgentBroken', { name }) });
+      out.push({ ok: true, note: true, ai: true, text: t(missing ? 'diag.askAgentMissing' : 'diag.askAgentBroken', { name }) });
       for (const n of missing ? [] : notices) {
-        const key = `notice.${n}`;
-        out.push({ ok: true, note: true, text: has(key) ? t(key) : n });
+        out.push({ ok: true, note: true, ai: true, text: noticeText(n, a) });
       }
       continue;
     }
+    // A signed-out AI is a failure; a sign-in that ends soon is a note (#60).
     for (const n of a.notices ?? []) {
-      const key = `notice.${n}`;
-      out.push({ ok: false, text: has(key) ? t(key) : n });
+      const ai = signInNotice(n);
+      out.push(noticeIsNote(n) ? { ok: true, note: true, ai, text: noticeText(n, a) } : { ok: false, ai, text: noticeText(n, a) });
     }
   }
   return out;

@@ -254,6 +254,7 @@ func checkCmd(dir string, out io.Writer) error {
 	switch {
 	case info.Available:
 		c.line("ok", m("Claude Code %s found", "Claude Code %s 찾음", info.Version))
+		signInLine(c, "Claude Code", info) // installed but not signed in (#60)
 	case others > 0:
 		c.line("warn", m("Claude Code not found: asks go to the other AIs, but My PCs (Claude Code sessions) needs it",
 			"Claude Code를 찾지 못했습니다. 묻기는 다른 AI로 하지만, '내 PC'(Claude Code 세션)에는 Claude Code가 있어야 합니다"))
@@ -275,9 +276,10 @@ func checkCmd(dir string, out io.Writer) error {
 	for _, a := range askOnly {
 		if ai := a.Info(ctx); ai.Available {
 			c.line("ok", m("%s %s found (asks)", "%s %s 찾음 (묻기)", a.Agent(), ai.Version))
+			signInLine(c, displayName(a.Agent()), ai)
 		} else {
-			c.line("warn", m("%s not found or not working (%s); asks leave it out",
-				"%s를 찾지 못했거나 동작하지 않습니다 (%s). 묻기에서 빠집니다", a.Agent(), strings.Join(ai.Notices, ", ")))
+			c.line("warn", m("%[1]s not found or not working (%[2]s); asks leave it out. To use it, install its CLI and sign in: %[3]s",
+				"%[1]s를 찾지 못했거나 동작하지 않습니다 (%[2]s). 묻기에서 빠집니다. 쓰려면 CLI를 설치하고 로그인하세요: %[4]s", a.Agent(), strings.Join(ai.Notices, ", "), aiGuide(true), aiGuide(false)))
 		}
 	}
 	if folder, err := cfg.AskFolder(); err == nil {

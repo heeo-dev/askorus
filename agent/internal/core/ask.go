@@ -160,6 +160,10 @@ const (
 	ErrCodeAskTimeout = "ask_timeout" // no answer within the time limit
 	ErrCodeAskEmpty   = "ask_empty"   // the AI ended without an answer
 	ErrCodeBadModel   = "bad_model"   // the AI does not know the model
+	// ErrCodeSignedOut: the AI's CLI is not signed in, or its sign-in ended
+	// (#60). Detail is the command that signs it in again on the PC
+	// ("claude auth login"), not the AI's own message.
+	ErrCodeSignedOut = "ai_signed_out"
 )
 
 // A model name for an ask: letters, digits and . _ - / : # [ ], never

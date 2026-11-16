@@ -237,6 +237,9 @@ func (a *Adapter) Ask(ctx context.Context, req core.AskRequest) (core.AskResult,
 	if req.OneOff {
 		out.SessionID = "" // nothing was kept to carry on
 	}
+	if core.ErrorCode(err) == core.ErrCodeSignedOut {
+		a.forgetLogin() // the next info asks claude again
+	}
 	return out, err
 }
 
@@ -255,6 +258,8 @@ func parseAskOutput(res proc.Result, asked string) (core.AskResult, error) {
 		switch {
 		case strings.Contains(stderr, "No conversation found"):
 			return core.AskResult{}, core.Fail(core.ErrCodeNotFound, "")
+		case signedOut(stderr, nil):
+			return core.AskResult{}, core.Fail(core.ErrCodeSignedOut, LoginCommand)
 		case stderr != "":
 			return core.AskResult{}, core.Fail(core.ErrCodeAskFailed, clip(stderr, 300))
 		}
@@ -270,11 +275,15 @@ func parseAskOutput(res proc.Result, asked string) (core.AskResult, error) {
 		r.SessionID = ""
 	}
 	if out.IsError || res.ExitCode != 0 {
+		msg := firstNonEmpty(out.Result, stderr)
 		code := core.ErrCodeAskFailed
-		if strings.Contains(stderr, "[claude-code:unrecognized_model]") || (out.APIErrorStatus != nil && *out.APIErrorStatus == 404) {
+		switch {
+		case strings.Contains(stderr, "[claude-code:unrecognized_model]") || (out.APIErrorStatus != nil && *out.APIErrorStatus == 404):
 			code = core.ErrCodeBadModel
+		case signedOut(msg+"\n"+stderr, out.APIErrorStatus):
+			return r, core.Fail(core.ErrCodeSignedOut, LoginCommand)
 		}
-		return r, core.Fail(code, clip(firstNonEmpty(out.Result, stderr), 300))
+		return r, core.Fail(code, clip(msg, 300))
 	}
 	r.Answer = out.Result
 	return r, nil

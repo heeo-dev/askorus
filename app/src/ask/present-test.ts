@@ -154,6 +154,10 @@ test('the AIs of a turn: names, models, seconds and a value that is always an ob
     ['failed', 'Did not answer'],
   ]);
   expect(partError({ code: 'ask_failed', message: 'usage limit reached' })).toBe('The AI reported an error.\nusage limit reached');
+  // #60: a signed-out AI says how to sign it in on the PC, not the CLI's own message.
+  expect(partError({ code: 'ai_signed_out', message: 'claude auth login' })).toBe(
+    "This AI isn't signed in on the PC. Run claude auth login in a terminal on the PC, then ask again.",
+  );
 });
 
 test('an AI still answering shows the model the turn asked for until the PC says which (UX-8)', () => {

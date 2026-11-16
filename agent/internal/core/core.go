@@ -98,6 +98,9 @@ type AdapterInfo struct {
 	Capabilities []Capability `json:"capabilities"`
 	Notices      []string     `json:"notices,omitempty"` // codes the app turns into text
 	Ask          *AskInfo     `json:"ask,omitempty"`     // set with the ask capability
+	// LoginExpiresAt is when the AI's sign-in ends (RFC 3339, UTC), sent
+	// only with the <agent>_login_expiring notice (#60).
+	LoginExpiresAt string `json:"loginExpiresAt,omitempty"`
 }
 
 // AskInfo tells the app which model each ask tier uses (P2-2).

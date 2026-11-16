@@ -4,8 +4,9 @@
 // unpairing, which asks first and also removes this phone on the PC.
 
 import { useEffect, useState } from 'react';
-import { Alert, StyleSheet, Text, View } from 'react-native';
+import { Alert, Linking, StyleSheet, Text, View } from 'react-native';
 
+import { aiGuideUrl } from '@/api/agents';
 import { AgentError } from '@/api/client';
 import { loadAskPrefs, saveAskPrefs } from '@/ask/prefs';
 import { type Check, diagnose } from '@/connections/diagnose';
@@ -93,6 +94,9 @@ export function PCSheet({
               </Text>
             ))}
           </View>
+        ) : null}
+        {Array.isArray(checks) && checks.some((x) => x.ai) ? (
+          <Button variant="outline" icon="open" label={t('diag.aiGuide')} onPress={() => Linking.openURL(aiGuideUrl()).catch(() => undefined)} />
         ) : null}
         <Button variant="outline" icon="retry" label={t('settings.check')} onPress={check} busy={checks === 'running'} />
         {onRename ? <Button variant="outline" label={t('settings.rename')} onPress={() => onRename(conn)} /> : null}

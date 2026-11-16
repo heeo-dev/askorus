@@ -43,7 +43,13 @@
 //	ASKORUS_FAKE_ASK         ask mode: "fail" for every AI, or per AI
 //	                           "opencode=fail,codex=empty"; fail is the AI's
 //	                           usage limit (exit 1), empty an answer with
-//	                           no text, ok (the default) an answer
+//	                           no text, signedout the AI's not-signed-in
+//	                           message (claude, codex; exit 1), ok (the
+//	                           default) an answer
+//	ASKORUS_FAKECLI_SIGNIN   sign-in state for `claude auth status --json`
+//	                           and `codex login status` (signin.go): "in"
+//	                           (default), "out", "soon" (claude), for every
+//	                           AI or per AI "claude=out"
 //	ASKORUS_FAKE_DEBATE      the debate (debate.go): "" one point, "two"
 //	                           a taste point too, "next" one more turn at
 //	                           every check that may, "none" no point
@@ -85,7 +91,7 @@ const (
 )
 
 // AskModes lists the ask modes.
-var AskModes = []string{AskOK, AskFail, AskEmpty}
+var AskModes = []string{AskOK, AskFail, AskEmpty, AskSignedOut}
 
 // Roles.
 const (

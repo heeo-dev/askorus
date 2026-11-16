@@ -25,6 +25,8 @@ func codexMain(c *Call, schemaErr error) int {
 		return unexpected(RoleCodex)
 	case exec:
 		return codexAsk(c)
+	case len(c.Args) == 2 && c.Args[0] == "login" && c.Args[1] == "status":
+		return codexLoginStatus()
 	}
 	return unexpected(RoleCodex)
 }
@@ -61,6 +63,10 @@ func codexAsk(c *Call) int {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "fakecli:", err)
 		return 2
+	}
+	if mode == AskSignedOut {
+		fmt.Fprintln(os.Stderr, SignedOutCodex)
+		return 1
 	}
 	text, err := askText(RoleCodex, "fake: ", c.Stdin)
 	if err != nil {

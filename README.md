@@ -54,7 +54,7 @@ The moderator is one of the AIs you asked. The debate is optional.
 
 - A PC with Windows, macOS or Linux
 - A [Tailscale](https://tailscale.com) account (free for personal use). Nothing of Tailscale is installed: it is built into the app and the PC agent, and the phone needs no VPN turned on. You sign in once on each
-- At least one official AI program installed and signed in on the PC: Claude Code, Codex or OpenCode. With two or more you get combined answers and debates; My PCs (the Claude Code sessions) needs Claude Code. Askorus uses the subscriptions and free accounts you already have; it never reads or moves their sign-in data.
+- At least one official AI program installed and signed in on the PC: Claude Code, Codex or OpenCode. With two or more you get combined answers and debates; My PCs (the Claude Code sessions) needs Claude Code. Askorus uses the subscriptions and free accounts you already have; it never reads or moves their sign-in data. The desktop apps alone are not enough; the CLI is needed ([Installing the AI programs](#installing-the-ai-programs)).
 - An Android phone (iOS later)
 
 ### What is Tailscale?
@@ -67,6 +67,18 @@ A service that makes a private network only your own devices can join (by Tailsc
 - **Your password.** You sign in on Tailscale's own page in the browser. Askorus never gets your password.
 
 The app says the same where it asks you to sign in ("What is Tailscale?").
+
+### Installing the AI programs
+
+Askorus asks each AI through its official CLI (the terminal program) on the PC. **The desktop apps (Claude, Codex) alone are not enough: install the CLI and sign in to it as well.** It works with the same account and plan as the desktop app. One AI is enough; two or more give combined answers and debates.
+
+| AI | Install (see the official docs for more) | Sign in |
+|---|---|---|
+| [Claude Code](https://code.claude.com/docs/en/setup) | Windows: `irm https://claude.ai/install.ps1 \| iex`<br>macOS, Linux: `curl -fsSL https://claude.ai/install.sh \| bash` | `claude auth login` (needs a paid Claude plan) |
+| [Codex](https://developers.openai.com/codex/cli) | Windows: `powershell -ExecutionPolicy ByPass -c "irm https://chatgpt.com/codex/install.ps1 \| iex"`<br>macOS, Linux: `curl -fsSL https://chatgpt.com/codex/install.sh \| sh` | `codex login` |
+| [OpenCode](https://opencode.ai/docs) | The official docs' way for each system (on Windows, a download) | run `opencode`, then `/connect` |
+
+After installing and signing in, run `askorus-agent check` on the PC: it shows, for each AI, whether it was found and is signed in. The app shows the same in Settings > the PC > connection check.
 
 ## Install the PC agent
 
@@ -186,6 +198,7 @@ Run `askorus-agent check` on the PC first. It lists what is missing, each line w
 - **It worked for months and then stopped.** A Tailscale sign-in ends after about 180 days by default. `askorus-agent check` warns two weeks ahead, and Settings > Tailscale in the app shows the date. Sign in again (`askorus-agent login` on the PC, Settings > Tailscale in the app), or turn key expiry off for the devices in the Tailscale admin console. Pairing stays.
 - **A new Claude Code session does not start.** Claude Code asks once per folder whether you trust it: on the PC, run `claude` in that folder once and accept.
 - **Keeping a folder open stays at "starting" or fails.** Remote Control has to be turned on once in Claude Code: on the PC, run `claude remote-control`, answer `y`, then stop it with Ctrl+C.
+- **One AI does not answer and says it isn't signed in.** That AI's CLI on the PC is not signed in, or its sign-in ended (Claude Code's sign-in has an end date). In a terminal on the PC, run `claude auth login` for Claude Code or `codex login` for Codex. Signing in to the desktop apps (Claude, Codex) is separate. The app's connection check and `askorus-agent check` show the sign-in state and a sign-in that ends soon.
 - **An AI is missing from the list.** Install it and sign in to it on the PC, then run `check` again. A program installed after `autostart on` is found in its usual folder, or run `autostart on` again.
 
 Still stuck? [Open an issue](https://github.com/heeo-dev/askorus/issues/new/choose) with the output of `askorus-agent check` (take your account, PC names and Tailscale addresses out first).

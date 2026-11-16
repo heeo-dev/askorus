@@ -123,9 +123,16 @@ func TestSetupNewPC(t *testing.T) {
 			t.Errorf("output lacks %q:\n%s", s, out)
 		}
 	}
-	for _, s := range []string{"only one AI program", "tailscale serve", "tailscale.com/download", "HTTPS"} {
+	for _, s := range []string{"only one AI program", "tailscale serve", "tailscale.com/download", "HTTPS", "%!"} {
 		if strings.Contains(out, s) {
 			t.Errorf("output has %q:\n%s", s, out)
+		}
+	}
+	// #60: a missing AI points to the README's install section, each line to its own README.
+	for _, s := range []string{"how: https://github.com/heeo-dev/askorus#installing-the-ai-programs)",
+		"방법: https://github.com/heeo-dev/askorus/blob/main/README.ko.md#ai-%ED%94%84%EB%A1%9C%EA%B7%B8%EB%9E%A8-%EC%84%A4%EC%B9%98)"} {
+		if !strings.Contains(out, s) {
+			t.Errorf("output lacks %q:\n%s", s, out)
 		}
 	}
 }

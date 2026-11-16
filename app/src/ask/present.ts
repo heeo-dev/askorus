@@ -26,8 +26,9 @@ import { texToUnicode } from '@/ui/tex';
 export function partError(e: { code: string; message?: string }): string {
   const askKey = `ask.error.${e.code}`;
   const key = `error.${e.code}`;
+  // ai_signed_out (#60) carries the command that signs the AI in on the PC.
   const base = has(askKey)
-    ? t(askKey as MessageKey, { folder: e.message ?? '' })
+    ? t(askKey as MessageKey, { folder: e.message ?? '', command: e.message ?? '' })
     : has(key)
       ? t(key as MessageKey)
       : t('error.unknown', { code: e.code });

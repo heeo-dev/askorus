@@ -74,10 +74,14 @@ func (r *Runner) Path() string { return r.exe }
 // Subcommands and flags the agent may pass. Everything else is refused, so
 // a permission-relaxing flag can only get in by being added here.
 var (
-	allowedSubcommands = map[string]bool{"agents": true, "stop": true, "rm": true, "logs": true, "remote-control": true}
+	allowedSubcommands = map[string]bool{"agents": true, "stop": true, "rm": true, "logs": true, "remote-control": true, "auth": true}
 	// Subcommands that take exactly one session id or name.
 	subcommandsWithTarget = map[string]bool{"stop": true, "rm": true, "logs": true}
-	allowedFlags          = map[string]bool{
+	// Subcommands that must be followed by exactly this word: the agent only
+	// reads the sign-in state (#60); auth login and logout are the person's,
+	// in their own terminal.
+	subcommandWord = map[string]string{"auth": "status"}
+	allowedFlags   = map[string]bool{
 		"--version": true, "--json": true, "--all": true,
 		"--bg": true, "--resume": true, "--remote-control": true,
 		"-n": true, "--model": true, "--effort": true,
@@ -99,7 +103,7 @@ var deniedFlags = []string{
 }
 
 func checkArgs(args []string) error {
-	sub, targets := "", 0
+	sub, targets, words := "", 0, 0
 	for _, a := range args {
 		if strings.ContainsAny(a, "\x00\r\n") {
 			return fmt.Errorf("%w: control character", ErrArgRejected)
@@ -130,12 +134,17 @@ func checkArgs(args []string) error {
 			sub = a
 		case subcommandsWithTarget[sub] && targets == 0:
 			targets++
+		case subcommandWord[sub] != "" && words == 0 && a == subcommandWord[sub]:
+			words++
 		default:
 			return fmt.Errorf("%w: %q", ErrArgRejected, a)
 		}
 	}
 	if subcommandsWithTarget[sub] && targets != 1 {
 		return fmt.Errorf("%w: %s needs one session", ErrArgRejected, sub)
+	}
+	if w := subcommandWord[sub]; w != "" && words != 1 {
+		return fmt.Errorf("%w: %s takes only %s", ErrArgRejected, sub, w)
 	}
 	return nil
 }

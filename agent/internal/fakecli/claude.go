@@ -21,6 +21,8 @@ func claudeMain(c *Call) int {
 	case strings.Join(c.Args, " ") == "agents --json --all":
 		fmt.Println("[]")
 		return 0
+	case strings.Join(c.Args, " ") == "auth status --json":
+		return claudeAuthStatus()
 	}
 	return unexpected(RoleClaude)
 }
@@ -60,6 +62,9 @@ func claudeAsk(c *Call) int {
 	case AskFail:
 		out["subtype"], out["is_error"], out["result"] = "error_during_execution", true, UsageLimitClaude
 		printJSON(out)
+		return 1
+	case AskSignedOut:
+		fmt.Fprintln(os.Stderr, SignedOutClaude)
 		return 1
 	case AskEmpty:
 		out["result"] = ""

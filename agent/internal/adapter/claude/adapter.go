@@ -62,6 +62,12 @@ type Adapter struct {
 	verErr  error
 	verAt   time.Time
 
+	// The sign-in state (#60, login.go). loginCheck is nil outside tests.
+	loginMu    sync.Mutex
+	login      loginState
+	loginAt    time.Time
+	loginCheck func(context.Context) loginState
+
 	fetchMu    sync.Mutex // one agents run at a time
 	amu        sync.Mutex
 	agentsList []agentEntry
@@ -181,6 +187,7 @@ func (a *Adapter) Info(ctx context.Context) core.AdapterInfo {
 		info.Notices = append(info.Notices, NoticeVersionFailed)
 	} else {
 		info.Version, info.Available = v, true
+		a.loginNotices(ctx, &info)
 	}
 	if os.Getenv("CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC") != "" || os.Getenv("DISABLE_GROWTHBOOK") != "" {
 		info.Notices = append(info.Notices, NoticeRCDisabledEnv)

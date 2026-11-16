@@ -97,6 +97,12 @@ type Adapter struct {
 	verErr  error
 	verAt   time.Time
 
+	// The sign-in state (#60, login.go). loginCheck is nil outside tests.
+	loginMu    sync.Mutex
+	login      loginState
+	loginAt    time.Time
+	loginCheck func(context.Context) loginState
+
 	// schemaDir holds the schema files: absolute, or "" when there is no
 	// agent folder.
 	schemaDir string
@@ -179,6 +185,7 @@ func (a *Adapter) Info(ctx context.Context) core.AdapterInfo {
 		} else {
 			info.Version, info.Available = v, true
 			info.Capabilities = append(info.Capabilities, core.CapAsk)
+			a.loginNotices(ctx, &info)
 		}
 	}
 	return info
@@ -346,6 +353,9 @@ func (a *Adapter) Ask(ctx context.Context, req core.AskRequest) (core.AskResult,
 	if req.OneOff {
 		out.SessionID = "" // --ephemeral kept nothing to carry on
 	}
+	if core.ErrorCode(err) == core.ErrCodeSignedOut {
+		a.forgetLogin() // the next info asks codex again
+	}
 	return out, err
 }
 
@@ -425,6 +435,9 @@ func parseOutput(res proc.Result, model, resume string) (core.AskResult, error) 
 		msg = fmt.Sprintf("codex ended with exit code %d and no answer", res.ExitCode)
 	}
 	r.Answer = ""
+	if code == core.ErrCodeAskFailed && signedOut(errMsg+"\n"+msg+"\n"+stderr) {
+		return r, core.Fail(core.ErrCodeSignedOut, LoginCommand)
+	}
 	return r, core.Fail(code, clip(msg, 300))
 }
 

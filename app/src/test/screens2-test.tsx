@@ -267,9 +267,21 @@ describe('settings', () => {
     await user.press(pc.getByRole('button', { name: 'Check connection' }));
     expect(await pc.findByText(/Claude Code 2\.1\.310/)).toBeTruthy();
     expect(pc.getByText(/✓ Codex 0\.164\.0 \(asks\)/)).toBeTruthy();
-    expect(pc.getByText(/· OpenCode: not on this PC \(left out of asks\)/)).toBeTruthy();
+    expect(pc.getByText(/· OpenCode: not on this PC \(left out of asks\)\. To use it, install the OpenCode CLI on the PC and sign in\./)).toBeTruthy();
     expect(pc.queryByText(/✗/)).toBeNull();
     expect(pc.queryByText(/opencode_not_found/)).toBeNull();
+    // #60: a missing AI brings the README's guide to installing and signing in.
+    expect(pc.getByRole('button', { name: 'How to install the AIs' })).toBeTruthy();
+  });
+
+  test('with every AI there and signed in, the sheet offers no install guide (#60)', async () => {
+    agent.askAgents = [{ agent: 'codex', version: '0.164.0', available: true, capabilities: ['ask'] }];
+    const user = userEvent.setup();
+    await pairedPC();
+    const pc = await openPCSheet(user);
+    await user.press(pc.getByRole('button', { name: 'Check connection' }));
+    expect(await pc.findByText(/✓ Codex 0\.164\.0 \(asks\)/)).toBeTruthy();
+    expect(pc.queryByRole('button', { name: 'How to install the AIs' })).toBeNull();
   });
 
   test('an AI that is there but broken says why, still as a note', async () => {

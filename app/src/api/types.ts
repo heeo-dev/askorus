@@ -54,6 +54,8 @@ export type AdapterInfo = {
   available: boolean;
   capabilities: string[];
   notices?: string[];
+  /** When the AI's sign-in ends (RFC 3339), sent with the <agent>_login_expiring notice (#60). */
+  loginExpiresAt?: string;
   /**
    * Set for AIs that can ask (Phase 2): the model of each tier, and (11-06,
    * newer agents) the efforts each of those models may take, least to most.
