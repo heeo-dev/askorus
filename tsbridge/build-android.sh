@@ -33,13 +33,50 @@ cd "$here"
 # -tags: the Tailscale library without the parts the app must not carry
 # (buildTags in tsbridge.go: its service for other devices, diagnostics,
 # the log uploader).
+# -trimpath: module paths instead of this PC's file paths (#61). Without it
+# Go writes where each source file was, and the toolchain and modules sit
+# in the Go module cache under the user's folder.
+# -X runtime.modinfo=: no module list in the library (#61). gomobile builds
+# from a module of its own that points at this folder by its full path
+# ("=> <this checkout>/tsbridge"), and Go writes that line into the module
+# list. Nothing reads the list: Tailscale reads only its git fields, which a
+# gomobile build does not have, and the app's license list comes from
+# go list (app/scripts/go-libs.mjs).
 gomobile bind -target="$targets" -androidapi 24 -javapkg app.askorus.tailnet \
+  -trimpath \
   -tags=ts_omit_peerapiserver,ts_omit_c2n,ts_omit_logtail \
-  -ldflags="-s -w -extldflags=-Wl,-z,max-page-size=16384" \
+  -ldflags="-s -w -X=runtime.modinfo= -extldflags=-Wl,-z,max-page-size=16384" \
   -o "$work/tsbridge.aar" .
 
-mkdir -p "$work/x" "$module/libs" "$module/src/main/jniLibs"
+mkdir -p "$work/x" "$work/j" "$module/libs" "$module/src/main/jniLibs"
 (cd "$work/x" && unzip -q ../tsbridge.aar)
+(cd "$work/j" && unzip -q ../x/classes.jar)
+
+# Nothing of this PC's folders may be in what was built (#61): the Go module
+# cache, the Go toolchain, the user's folder and this checkout, written as
+# Go writes paths (forward slashes; on Windows with the drive). A build that
+# still has one is not put into the app. The message names which folder,
+# not the path.
+native() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s\n' "$1"; fi; }
+leaks=0
+check_path() {
+  local what="$1" p
+  p="$(native "$2")"
+  [ "${#p}" -ge 4 ] || return 0
+  if grep -a -r -F -i -q -e "$p" -e "${p//\//\\}" "$work/x/jni" "$work/j"; then
+    echo "build-android.sh: the built bridge holds the path of $what (#61)" >&2
+    leaks=1
+  fi
+}
+check_path "the Go module cache" "$(go env GOMODCACHE)"
+check_path "the Go toolchain" "$(go env GOROOT)"
+check_path "the user's folder" "$HOME"
+check_path "this checkout" "$(cd "$here/.." && pwd)"
+if [ "$leaks" -ne 0 ]; then
+  echo "build-android.sh: not using this build" >&2
+  exit 1
+fi
+
 cp "$work/x/classes.jar" "$module/libs/tsbridge.jar"
 rm -rf "$module/src/main/jniLibs"/*
 cp -r "$work/x/jni/"* "$module/src/main/jniLibs/"

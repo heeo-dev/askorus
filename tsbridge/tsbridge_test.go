@@ -270,6 +270,46 @@ func TestBuildTagsMatch(t *testing.T) {
 	}
 }
 
+// No path of the PC that built them goes into the bridge or the agent
+// (#61): both are built with -trimpath, the bridge also without a module
+// list, and the bridge's build fails when a local folder is still in what it
+// built. The app's libraries of 0.3.0 to 0.3.3 held the user's folder
+// ~1,700 times per ABI, and the checkout's path in the module list.
+func TestBuildTrimsPaths(t *testing.T) {
+	if _, err := os.Stat(filepath.Join("..", "agent", "go.mod")); err != nil {
+		t.Skip("the bridge's folder alone, not the whole repository")
+	}
+	b, err := os.ReadFile("build-android.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := string(b)
+	bind := script[strings.Index(script, "gomobile bind"):]
+	bind = bind[:strings.Index(bind, "-o ")]
+	// -trimpath for the source files, an empty module list for the line
+	// "=> <checkout>/tsbridge" of gomobile's own go.mod.
+	for _, flag := range []string{"-trimpath", "-X=runtime.modinfo= "} {
+		if !strings.Contains(bind, flag) {
+			t.Errorf("gomobile bind runs without %s:\n%s", strings.TrimSpace(flag), bind)
+		}
+	}
+	for _, s := range []string{`check_path "the Go module cache"`, `check_path "the user's folder"`, `check_path "this checkout"`, "not using this build"} {
+		if !strings.Contains(script, s) {
+			t.Errorf("build-android.sh lacks the local path check %q", s)
+		}
+	}
+	if strings.Index(script, "check_path \"this checkout\"") > strings.Index(script, `cp "$work/x/classes.jar"`) {
+		t.Error("build-android.sh copies the bridge into the app before it checks it")
+	}
+	r, err := os.ReadFile(filepath.Join("..", "scripts", "release.ps1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(r), "go build -trimpath") {
+		t.Error("scripts/release.ps1 builds the agent without -trimpath")
+	}
+}
+
 // The app finds its PCs in this list instead of in a QR code (#58): only
 // the devices a request may go to are in it, so a friend's shared PC or a
 // tagged server is never offered for pairing.

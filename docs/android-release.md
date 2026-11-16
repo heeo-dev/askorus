@@ -36,6 +36,7 @@ tsbridge/build-android.sh arm64,arm,amd64,386   # 스토어에 올릴 AAB (네 �
 ```
 
 - 스크립트가 빌드 태그 `ts_omit_peerapiserver,ts_omit_c2n,ts_omit_logtail`를 붙인다(Tailscale 라이브러리의 다른 기기용 서비스, 서버 진단, 로그 올리기를 뺀다. `docs/phase1-plan.md` 25절 13). 태그 없이 만든 라이브러리는 앱에서 켜지지 않는다.
+- `-trimpath`와 빈 모듈 목록(`-X=runtime.modinfo=`)으로 만든다. gomobile은 저장소 폴더를 전체 경로로 가리키는 자기 go.mod로 빌드하는데, Go가 그 줄을 모듈 목록에 남기기 때문이다. 모듈 목록은 아무도 읽지 않는다(Tailscale은 git 칸만 읽고 gomobile 빌드에는 그 칸이 없다. 앱의 라이선스 목록은 `go list`로 만든다). 만든 라이브러리와 jar에 이 PC의 폴더 경로(Go 모듈 캐시, Go 툴체인, 사용자 폴더, 저장소)가 남아 있으면 앱에 넣지 않고 멈춘다(#61. 0.3.0~0.3.3의 라이브러리에는 사용자 폴더와 저장소 경로가 들어 있었다).
 - 나오는 것: `app/modules/tailnet/android/libs/tsbridge.jar`와 `src/main/jniLibs/<abi>/libgojni.so`. 없으면 Gradle이 `checkTsbridge`에서 멈추고 이 명령을 알려 준다.
 - 빌드한 ABI와 앱 빌드의 ABI(`-PreactNativeArchitectures`)가 같아야 한다. 라이브러리가 없는 ABI의 폰에서는 앱이 PC에 연결하지 못한다.
 - 크기: arm64 하나가 약 21MB다. APK에는 압축하지 않고 담기므로 APK 파일이 그만큼 커진다(11-13 시험 APK: 37MB에서 52MB). 스토어에서 내려받는 크기로는 약 8MB 늘어난다. 16KB 메모리 페이지에 맞춰 링크한다(Android 15, Play 요구).
