@@ -153,7 +153,7 @@ PC의 Claude Code나 Codex에 내 운영체제에 맞는 글을 붙여 넣으세
 - 위의 명령만 실행하고, 실행하기 전마다 나에게 물어 줘.
 - 관리자 권한으로 실행하지 말고, 너(AI)의 권한 확인이나 샌드박스를 건너뛰는 옵션은 절대 쓰지 마.
 - 어떤 AI 프로그램의 로그인 파일도 읽거나 옮기지 마(예: ~/.claude/.credentials.json).
-- Tailscale 로그인, Claude 서비스·세션 끄기, 동의 질문은 내 몫이야. 할 일을 보여 주고 내가 하게 해 줘.
+- Tailscale이나 AI 프로그램 로그인(예: "claude auth login", "codex login"), Claude 서비스·세션 끄기, 동의 질문은 내 몫이야. 할 일을 보여 주고 내가 하게 해 줘.
 - "setup", "login", "pair"는 실행하지 마.
 ```
 
@@ -179,7 +179,7 @@ PC의 Claude Code나 Codex에 내 운영체제에 맞는 글을 붙여 넣으세
 - 위의 명령만 실행하고, 실행하기 전마다 나에게 물어 줘.
 - sudo나 root로 실행하지 말고, 너(AI)의 권한 확인이나 샌드박스를 건너뛰는 옵션은 절대 쓰지 마.
 - 어떤 AI 프로그램의 로그인 파일도 읽거나 옮기지 마(예: ~/.claude/.credentials.json).
-- Tailscale 로그인, Claude 서비스·세션 끄기, 동의 질문은 내 몫이야. 할 일을 보여 주고 내가 하게 해 줘.
+- Tailscale이나 AI 프로그램 로그인(예: "claude auth login", "codex login"), Claude 서비스·세션 끄기, 동의 질문은 내 몫이야. 할 일을 보여 주고 내가 하게 해 줘.
 - "setup", "login", "pair"는 실행하지 마.
 ```
 

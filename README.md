@@ -153,7 +153,7 @@ Rules:
 - Run only the commands above, and ask me before each one.
 - Do not run anything as administrator, and never use options that skip your own (the AI's) permission prompts or sandbox.
 - Never read or copy the sign-in files of any AI program (for example ~/.claude/.credentials.json).
-- Signing in to Tailscale, stopping Claude services or sessions, and consent prompts are mine: show me what to do and let me do it.
+- Signing in to Tailscale or to the AI programs (for example "claude auth login", "codex login"), stopping Claude services or sessions, and consent prompts are mine: show me what to do and let me do it.
 - Do not run "setup", "login" or "pair".
 ```
 
@@ -179,7 +179,7 @@ Rules:
 - Run only the commands above, and ask me before each one.
 - Do not run anything with sudo or as root, and never use options that skip your own (the AI's) permission prompts or sandbox.
 - Never read or copy the sign-in files of any AI program (for example ~/.claude/.credentials.json).
-- Signing in to Tailscale, stopping Claude services or sessions, and consent prompts are mine: show me what to do and let me do it.
+- Signing in to Tailscale or to the AI programs (for example "claude auth login", "codex login"), stopping Claude services or sessions, and consent prompts are mine: show me what to do and let me do it.
 - Do not run "setup", "login" or "pair".
 ```
 
