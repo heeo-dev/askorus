@@ -32,7 +32,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, Keyboard, Pressable, ScrollView, type ScrollViewInstance, StyleSheet, Text, View, type ViewInstance } from 'react-native';
 
-import { agentName } from '@/api/agents';
+import { agentName, signInNote } from '@/api/agents';
 import type { AgentClient } from '@/api/client';
 import { openRemoteUrl } from '@/api/remoteUrl';
 import { type Info, type RunPart, type Tier, tiers } from '@/api/types';
@@ -736,12 +736,19 @@ export default function Ask() {
   ) as Record<Tier, string>;
   const tierModels = tierModelsOf(on);
 
+  // An AI that can answer but whose sign-in needs the person says so under its model (#60).
+  const noteOf = (agent: string): AISheetRow['note'] => {
+    const n = canAsk(agent) ? signInNote(info?.agents.find((x) => x.agent === agent)) : undefined;
+    return n ? { tone: n.ends ? 'sub' : 'danger', text: n.text } : undefined;
+  };
+
   const pickRows: AISheetRow[] = list.map((a) => {
     const name = agentName(a.agent);
     return {
       agent: a.agent,
       name,
       model: a.canAsk ? modelOf(a.agent) || undefined : t('ask.error.agent_cannot_ask'),
+      note: noteOf(a.agent),
       onPress: a.canAsk ? () => toggle(a.agent) : undefined,
       onLongPress: a.canAsk ? () => setSheet({ kind: 'model', agent: a.agent }) : undefined,
       disabled: !a.canAsk,
@@ -794,6 +801,7 @@ export default function Ask() {
       agent: a.agent,
       name,
       model: a.canAsk ? modelOf(a.agent, follow.tier) || undefined : t('ask.error.agent_cannot_ask'),
+      note: noteOf(a.agent),
       onPress: a.canAsk ? () => toggleFollow(a.agent) : undefined,
       onLongPress: a.canAsk ? () => setSheet({ kind: 'model', agent: a.agent, back: 'followPick' }) : undefined,
       disabled: !a.canAsk,

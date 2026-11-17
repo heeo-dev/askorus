@@ -102,6 +102,8 @@ export class FakeAgent {
   remoteUrl = 'https://claude.ai/code/session_test';
   /** Codes /v1/info reports for Claude, such as claude_service_elevated. */
   notices: string[] = [];
+  /** Claude's sign-in fields beside its notices in /v1/info (#60, #62). */
+  claudeLogin: Pick<AdapterInfo, 'loginExpiresAt' | 'signInHint'> = {};
   /** AIs beside Claude that /v1/info lists, such as Codex that only asks (Phase 2). */
   askAgents: AdapterInfo[] = [];
   /** What /v1/info announces; drop 'preview' to act like an older agent. */
@@ -379,7 +381,7 @@ export class FakeAgent {
     const ask = this.capabilities.includes('ask')
       ? { ask: { tiers: { quick: { model: 'haiku' }, standard: { model: 'sonnet' }, deep: { model: 'opus' } } } }
       : {};
-    return { agent: 'claude', version: '2.1.310', available: true, capabilities: this.capabilities, notices: this.notices, ...ask };
+    return { agent: 'claude', version: '2.1.310', available: true, capabilities: this.capabilities, notices: this.notices, ...this.claudeLogin, ...ask };
   }
 
   private known(agent: string): boolean {

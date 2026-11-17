@@ -44,3 +44,13 @@ export function noticeIsNote(code: string): boolean {
 export function signInNotice(code: string): boolean {
   return code.endsWith('_signed_out') || code.endsWith('_login_expiring');
 }
+
+/**
+ * signInNote is the line the AI picker shows under an AI whose sign-in
+ * needs the person (#60): the connection check's words, and ends whether it
+ * only ends soon (a heads-up) rather than being signed out already.
+ */
+export function signInNote(a: AdapterInfo | undefined): { text: string; ends: boolean } | undefined {
+  const code = a?.notices?.find(signInNotice);
+  return a && code ? { text: noticeText(code, a), ends: noticeIsNote(code) } : undefined;
+}

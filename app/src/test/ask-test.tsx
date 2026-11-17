@@ -259,6 +259,44 @@ test('an AI the PC cannot use is dimmed in the picker and never asked', async ()
   expect(agent.runRequests()[0].agents).toEqual([{ agent: 'claude' }, { agent: 'codex' }]);
 });
 
+// #60 (11-18): the picker says what the connection check says about an AI's
+// sign-in, under its model. The AI stays a switch and is still asked: the
+// PC keeps the state a minute, and the person may have signed in since.
+test('an AI not signed in on the PC says so in the picker, one whose sign-in ends soon says when, and both are still asked', async () => {
+  const end = new Date(Date.now() + 2 * 86_400_000).toISOString();
+  agent.notices = ['claude_login_expiring'];
+  agent.claudeLogin = { loginExpiresAt: end };
+  agent.askAgents[0] = { ...agent.askAgents[0], notices: ['codex_signed_out'] };
+  const { user } = await open();
+  await user.press(await screen.findByRole('button', { name: 'AIs to answer: 3 (Claude, Codex, OpenCode). Pick' }));
+  const out = "Codex on the PC isn't signed in, so it can't answer. Run codex login in a terminal on the PC.";
+  const codex = await screen.findByRole('switch', { name: `Codex, codex-std · medium, ${out}` });
+  expect(codex).toBeEnabled();
+  expect(codex).toBeChecked();
+  expect(screen.getByText(out)).toBeTruthy();
+  const ends = `Claude Code's sign-in on the PC ends on ${new Date(end).toLocaleDateString()}. Before then, run claude auth login in a terminal on the PC.`;
+  expect(screen.getByRole('switch', { name: `Claude, sonnet, ${ends}` })).toBeChecked();
+  expect(screen.getByRole('switch', { name: 'OpenCode, opencode-std · medium' })).toBeTruthy();
+  await user.press(close());
+  await ask(user, 'q');
+  await screen.findByText('codex says: q');
+  expect(agent.runRequests()[0].agents.map((a: { agent: string }) => a.agent)).toEqual(['claude', 'codex', 'opencode']);
+});
+
+test("the follow-up picker says it too, in the Mac's words when the PC's agent cannot read the sign-in (#62)", async () => {
+  agent.notices = ['claude_signed_out'];
+  agent.claudeLogin = { signInHint: 'mac_keychain' };
+  const { user } = await open();
+  await ask(user, 'first');
+  await screen.findByText('opencode says: first');
+  await user.press(screen.getByRole('button', { name: 'AIs for the follow-up: 3 (Claude, Codex, OpenCode). Pick' }));
+  await screen.findByRole('header', { name: 'AIs for the follow-up' });
+  const mac =
+    "Claude Code on the PC can't read its sign-in: the agent was started outside the Mac's own screen (over SSH, for example), where the keychain is locked. On the Mac itself, open Terminal and run askorus-agent shutdown, then askorus-agent start.";
+  expect(screen.getByRole('switch', { name: `Claude, sonnet, ${mac}` })).toBeChecked();
+  expect(screen.getByRole('switch', { name: 'Codex, codex-std · medium' })).toBeTruthy();
+});
+
 test('a question no AI compares shows each answer in full as it comes, with its model and time', async () => {
   agent.runLimit = 1;
   const { user } = await open();

@@ -19,6 +19,8 @@ export type AISheetRow = {
   name: string;
   model?: string;
   status?: { tone: 'sub' | 'waiting' | 'danger'; text: string; icon?: 'check' | 'spinner' };
+  /** A line under the model, such as an AI that is not signed in on the PC (#60). */
+  note?: { tone: 'sub' | 'danger'; text: string };
   onPress?: () => void;
   onLongPress?: () => void;
   right?: ReactNode;
@@ -49,6 +51,7 @@ export function AISheet({ open, onClose, title, subtitle, rows }: { open: boolea
                     {r.model}
                   </Text>
                 ) : null}
+                {r.note ? <Text style={[s.note, { color: r.note.tone === 'danger' ? th.danger : th.textSub }]}>{r.note.text}</Text> : null}
               </View>
               {r.status ? (
                 <View style={s.status}>
@@ -65,7 +68,7 @@ export function AISheet({ open, onClose, title, subtitle, rows }: { open: boolea
           );
           // The status is said once: left out of the label when the value already says it ('Answered, 9 s').
           const said = !!r.status?.text && r.accessibilityValue.text.endsWith(r.status.text);
-          const label = [r.name, r.model, said ? undefined : r.status?.text].filter(Boolean).join(', ');
+          const label = [r.name, r.model, said ? undefined : r.status?.text, r.note?.text].filter(Boolean).join(', ');
           const row = [s.row, i > 0 && s.divided, r.disabled && s.off];
           const toggles = r.checked !== undefined;
           const state = toggles ? { checked: r.checked, disabled: !!r.disabled } : { disabled: !!r.disabled };
@@ -109,9 +112,11 @@ const styles = themed((th) =>
     divided: { borderTopWidth: 1, borderTopColor: th.divider },
     off: { opacity: 0.45 },
     pressed: { backgroundColor: th.raised },
-    names: { flex: 1, minWidth: 0, gap: 1 },
+    // The padding keeps a row with a note off the dividers; a two-line row stays 64 high.
+    names: { flex: 1, minWidth: 0, gap: 1, paddingVertical: 10 },
     name: { fontSize: 15, fontWeight: '500', lineHeight: 21, color: th.text },
     model: { fontSize: 13, lineHeight: 18, color: th.caption },
+    note: { fontSize: 13, lineHeight: 18, paddingTop: 2 },
     status: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 },
     statusText: { fontSize: 14, lineHeight: 20, fontVariant: ['tabular-nums'] },
   }),
