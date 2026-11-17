@@ -24,9 +24,14 @@ export function loginDay(iso?: string): string {
   return Number.isNaN(d.getTime()) ? (iso ?? '') : d.toLocaleDateString();
 }
 
-/** noticeText turns one of an AI's notice codes into words; unknown codes show as they are. */
-export function noticeText(code: string, a: Pick<AdapterInfo, 'loginExpiresAt'>): string {
-  const key = `notice.${code}`;
+/**
+ * noticeText turns one of an AI's notice codes into words; unknown codes
+ * show as they are. A notice the PC gives a hint for has words of its own
+ * (#62: Claude Code on a Mac whose agent was started over SSH).
+ */
+export function noticeText(code: string, a: Pick<AdapterInfo, 'loginExpiresAt' | 'signInHint'>): string {
+  const hinted = a.signInHint ? `notice.${code}_${a.signInHint}` : '';
+  const key = hinted && has(hinted) ? hinted : `notice.${code}`;
   return has(key) ? t(key, { date: loginDay(a.loginExpiresAt) }) : code;
 }
 

@@ -101,7 +101,18 @@ type AdapterInfo struct {
 	// LoginExpiresAt is when the AI's sign-in ends (RFC 3339, UTC), sent
 	// only with the <agent>_login_expiring notice (#60).
 	LoginExpiresAt string `json:"loginExpiresAt,omitempty"`
+	// SignInHint says why the AI shows as signed out when the agent knows
+	// more than the AI does (SignInHintMacKeychain), sent only with the
+	// <agent>_signed_out notice (#62). Older apps leave it out and show the
+	// notice as before.
+	SignInHint string `json:"signInHint,omitempty"`
 }
+
+// SignInHintMacKeychain: the agent runs on a Mac outside the screen's
+// session (started over SSH, for example), where the AI's sign-in in the
+// keychain cannot be read. Starting the agent again from a terminal on the
+// Mac's screen fixes it; signing in again does not (#62).
+const SignInHintMacKeychain = "mac_keychain"
 
 // AskInfo tells the app which model each ask tier uses (P2-2).
 type AskInfo struct {

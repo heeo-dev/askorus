@@ -239,6 +239,7 @@ func (a *Adapter) Ask(ctx context.Context, req core.AskRequest) (core.AskResult,
 	}
 	if core.ErrorCode(err) == core.ErrCodeSignedOut {
 		a.forgetLogin() // the next info asks claude again
+		err = a.withSignInHint(err)
 	}
 	return out, err
 }

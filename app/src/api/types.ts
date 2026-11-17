@@ -57,6 +57,13 @@ export type AdapterInfo = {
   /** When the AI's sign-in ends (RFC 3339), sent with the <agent>_login_expiring notice (#60). */
   loginExpiresAt?: string;
   /**
+   * Why the AI shows as signed out when the PC knows more, sent with the
+   * <agent>_signed_out notice (#62): 'mac_keychain' = the agent runs on a
+   * Mac outside the screen's session (started over SSH) and cannot read the
+   * sign-in in the keychain. Older agents leave it out.
+   */
+  signInHint?: string;
+  /**
    * Set for AIs that can ask (Phase 2): the model of each tier, and (11-06,
    * newer agents) the efforts each of those models may take, least to most.
    */
@@ -288,7 +295,8 @@ export type RunPart = {
   ms?: number;
   inputTokens?: number;
   outputTokens?: number;
-  error?: { code: string; message?: string };
+  /** hint: more about the failure, 'mac_keychain' with ai_signed_out (#62). */
+  error?: { code: string; message?: string; hint?: string };
 };
 
 export type Run = {

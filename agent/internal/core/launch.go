@@ -51,10 +51,12 @@ type OpenResult struct {
 }
 
 // ActionError is a failure the app can explain. Code is stable; Detail is
-// optional extra text for the person (never logged).
+// optional extra text for the person (never logged). Hint, when set, is a
+// code that says more about the failure (SignInHintMacKeychain, #62).
 type ActionError struct {
 	Code   string
 	Detail string
+	Hint   string
 }
 
 func (e *ActionError) Error() string {

@@ -78,6 +78,8 @@ type rigOptions struct {
 	env     map[string]string // set before the adapters are made
 	judge   config.JudgeConfig
 	refine  bool // api.Options.Refine: off, as in the agent, unless a test turns it on
+	// offScreen: the agent runs on a Mac outside the screen's session (#62).
+	offScreen bool
 }
 
 type rig struct {
@@ -126,7 +128,7 @@ func newRig(t *testing.T, mutate func(*rigOptions)) *rig {
 		}
 	}
 	r.adapters = []core.Adapter{
-		claude.New(claude.Options{ClaudeDir: r.claudeDir, ClaudePath: exes[fakecli.RoleClaude]}),
+		claude.New(claude.Options{ClaudeDir: r.claudeDir, ClaudePath: exes[fakecli.RoleClaude], OutsideScreen: func() bool { return o.offScreen }}),
 		codex.New(codex.Options{Path: exes[fakecli.RoleCodex], SchemaDir: filepath.Join(root, "agent")}),
 		opencode.New(opencode.Options{Path: exes[fakecli.RoleOpenCode]}),
 	}

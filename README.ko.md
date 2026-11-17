@@ -80,6 +80,8 @@ Askorus는 PC에 설치한 각 AI의 공식 CLI(터미널 프로그램)로 묻�
 
 설치하고 로그인한 뒤 PC에서 `askorus-agent check`를 실행하면, 찾았는지와 로그인되어 있는지를 AI마다 보여 줍니다. 앱의 설정 > PC > 연결 진단에도 나옵니다.
 
+Mac에서는 에이전트를 SSH가 아니라 Mac 화면에서 연 터미널에서 켜세요. SSH에서 켠 에이전트는 키체인에 있는 Claude Code 로그인을 읽지 못합니다([고치는 법](#안-될-때)).
+
 ## PC 에이전트 설치
 
 에이전트는 Windows, macOS, Linux에서 돕니다. 어디서나 한 줄이고, 관리자 권한은 필요 없습니다.
@@ -103,7 +105,7 @@ setup은 차례로 안내합니다. 에이전트를 PATH에 넣고, AI 프로그
 macOS와 Linux에서도 명령은 Windows와 같습니다. 운영체제마다 다른 점은 이렇습니다.
 
 - **Linux:** 로그인할 때 켜기는 systemd 사용자 단위입니다. 아무도 로그인하지 않는 컴퓨터에서는 `loginctl enable-linger`를 해 두면 부팅할 때 켜집니다. 폰을 허용할지 묻는 창은 `zenity`나 `kdialog`와 화면이 있어야 뜹니다. 없으면 `askorus-agent pair`를 열어 두고 짝을 맺으세요.
-- **macOS:** 로그인할 때 켜기는 `~/Library/LaunchAgents`의 LaunchAgent입니다. 다음 로그인부터 적용되고, 지금 바로 켜려면 `askorus-agent start`를 실행합니다.
+- **macOS:** 로그인할 때 켜기는 `~/Library/LaunchAgents`의 LaunchAgent입니다. 다음 로그인부터 적용되고, 지금 바로 켜려면 `askorus-agent start`를 실행합니다. 설치 줄과 `askorus-agent start`는 SSH가 아니라 Mac 화면에서 연 터미널에서 실행하세요. Claude Code는 로그인을 키체인에 두는데, SSH에서 켠 에이전트는 그것을 읽지 못해 Claude가 로그인 안 됨으로 보입니다(`start`가 경고합니다).
 - macOS용 에이전트는 클라우드의 Mac에서 자동 점검(Go 테스트, 설치 스크립트, launchd 아래에서 켜기·끄기·로그인할 때 켜기)으로 확인했습니다. 실제 AI 프로그램이 있는 사람의 Mac에서는 아직 써 보지 못했습니다. 안 되는 것이 있으면 [이슈로 알려 주세요](https://github.com/heeo-dev/askorus/issues).
 
 <details>
@@ -196,6 +198,7 @@ PC의 Claude Code나 Codex에 내 운영체제에 맞는 글을 붙여 넣으세
 - **폰에 '지금 PC에서 허용해 줄 수 있는 곳이 없습니다'라고 나오거나, PC에 창이 뜨지 않습니다.** 작은 창은 화면이 있어야 뜹니다. Linux에서는 `zenity`나 `kdialog`도 있어야 하고, 서버나 SSH 접속에는 뜨지 않습니다. PC에서 `askorus-agent pair`를 실행한 뒤 앱에서 PC를 다시 누르세요. 실행해 둔 동안에는 묻지 않고 바로 받습니다. 이미 짝 맺은 폰에서 허용해도 됩니다.
 - **모르는 폰이 짝 맺어졌거나, 터미널의 숫자가 내 폰의 숫자와 다릅니다.** `askorus-agent devices`가 짝 맺은 폰을 보여 주고, `askorus-agent devices revoke <id나 이름>`으로 끊습니다.
 - **몇 달 잘 되다가 갑자기 안 됩니다.** Tailscale 로그인은 기본으로 약 180일 뒤 끝납니다. `askorus-agent check`가 2주 전부터 알리고, 앱의 설정 > Tailscale에 끝나는 날짜가 보입니다. 다시 로그인하거나(PC는 `askorus-agent login`, 앱은 설정 > Tailscale), Tailscale 관리 화면에서 기기의 키 만료를 끄세요. 짝 맺기는 그대로 남습니다.
+- **Mac에서 Claude가 로그인되어 있지 않다고 하는데, 터미널에서는 `claude`가 잘 됩니다.** 에이전트를 SSH에서 켠 경우입니다(SSH에서 설치 줄을 실행한 경우 등). Claude Code는 로그인을 키체인에 두는데, SSH에서 켠 프로그램은 SSH를 끊은 뒤에도 그것을 읽지 못합니다. 다시 로그인해도 고쳐지지 않습니다. Mac 화면에서 터미널을 열고 `askorus-agent shutdown`, `askorus-agent start`를 차례로 실행하세요.
 - **새 Claude Code 세션이 시작되지 않습니다.** Claude Code는 폴더마다 한 번 신뢰할지 묻습니다. PC에서 그 폴더로 가서 `claude`를 한 번 실행하고 허용하세요.
 - **폴더 열어 두기가 '켜는 중'에 머물거나 실패합니다.** Claude Code에서 Remote Control을 한 번 켜야 합니다. PC에서 `claude remote-control`을 실행해 `y`로 답하고 Ctrl+C로 끄세요.
 - **한 AI만 '로그인되어 있지 않다'며 답하지 않습니다.** PC에서 그 AI의 CLI가 로그인되어 있지 않거나 로그인이 끝났습니다(Claude Code의 로그인은 끝나는 날이 있습니다). PC의 터미널에서 Claude Code는 `claude auth login`, Codex는 `codex login`을 실행하세요. 데스크톱 앱(Claude, Codex)에 로그인한 것과는 따로입니다. 앱의 연결 진단과 `askorus-agent check`가 로그인 상태와 곧 끝나는 날을 알려 줍니다.

@@ -19,6 +19,7 @@ func testAdapter(t *testing.T) *Adapter {
 	claudeDir := filepath.Dir(copyProjects(t))
 	a := New(Options{ClaudeDir: claudeDir, ClaudePath: r.Path()})
 	a.folderExists = func(string) bool { return true } // testdata folders are from another PC
+	a.outsideScreen = func() bool { return false }     // the same on a Mac runner as anywhere (#62)
 	return a
 }
 

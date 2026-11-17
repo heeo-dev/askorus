@@ -80,6 +80,8 @@ Askorus asks each AI through its official CLI (the terminal program) on the PC. 
 
 After installing and signing in, run `askorus-agent check` on the PC: it shows, for each AI, whether it was found and is signed in. The app shows the same in Settings > the PC > connection check.
 
+On a Mac, start the agent from Terminal on the Mac's own screen, not over SSH: an agent started over SSH cannot read Claude Code's sign-in in the keychain ([what to do](#if-something-does-not-work)).
+
 ## Install the PC agent
 
 The agent runs on Windows, macOS and Linux. It is one line on each, and needs no administrator rights.
@@ -103,7 +105,7 @@ Setup goes step by step: it puts the agent on your PATH, checks the AI programs,
 On macOS and Linux the same commands work as on Windows. A few things differ by system:
 
 - **Linux:** starting at logon is a systemd user unit; on a machine nobody logs on to, `loginctl enable-linger` makes it start at boot. The window that asks about a phone needs `zenity` or `kdialog` and a screen; without them, pair with `askorus-agent pair` open.
-- **macOS:** starting at logon is a launch agent in `~/Library/LaunchAgents`; it takes effect at your next logon, and `askorus-agent start` starts the agent now.
+- **macOS:** starting at logon is a launch agent in `~/Library/LaunchAgents`; it takes effect at your next logon, and `askorus-agent start` starts the agent now. Run the install line and `askorus-agent start` in Terminal on the Mac's own screen, not over SSH: Claude Code keeps its sign-in in the keychain, and an agent started over SSH cannot read it, so Claude shows as not signed in (`start` warns about it).
 - The macOS agent is tested by automated checks on a Mac in the cloud (the Go tests, the install script, and start, stop and logon start under launchd). It has not been tried yet with real AI programs on a person's Mac. If something does not work there, please [open an issue](https://github.com/heeo-dev/askorus/issues).
 
 <details>
@@ -196,6 +198,7 @@ Run `askorus-agent check` on the PC first. It lists what is missing, each line w
 - **The phone says nothing on the PC can allow it, or no window shows on the PC.** The small window needs a screen. On Linux it also needs `zenity` or `kdialog`, and a server or an SSH session has none. Run `askorus-agent pair` on the PC and tap the PC again: while it runs, the phone is taken without a question. A phone that is already paired can allow it too.
 - **A phone I do not know was paired, or the number in the terminal is not the one on my phone.** `askorus-agent devices` lists the paired phones and `askorus-agent devices revoke <id or name>` disconnects one.
 - **It worked for months and then stopped.** A Tailscale sign-in ends after about 180 days by default. `askorus-agent check` warns two weeks ahead, and Settings > Tailscale in the app shows the date. Sign in again (`askorus-agent login` on the PC, Settings > Tailscale in the app), or turn key expiry off for the devices in the Tailscale admin console. Pairing stays.
+- **On a Mac, Claude says it is not signed in, but `claude` works in Terminal.** The agent was started over SSH (for example, the install line was run over SSH). Claude Code keeps its sign-in in the keychain, which a program started over SSH cannot read, even after SSH ends. Signing in again does not help: on the Mac itself, open Terminal and run `askorus-agent shutdown`, then `askorus-agent start`.
 - **A new Claude Code session does not start.** Claude Code asks once per folder whether you trust it: on the PC, run `claude` in that folder once and accept.
 - **Keeping a folder open stays at "starting" or fails.** Remote Control has to be turned on once in Claude Code: on the PC, run `claude remote-control`, answer `y`, then stop it with Ctrl+C.
 - **One AI does not answer and says it isn't signed in.** That AI's CLI on the PC is not signed in, or its sign-in ended (Claude Code's sign-in has an end date). In a terminal on the PC, run `claude auth login` for Claude Code or `codex login` for Codex. Signing in to the desktop apps (Claude, Codex) is separate. The app's connection check and `askorus-agent check` show the sign-in state and a sign-in that ends soon.

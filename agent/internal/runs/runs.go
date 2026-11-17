@@ -55,6 +55,9 @@ var ErrSessionBusy = errors.New("that conversation is still answering")
 type Error struct {
 	Code    string `json:"code"`
 	Message string `json:"message,omitempty"`
+	// Hint says more about the failure: core.SignInHintMacKeychain with
+	// ai_signed_out (#62). Older apps leave it out.
+	Hint string `json:"hint,omitempty"`
 }
 
 // Part is one AI's share of a run. Fields may be added inside /v1, never
@@ -294,7 +297,7 @@ func safeAsk(ctx context.Context, ask func(context.Context) (core.AskResult, err
 func partError(err error) *Error {
 	var ae *core.ActionError
 	if errors.As(err, &ae) {
-		return &Error{Code: ae.Code, Message: ae.Detail}
+		return &Error{Code: ae.Code, Message: ae.Detail, Hint: ae.Hint}
 	}
 	return &Error{Code: "internal"}
 }

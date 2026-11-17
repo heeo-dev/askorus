@@ -123,3 +123,56 @@ func TestAskSignedOut(t *testing.T) {
 		}
 	}
 }
+
+// R-118 (#62): on a Mac outside the screen's session (an agent started
+// over SSH) a signed-out claude may only be unable to read its sign-in in
+// the keychain; the notice and the ask error carry the hint that says so.
+func TestSignInHintOffScreen(t *testing.T) {
+	a := testAdapter(t)
+	t.Setenv("CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "")
+	t.Setenv("DISABLE_GROWTHBOOK", "")
+	soon := time.Now().Add(24 * time.Hour)
+	cases := []struct {
+		name string
+		off  bool
+		st   loginState
+		hint string
+	}{
+		{"off screen, signed out", true, loginState{known: true}, core.SignInHintMacKeychain},
+		{"off screen, ended", true, loginState{known: true, signedIn: true, expires: time.Now().Add(-time.Hour)}, core.SignInHintMacKeychain},
+		{"off screen, signed in", true, loginState{known: true, signedIn: true}, ""},
+		{"off screen, ends soon", true, loginState{known: true, signedIn: true, expires: soon}, ""},
+		{"off screen, unknown", true, loginState{}, ""},
+		{"on screen, signed out", false, loginState{known: true}, ""},
+	}
+	for _, c := range cases {
+		off, st := c.off, c.st
+		a.outsideScreen = func() bool { return off }
+		a.loginCheck = func(context.Context) loginState { return st }
+		a.forgetLogin()
+		if info := a.Info(context.Background()); info.SignInHint != c.hint {
+			t.Errorf("%s: hint %q, want %q (notices %v)", c.name, info.SignInHint, c.hint, info.Notices)
+		}
+	}
+
+	signedOut := proc.Result{ExitCode: 1, Stdout: []byte(`{"type":"result","is_error":true,"result":"Not logged in · Please run /login"}`)}
+	for _, off := range []bool{true, false} {
+		a.outsideScreen = func() bool { return off }
+		_, err := parseAskOutput(signedOut, "sonnet")
+		err = a.withSignInHint(err)
+		var ae *core.ActionError
+		want := ""
+		if off {
+			want = core.SignInHintMacKeychain
+		}
+		if !errors.As(err, &ae) || ae.Code != core.ErrCodeSignedOut || ae.Detail != LoginCommand || ae.Hint != want {
+			t.Errorf("off screen %v: %+v, want %s with hint %q", off, ae, core.ErrCodeSignedOut, want)
+		}
+	}
+	a.outsideScreen = func() bool { return true }
+	_, err := parseAskOutput(proc.Result{ExitCode: 1, Stdout: []byte(`{"type":"result","is_error":true,"result":"Overloaded"}`)}, "sonnet")
+	var ae *core.ActionError
+	if errors.As(a.withSignInHint(err), &ae) && ae.Hint != "" {
+		t.Errorf("another failure got the hint: %+v", ae)
+	}
+}

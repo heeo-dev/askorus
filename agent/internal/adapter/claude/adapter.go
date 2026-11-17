@@ -13,6 +13,7 @@ import (
 	"unicode"
 
 	"github.com/heeo-dev/askorus/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/proc"
 )
 
 // Name is the agent name used in session ids ("claude:<uuid>").
@@ -49,6 +50,10 @@ type Options struct {
 	DefaultEffort string
 	// AskTiers overrides the ask tier models (settings ask.tiers.claude).
 	AskTiers map[string]core.AskModel
+	// OutsideScreen reports whether the agent runs on a Mac outside the
+	// screen's session, where claude cannot read its sign-in (#62). Nil
+	// asks the system (proc.OutsideScreenSession).
+	OutsideScreen func() bool
 }
 
 // Adapter implements core.Adapter for Claude Code.
@@ -67,6 +72,8 @@ type Adapter struct {
 	login      loginState
 	loginAt    time.Time
 	loginCheck func(context.Context) loginState
+	// outsideScreen: the agent runs outside the Mac's screen session (#62).
+	outsideScreen func() bool
 
 	fetchMu    sync.Mutex // one agents run at a time
 	amu        sync.Mutex
@@ -140,6 +147,10 @@ func New(opts Options) *Adapter {
 	a.live = func() map[string]liveSession { return readLiveSessions(sessionsDir, processAlive) }
 	a.serviceCheck = func() (bool, int) { return serviceElevated(opts.ClaudeDir, processAlive, processElevated) }
 	a.folderExists = dirExists
+	a.outsideScreen = opts.OutsideScreen
+	if a.outsideScreen == nil {
+		a.outsideScreen = proc.OutsideScreenSession
+	}
 	return a
 }
 

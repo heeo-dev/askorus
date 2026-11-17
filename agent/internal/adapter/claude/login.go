@@ -13,6 +13,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"time"
 
@@ -110,10 +111,32 @@ func (a *Adapter) loginNotices(ctx context.Context, info *core.AdapterInfo) {
 	switch {
 	case !st.signedIn, !st.expires.IsZero() && left <= 0:
 		info.Notices = append(info.Notices, NoticeSignedOut)
+		info.SignInHint = a.signInHint()
 	case !st.expires.IsZero() && left < loginWarnBefore:
 		info.Notices = append(info.Notices, NoticeLoginExpiring)
 		info.LoginExpiresAt = st.expires.Format(time.RFC3339)
 	}
+}
+
+// signInHint is core.SignInHintMacKeychain when the agent runs on a Mac
+// outside the screen's session (#62): there claude cannot read its
+// sign-in in the keychain, so a signed-out claude may well be signed in,
+// and signing in again does not help; starting the agent again from a
+// terminal on the Mac's screen does.
+func (a *Adapter) signInHint() string {
+	if a.outsideScreen != nil && a.outsideScreen() {
+		return core.SignInHintMacKeychain
+	}
+	return ""
+}
+
+// withSignInHint adds the hint to a signed-out ask error.
+func (a *Adapter) withSignInHint(err error) error {
+	var ae *core.ActionError
+	if errors.As(err, &ae) && ae.Code == core.ErrCodeSignedOut {
+		ae.Hint = a.signInHint()
+	}
+	return err
 }
 
 // signedOutMarks are pieces of what claude prints when it is not signed in

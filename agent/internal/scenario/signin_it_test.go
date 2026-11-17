@@ -42,14 +42,57 @@ func TestIT22SignIn(t *testing.T) {
 				if p.Agent == fakecli.RoleCodex {
 					want = codex.LoginCommand
 				}
-				if p.Error == nil || p.Error.Code != core.ErrCodeSignedOut || p.Error.Message != want {
-					t.Errorf("%s part %+v, want %s with %q", p.Agent, p.Error, core.ErrCodeSignedOut, want)
+				if p.Error == nil || p.Error.Code != core.ErrCodeSignedOut || p.Error.Message != want || p.Error.Hint != "" {
+					t.Errorf("%s part %+v, want %s with %q and no hint", p.Agent, p.Error, core.ErrCodeSignedOut, want)
 				}
 			case fakecli.RoleOpenCode:
 				if p.Answer == "" {
 					t.Errorf("opencode gave no answer: %+v", p.Error)
 				}
 			}
+		}
+	})
+
+	// R-118 (#62, 2026-11-17): on a Mac, an agent started over SSH stays
+	// outside the screen's session, where claude cannot read its sign-in
+	// in the keychain. Claude shows as signed out though the person is
+	// signed in, and signing in again does not help: the info and the
+	// failed part say why, so the app can tell them to start the agent
+	// again from the Mac's screen. Codex keeps its sign-in in a file.
+	t.Run("Mac outside the screen's session", func(t *testing.T) {
+		r := newRig(t, func(o *rigOptions) {
+			o.offScreen = true
+			o.env = map[string]string{fakecli.EnvSignIn: "claude=out,codex=out", fakecli.EnvAsk: "claude=signedout,codex=signedout"}
+		})
+		r.addDevice()
+		info := r.info()
+		cl, cx := agentInfo(t, info, fakecli.RoleClaude), agentInfo(t, info, fakecli.RoleCodex)
+		if !slices.Contains(cl.Notices, claude.NoticeSignedOut) || cl.SignInHint != core.SignInHintMacKeychain {
+			t.Errorf("claude %+v, want %s with hint %s", cl, claude.NoticeSignedOut, core.SignInHintMacKeychain)
+		}
+		if cx.SignInHint != "" {
+			t.Errorf("codex %+v has a hint", cx)
+		}
+		st := r.waitRun(r.ask(nil, nil).ID)
+		for _, p := range st.Parts {
+			switch p.Agent {
+			case fakecli.RoleClaude:
+				if p.Error == nil || p.Error.Code != core.ErrCodeSignedOut || p.Error.Message != claude.LoginCommand || p.Error.Hint != core.SignInHintMacKeychain {
+					t.Errorf("claude part %+v, want %s with hint %s", p.Error, core.ErrCodeSignedOut, core.SignInHintMacKeychain)
+				}
+			case fakecli.RoleCodex:
+				if p.Error == nil || p.Error.Code != core.ErrCodeSignedOut || p.Error.Hint != "" {
+					t.Errorf("codex part %+v, want %s and no hint", p.Error, core.ErrCodeSignedOut)
+				}
+			}
+		}
+	})
+
+	t.Run("Mac outside the screen's session, signed in", func(t *testing.T) {
+		r := newRig(t, func(o *rigOptions) { o.offScreen = true })
+		r.addDevice()
+		if cl := agentInfo(t, r.info(), fakecli.RoleClaude); len(cl.Notices) != 0 || cl.SignInHint != "" {
+			t.Errorf("claude %+v: a signed-in claude needs no hint", cl)
 		}
 	})
 

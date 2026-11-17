@@ -158,6 +158,13 @@ test('the AIs of a turn: names, models, seconds and a value that is always an ob
   expect(partError({ code: 'ai_signed_out', message: 'claude auth login' })).toBe(
     "This AI isn't signed in on the PC. Run claude auth login in a terminal on the PC, then ask again.",
   );
+  // R-118 (#62): a Mac agent started over SSH cannot read the sign-in; a hint without words of its own keeps the usual ones.
+  expect(partError({ code: 'ai_signed_out', message: 'claude auth login', hint: 'mac_keychain' })).toBe(
+    "This AI's sign-in can't be read: the PC's agent was started outside the Mac's own screen (over SSH, for example). On the Mac itself, open Terminal, run askorus-agent shutdown, then askorus-agent start, and ask again.",
+  );
+  expect(partError({ code: 'ai_signed_out', message: 'codex login', hint: 'some_newer_hint' })).toBe(
+    "This AI isn't signed in on the PC. Run codex login in a terminal on the PC, then ask again.",
+  );
 });
 
 test('an AI still answering shows the model the turn asked for until the PC says which (UX-8)', () => {

@@ -37,6 +37,27 @@ test('a signed-out AI fails the check and says how to sign in (#60)', async () =
   ]);
 });
 
+// R-118 (#62): on a Mac whose agent was started over SSH, Claude Code cannot
+// read its sign-in; signing in again would not help, starting the agent
+// again from the Mac's screen does. An older app (no hint words) or an AI
+// without the hint keeps the usual line.
+test('a Mac agent started over SSH says to start it again from the screen (#62)', async () => {
+  const info = {
+    ...base,
+    agents: [
+      { agent: 'claude', version: '2.1.325', available: true, capabilities: ['list', 'ask'], notices: ['claude_signed_out'], signInHint: 'mac_keychain' },
+      { agent: 'codex', version: '0.167.1', available: true, capabilities: ['ask'], notices: ['codex_signed_out'], signInHint: 'some_newer_hint' },
+    ],
+  } as Info;
+  const checks = await diagnose(client(info));
+  const failed = checks.filter((c) => !c.ok);
+  expect(failed.map((c) => c.text)).toEqual([
+    "Claude Code on the PC can't read its sign-in: the agent was started outside the Mac's own screen (over SSH, for example), where the keychain is locked. On the Mac itself, open Terminal and run askorus-agent shutdown, then askorus-agent start.",
+    "Codex on the PC isn't signed in, so it can't answer. Run codex login in a terminal on the PC.",
+  ]);
+  expect(failed.every((c) => c.ai)).toBe(true);
+});
+
 test('a sign-in that ends soon is a note with its day (#60)', async () => {
   const at = '2026-11-27T03:02:52Z';
   const info = {

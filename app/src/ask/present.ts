@@ -23,8 +23,10 @@ import { texToUnicode } from '@/ui/tex';
 // ---- Errors ----
 
 /** partError explains why an AI gave no answer; the AI's own message follows. */
-export function partError(e: { code: string; message?: string }): string {
-  const askKey = `ask.error.${e.code}`;
+export function partError(e: { code: string; message?: string; hint?: string }): string {
+  // A failure the PC gives a hint for has words of its own (#62).
+  const hinted = e.hint ? `ask.error.${e.code}_${e.hint}` : '';
+  const askKey = hinted && has(hinted) ? hinted : `ask.error.${e.code}`;
   const key = `error.${e.code}`;
   // ai_signed_out (#60) carries the command that signs the AI in on the PC.
   const base = has(askKey)

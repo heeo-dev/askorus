@@ -21,6 +21,7 @@ import (
 	"github.com/heeo-dev/askorus/agent/internal/core"
 	"github.com/heeo-dev/askorus/agent/internal/devices"
 	"github.com/heeo-dev/askorus/agent/internal/dialog"
+	"github.com/heeo-dev/askorus/agent/internal/proc"
 	"github.com/heeo-dev/askorus/agent/internal/tsnode"
 )
 
@@ -70,6 +71,9 @@ func startCmd(dir string, args []string, out io.Writer) error {
 	}
 	say(out, m("the agent runs in the background (pid %d); stop it with: askorus-agent shutdown",
 		"에이전트가 백그라운드에서 돕니다 (pid %d). 끄려면: askorus-agent shutdown", pid))
+	if note, ok := startSignInNote(cfg.ClaudePath); ok {
+		say(out, note)
+	}
 	// Say whether phones can reach it yet. Signing in to Tailscale is a
 	// step of its own (login), so a PC not signed in is not an error here.
 	deadline := time.Now().Add(startNodeWait)
@@ -87,6 +91,22 @@ func startCmd(dir string, args []string, out io.Writer) error {
 // startNodeWait is how long start waits to learn the node's state; tests
 // shorten it.
 var startNodeWait = 12 * time.Second
+
+// startOffScreen reports whether start runs on a Mac outside the screen's
+// session (#62); tests replace it.
+var startOffScreen = proc.OutsideScreenSession
+
+// startSignInNote is the line start adds on a Mac outside the screen's
+// session when Claude Code is installed (#62).
+func startSignInNote(claudePath string) (msg, bool) {
+	if !startOffScreen() {
+		return msg{}, false
+	}
+	if _, err := claude.NewRunner(claudePath); err != nil {
+		return msg{}, false
+	}
+	return offScreenStart(), true
+}
 
 // pidFile holds the running agent's process id while it serves.
 const pidFile = "agent.pid"
