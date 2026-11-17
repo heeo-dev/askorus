@@ -106,7 +106,7 @@ On macOS and Linux the same commands work as on Windows. A few things differ by 
 
 - **Linux:** starting at logon is a systemd user unit; on a machine nobody logs on to, `loginctl enable-linger` makes it start at boot. The window that asks about a phone needs `zenity` or `kdialog` and a screen; without them, pair with `askorus-agent pair` open.
 - **macOS:** starting at logon is a launch agent in `~/Library/LaunchAgents`; it takes effect at your next logon, and `askorus-agent start` starts the agent now. Run the install line and `askorus-agent start` in Terminal on the Mac's own screen, not over SSH: Claude Code keeps its sign-in in the keychain, and an agent started over SSH cannot read it, so Claude shows as not signed in (`start` warns about it).
-- The macOS agent is tested by automated checks on a Mac in the cloud (the Go tests, the install script, and start, stop and logon start under launchd). It has not been tried yet with real AI programs on a person's Mac. If something does not work there, please [open an issue](https://github.com/heeo-dev/askorus/issues).
+- The macOS agent is tested by automated checks on a Mac in the cloud (the Go tests, the install script, and start, stop and logon start under launchd), and it has been used with Claude Code and Codex on a person's Mac. Starting at logon has not been tried on a real Mac yet. If something does not work there, please [open an issue](https://github.com/heeo-dev/askorus/issues).
 
 <details>
 <summary>Read the script before you run it</summary>

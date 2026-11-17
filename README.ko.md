@@ -106,7 +106,7 @@ macOS와 Linux에서도 명령은 Windows와 같습니다. 운영체제마다 �
 
 - **Linux:** 로그인할 때 켜기는 systemd 사용자 단위입니다. 아무도 로그인하지 않는 컴퓨터에서는 `loginctl enable-linger`를 해 두면 부팅할 때 켜집니다. 폰을 허용할지 묻는 창은 `zenity`나 `kdialog`와 화면이 있어야 뜹니다. 없으면 `askorus-agent pair`를 열어 두고 짝을 맺으세요.
 - **macOS:** 로그인할 때 켜기는 `~/Library/LaunchAgents`의 LaunchAgent입니다. 다음 로그인부터 적용되고, 지금 바로 켜려면 `askorus-agent start`를 실행합니다. 설치 줄과 `askorus-agent start`는 SSH가 아니라 Mac 화면에서 연 터미널에서 실행하세요. Claude Code는 로그인을 키체인에 두는데, SSH에서 켠 에이전트는 그것을 읽지 못해 Claude가 로그인 안 됨으로 보입니다(`start`가 경고합니다).
-- macOS용 에이전트는 클라우드의 Mac에서 자동 점검(Go 테스트, 설치 스크립트, launchd 아래에서 켜기·끄기·로그인할 때 켜기)으로 확인했습니다. 실제 AI 프로그램이 있는 사람의 Mac에서는 아직 써 보지 못했습니다. 안 되는 것이 있으면 [이슈로 알려 주세요](https://github.com/heeo-dev/askorus/issues).
+- macOS용 에이전트는 클라우드의 Mac에서 자동 점검(Go 테스트, 설치 스크립트, launchd 아래에서 켜기·끄기·로그인할 때 켜기)으로 확인했고, 사람의 Mac에서 Claude Code와 Codex로 써 봤습니다. 실제 Mac에서 로그인할 때 켜기는 아직 써 보지 못했습니다. 안 되는 것이 있으면 [이슈로 알려 주세요](https://github.com/heeo-dev/askorus/issues).
 
 <details>
 <summary>실행하기 전에 스크립트 읽어 보기</summary>
