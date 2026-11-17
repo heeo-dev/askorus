@@ -47,12 +47,25 @@ func (a *Adapter) Family(model string) string {
 // off, the schema from a file and the featuresOff features off
 // (disableArgs). "-" reads the prompt from stdin.
 func judgeArgs(model, effort, schema string) []string {
-	args := []string{"exec", "-s", "read-only", "--ignore-user-config", "--skip-git-repo-check", "--ephemeral", "--json",
-		"-m", model, "-c", `model_reasoning_effort="` + effort + `"`, "-c", `web_search="disabled"`,
-		"--output-schema", schema}
+	return judgeImageArgs(model, effort, schema, nil)
+}
+
+// judgeImageArgs is judgeArgs for a question with photos (#14): "-i" and
+// the path of each kept photo after --ephemeral, before --json.
+func judgeImageArgs(model, effort, schema string, images []string) []string {
+	args := []string{"exec", "-s", "read-only", "--ignore-user-config", "--skip-git-repo-check", "--ephemeral"}
+	for _, p := range images {
+		args = append(args, "-i", p)
+	}
+	args = append(args, "--json",
+		"-m", model, "-c", `model_reasoning_effort="`+effort+`"`, "-c", `web_search="disabled"`,
+		"--output-schema", schema)
 	args = append(args, disableArgs()...)
 	return append(args, "-")
 }
+
+// judgeImagesAt is where the first "-i" of judgeImageArgs stands.
+const judgeImagesAt = 6
 
 // judgeItems are the items a one-off run may produce. Any other item, such
 // as command_execution, file_change, mcp_tool_call or web_search, is a

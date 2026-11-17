@@ -121,7 +121,11 @@ type Call struct {
 	// Env holds only PWD and OPENCODE_CONFIG_CONTENT, when they are set.
 	Env map[string]string `json:"env,omitempty"`
 	// Schema is the content of codex's --output-schema file.
-	Schema string    `json:"schema,omitempty"`
+	Schema string `json:"schema,omitempty"`
+	// Photos is how many photos the call got (photos.go, #14); Prompt is
+	// the question's text: Stdin, or the text of claude's stream message.
+	Photos int       `json:"photos,omitempty"`
+	Prompt string    `json:"-"`
 	At     time.Time `json:"at"`
 }
 
@@ -168,7 +172,13 @@ func Main(args []string) int {
 			c.Schema, schemaErr = string(b), err
 		}
 	}
+	var photoErr error
+	c.Photos, c.Prompt, photoErr = photoInput(role, args, c.Stdin)
 	record(c)
+	if photoErr != nil {
+		fmt.Fprintln(os.Stderr, "fakecli:", photoErr)
+		return 2
+	}
 	switch role {
 	case RoleClaude:
 		return claudeMain(c)

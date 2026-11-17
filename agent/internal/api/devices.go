@@ -28,6 +28,9 @@ func (s *Server) forgetSelf(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, CodeInternal, "could not remove the device")
 		return
 	}
+	if s.o.Uploads != nil {
+		s.o.Uploads.DropOwner(id) // its photos go with it (#14)
+	}
 	if s.o.Logger != nil {
 		s.o.Logger.Info("device unpaired itself", "device", id)
 	}

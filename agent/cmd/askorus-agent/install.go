@@ -23,6 +23,7 @@ import (
 	"github.com/heeo-dev/askorus/agent/internal/dialog"
 	"github.com/heeo-dev/askorus/agent/internal/proc"
 	"github.com/heeo-dev/askorus/agent/internal/tsnode"
+	"github.com/heeo-dev/askorus/agent/internal/uploads"
 )
 
 // Installing and running the agent on the PC (A5, design: PC 설치 흐름).
@@ -468,6 +469,12 @@ func uninstallCmd(dir string, args []string, in io.Reader, out io.Writer) error 
 	synthSchemaFile := filepath.Join(dir, core.SynthSchemaFile)
 	refineSchemaFile := filepath.Join(dir, core.RefineSchemaFile)
 	plan = append(plan, m("delete %s", "%s 삭제", schemaFile), m("delete %s", "%s 삭제", synthSchemaFile), m("delete %s", "%s 삭제", refineSchemaFile))
+	// The photos of questions (#14): the agent deletes them itself, so the
+	// folder is empty unless an agent was cut off.
+	uploadsFolder, _ := config.UploadsFolder(dir)
+	if uploadsFolder != "" {
+		plan = append(plan, m("delete the photos left in %s", "%s에 남은 사진 삭제", uploadsFolder))
+	}
 	if *all {
 		plan = append(plan, m("delete %s", "%s 삭제", dir))
 	}
@@ -533,6 +540,14 @@ func uninstallCmd(dir string, args []string, in io.Reader, out io.Writer) error 
 	os.Remove(schemaFile)
 	os.Remove(synthSchemaFile)
 	os.Remove(refineSchemaFile)
+	if uploadsFolder != "" {
+		// Open deletes the store's own files and nothing else; Close then
+		// leaves the folder empty, and an empty folder is removed.
+		if photos, err := uploads.Open(uploadsFolder); err == nil {
+			photos.Close()
+			os.Remove(uploadsFolder)
+		}
+	}
 	if *all {
 		if err := os.RemoveAll(dir); err != nil {
 			return err

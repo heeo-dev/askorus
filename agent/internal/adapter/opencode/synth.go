@@ -78,15 +78,34 @@ func writerArgs(agent, model string) []string {
 // checkSynthArgs accepts exactly what synthArgs or refineArgs makes from a
 // valid model: never an ask's or another agent. The prompt goes on stdin.
 func checkSynthArgs(args []string) error {
+	// The photos of a question (#14) are "--file" and a path each, at the
+	// end, and only with the writer agent.
+	n := len(synthArgs(""))
+	var images []string
+	for i := n; i+1 < len(args) && args[i] == "--file"; i += 2 {
+		images = append(images, args[i+1])
+	}
 	switch {
-	case len(args) != len(synthArgs("")):
+	case len(args) != n+2*len(images):
 		return fmt.Errorf("opencode synth: %d arguments refused", len(args))
 	case !modelRe.MatchString(args[7]):
 		return fmt.Errorf("opencode synth: model %q refused", args[7])
-	case !slices.Equal(args, synthArgs(args[7])) && !slices.Equal(args, refineArgs(args[7])):
+	case checkImagePaths(images) != nil:
+		return fmt.Errorf("opencode synth: an image path was refused")
+	case !slices.Equal(args, synthImageArgs(args[7], images)) && !(len(images) == 0 && slices.Equal(args, refineArgs(args[7]))):
 		return fmt.Errorf("opencode synth: arguments %q refused", args)
 	}
 	return nil
+}
+
+// synthImageArgs is synthArgs with "--file" and the path of each kept
+// photo of the question at the end.
+func synthImageArgs(model string, images []string) []string {
+	args := synthArgs(model)
+	for _, p := range images {
+		args = append(args, "--file", p)
+	}
+	return args
 }
 
 // synthEnv is what a writer run gets: the judge folder as PWD and the
@@ -118,7 +137,11 @@ func (a *Adapter) Synthesize(ctx context.Context, req core.SynthRequest) (core.S
 		return core.SynthResult{}, core.Fail(core.ErrCodeBadModel, req.Model)
 	}
 	model := modelArg(req.Model, req.Effort)
-	args := synthArgs(model)
+	images, ierr := imagePaths(req.Images)
+	if ierr != nil || (len(images) > 0 && (req.Refine || !a.SeesImages(model))) {
+		return core.SynthResult{}, core.Fail(core.ErrCodeInternal, "the combined-answer photos were refused")
+	}
+	args := synthImageArgs(model, images)
 	if req.Refine {
 		args = refineArgs(model)
 	}

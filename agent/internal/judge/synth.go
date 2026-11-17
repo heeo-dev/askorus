@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"strings"
 
@@ -62,7 +63,16 @@ type SynthTask struct {
 	// Conversation is the record a follow-up came with (#29): with one, the
 	// prompt is synth-v6 (debate-v5 after a debate, debate-plan v3).
 	Conversation *Conversation
+	// Photos is how many photos of the question the writer gets with the
+	// prompt (#14). With any, the prompt says so in one line (synthPhotos);
+	// with none it is the prompt as it always was.
+	Photos int
 }
+
+// synthPhotos is the one line a combined-answer prompt gains when the
+// question's photos go with it: after the head, before the data block. The
+// writer still adds nothing the answers do not say.
+const synthPhotos = "PHOTOS: The person sent %d photo(s) with the QUESTION; they are attached to this message. Use them only to understand the QUESTION and the answers, and add no fact that no answer gives.\n"
 
 // SynthAnswer is one answer: the name of the AI or app that wrote it, as
 // the writer must name it, and its text.
@@ -208,6 +218,9 @@ func SynthPrompt(task SynthTask, nonce string) string {
 	}
 	var b strings.Builder
 	b.WriteString(strings.ReplaceAll(synthHead, "{N}", nonce))
+	if task.Photos > 0 {
+		fmt.Fprintf(&b, synthPhotos, task.Photos)
+	}
 	b.WriteString("<data-" + nonce + ">\n")
 	b.WriteString(synthQuestion)
 	promptQuote(&b, task.Question)

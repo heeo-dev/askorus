@@ -225,24 +225,36 @@ func modelArg(model, effort string) string {
 	return base + "#" + effort
 }
 
-func askArgs(model, session string) []string {
+func askArgs(model, session string) []string { return askImageArgs(model, session, nil) }
+
+// askImageArgs is askArgs for a question with photos (#14): "--file" and
+// the path of each kept photo (core.CheckImage; the agent's own file) at
+// the end. opencode attaches the files itself; the ask agent's denied
+// tools stay denied.
+func askImageArgs(model, session string, images []string) []string {
 	args := []string{"run", "--standalone", "--format", "json", "--agent", askAgent, "-m", model}
 	if session != "" {
 		args = append(args, "--session", session)
 	}
+	for _, p := range images {
+		args = append(args, "--file", p)
+	}
 	return args
 }
 
-// checkArgs accepts exactly what askArgs makes from valid values. The
-// prompt goes on stdin, so no argument carries the question.
+// checkArgs accepts exactly what askArgs or askImageArgs makes from valid
+// values. The prompt goes on stdin, so no argument carries the question.
 func checkArgs(args []string) error {
 	model, session := "", ""
+	var images []string
 	for i := 0; i+1 < len(args); i++ {
 		switch args[i] {
 		case "-m":
 			model = args[i+1]
 		case "--session":
 			session = args[i+1]
+		case "--file":
+			images = append(images, args[i+1])
 		}
 	}
 	switch {
@@ -250,10 +262,59 @@ func checkArgs(args []string) error {
 		return fmt.Errorf("opencode ask: model %q refused", model)
 	case session != "" && !sessionRe.MatchString(session):
 		return fmt.Errorf("opencode ask: session %q refused", session)
-	case !slices.Equal(args, askArgs(model, session)):
+	case checkImagePaths(images) != nil:
+		return fmt.Errorf("opencode ask: an image path was refused")
+	case !slices.Equal(args, askImageArgs(model, session, images)):
 		return fmt.Errorf("opencode ask: arguments %q refused", args)
 	}
 	return nil
+}
+
+// checkImagePaths accepts the paths of kept photos only (core.CheckImages),
+// each with the type its ending says.
+func checkImagePaths(paths []string) error {
+	ims := make([]core.Image, len(paths))
+	for i, p := range paths {
+		for typ, ext := range core.ImageExt {
+			if strings.HasSuffix(p, ext) {
+				ims[i] = core.Image{Path: p, Type: typ}
+			}
+		}
+		if ims[i].Path == "" {
+			return fmt.Errorf("not a kept photo")
+		}
+	}
+	return core.CheckImages(ims)
+}
+
+// imagePaths checks a request's photos and returns their paths.
+func imagePaths(images []core.Image) ([]string, error) {
+	if err := core.CheckImages(images); err != nil {
+		return nil, err
+	}
+	paths := make([]string, len(images))
+	for i, im := range images {
+		paths[i] = im.Path
+	}
+	return paths, nil
+}
+
+// imageModels are the models known to see photos (2026-11-18 probe, #14):
+// DeepSeek V4.1 Flash read the test photos; DeepSeek V4 Pro answered that
+// there was no image, without an error. OpenCode gives no error for a
+// model that cannot see, so a model not listed here takes no photos.
+var imageModels = []string{"opencode-go/deepseek-v4.1-flash"}
+
+// SeesImages reports whether model (with or without "#variant") is one of
+// imageModels (core.ImageSeer).
+func (a *Adapter) SeesImages(model string) bool {
+	base, _, _ := strings.Cut(model, "#")
+	return slices.Contains(imageModels, base)
+}
+
+// ImageModels lists them for the app.
+func (a *Adapter) ImageModels() core.ImageInfo {
+	return core.ImageInfo{Models: slices.Clone(imageModels)}
 }
 
 // env is what every run gets. OpenCode takes its folder from PWD, not
@@ -298,7 +359,15 @@ func (a *Adapter) Ask(ctx context.Context, req core.AskRequest) (core.AskResult,
 	if req.OneOff && req.Resume != "" {
 		return core.AskResult{}, core.Fail(core.ErrCodeInternal, "a one-off ask never resumes")
 	}
-	args := askArgs(model, req.Resume)
+	images, err := imagePaths(req.Images)
+	if err != nil {
+		return core.AskResult{}, core.Fail(core.ErrCodeInternal, "opencode ask: a photo was refused")
+	}
+	if len(images) > 0 && !a.SeesImages(model) {
+		// OpenCode would answer without seeing them, and say so to nobody.
+		return core.AskResult{}, core.Fail(core.ErrCodeNoImages, model)
+	}
+	args := askImageArgs(model, req.Resume, images)
 	if err := checkArgs(args); err != nil {
 		return core.AskResult{}, err
 	}

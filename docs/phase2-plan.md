@@ -1467,7 +1467,7 @@ Askorus는 사용자 자신의 PC가 있어야 동작한다. 그래서 PC가 없
 4. 에이전트: 사진의 실제 종류를 첫 바이트로 확인하고, 자기 폴더에 자기가 지은 이름으로 저장한다. 폰이 보낸 파일 이름은 쓰지 않는다.
 5. 에이전트 → AI: 위 표의 방법으로 넘긴다. 질문 글은 지금처럼 stdin이다. 사진이 없는 질문의 명령은 바뀌지 않는다.
 6. 종합 답변: 사회자에게 답들과 같은 사진을 준다.
-7. 에이전트: 사진을 쓰는 일이 없고 10분이 지나면 지운다. 켤 때와 기기의 짝을 끊을 때도 지운다. 다시 필요하면 폰이 자기 사본을 다시 올린다.
+7. 에이전트: 사진을 쓰는 일이 없고 10분이 지나면 지운다. 켤 때와 끌 때, 폰이 스스로 짝을 끊을 때도 지운다. 다시 필요하면 폰이 자기 사본을 다시 올린다.
 
 **한도와 API(더하기만)**
 
@@ -1479,7 +1479,7 @@ Askorus는 사용자 자신의 PC가 있어야 동작한다. 그래서 PC가 없
 | 기기마다 PC에 보관 중인 사진 | 16장, 32MiB |
 | PC에서 지우기 | 마지막으로 쓴 뒤 10분 |
 
-- `GET /v1/info`의 `ask.attachments`: 한도, 받는 종류, AI와 단계별로 사진을 보는지. 이 값이 없는 옛 에이전트에서는 앱이 +를 흐리게 하고 'PC의 Askorus를 새 판으로 올리면 사진을 붙일 수 있습니다'를 보인다.
+- `GET /v1/info`의 `attachments`: 한도(`maxCount`, `maxBytes`)와 받는 종류(`types`). AI마다 `agents[].ask.images`: 사진을 보는 모델(`all`이거나 모델 이름 목록). `attachments`가 없는 옛 에이전트에서는 앱이 +를 흐리게 하고 'PC의 Askorus를 새 판으로 올리면 사진을 붙일 수 있습니다'를 보인다.
 - `POST /v1/uploads`: 사진 한 장을 받아 `{id, type, bytes}`를 준다. 오류 `upload_too_large`, `upload_bad_type`, `upload_limit`. `DELETE /v1/uploads/{id}`: 보내기 전에 뺀 사진.
 - `POST /v1/runs`의 `attachments`: id 목록(4개까지). 모든 대상 AI와 종합 답변에 준다. 없는 id면 `upload_gone`(앱이 다시 올리고 같은 요청을 다시 보낸다). 사진을 못 보는 모델이 섞여 들어오면 그 AI만 `no_image_support`로 실패한다.
 - 이어서 묻기는 새 사진이 있을 때만 `attachments`를 보낸다. 새로 들어온 AI는 앞 사진을 본 적이 없으니 화면에 알린다(1차에는 다시 보내지 않는다).
@@ -1503,12 +1503,31 @@ Askorus는 사용자 자신의 PC가 있어야 동작한다. 그래서 PC가 없
 
 | 단계 | 할 일 |
 | --- | --- |
-| S1 | 에이전트: 올리기 저장소와 `/v1/uploads`, `info`의 `ask.attachments`, `core.AskRequest`의 사진, AI별 넘기기, `runs`의 `attachments`, 종합에 사진, 가짜 CLI, UT·IT·LT |
+| S1 | 에이전트: 올리기 저장소와 `/v1/uploads`, `info`의 `attachments`와 `ask.images`, `core.AskRequest`의 사진, AI별 넘기기, `runs`의 `attachments`, 종합에 사진, 가짜 CLI, UT·IT·LT. **끝(2026-11-18), 아래 'S1 만든 것'** |
 | S2 | 다리: 파일을 보내는 함수, 앱의 네이티브 모듈 |
 | S3 | 앱: + 시트, 고르기와 줄이기, 미리 보기, 올리기, 기록에 사진, 못 보는 AI 안내, 문구(한·영), 화면 테스트 |
 | S4 | 앱: 답 속 SVG 그림 보기 |
 | S5 | 문서: 개인정보처리방침, 스토어 글, README, `docs/testing.md`, 메뉴 지도 |
 | S6 | 보안 검토 반영, 실제 폰 확인, 판 0.4.0 |
+
+**S1 만든 것(2026-11-18, 에이전트)**
+
+- `internal/uploads`: 올리기 저장소. 사진은 올리기 폴더(사용자 캐시 폴더의 `Askorus/uploads`, 사용자만 읽음)에 `up_<32자리 16진수>.<jpg|png|webp>`로 둔다. 종류는 첫 바이트로 정하고(JPEG, PNG, WebP가 아니면 거절), 기기마다 16장·32MiB, 한 장 4MiB. 질문이 쓰는 동안은 잡아 두고, 마지막으로 쓴 뒤 10분에 지운다. 목록은 메모리에만 있어 에이전트를 다시 켜면 남은 파일을 지우고 빈 채로 시작한다. `uninstall`도 남은 사진을 지운다.
+- `internal/core/image.go`: `Image{Path, Type}`와 `CheckImage`(절대 경로, 정리된 경로, 에이전트가 지은 이름, 종류와 맞는 확장자). 모든 어댑터가 경로를 명령에 넣기 전에 이것을 거친다. `ImageSeer`는 모델이 사진을 보는지 답한다(Claude·Codex는 모두, OpenCode는 DeepSeek V4.1 Flash만. 표에 없는 모델은 못 보는 것으로 다룬다).
+- AI별 명령(사진이 있을 때만 달라지고, 없으면 전과 한 글자도 다르지 않다):
+
+| AI | 묻기 | 종합 답변 |
+| --- | --- | --- |
+| Claude | `--output-format stream-json … --input-format stream-json --verbose`, stdin은 JSON 한 줄(질문 글 + 사진 base64). 경로가 명령에도 stdin에도 없다 | 같은 방식(`--tools ""`, `--safe-mode`, `--json-schema`는 그대로) |
+| Codex | `… --skip-git-repo-check [--ephemeral] -i <경로> … --json …`, 질문은 stdin | `exec … --ephemeral -i <경로> … --json …` |
+| OpenCode | `run … -m <모델> [--session <id>] --file <경로> …`, 질문은 stdin. 사진을 못 보는 모델이면 묻지 않고 `no_image_support` | `run … --title <제목> --file <경로> …` |
+
+- 명령 검사(`checkAskArgs`, `checkArgs`, `checkSynthArgs`)는 새 모양만 정확히 받는다: Claude는 stream 셋이 함께일 때만, Codex와 OpenCode는 정해진 자리의 `-i`·`--file`과 `CheckImage`를 지난 경로만. 다른 파일, 상대 경로, `..`, 플래그처럼 생긴 값, 같은 사진 두 번, 다섯 장은 거절한다.
+- API: `POST /v1/uploads`(본문이 사진, 201 `{id, type, bytes}`, 읽는 시간 2분, 동시에 4개), `DELETE /v1/uploads/{id}`(204, 남의 것은 지우지 않음), `POST /v1/runs`의 `attachments`. 오류 `uploads_unavailable`(503), `upload_too_large`(413), `upload_bad_type`(415), `upload_limit`(429), `upload_gone`(409), AI별 `no_image_support`. 사진은 올린 기기만 쓴다. 같은 `clientRunId`로 다시 보낸 질문은 사진을 두 번 잡지 않는다.
+- 종합 답변: 사회자의 모델이 사진을 보고 파일이 남아 있으면 사진을 같이 주고, 지시문에 `PHOTOS:` 한 줄을 더한다(사진이 몇 장이고, 질문과 답을 이해하는 데만 쓰며 답에 없는 사실을 더하지 않는다). 그 밖에는 답만으로 쓴다(사진 없는 질문의 지시문 그대로).
+- 사회자에게 묻기(#25)는 묻기 명령을 쓰므로 `attachments`가 그대로 간다. 종합 다시 쓰기(`POST /v1/comparisons/{id}/synthesis`)는 사진이 PC에 남아 있을 때만 사진을 준다(10분). 토론은 사진을 주지 않는다.
+- 로그: 사진은 장수만(`photos`, `photosSent`). 경로, id, 내용은 쓰지 않는다.
+- 시험: UT(`uploads`, `core/image_test.go`, 어댑터마다 `images_test.go`, `judge` 지시문, `api/uploads_test.go`), IT-23, LT-16(실제 세 AI, 2026-11-18 통과). 가짜 CLI는 사진을 AI마다의 방식으로 받고, 사진이 아니거나 없는 파일이면 실패한다.
 
 ## 5. 단계 (초안)
 

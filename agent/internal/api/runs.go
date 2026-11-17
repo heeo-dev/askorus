@@ -84,6 +84,12 @@ type RunRequest struct {
 	// Moderator sends the question to the moderator AI alone (#25): agents,
 	// compare and refine are then not read. See moderator.go.
 	Moderator *RunModerator `json:"moderator,omitempty"`
+	// Attachments are the ids of the photos the question comes with (#14,
+	// POST /v1/uploads), at most 4. Every AI of the run gets them, and so
+	// does the writer of the combined answer. An id the PC no longer keeps
+	// refuses the run with upload_gone: the phone uploads again and sends
+	// the same run again.
+	Attachments []string `json:"attachments,omitempty"`
 }
 
 // RunRefine is RunRequest.refine.
@@ -186,7 +192,7 @@ func (s *Server) parseCompare(raw json.RawMessage) (*RunCompare, *judge.Error) {
 // attachCompare makes the comparison of a run that has just started. It
 // returns the compareError for the 202, or nil when the comparison was
 // made (or found again, for a re-sent run).
-func (s *Server) attachCompare(owner, question string, run runs.Run, targets []RunTarget, c *RunCompare, conv *judge.Conversation) *judge.Error {
+func (s *Server) attachCompare(owner, question string, run runs.Run, targets []RunTarget, c *RunCompare, conv *judge.Conversation, images []core.Image) *judge.Error {
 	if len(targets) < 2 {
 		return &judge.Error{Code: core.ErrCodeNeedTwoAnswers, Message: msgNeedTwo}
 	}
@@ -205,7 +211,7 @@ func (s *Server) attachCompare(owner, question string, run runs.Run, targets []R
 	}
 	spec := compares.RunSpec{
 		Owner: owner, RunID: run.ID, Question: question,
-		Earlier: c.Earlier, Judges: judges, Asked: asked, Conversation: conv,
+		Earlier: c.Earlier, Judges: judges, Asked: asked, Conversation: conv, Images: images,
 	}
 	if sy := c.Synthesis; sy != nil {
 		spec.Synth = &compares.SynthSpec{Off: sy.Off, Agent: sy.Agent, Tier: run.Tier, Model: sy.Model, Effort: sy.Effort}
@@ -365,6 +371,18 @@ func (s *Server) startRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	owner := deviceOf(r)
+	// The question's photos (#14) are held until the run has ended. Every
+	// way out of this function before that lets them go.
+	images, release, ok := s.holdAttachments(w, owner, req.Attachments)
+	if !ok {
+		return
+	}
+	started := false
+	defer func() {
+		if !started {
+			release()
+		}
+	}()
 	// Refining (milestone C): the first AI to start asks the moderator,
 	// every AI waits for the spec and asks the question with its template.
 	// A retried request returns the first run, whose tasks ran already, so
@@ -397,7 +415,7 @@ func (s *Server) startRun(w http.ResponseWriter, r *http.Request) {
 		// A follow-up's record goes before the question (#29), with the
 		// earlier questions for an AI new to the conversation.
 		fresh := t.Session == ""
-		areq := core.AskRequest{Folder: folder, Prompt: judge.AskWithConversation(prompt, conv, fresh), Tier: tier, Model: t.Model, Effort: t.Effort}
+		areq := core.AskRequest{Folder: folder, Prompt: judge.AskWithConversation(prompt, conv, fresh), Tier: tier, Model: t.Model, Effort: t.Effort, Images: images}
 		if mod != nil {
 			// The moderator answers alone, from the record and the answers, as
 			// a one-off in the judge folder: no session is kept or listed.
@@ -415,6 +433,9 @@ func (s *Server) startRun(w http.ResponseWriter, r *http.Request) {
 			session = ""
 		}
 		tasks[i] = runs.Task{Agent: t.Agent, Session: session, OneOff: mod != nil, Ask: func(ctx context.Context) (core.AskResult, error) {
+			if _, sees := asker.(core.ImageSeer); len(areq.Images) > 0 && !sees {
+				return core.AskResult{}, core.Fail(core.ErrCodeNoImages, "")
+			}
 			if refiner != nil {
 				q, err := refiner.Question(ctx)
 				if err != nil {
@@ -439,8 +460,16 @@ func (s *Server) startRun(w http.ResponseWriter, r *http.Request) {
 		s.actionError(w, err)
 		return
 	}
+	if len(images) > 0 {
+		// The run lets its photos go when it ends. A run sent again holds
+		// them already, and one that ended before this line never will.
+		started = s.holds.keep(run.ID, release)
+		if now, ok := s.runs.Get(owner, run.ID); started && (!ok || now.Status != runs.Running) {
+			s.holds.done(run.ID)
+		}
+	}
 	if cmp != nil {
-		cmpErr = s.attachCompare(owner, prompt, run, targets, cmp, conv)
+		cmpErr = s.attachCompare(owner, prompt, run, targets, cmp, conv, images)
 	}
 	if s.o.Logger != nil {
 		names := make([]string, len(targets))
@@ -456,7 +485,7 @@ func (s *Server) startRun(w http.ResponseWriter, r *http.Request) {
 		synth := cmp != nil && cmpErr == nil && cmp.Synthesis != nil && !cmp.Synthesis.Off
 		s.o.Logger.Info("run started", append([]any{"mode", req.Mode, "tier", tier, "agents", strings.Join(names, ","), "followUp", followUp,
 			"compare", cmp != nil || cmpErr != nil, "compareCode", compareCode, "synthesis", synth, "refine", refiner != nil,
-			"moderator", mod != nil, "modItems", len(modAnswers)}, conv.Log()...)...)
+			"moderator", mod != nil, "modItems", len(modAnswers), "photos", len(images)}, conv.Log()...)...)
 	}
 	st := s.runStatus(owner, run)
 	st.CompareError = cmpErr

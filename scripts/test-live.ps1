@@ -71,9 +71,19 @@
 #   zero-width space) must still stop it; the bare command without a guard
 #   is only reported. 7 AI calls, no Codex.
 #
+# LT-16, photos with a question (#14, agent/internal/live/photo_live_test.go):
+#   the real claude, codex and opencode on the quick tier. Two test photos
+#   with a code drawn in each are uploaded as the phone does and go with
+#   one question to all three: every answer must have both codes. A
+#   follow-up without photos asks for the second code again. OpenCode's
+#   deep tier, whose model does not see photos, is not asked. Then each AI
+#   writes a combined answer with the photos attached to its one-off
+#   command. 9 AI calls (Codex 3).
+#
 # One full run writes one combined answer with Codex (LT-08 1), refines
-# once with Codex (LT-09 1), asks Codex 4 times (LT-05 3, LT-12 1) and lets
-# Codex speak once or twice in a debate (LT-11).
+# once with Codex (LT-09 1), asks Codex 4 times (LT-05 3, LT-12 1), lets
+# Codex speak once or twice in a debate (LT-11) and asks Codex 3 times with
+# photos (LT-16: two asks and a combined answer).
 #
 #   powershell -NoProfile -File scripts\test-live.ps1              # every LT
 #   powershell -NoProfile -File scripts\test-live.ps1 -Run LT08    # only LT-08
@@ -83,6 +93,7 @@
 #   powershell -NoProfile -File scripts\test-live.ps1 -Run LT13    # only LT-13
 #   powershell -NoProfile -File scripts\test-live.ps1 -Run LT14    # only LT-14
 #   powershell -NoProfile -File scripts\test-live.ps1 -Run LT15    # only LT-15
+#   powershell -NoProfile -File scripts\test-live.ps1 -Run LT16    # only LT-16
 param([string]$Run)
 $go = Join-Path $env:USERPROFILE 'sdk\go1.27.3\bin'
 if (Test-Path $go) { $env:Path = "$go;" + $env:Path }

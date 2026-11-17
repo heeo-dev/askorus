@@ -113,11 +113,12 @@ func opencodeAsk(c *Call) int {
 		fmt.Fprintln(os.Stderr, "fakecli:", err)
 		return 2
 	}
-	text, err := askText(RoleOpenCode, "fake: ", c.Stdin)
+	text, err := askText(RoleOpenCode, "fake: ", c.Prompt)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "fakecli:", err)
 		return 2
 	}
+	text += photoNote(c)
 	id := flagValue(c.Args, "--session")
 	if id == "" {
 		id = newSessionID()

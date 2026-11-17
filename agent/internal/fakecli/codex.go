@@ -68,11 +68,12 @@ func codexAsk(c *Call) int {
 		fmt.Fprintln(os.Stderr, SignedOutCodex)
 		return 1
 	}
-	text, err := askText(RoleCodex, "fake: ", c.Stdin)
+	text, err := askText(RoleCodex, "fake: ", c.Prompt)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "fakecli:", err)
 		return 2
 	}
+	text += photoNote(c)
 	thread := newUUID()
 	if slices.Contains(c.Args, "resume") && len(c.Args) >= 2 {
 		thread = c.Args[len(c.Args)-2]

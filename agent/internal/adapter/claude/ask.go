@@ -3,10 +3,12 @@ package claude
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
+	"os"
 	"sort"
 	"strings"
 
@@ -99,7 +101,24 @@ func (a *Adapter) AskTiers() map[string]core.AskModel {
 // askArgs builds the command line of one ask. The prompt is not in it. A
 // one-off ask (a debate turn) keeps no conversation and never resumes.
 func askArgs(model, effort, resume string, oneOff bool) []string {
-	args := []string{"-p", "--output-format", "json", "--model", model}
+	return askArgsFor(model, effort, resume, oneOff, false)
+}
+
+// askImageArgs is askArgs for a question with photos (#14): the same
+// command, but the input is one JSON message on stdin (the prompt and the
+// photos together) and the output is the event stream, whose last result
+// line has the shape of the one JSON object. No tool, rule or setting
+// changes: the photos are in the message, so no file is read.
+func askImageArgs(model, effort, resume string, oneOff bool) []string {
+	return askArgsFor(model, effort, resume, oneOff, true)
+}
+
+func askArgsFor(model, effort, resume string, oneOff, images bool) []string {
+	format := "json"
+	if images {
+		format = streamJSON
+	}
+	args := []string{"-p", "--output-format", format, "--model", model}
 	if effort != "" {
 		args = append(args, "--effort", effort)
 	}
@@ -110,8 +129,74 @@ func askArgs(model, effort, resume string, oneOff bool) []string {
 	case oneOff:
 		args = append(args, "--no-session-persistence")
 	}
+	if images {
+		// Claude Code prints the event stream in print mode only with --verbose.
+		args = append(args, "--input-format", streamJSON, "--verbose")
+	}
 	return args
 }
+
+// streamJSON is the only value --input-format may take, and the other
+// value of --output-format, the two always together.
+const streamJSON = "stream-json"
+
+// imageMessage is the one line of stdin of a question with photos: a user
+// message with the prompt and each photo as base64.
+type imageMessage struct {
+	Type    string `json:"type"`
+	Message struct {
+		Role    string       `json:"role"`
+		Content []imageBlock `json:"content"`
+	} `json:"message"`
+}
+
+type imageBlock struct {
+	Type   string       `json:"type"`
+	Text   string       `json:"text,omitempty"`
+	Source *imageSource `json:"source,omitempty"`
+}
+
+type imageSource struct {
+	Type      string `json:"type"`
+	MediaType string `json:"media_type"`
+	Data      string `json:"data"`
+}
+
+// imageStdin builds the stdin of a question with photos: prompt (already
+// through plainAt) and the photos, read from the files CheckImages
+// accepted. A photo that is gone or larger than core.MaxImageBytes is an
+// error; nothing of a path goes into the message.
+func imageStdin(prompt string, images []core.Image) (string, error) {
+	if err := core.CheckImages(images); err != nil {
+		return "", err
+	}
+	var m imageMessage
+	m.Type, m.Message.Role = "user", "user"
+	m.Message.Content = append(m.Message.Content, imageBlock{Type: "text", Text: prompt})
+	for _, im := range images {
+		info, err := os.Stat(im.Path)
+		if err != nil || !info.Mode().IsRegular() || info.Size() > core.MaxImageBytes {
+			return "", errors.New("a photo of the question is no longer on the PC")
+		}
+		data, err := os.ReadFile(im.Path)
+		if err != nil || len(data) > core.MaxImageBytes {
+			return "", errors.New("a photo of the question could not be read")
+		}
+		m.Message.Content = append(m.Message.Content, imageBlock{Type: "image",
+			Source: &imageSource{Type: "base64", MediaType: im.Type, Data: base64.StdEncoding.EncodeToString(data)}})
+	}
+	b, err := json.Marshal(m)
+	if err != nil {
+		return "", err
+	}
+	return string(b) + "\n", nil
+}
+
+// SeesImages: every Claude model sees photos (core.ImageSeer).
+func (a *Adapter) SeesImages(string) bool { return true }
+
+// ImageModels says so to the app.
+func (a *Adapter) ImageModels() core.ImageInfo { return core.ImageInfo{All: true} }
 
 // checkAskArgs accepts exactly the shape askArgs makes, so nothing else
 // (a permission flag, another tool, an MCP config, other settings, a prompt
@@ -122,13 +207,14 @@ func checkAskArgs(args []string) error {
 		return fmt.Errorf("%w: an ask starts with -p", ErrArgRejected)
 	}
 	seen := map[string]bool{}
+	stream := false // --output-format stream-json: a question with photos
 	for i := 1; i < len(args); i++ {
 		a := args[i]
 		if seen[a] {
 			return fmt.Errorf("%w: %s twice", ErrArgRejected, a)
 		}
 		seen[a] = true
-		if a == "--strict-mcp-config" || a == "--no-session-persistence" {
+		if a == "--strict-mcp-config" || a == "--no-session-persistence" || a == "--verbose" {
 			continue
 		}
 		if i+1 >= len(args) {
@@ -139,7 +225,10 @@ func checkAskArgs(args []string) error {
 		var ok bool
 		switch a {
 		case "--output-format":
-			ok = v == "json"
+			ok = v == "json" || v == streamJSON
+			stream = v == streamJSON
+		case "--input-format":
+			ok = v == streamJSON
 		case "--model":
 			ok = config.ValidModel(v)
 		case "--effort":
@@ -162,6 +251,11 @@ func checkAskArgs(args []string) error {
 	}
 	if seen["--no-session-persistence"] && seen["--resume"] {
 		return fmt.Errorf("%w: a one-off ask never resumes", ErrArgRejected)
+	}
+	// The stream output, the stream input and --verbose come together (a
+	// question with photos) or not at all.
+	if seen["--input-format"] != stream || seen["--verbose"] != stream {
+		return fmt.Errorf("%w: the stream formats and --verbose go together", ErrArgRejected)
 	}
 	return nil
 }
@@ -207,7 +301,15 @@ func (a *Adapter) Ask(ctx context.Context, req core.AskRequest) (core.AskResult,
 	if req.OneOff && req.Resume != "" {
 		return core.AskResult{}, core.Fail(core.ErrCodeInternal, "a one-off ask never resumes")
 	}
-	args := askArgs(model, effort, req.Resume, req.OneOff)
+	args, stdin := askArgs(model, effort, req.Resume, req.OneOff), plainAt(req.Prompt)
+	if len(req.Images) > 0 {
+		// The photos go on stdin with the prompt; no path reaches the command.
+		var err error
+		if stdin, err = imageStdin(stdin, req.Images); err != nil {
+			return core.AskResult{}, core.Fail(core.ErrCodeAskFailed, err.Error())
+		}
+		args = askImageArgs(model, effort, req.Resume, req.OneOff)
+	}
 	if err := checkAskArgs(args); err != nil {
 		return core.AskResult{}, err
 	}
@@ -224,7 +326,7 @@ func (a *Adapter) Ask(ctx context.Context, req core.AskRequest) (core.AskResult,
 			return core.AskResult{}, core.Fail(core.ErrCodeBusy, "")
 		}
 	}
-	res, err := proc.Run(ctx, proc.Cmd{Exe: a.runner.Path(), Dir: req.Folder, Args: args, Stdin: plainAt(req.Prompt)})
+	res, err := proc.Run(ctx, proc.Cmd{Exe: a.runner.Path(), Dir: req.Folder, Args: args, Stdin: stdin})
 	switch {
 	case errors.Is(err, proc.ErrTimeout):
 		return core.AskResult{}, core.Fail(core.ErrCodeAskTimeout, "")

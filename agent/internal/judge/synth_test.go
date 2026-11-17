@@ -156,6 +156,27 @@ func TestSynthPromptEarlier(t *testing.T) {
 	}
 }
 
+// A question with photos (#14): the prompt gains one line that says how
+// many go with it, between the head and the data block, and is otherwise
+// the prompt without photos, byte for byte.
+func TestSynthPromptPhotos(t *testing.T) {
+	task := BuildSynthTask(synthSpec(), synthName)
+	plain := SynthPrompt(task, synthGoldenNonce)
+	task.Photos = 2
+	p := SynthPrompt(task, synthGoldenNonce)
+	line := "PHOTOS: The person sent 2 photo(s) with the QUESTION; they are attached to this message. Use them only to understand the QUESTION and the answers, and add no fact that no answer gives.\n"
+	at := strings.Index(p, line)
+	if at < 0 || strings.Count(p, "PHOTOS:") != 1 {
+		t.Fatalf("no photos line:\n%s", p)
+	}
+	if !strings.HasPrefix(p[at+len(line):], "<data-"+synthGoldenNonce+">\n") {
+		t.Errorf("the photos line is not right before the data block:\n%s", p)
+	}
+	if p[:at]+p[at+len(line):] != plain || strings.Contains(plain, "PHOTOS") {
+		t.Errorf("the prompt with photos is not the plain prompt plus one line")
+	}
+}
+
 // An answer that tries to end the block, add lines or give orders stays
 // inside its JSON string; so do AI names.
 func TestSynthPromptInjection(t *testing.T) {

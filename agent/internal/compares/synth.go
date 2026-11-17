@@ -3,6 +3,7 @@ package compares
 import (
 	"context"
 	"errors"
+	"os"
 	"slices"
 	"strings"
 	"time"
@@ -326,6 +327,25 @@ type synthInput struct {
 	// qspec is the run's question spec when it was refined (milestone C,
 	// off since 2026-11-04). It rides in the task; synth-v5 does not use it.
 	qspec *judge.QuestionSpec
+	// images are the question's photos (#14, a run's comparison only).
+	images []core.Image
+}
+
+// writerImages are the photos w gets with the combined answer: all of
+// images when w's model sees photos (core.ImageSeer) and every file is
+// still on the PC, else none. The combined answer is then written from the
+// answers alone, as it is for a question without photos.
+func writerImages(w Writer, images []core.Image) []core.Image {
+	seer, ok := w.Synth.(core.ImageSeer)
+	if len(images) == 0 || !ok || !seer.SeesImages(w.Model) || core.CheckImages(images) != nil {
+		return nil
+	}
+	for _, im := range images {
+		if info, err := os.Stat(im.Path); err != nil || !info.Mode().IsRegular() {
+			return nil
+		}
+	}
+	return images
 }
 
 // synthesize writes c's combined answer, in its own goroutine. Whatever
@@ -371,11 +391,14 @@ func (m *Manager) synthRun(c *comparison) (string, *judge.Error) {
 	names := m.answerNames(in.task.Answers)
 	task := judge.BuildSynthTask(in.task, func(id string) string { return names[id] })
 	task.Spec = in.qspec
+	images := writerImages(w, in.images)
+	task.Photos = len(images)
 	m.locked(func() {
 		c.synth.writer, c.synth.model = w.Agent, w.Model
 		m.touchLocked(c)
 	})
-	m.log.Info("synthesis started", append([]any{"comparison", c.id, "writer", w.Agent, "rules", judge.SynthRulesFor(task), "ais", len(task.Answers)}, task.Conversation.Log()...)...)
+	m.log.Info("synthesis started", append([]any{"comparison", c.id, "writer", w.Agent, "rules", judge.SynthRulesFor(task), "ais", len(task.Answers),
+		"photos", len(in.images), "photosSent", len(images)}, task.Conversation.Log()...)...)
 	if err := makeFolder(m.o.Gate.Folder); err != nil {
 		return "", synthFailure(core.ErrCodeInternal, "")
 	}
@@ -415,7 +438,7 @@ func (m *Manager) synthRun(c *comparison) (string, *judge.Error) {
 		})
 		called = true
 		start := time.Now()
-		res, err := m.callSynth(w, core.SynthRequest{Folder: m.o.Gate.Folder, Prompt: prompt, Model: w.Model, Effort: w.Effort})
+		res, err := m.callSynth(w, core.SynthRequest{Folder: m.o.Gate.Folder, Prompt: prompt, Model: w.Model, Effort: w.Effort, Images: images})
 		// The cleanup ref is kept whatever the error (core.Synthesizer).
 		if res.Cleanup != "" {
 			refs = append(refs, res.Cleanup)
@@ -475,6 +498,7 @@ func (m *Manager) synthInputLocked(c *comparison) synthInput {
 	switch {
 	case c.runSpec != nil:
 		in.allowed = slices.Clone(c.runSpec.Asked)
+		in.images = slices.Clone(c.runSpec.Images)
 		if in.tier == "" && c.run != nil {
 			in.tier = c.run.Tier
 		}

@@ -31,6 +31,7 @@ import (
 	"github.com/heeo-dev/askorus/agent/internal/devices"
 	"github.com/heeo-dev/askorus/agent/internal/fakecli"
 	"github.com/heeo-dev/askorus/agent/internal/logx"
+	"github.com/heeo-dev/askorus/agent/internal/uploads"
 )
 
 func TestMain(m *testing.M) {
@@ -96,7 +97,8 @@ type rig struct {
 	srv       *httptest.Server
 	logs      *syncBuffer
 	token     string
-	device    string // the device id: the owner of its runs and comparisons
+	device    string         // the device id: the owner of its runs and comparisons
+	photos    *uploads.Store // the photos of questions (#14), in root/uploads
 }
 
 // newRig starts the agent around the three fakes. mutate may change the
@@ -144,10 +146,15 @@ func newRig(t *testing.T, mutate func(*rigOptions)) *rig {
 
 // start starts a new agent on the same adapters, folders and devices.
 func (r *rig) start() {
+	photos, err := uploads.Open(filepath.Join(r.root, "uploads"))
+	if err != nil {
+		r.t.Fatal(err)
+	}
+	r.photos = photos
 	r.server = api.New(apitest.Node(api.Options{
 		Version: "it", Hostname: "PC", Adapters: r.adapters, Devices: r.store,
 		Logger:    logx.New(r.logs, slog.LevelDebug),
-		AskFolder: r.askDir, Judge: r.o.judge, Refine: r.o.refine,
+		AskFolder: r.askDir, Judge: r.o.judge, Refine: r.o.refine, Uploads: photos,
 		JudgeMinVersions: map[string]string{
 			claude.Name: claude.JudgeMinVersion, codex.Name: codex.JudgeMinVersion, opencode.Name: opencode.JudgeMinVersion,
 		},
@@ -159,6 +166,7 @@ func (r *rig) stop() {
 	if r.srv != nil {
 		r.srv.Close()
 		r.server.Close()
+		r.photos.Close()
 		r.srv = nil
 	}
 }

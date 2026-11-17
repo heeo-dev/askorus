@@ -23,6 +23,7 @@ import (
 	"github.com/heeo-dev/askorus/agent/internal/jobs"
 	"github.com/heeo-dev/askorus/agent/internal/pairing"
 	"github.com/heeo-dev/askorus/agent/internal/runs"
+	"github.com/heeo-dev/askorus/agent/internal/uploads"
 )
 
 // APIVersion is the major API version in the URL path.
@@ -121,6 +122,10 @@ type Options struct {
 	// combined answer better; the user's decision): the field is ignored
 	// and every AI gets the question as written. The code stays.
 	Refine bool
+	// Uploads keeps the photos a phone sends with a question (#14). Nil
+	// turns photos off: /v1/info then has no attachments, POST /v1/uploads
+	// is refused and a run that names photos is too.
+	Uploads *uploads.Store
 }
 
 // Server serves /v1.
@@ -140,6 +145,10 @@ type Server struct {
 	// comparisons share it.
 	gate     compares.Gate
 	compares *compares.Manager
+	// uploading bounds the photos being read at once; holds keeps each
+	// run's photos until the run has ended (uploads.go).
+	uploading chan struct{}
+	holds     runHolds
 }
 
 // New builds a server.
@@ -150,6 +159,8 @@ func New(o Options) *Server {
 		asks:    newAskLimiter(),
 		jobs:    jobs.NewManager(),
 		runs:    runs.NewManager(),
+
+		uploading: make(chan struct{}, maxUploading),
 	}
 	s.runs.OnPart = func(mode string, p runs.Part) {
 		if o.Logger == nil {
@@ -166,8 +177,13 @@ func New(o Options) *Server {
 		s.gate.Folder = core.JudgeFolder(o.AskFolder)
 	}
 	s.compares = compares.New(compares.Options{Adapters: o.Adapters, Gate: s.gate, Runs: s.runs, Logger: o.Logger})
-	// A run's comparison starts when its last answer is in (P2-3).
-	s.runs.OnEnd = s.compares.RunEnded
+	// A run's comparison starts when its last answer is in (P2-3). Its
+	// photos (#14) are let go then: the combined answer that follows reads
+	// them within the ten minutes they stay.
+	s.runs.OnEnd = func(r runs.Run) {
+		defer s.holds.done(r.ID)
+		s.compares.RunEnded(r)
+	}
 	return s
 }
 
@@ -205,6 +221,8 @@ func (s *Server) Handler() http.Handler {
 	route("GET", "/v1/jobs/{jobId}", s.jobStatus)
 	route("POST", "/v1/runs", s.startRun)
 	route("GET", "/v1/runs/{runId}", s.getRun)
+	route("POST", "/v1/uploads", s.upload)
+	route("DELETE", "/v1/uploads/{id}", s.deleteUpload)
 	route("POST", "/v1/comparisons", s.startComparison)
 	route("GET", "/v1/comparisons/{id}", s.getComparison)
 	route("POST", "/v1/comparisons/{id}/retry", s.retryComparison)
@@ -383,6 +401,9 @@ type InfoResponse struct {
 	// and lets a paired phone answer them (#58): the phone looks for
 	// waiting requests only then.
 	Pairing *PairingInfo `json:"pairing,omitempty"`
+	// Attachments is there when the agent takes photos with a question
+	// (#14): the phone offers the + button only then.
+	Attachments *AttachmentsInfo `json:"attachments,omitempty"`
 }
 
 // PairingInfo says what the agent's pairing can do beyond the QR code.
@@ -409,6 +430,7 @@ func (s *Server) info(w http.ResponseWriter, r *http.Request) {
 		Debate:       s.debateInfo(),
 		Context:      contextInfo(),
 		Moderator:    s.moderatorInfo(),
+		Attachments:  s.attachmentsInfo(),
 	}
 	if s.o.Pairer != nil {
 		resp.Pairing = &PairingInfo{Approve: true}
@@ -527,6 +549,10 @@ func (w *statusWriter) WriteHeader(code int) {
 	w.status = code
 	w.ResponseWriter.WriteHeader(code)
 }
+
+// Unwrap lets http.ResponseController reach the server's own writer (an
+// upload moves its read deadline).
+func (w *statusWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
 
 // Close ends the work the server still runs in the background (asks and
 // comparisons), for agent shutdown.

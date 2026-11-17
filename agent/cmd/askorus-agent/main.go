@@ -36,6 +36,7 @@ import (
 	"github.com/heeo-dev/askorus/agent/internal/hidden"
 	"github.com/heeo-dev/askorus/agent/internal/logx"
 	"github.com/heeo-dev/askorus/agent/internal/pairing"
+	"github.com/heeo-dev/askorus/agent/internal/uploads"
 )
 
 // version is set at release time with -ldflags "-X main.version=...".
@@ -337,6 +338,19 @@ func serve(dir string, args []string) error {
 		askFolder = ""
 	}
 	askOnly := askOnlyAdapters(cfg)
+	// Photos sent with a question (#14) are kept in their own folder for a
+	// few minutes. Without it questions still work, without photos.
+	var photos *uploads.Store
+	if askFolder != "" {
+		if folder, err := config.UploadsFolder(dir); err != nil {
+			logger.Error("no uploads folder; photos are off", "err", err.Error())
+		} else if photos, err = uploads.Open(folder); err != nil {
+			logger.Error("the uploads folder cannot be used; photos are off", "err", err.Error())
+			photos = nil
+		} else {
+			defer photos.Close()
+		}
+	}
 	apiSrv := api.New(api.Options{
 		Version:         version,
 		Hostname:        host,
@@ -360,6 +374,7 @@ func serve(dir string, args []string) error {
 		Judge:            cfg.Judge,
 		JudgeMinVersions: judgeMinVersions(),
 		Refine:           refineOn,
+		Uploads:          photos,
 	})
 	// The API listens inside the tailnet only: no port is opened on the
 	// PC's own addresses, not even 127.0.0.1.

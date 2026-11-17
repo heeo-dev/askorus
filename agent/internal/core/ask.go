@@ -136,6 +136,10 @@ type AskRequest struct {
 	// save none (--no-session-persistence, --ephemeral) and OpenCode's is
 	// deleted after it; the result has no SessionID. Never with Resume.
 	OneOff bool
+	// Images are the photos sent with the question (#14), at most MaxImages,
+	// each one CheckImage accepts. An asker whose model does not see photos
+	// answers no_image_support without asking.
+	Images []Image
 }
 
 // AskModel is the model and effort of one tier.

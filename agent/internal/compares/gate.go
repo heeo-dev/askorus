@@ -149,6 +149,10 @@ func Announce(ctx context.Context, adapters []core.Adapter, g Gate) ([]core.Adap
 			if l, ok := a.(core.EffortLister); ok {
 				info.Ask.Efforts = l.AskEfforts()
 			}
+			if seer, ok := a.(core.ImageSeer); ok {
+				im := seer.ImageModels()
+				info.Ask.Images = &im
+			}
 		}
 		caps := slices.DeleteFunc(slices.Clone(info.Capabilities), func(c core.Capability) bool {
 			return c == core.CapSynthesize

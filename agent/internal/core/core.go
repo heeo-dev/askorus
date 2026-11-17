@@ -121,6 +121,9 @@ type AskInfo struct {
 	// pick with it (11-06: the app's own pick of model and effort), least
 	// to most thinking. Absent when the adapter does not say.
 	Efforts map[string][]string `json:"efforts,omitempty"`
+	// Images says which of the AI's models see photos sent with a question
+	// (#14). Absent when the AI takes no photos.
+	Images *ImageInfo `json:"images,omitempty"`
 }
 
 // ListResult is what an adapter returns for the session list.

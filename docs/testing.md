@@ -37,7 +37,7 @@ Askorus Phase 1과 Phase 2(묻기·종합 답변·화면 재구성까지)의 테
 
 ## 3. 시나리오 목록
 
-### IT (에이전트, `scenario_it_test.go`. 종합 답변 IT-15, 정제 IT-16, 판정 없는 비교 IT-18, 토론 IT-19, 대화 결론 기록 IT-20, 사회자에게 묻기 IT-21, AI 로그인 IT-22는 `agent/internal/scenario`)
+### IT (에이전트, `scenario_it_test.go`. 종합 답변 IT-15, 정제 IT-16, 판정 없는 비교 IT-18, 토론 IT-19, 대화 결론 기록 IT-20, 사회자에게 묻기 IT-21, AI 로그인 IT-22, 사진 붙여서 묻기 IT-23은 `agent/internal/scenario`)
 
 C6(2026-11-05, 사용자 결정)부터 에이전트는 판정하지 않고, C6d(#24)에서 판정 시험 IT-12(비교 판정 기본)·IT-13(실패와 다른 길)·IT-14(판정 주입)·IT-17(다른 곳의 주제)을 판정 코드와 함께 지웠다. 번호는 다시 쓰지 않는다.
 
@@ -61,6 +61,7 @@ C6(2026-11-05, 사용자 결정)부터 에이전트는 판정하지 않고, C6d(
 | IT-20 | 대화 결론 기록(#29, `conversation_it_test.go`, 가짜 CLI 토론 모드 next): info의 `context {maxSettled 12, maxLastBytes 8192}` → AI 셋에게 묻기와 종합(claude) → 그 토론(done, 쟁점 하나 agreed) → 이어서 묻기에 `context {earlier, settled, last}`: claude·codex는 앞 세션으로, opencode는 새로 → 세 묻기 stdin 모두 nonce 블록 하나에 SETTLED 줄(쟁점·결과·결과 줄)·PREVIOUS QUESTION·PREVIOUS ANSWER(토론 뒤 정리), 끝은 'The new question:' 뒤 질문과 '(Write the answer in Korean.)'(#39), 앞 질문(EARLIER QUESTIONS)은 처음 들어온 opencode에만, 인자에 질문·결론 없음 → 종합은 synth-v6(SETTLED 1·PREVIOUS ANSWER 1·EARLIER 1·ANSWER 3) → 그 차례의 토론에 같은 기록 → 사회자 호출은 debate-plan v5(#39 전 v3, SETTLED만, PREVIOUS 없음, '재검토:' 규칙)·점검 둘·synthesis debate-v5 → 로그에 결론·질문 없음, `rules` synth-v6·debate-v7(#39 전 v5)와 `settled`·`lastBytes`만 | #29 |
 | IT-21 | 사회자에게 묻기(#25, `moderator_it_test.go`, 사회자 claude·opencode 각각): info의 `moderator {maxAnswers 6, maxAnswerBytes 8192}` → AI 셋에게 묻기 → 같은 질문 대신 `moderator {agent, answers}`와 `context`로 묻기(agents·compare는 무시) → 비교 없음, run은 그 AI 하나, 부분에 세션 없음 → 묻기 명령 한 번, 판정 폴더에서, stdin에 moderator-ask v1 머리·EARLIER QUESTIONS·PREVIOUS ANSWER·AI 이름별 ANSWER 셋(Claude·Codex·OpenCode)이 nonce 블록 하나에, 끝은 'The new question:' 뒤 질문과 '(Write the answer in Korean.)'(#39), 인자에 질문 없음 → 일회성: claude `--no-session-persistence`, opencode는 대화 지움 1번 → 로그에 질문 없음 | #25 |
 | IT-22 | AI 로그인(#60, `signin_it_test.go`, 가짜 CLI `ASKORUS_FAKECLI_SIGNIN`과 묻기 모드 signedout): Claude·Codex가 로그인 안 됨이면 info에 `claude_signed_out`·`codex_signed_out`(available은 그대로), 묻기는 그 둘만 `ai_signed_out`(내용은 `claude auth login`·`codex login`)으로 실패하고 OpenCode는 답함. Claude 로그인이 하루 안에 끝나면 `claude_login_expiring`과 `loginExpiresAt`. 로그인돼 있으면 알림이 없고, 가짜의 auth status가 찍는 메일은 info에 실리지 않음. Mac 화면의 세션 밖(#62)이면 Claude의 로그인 안 됨 알림과 묻기 실패에만 `signInHint`·`hint` = `mac_keychain`(Codex에는 없음, 로그인돼 있으면 없음) | 1 |
+| IT-23 | 사진 붙여서 묻기(#14, `photos_it_test.go`): info의 `attachments {maxCount 4, maxBytes 4MiB, types}`와 AI별 `ask.images`(Claude·Codex는 all, OpenCode는 Flash만) → 글 파일을 올리면 415 `upload_bad_type` → JPEG·PNG 두 장을 올리고 세 AI에게 물으면 AI마다 자기 방식으로 받음(Claude는 stdin의 stream-json 한 줄에 base64로, 명령에 경로 없음. Codex는 `-i <에이전트 파일>` 둘을 `--json` 앞에. OpenCode는 `--file` 둘을 끝에), 질문은 그대로 stdin, 묻기 제한(웹 도구 둘, 파일 읽기 거부, 읽기 전용, 꺼 둔 기능)은 그대로 → 종합 답변을 쓰는 Claude도 사진 두 장과 `PHOTOS:` 줄을 받음 → 사진 없는 이어서 묻기는 전과 같은 명령 → '깊게'의 OpenCode는 묻지 않고 `no_image_support`, Codex는 답함 → 로그에 사진의 경로·id 없음 → 에이전트를 다시 켜면 올리기 폴더가 비고 옛 id는 409 `upload_gone` | #14 |
 
 ### synth-eval (측정 도구, `agent/cmd/synth-eval`, 태그 `syntheval`, 마일스톤 C C-9)
 
@@ -92,6 +93,7 @@ C6d(#24)에서 판정에 기대던 것을 지웠다: `topics`·`label`·`differs
 | LT-13 | 사회자에게 묻기(#25, `moderator_live_test.go`, `test-live -Run LT13`): 에이전트 + 실제 claude, '빠르게' 단계. 앞 차례의 두 답(물의 끓는점 100도 vs 90도)과 기록을 주고 'AI들이 뭐가 달랐는지' 물음 → claude 혼자 일회성으로 판정 폴더에서 답함, 답에 100과 90이 다 있음, run 부분에 세션 없음, 판정 폴더 세션 0. AI 호출 1번 | 통과(11-07, 10.5초: claude-haiku-5-5 6초·83바이트, 100과 90을 다 말함, 세션 없음. 같은 test-live 전체 190초에서 LT-11만 한 번 실패: 계획이 끓는점 쟁점을 토론하지 않음으로 정해 발언 0 → 다시 돌려 통과(42초, 합의). 모델 판단이 흔들린 것으로 봄) |
 | LT-14 | 질문의 언어(#39, `lang_live_test.go`, `test-live -Run LT14`): 실제 claude, '기본' 단계. 영어 질문의 토론 지시문 넷(사회자 계획(답은 영어), 마지막 확인(발언이 영어 / 한국어), 자기 답이 한국어인 발언)을 `ASKORUS_LT14_N`번(기본 3)씩 → 어느 답에도 한글이 없음. `ASKORUS_LT14_OLD=1`이면 #39 전 지시문도 돌려 보고만, `ASKORUS_LT14_SYNTH=1`이면 종합 답변·토론 뒤 정리(답 하나가 한국어)도. AI 호출 12번(N=3), Codex 없음 | 통과(11-09, 각 5번: #39 전 지시문 20번 중 15번 한국어(계획 0/5, 확인·영어 발언 5/5, 확인·한국어 발언 5/5, 발언 5/5), 지금 0/20. 종합 답변·토론 뒤 정리(바꾸지 않음)도 3번씩 0/6) |
 | LT-15 | `@경로` 첨부 막기(R-93, `mention_live_test.go`, `test-live -Run LT15`): 실제 claude, '빠르게' 단계, 묻기 폴더 `live`. 묻기 폴더 밖에 표식 파일(내용과 파일 이름에 표식)을 두고, 어댑터로 넷(질문의 `@파일`, JSON 데이터 안의 `@파일`, `@폴더`, 한 답에 `@파일`이 든 종합 답변)을 돌려 어느 답에도 표식이 없어야 한다. 이어서 맨 묻기 명령으로 방어 하나씩만(거부 규칙만 / 폭 없는 공백만) 돌려 각각 막는지 보고(하나가 안 듣게 되면 실패), 방어가 없는 명령은 알리기만 한다(더는 새지 않으면 Claude Code가 바뀐 것). AI 7번, Codex 없음 | 11-10 통과(방어 없는 명령은 표식이 나옴) |
+| LT-16 | 사진 붙여서 묻기(#14, `photo_live_test.go`, `test-live -Run LT16`): 실제 claude·codex·opencode, '빠르게' 단계, 묻기 폴더 `live`. 글자가 그려진 시험 사진 두 장(`testdata/photo-*.png`, 글자는 질문에 없음)을 폰처럼 올려 세 AI에게 한 번에 물으면 답마다 두 글자가 모두 있어야 한다. 사진 없이 이어서 '두 번째 사진의 글자'를 물으면 AI마다 자기 대화에서 기억해 답한다. OpenCode '깊게'(사진을 못 보는 모델)는 묻지 않고 `no_image_support`. 이어서 세 AI의 종합 답변 명령에 사진을 붙여 한 번씩 쓴다. 끝나면 올리기 폴더에 남는 파일이 없다. AI 9번(Codex 3번) | 11-18 통과(31초) |
 
 ### ST (앱 화면, `app/src/test`)
 

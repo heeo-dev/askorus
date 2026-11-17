@@ -154,6 +154,10 @@ type RunSpec struct {
 	// Conversation is the conversation record of a follow-up (#29), for
 	// its combined answer; nil is none. It is never changed after.
 	Conversation *judge.Conversation
+	// Images are the photos the question came with (#14). The writer of the
+	// combined answer gets them when its model sees photos and the files
+	// are still there; else it writes from the answers alone.
+	Images []core.Image
 }
 
 // DirectAnswer is one answer of a DirectSpec. Via is judge.ViaPC (Agent is
@@ -297,6 +301,7 @@ func (m *Manager) attachLocked(s RunSpec) (c *comparison, isNew bool, err error)
 	c = m.newLocked(s.Owner, "", SourceRun, s.RunID)
 	spec := s
 	spec.Earlier, spec.Judges, spec.Asked = slices.Clone(s.Earlier), slices.Clone(s.Judges), slices.Clone(s.Asked)
+	spec.Images = slices.Clone(s.Images)
 	if s.Synth != nil {
 		synth := *s.Synth
 		spec.Synth = &synth

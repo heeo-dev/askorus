@@ -151,7 +151,7 @@ func claudeSynth(c *Call) int {
 	}
 	model := flagValue(c.Args, "--model")
 	out := claudeResult(model)
-	text := synthReply(mode, c.Stdin)
+	text := synthReply(mode, c.Prompt)
 	code := 0
 	switch mode {
 	case SynthUsageLimit:
@@ -193,7 +193,7 @@ func codexSynth(c *Call) int {
 	if mode == SynthSlow {
 		sleepSlow()
 	}
-	text := synthReply(mode, c.Stdin)
+	text := synthReply(mode, c.Prompt)
 	switch mode {
 	case SynthUsageLimit:
 		return codexFail(UsageLimitCodex)
@@ -233,7 +233,7 @@ func opencodeSynth(c *Call) int {
 		return 2
 	}
 	opencodeEvent("step_start", id, opencodePart("step-start", nil))
-	text := synthReply(mode, c.Stdin)
+	text := synthReply(mode, c.Prompt)
 	if mode != SynthProse {
 		text = "```json\n" + text + "\n```"
 	}

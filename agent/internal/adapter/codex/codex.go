@@ -255,6 +255,17 @@ func (a *Adapter) AskTiers() map[string]core.AskModel {
 // A one-off ask (a debate turn, 11-06) keeps no session file: --ephemeral
 // after --skip-git-repo-check, never with resume.
 func askArgs(model, effort, resume string, oneOff bool) []string {
+	return askImageArgs(model, effort, resume, oneOff, nil)
+}
+
+// askImageArgs is askArgs for a question with photos (#14): "-i" and the
+// path of each kept photo (core.CheckImage; the agent's own file, never
+// the phone's name), before --json so that the list of -i ends there.
+// codex reads the files itself; the sandbox and the features stay as they
+// are. Without photos it is askArgs.
+//
+//	--search exec -s read-only [resume] --ignore-user-config --skip-git-repo-check [--ephemeral] -i P… --json -m M …
+func askImageArgs(model, effort, resume string, oneOff bool, images []string) []string {
 	args := []string{"--search", "exec", "-s", "read-only"}
 	if resume != "" {
 		args = append(args, "resume")
@@ -262,6 +273,9 @@ func askArgs(model, effort, resume string, oneOff bool) []string {
 	args = append(args, "--ignore-user-config", "--skip-git-repo-check")
 	if oneOff && resume == "" {
 		args = append(args, "--ephemeral")
+	}
+	for _, p := range images {
+		args = append(args, "-i", p)
 	}
 	args = append(args, "--json", "-m", model)
 	if effort != "" {
@@ -286,9 +300,12 @@ func askArgs(model, effort, resume string, oneOff bool) []string {
 // every flag, its place and the order of the disabled features must match.
 func checkArgs(args []string) error {
 	model, effort, resume := "", "", ""
+	var images []string
 	oneOff := slices.Contains(args, "--ephemeral")
 	for i := 0; i+1 < len(args); i++ {
 		switch {
+		case args[i] == "-i":
+			images = append(images, args[i+1])
 		case args[i] == "-m":
 			model = args[i+1]
 		case args[i] == "-c" && strings.HasPrefix(args[i+1], "model_reasoning_effort="):
@@ -304,11 +321,51 @@ func checkArgs(args []string) error {
 		return fmt.Errorf("codex ask: effort %q refused", effort)
 	case resume != "" && !threadRe.MatchString(resume):
 		return fmt.Errorf("codex ask: thread %q refused", resume)
-	case !slices.Equal(args, askArgs(model, effort, resume, oneOff)):
+	case checkImagePaths(images) != nil:
+		return fmt.Errorf("codex ask: an image path was refused")
+	case !slices.Equal(args, askImageArgs(model, effort, resume, oneOff, images)):
 		return fmt.Errorf("codex ask: arguments %q refused", args)
 	}
 	return nil
 }
+
+// checkImagePaths accepts the paths of kept photos only (core.CheckImages),
+// each with the type its ending says.
+func checkImagePaths(paths []string) error {
+	ims := make([]core.Image, len(paths))
+	for i, p := range paths {
+		ims[i] = core.Image{Path: p, Type: imageTypeOf(p)}
+	}
+	return core.CheckImages(ims)
+}
+
+// imageTypeOf is the photo type the ending of path stands for, or "".
+func imageTypeOf(path string) string {
+	for typ, ext := range core.ImageExt {
+		if strings.HasSuffix(path, ext) {
+			return typ
+		}
+	}
+	return ""
+}
+
+// imagePaths checks a request's photos and returns their paths.
+func imagePaths(images []core.Image) ([]string, error) {
+	if err := core.CheckImages(images); err != nil {
+		return nil, err
+	}
+	paths := make([]string, len(images))
+	for i, im := range images {
+		paths[i] = im.Path
+	}
+	return paths, nil
+}
+
+// SeesImages: every model codex runs for an ask sees photos (core.ImageSeer).
+func (a *Adapter) SeesImages(string) bool { return true }
+
+// ImageModels says so to the app.
+func (a *Adapter) ImageModels() core.ImageInfo { return core.ImageInfo{All: true} }
 
 // Ask answers one question with codex exec (core.Asker).
 func (a *Adapter) Ask(ctx context.Context, req core.AskRequest) (core.AskResult, error) {
@@ -336,7 +393,11 @@ func (a *Adapter) Ask(ctx context.Context, req core.AskRequest) (core.AskResult,
 	case req.OneOff && req.Resume != "":
 		return core.AskResult{}, core.Fail(core.ErrCodeInternal, "a one-off ask never resumes")
 	}
-	args := askArgs(model, effort, req.Resume, req.OneOff)
+	images, err := imagePaths(req.Images)
+	if err != nil {
+		return core.AskResult{}, core.Fail(core.ErrCodeInternal, "codex ask: a photo was refused")
+	}
+	args := askImageArgs(model, effort, req.Resume, req.OneOff, images)
 	if err := checkArgs(args); err != nil {
 		return core.AskResult{}, err
 	}

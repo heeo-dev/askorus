@@ -46,6 +46,10 @@ type SynthRequest struct {
 	Model  string // the writer's ask tier model; never empty
 	Effort string // its effort; "" lets the adapter pick its command's default
 	Refine bool   // the question spec (RefineSchemaV1), not a combined answer
+	// Images are the question's photos (#14), for a writer whose model sees
+	// photos (ImageSeer); the caller leaves them out for any other. Never
+	// with Refine.
+	Images []Image
 }
 
 // SynthResult is one writer's output. Output is untrusted and never logged.

@@ -59,20 +59,29 @@ func synthArgs(model, effort, schema string) []string {
 // a codex effort and this adapter's synth or refine schema file: never
 // another schema file, and no other option.
 func (a *Adapter) checkSynthArgs(args []string) error {
-	if len(args) != 16+2*len(featuresOff) {
+	// The photos of a question (#14) are "-i" and a path each, in one place.
+	var images []string
+	rest := slices.Clone(args)
+	for len(rest) > judgeImagesAt+1 && rest[judgeImagesAt] == "-i" {
+		images = append(images, rest[judgeImagesAt+1])
+		rest = slices.Delete(rest, judgeImagesAt, judgeImagesAt+2)
+	}
+	if len(rest) != 16+2*len(featuresOff) {
 		return fmt.Errorf("codex synth: %d arguments refused", len(args))
 	}
-	model, schema := args[8], args[14]
-	effort, ok := strings.CutPrefix(args[10], `model_reasoning_effort="`)
+	model, schema := rest[8], rest[14]
+	effort, ok := strings.CutPrefix(rest[10], `model_reasoning_effort="`)
 	effort, ok2 := strings.CutSuffix(effort, `"`)
 	switch {
 	case !config.ValidModel(model):
 		return fmt.Errorf("codex synth: model %q refused", model)
 	case !ok || !ok2 || !efforts[effort]:
-		return fmt.Errorf("codex synth: effort %q refused", args[10])
+		return fmt.Errorf("codex synth: effort %q refused", rest[10])
 	case schema == "" || !filepath.IsAbs(schema) || (schema != a.synthSchemaPath() && schema != a.refineSchemaPath()):
 		return fmt.Errorf("codex synth: schema %q refused", schema)
-	case !slices.Equal(args, synthArgs(model, effort, schema)):
+	case checkImagePaths(images) != nil || (len(images) > 0 && schema != a.synthSchemaPath()):
+		return fmt.Errorf("codex synth: an image path was refused")
+	case !slices.Equal(args, judgeImageArgs(model, effort, schema, images)):
 		return fmt.Errorf("codex synth: arguments %q refused", args)
 	}
 	return nil
@@ -165,7 +174,11 @@ func (a *Adapter) Synthesize(ctx context.Context, req core.SynthRequest) (core.S
 	if err != nil {
 		return core.SynthResult{}, err
 	}
-	args := synthArgs(model, effort, schema)
+	images, err := imagePaths(req.Images)
+	if err != nil || (req.Refine && len(images) > 0) {
+		return core.SynthResult{}, core.Fail(core.ErrCodeInternal, "codex synth: a photo was refused")
+	}
+	args := judgeImageArgs(model, effort, schema, images)
 	if err := a.checkSynthArgs(args); err != nil {
 		return core.SynthResult{}, core.Fail(core.ErrCodeInternal, "codex synth: arguments refused")
 	}
