@@ -27,6 +27,7 @@ import {
 } from './compare';
 import { debateRequest, type TurnDebate } from './debate';
 import type { ModelPick } from './models';
+import type { TurnPhoto } from './photos';
 import { buildRecord } from './record';
 
 /**
@@ -72,6 +73,10 @@ export type Turn = {
   // Sent without the conversation record by the person's choice ('이번만
   // 빼고 보내기', #29); the record it went with is req.context.
   noRecord?: boolean;
+  // The photos the question came with (#14): the app's own scaled-down
+  // copies, kept with the conversation. They are uploaded when the run is
+  // sent (sendRun); the PC's ids for them are not kept.
+  photos?: TurnPhoto[];
 };
 
 /**
@@ -179,8 +184,11 @@ export function newTurn(o: {
   context?: RequestContext | null;
   /** A question to the moderator alone (#25): that AI, no session, no comparison. */
   moderator?: RunModerator;
+  /** The photos that go with the question (#14); the caller has left out the AIs that do not see photos. */
+  photos?: TurnPhoto[];
   at: number;
 }): Turn {
+  const photos = o.photos?.length ? { photos: o.photos } : {};
   if (o.moderator) {
     const m = o.moderator;
     const target: RunTarget = { agent: m.agent };
@@ -190,11 +198,11 @@ export function newTurn(o: {
     }
     const req: RunRequest = { mode: 'ask', prompt: o.question, tier: o.tier, agents: [target], clientRunId: o.id, moderator: m };
     if (o.context) req.context = o.context;
-    return { id: o.id, question: o.question, req, agents: [m.agent], at: o.at, moderator: true };
+    return { id: o.id, question: o.question, req, agents: [m.agent], at: o.at, moderator: true, ...photos };
   }
   const req = request({ question: o.question, tier: o.tier, to: o.to, on: o.on, turns: o.turns, models: o.models, efforts: o.efforts, id: o.id });
   const asked = (req.agents ?? []).map((a) => a.agent);
-  const turn: Turn = { id: o.id, question: o.question, req, agents: asked, at: o.at };
+  const turn: Turn = { id: o.id, question: o.question, req, agents: asked, at: o.at, ...photos };
   if (compares({ info: o.info, asked, to: o.to })) {
     const judges = writersOf(o.info, asked);
     const earlier = earlierFor(o.turns, judges);
@@ -258,6 +266,28 @@ export function lostRun(run: Run): Run {
 }
 
 /**
+ * sendRun sends a turn's run. A turn with photos (#14) sends them to the PC
+ * first, one after another, and names them in the run (attachments). The PC
+ * lets a photo go ten minutes after its last use: a run it then refuses
+ * (upload_gone) is sent once more with the photos uploaded again. A run
+ * sent again with the same clientRunId is the first one, so nothing is
+ * asked twice.
+ */
+export async function sendRun(client: AgentClient, turn: Turn, signal?: AbortSignal): Promise<Run> {
+  const photos = turn.photos ?? [];
+  if (!photos.length) return client.startRun(turn.req, signal);
+  for (let tries = 0; ; tries++) {
+    const attachments: string[] = [];
+    for (const p of photos) attachments.push((await client.uploadPhoto(p.uri, signal)).id);
+    try {
+      return await client.startRun({ ...turn.req, attachments }, signal);
+    } catch (e) {
+      if (!(e instanceof AgentError && e.code === 'upload_gone') || tries >= 1) throw e;
+    }
+  }
+}
+
+/**
  * followRun sends (or, with a run id, picks up) a turn's run and patches in
  * its answers as they come. A turn that compares then follows the
  * comparison the PC made of them. A run the PC no longer has keeps what
@@ -278,7 +308,7 @@ export async function followRun(client: AgentClient, turn: Turn, deps: FollowDep
   let run: Run;
   let lost = false;
   try {
-    run = runId ? await client.run(runId, ctl.signal) : await client.startRun(turn.req, ctl.signal);
+    run = runId ? await client.run(runId, ctl.signal) : await sendRun(client, turn, ctl.signal);
     put(run);
     run = await client.waitRun(run, { signal: ctl.signal, onUpdate: put });
     put(run);

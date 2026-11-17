@@ -82,6 +82,9 @@ var (
 	started time.Time
 	runAt   time.Time // when the node first reported Running
 	verbose bool
+	// stateDir is the folder Start was given: the node's key lives there,
+	// and SendFile sends nothing from it.
+	stateDir string
 
 	peersMu sync.Mutex
 	peersAt time.Time
@@ -160,7 +163,7 @@ func Start(dir, hostname string) error {
 		s.Close()
 		return err
 	}
-	srv, lc = s, c
+	srv, lc, stateDir = s, c, dir
 	started, runAt = time.Now(), time.Time{}
 	httpc = &http.Client{
 		Transport: &http.Transport{
@@ -628,6 +631,71 @@ func targetOf(u *url.URL, p peerInfo) (string, error) {
 // by plain http: the tailnet already encrypts between the two devices and
 // knows who is on the other end.
 func Fetch(method, rawURL, headers, body string, timeoutMs int) (*Response, error) {
+	var rd io.Reader
+	if body != "" {
+		rd = strings.NewReader(body)
+	}
+	return send(method, rawURL, headers, rd, -1, timeoutMs)
+}
+
+// maxSendFile bounds the file SendFile sends: a photo for a question, which
+// the app scales down first and the PC takes up to 4 MiB of.
+const maxSendFile = 8 << 20
+
+// SendFile is Fetch with a file of the app's own as the body (#14: a photo
+// that goes with a question). path is absolute; the file is a regular file
+// of at most maxSendFile bytes and never one of the node's own (its key).
+// Everything Fetch checks about the address holds here too: the file goes
+// to a device of the person's own Tailscale account or nowhere.
+func SendFile(method, rawURL, headers, path string, timeoutMs int) (*Response, error) {
+	f, size, err := openOwnFile(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	return send(method, rawURL, headers, f, size, timeoutMs)
+}
+
+// openOwnFile opens the file SendFile may send and gives its size.
+func openOwnFile(path string) (*os.File, int64, error) {
+	if !filepath.IsAbs(path) || filepath.Clean(path) != path {
+		return nil, 0, coded(CodeBadRequest, "the file's path must be absolute and clean")
+	}
+	// By its real path, so a link cannot point at the node's folder.
+	real, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return nil, 0, coded(CodeBadRequest, "no such file")
+	}
+	mu.Lock()
+	dir := stateDir
+	mu.Unlock()
+	if dir != "" {
+		if realDir, err := filepath.EvalSymlinks(dir); err == nil {
+			dir = realDir
+		}
+		if rel, err := filepath.Rel(dir, real); err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && !filepath.IsAbs(rel) {
+			return nil, 0, coded(CodeBadRequest, "that file is the node's own")
+		}
+	}
+	f, err := os.Open(real)
+	if err != nil {
+		return nil, 0, coded(CodeBadRequest, "the file cannot be opened")
+	}
+	fi, err := f.Stat()
+	switch {
+	case err != nil || !fi.Mode().IsRegular() || fi.Size() == 0:
+		f.Close()
+		return nil, 0, coded(CodeBadRequest, "not a file with something in it")
+	case fi.Size() > maxSendFile:
+		f.Close()
+		return nil, 0, coded(CodeTooLarge, "the file is too large to send")
+	}
+	return f, fi.Size(), nil
+}
+
+// send is one request through the node: Fetch's and SendFile's. size is the
+// body's length when it is known (a file), else -1.
+func send(method, rawURL, headers string, body io.Reader, size int64, timeoutMs int) (*Response, error) {
 	mu.Lock()
 	c, hc, since := lc, httpc, started
 	mu.Unlock()
@@ -668,13 +736,12 @@ func Fetch(method, rawURL, headers, body string, timeoutMs int) (*Response, erro
 		return nil, err
 	}
 
-	var rd io.Reader
-	if body != "" {
-		rd = strings.NewReader(body)
-	}
-	req, err := http.NewRequestWithContext(ctx, method, target, rd)
+	req, err := http.NewRequestWithContext(ctx, method, target, body)
 	if err != nil {
 		return nil, coded(CodeBadRequest, "%v", err)
+	}
+	if size >= 0 {
+		req.ContentLength = size
 	}
 	req.Host = u.Host // the agent answers to its own names only
 	if headers != "" {

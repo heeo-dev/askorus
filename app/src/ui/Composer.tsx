@@ -15,16 +15,55 @@
 // whose names were cut at 360 dp (#16); one chip with the picked tier
 // fits, and leaves room for more tools. The follow-up grows with what is
 // written, up to about five lines (UX-7).
+//
+// Photos (#14): where the PC takes photos, both have a + button that opens
+// the photo sheet, and show the photos picked for the question in a row
+// above the text, each with a × that takes it off. A line under them says
+// which AIs sit the question out because they do not see photos.
 
 import { Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 
 import type { Tier } from '@/api/types';
+import type { TurnPhoto } from '@/ask/photos';
 import { t } from '@/i18n';
 
 import { Avatar, AvatarPile } from './Avatar';
-import { Icon } from './Icon';
+import { Icon, IconButton } from './Icon';
 import { useKeyboardInset, useSafeInsets } from './keyboard';
+import { PhotoStrip } from './PhotoStrip';
 import { themed, type Theme, useTheme } from './theme';
+
+/** The photos of the question being written and what the + button does (#14). Left out, there is no + button. */
+export type PhotoTools = {
+  photos: TurnPhoto[];
+  /** Opens the photo sheet, or says why no photo can be added. */
+  onAdd: () => void;
+  onOpen: (index: number) => void;
+  onRemove: (index: number) => void;
+  /** A line about the photos: who sits the question out, or why none can be added. */
+  note?: { text: string; error?: boolean };
+  /** The + is drawn dimmed (a PC that takes no photos yet); it still says why when pressed. */
+  dim?: boolean;
+};
+
+function PhotoRow({ photo, th }: { photo: PhotoTools; th: Theme }) {
+  const s = styles(th);
+  if (!photo.photos.length && !photo.note) return null;
+  return (
+    <View style={s.photos} testID="composer-photos">
+      <PhotoStrip photos={photo.photos} onOpen={photo.onOpen} onRemove={photo.onRemove} />
+      {photo.note ? (
+        <Text style={[s.photoNote, photo.note.error && { color: th.danger }]} accessibilityLiveRegion="polite">
+          {photo.note.text}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
+function AddPhoto({ photo, th }: { photo: PhotoTools; th: Theme }) {
+  return <IconButton name="plus" label={t('ask.photo.add')} onPress={photo.onAdd} color={photo.dim ? th.caption : th.textSub} />;
+}
 
 /** composerCompact: the toolbar packs closer when its text has less than 400 dp (the width over the font scale). */
 export function composerCompact(width: number, fontScale: number): boolean {
@@ -61,6 +100,7 @@ export function Composer({
   onPickAIs,
   tier,
   onPickTier,
+  photo,
 }: {
   value: string;
   onChangeText: (s: string) => void;
@@ -72,6 +112,7 @@ export function Composer({
   onPickAIs: () => void;
   tier: Tier;
   onPickTier: () => void;
+  photo?: PhotoTools;
 }) {
   const th = useTheme();
   const s = styles(th);
@@ -80,6 +121,7 @@ export function Composer({
   const compact = composerCompact(width, fontScale);
   return (
     <View style={[s.box, { marginBottom: 12 + lift }]} testID="composer">
+      {photo ? <PhotoRow photo={photo} th={th} /> : null}
       <TextInput
         value={value}
         onChangeText={onChangeText}
@@ -91,6 +133,7 @@ export function Composer({
         textAlignVertical="top"
       />
       <View style={s.tools}>
+        {photo ? <AddPhoto photo={photo} th={th} /> : null}
         <Pressable
           onPress={onPickAIs}
           accessibilityRole="button"
@@ -135,6 +178,7 @@ export function FollowBar({
   onPickAIs,
   tier,
   onPickTier,
+  photo,
 }: {
   value: string;
   onChangeText: (s: string) => void;
@@ -151,6 +195,7 @@ export function FollowBar({
   onPickAIs?: () => void;
   tier?: Tier;
   onPickTier?: () => void;
+  photo?: PhotoTools;
 }) {
   const th = useTheme();
   const s = styles(th);
@@ -211,7 +256,9 @@ export function FollowBar({
           ) : null}
         </View>
       ) : null}
+      {photo ? <PhotoRow photo={photo} th={th} /> : null}
       <View style={s.followRow}>
+        {photo ? <AddPhoto photo={photo} th={th} /> : null}
         <TextInput
           value={value}
           onChangeText={onChangeText}
@@ -251,6 +298,8 @@ const styles = themed((th) =>
       color: th.text,
     },
     tools: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+    photos: { paddingTop: 8, paddingHorizontal: 8, gap: 6 },
+    photoNote: { fontSize: 13, lineHeight: 18, color: th.textSub },
     pick: { height: 44, flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 8, borderRadius: 22 },
     pickCompact: { paddingHorizontal: 4 },
     count: { fontSize: 14, fontWeight: '600', lineHeight: 20, color: th.text },

@@ -1,18 +1,31 @@
 // The question as a bubble at the right (S5c, F-Ask-Answering): raised
-// colour, the bottom-right corner tucked in.
+// colour, the bottom-right corner tucked in. The photos it came with (#14)
+// sit in a row above it.
 
 import { StyleSheet, Text, View } from 'react-native';
 
+import type { TurnPhoto } from '@/ask/photos';
+import { t } from '@/i18n';
+
+import { PhotoStrip } from './PhotoStrip';
 import { themed, useTheme } from './theme';
 
-export function ThreadBubble({ text }: { text: string }) {
+export function ThreadBubble({ text, photos, onOpenPhoto }: { text: string; photos?: TurnPhoto[]; onOpenPhoto?: (index: number) => void }) {
   const s = styles(useTheme());
+  const n = photos?.length ?? 0;
   return (
-    <View style={s.row}>
-      <View style={s.bubble}>
-        <Text style={s.text} selectable>
-          {text}
-        </Text>
+    <View style={s.column}>
+      {photos && n > 0 ? (
+        <View accessibilityLabel={t('ask.photo.question', { n })} testID="turn-photos">
+          <PhotoStrip photos={photos} onOpen={onOpenPhoto ?? (() => undefined)} size={88} align="right" />
+        </View>
+      ) : null}
+      <View style={s.row}>
+        <View style={s.bubble}>
+          <Text style={s.text} selectable>
+            {text}
+          </Text>
+        </View>
       </View>
     </View>
   );
@@ -20,6 +33,7 @@ export function ThreadBubble({ text }: { text: string }) {
 
 const styles = themed((th) =>
   StyleSheet.create({
+    column: { gap: 6 },
     row: { flexDirection: 'row', justifyContent: 'flex-end' },
     bubble: {
       maxWidth: 300,

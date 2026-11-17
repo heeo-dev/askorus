@@ -174,3 +174,50 @@ test('signing out removes the phone from the tailnet and stops the node; the nex
   await resumeTailnet();
   expect(mockTailnet.calls).toEqual([]);
 });
+
+// #14: a photo goes through the node as a file. The same checks as a
+// request: not before the person signed in, only with a build that has it,
+// and the node's refusals keep their code.
+test('a file goes through the node with its headers, and its answer comes back', async () => {
+  const { tailnetSendFile } = jest.requireActual('./node') as typeof import('./node');
+  agent.enableAsk();
+  agent.enablePhotos();
+  const sendFile = jest.spyOn(native(), 'sendFile');
+  const up = await new AgentClient(baseUrl(HOST, PORT), { token: TOKEN }).uploadPhoto('file:///data/user/0/app.askorus/files/photos/c1/a.jpg');
+  expect(up.id).toMatch(/^up_[0-9a-f]{32}$/);
+  expect(sendFile).toHaveBeenCalledWith(
+    'POST',
+    `http://${HOST}:${PORT}/v1/uploads`,
+    JSON.stringify({ Accept: 'application/json', 'Content-Type': 'application/octet-stream', Authorization: `Bearer ${TOKEN}` }),
+    'file:///data/user/0/app.askorus/files/photos/c1/a.jpg',
+    expect.any(Number),
+  );
+  expect(agent.uploaded).toEqual(['file:///data/user/0/app.askorus/files/photos/c1/a.jpg']);
+
+  sendFile.mockRejectedValueOnce(Object.assign(new Error('refused'), { code: 'tailnet_not_own' }));
+  await expect(tailnetSendFile(`http://${HOST}:${PORT}/v1/uploads`, { file: 'file:///x.jpg' })).rejects.toMatchObject({ code: 'tailnet_not_own' });
+  sendFile.mockRejectedValueOnce(Object.assign(new Error('refused'), { code: 'tailnet_bad_request' }));
+  const e = await new AgentClient(baseUrl(HOST, PORT), { token: TOKEN }).uploadPhoto('file:///x.jpg').catch((x) => x);
+  expect(e).toBeInstanceOf(NetworkError);
+  expect(e.cause).toMatchObject({ code: 'tailnet_bad_request' });
+
+  sendFile.mockImplementation(() => new Promise(() => undefined)); // never answers
+  const ctl = new AbortController();
+  const pending = tailnetSendFile(`http://${HOST}:${PORT}/v1/uploads`, { file: 'file:///x.jpg', signal: ctl.signal });
+  ctl.abort();
+  await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+});
+
+test('no file is sent before the person signed in, or by a build from before photos', async () => {
+  const { tailnetSendFile } = jest.requireActual('./node') as typeof import('./node');
+  const mod = native();
+  const sendFile = mod.sendFile;
+  delete mod.sendFile;
+  await expect(tailnetSendFile(`http://${HOST}:${PORT}/v1/uploads`, { file: 'file:///x.jpg' })).rejects.toMatchObject({ code: 'tailnet_off' });
+  mod.sendFile = sendFile;
+
+  await neverSignedIn();
+  await expect(tailnetSendFile(`http://${HOST}:${PORT}/v1/uploads`, { file: 'file:///x.jpg' })).rejects.toMatchObject({ code: 'tailnet_login' });
+  expect(mockTailnet.calls).toEqual([]);
+  expect(agent.calls).toHaveLength(0);
+});

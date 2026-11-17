@@ -67,6 +67,8 @@ export function DebateSection({ turn, info, note, act }: { turn: Turn; info: Inf
     if (act.noticed) act.start();
     else setAsking(true);
   };
+  // The debaters get the answers as text: a question's photos (#14) do not go again.
+  const noPhotos = turn.photos?.length ? <Text style={s.caption}>{t('ask.photo.debate')}</Text> : null;
   const button = offered ? (
     asking ? (
       <View style={s.notice} accessibilityLiveRegion="polite">
@@ -90,12 +92,14 @@ export function DebateSection({ turn, info, note, act }: { turn: Turn; info: Inf
       <View style={s.action}>
         <Button variant="outline" label={t('debate.again')} onPress={press} />
         <Text style={s.caption}>{t('debate.cost', { n: debateCost(turn) })}</Text>
+        {noPhotos}
       </View>
     ) : (
       <View style={s.offer}>
         <Text style={s.offerLead}>{t('debate.lead')}</Text>
         <Button icon="ask" label={t('debate.start')} onPress={press} />
         <Text style={s.caption}>{t('debate.cost', { n: debateCost(turn) })}</Text>
+        {noPhotos}
       </View>
     )
   ) : null;

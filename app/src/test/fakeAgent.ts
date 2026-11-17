@@ -124,6 +124,17 @@ export class FakeAgent {
   openError: { code: string; message: string } | null = null;
   /** POST /v1/runs answers this error instead (for example too_many_runs). */
   runError: { status: number; code: string } | null = null;
+  /**
+   * Photos with a question (#14): off until enablePhotos(). The PC keeps
+   * what POST /v1/uploads brought (uploads: id to the phone's file); a run
+   * that names an id it does not keep is refused with upload_gone.
+   */
+  photosOn = false;
+  uploads = new Map<string, string>();
+  /** POST /v1/uploads answers this error instead (for example 429 upload_limit). */
+  uploadError: { status: number; code: string } | null = null;
+  /** The PC lets go of every photo before the next this many runs with photos arrive. */
+  forgetUploads = 0;
   private runs = new Map<string, FakeRun>();
   /** POST /v1/comparisons answers this error instead (for example 429 too_many_comparisons). */
   comparisonError: { status: number; code: string } | null = null;
@@ -204,6 +215,25 @@ export class FakeAgent {
       { agent: 'codex', version: '0.164.0', available: true, capabilities: ['ask'], ask: { tiers: tiers('codex') } },
       { agent: 'opencode', version: '2.2.1', available: true, capabilities: ['ask'], ask: { tiers: tiers('opencode') } },
     ];
+  }
+
+  /**
+   * enablePhotos makes the PC take photos with a question (#14); call it
+   * after enableAsk. Claude and Codex see photos with every model, OpenCode
+   * with its quick and standard models only, as on the reference PC.
+   */
+  enablePhotos() {
+    this.photosOn = true;
+    this.askAgents = this.askAgents.map((a) =>
+      a.ask
+        ? { ...a, ask: { ...a.ask, images: a.agent === 'opencode' ? { models: ['opencode-quick', 'opencode-std'] } : { all: true } } }
+        : a,
+    );
+  }
+
+  /** The files the phone sent as photos, in order. */
+  get uploaded(): string[] {
+    return this.callsTo('POST', '/v1/uploads').map((c) => c.body?.file);
   }
 
   /** askModels gives Codex or OpenCode these tier models and, as newer agents do, their efforts (11-06). */
@@ -379,7 +409,7 @@ export class FakeAgent {
 
   private claudeInfo() {
     const ask = this.capabilities.includes('ask')
-      ? { ask: { tiers: { quick: { model: 'haiku' }, standard: { model: 'sonnet' }, deep: { model: 'opus' } } } }
+      ? { ask: { tiers: { quick: { model: 'haiku' }, standard: { model: 'sonnet' }, deep: { model: 'opus' } }, ...(this.photosOn ? { images: { all: true } } : {}) } }
       : {};
     return { agent: 'claude', version: '2.1.310', available: true, capabilities: this.capabilities, notices: this.notices, ...this.claudeLogin, ...ask };
   }
@@ -716,7 +746,21 @@ export class FakeAgent {
         ...(this.debateOn ? { debate: { maxPoints: 2, maxTurns: 4, rules: 'debate-v4' } } : {}),
         ...(this.contextOn ? { context: { maxSettled: 12, maxLastBytes: 8192 } } : {}),
         ...(this.moderatorOn ? { moderator: { maxAnswers: 6, maxAnswerBytes: 8192, rules: 'moderator-ask-v1' } } : {}),
+        ...(this.photosOn ? { attachments: { maxCount: 4, maxBytes: 4 << 20, types: ['image/jpeg', 'image/png', 'image/webp'] } } : {}),
       });
+    }
+    if (key === 'POST /v1/uploads') {
+      if (!this.photosOn) return err(503, 'uploads_unavailable');
+      if (this.uploadError) return err(this.uploadError.status, this.uploadError.code);
+      if (typeof c.body?.file !== 'string') return err(415, 'upload_bad_type');
+      const id = `up_${(++this.n).toString(16).padStart(32, '0')}`;
+      this.uploads.set(id, c.body.file);
+      return json(201, { id, type: 'image/jpeg', bytes: 1234 });
+    }
+    const up = c.path.match(/^\/v1\/uploads\/([^/]+)$/);
+    if (up && c.method === 'DELETE') {
+      this.uploads.delete(up[1]);
+      return new Response(null, { status: 204 });
     }
     if (key === 'DELETE /v1/devices/self') {
       this.tokenValid = false;
@@ -817,6 +861,15 @@ export class FakeAgent {
       if (this.runError) return err(this.runError.status, this.runError.code);
       const known = [...this.runs.values()].find((r) => c.body?.clientRunId && r.key === c.body.clientRunId);
       if (known) return json(200, this.runState(known));
+      const attached: string[] = c.body?.attachments ?? [];
+      if (attached.length) {
+        if (!this.photosOn) return err(503, 'uploads_unavailable');
+        if (this.forgetUploads > 0) {
+          this.forgetUploads--;
+          this.uploads.clear();
+        }
+        if (attached.length > 4 || attached.some((id) => !this.uploads.has(id))) return err(409, 'upload_gone');
+      }
       const id = `run-${++this.n}`;
       const parts = (c.body.agents ?? []).map((t: any) => {
         // A question to the moderator is a one-off: like the agent, its part names no session (#25).

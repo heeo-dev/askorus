@@ -329,6 +329,44 @@ export const tailnetFetch: typeof fetch = async (input, init) => {
   }
 };
 
+// A photo may be several megabytes over a slow relayed connection.
+const sendFileTimeoutMs = 120000;
+
+/**
+ * tailnetSendFile is tailnetFetch with a file of the app's own as the body
+ * (#14: a photo that goes with a question). The native side sends only a
+ * file of the app's cache or files, never the node's own, and only to a
+ * device of the person's own Tailscale account.
+ */
+export async function tailnetSendFile(
+  url: string,
+  init: { method?: string; headers?: Record<string, string>; file: string; signal?: AbortSignal },
+): Promise<Response> {
+  const native = nativeTailnet();
+  if (!native || typeof native.sendFile !== 'function') throw new TailnetError('tailnet_off');
+  if (!started && !(await enabled())) throw new TailnetError('tailnet_login');
+  const signal = init.signal;
+  if (signal?.aborted) throw aborted();
+  const headers: Record<string, string> = {};
+  for (const [key, value] of Object.entries(init.headers ?? {})) if (typeof value === 'string') headers[key] = value;
+
+  let onAbort: (() => void) | undefined;
+  const gaveUp = new Promise<never>((_, reject) => {
+    onAbort = () => reject(aborted());
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
+  try {
+    await Promise.race([start(native), gaveUp]);
+    const res = await Promise.race([native.sendFile(init.method ?? 'POST', url, JSON.stringify(headers), init.file, sendFileTimeoutMs), gaveUp]);
+    return answer(res.status, res.body, res.headers);
+  } catch (e) {
+    if ((e as Error)?.name === 'AbortError') throw e;
+    throw coded(e);
+  } finally {
+    if (onAbort) signal?.removeEventListener('abort', onAbort);
+  }
+}
+
 function answer(status: number, body: string, headersJSON: string): Response {
   let headers: Record<string, string> = {};
   try {

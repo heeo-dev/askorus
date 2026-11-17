@@ -1,0 +1,24 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!-- No permission is asked for here. The photo picker needs none, and the
+       camera permission the app already has (for the pairing QR code) is what
+       Android wants before another app's camera may be opened. -->
+  <application>
+    <!-- The phone's camera app writes the picture it took into one folder of
+         the app's cache, and nowhere else (askorus_photo_paths). -->
+    <provider
+      android:name=".PhotoFileProvider"
+      android:authorities="${applicationId}.AskorusPhotoProvider"
+      android:exported="false"
+      android:grantUriPermissions="true">
+      <meta-data
+        android:name="android.support.FILE_PROVIDER_PATHS"
+        android:resource="@xml/askorus_photo_paths" />
+    </provider>
+  </application>
+
+  <queries>
+    <intent>
+      <action android:name="android.media.action.IMAGE_CAPTURE" />
+    </intent>
+  </queries>
+</manifest>

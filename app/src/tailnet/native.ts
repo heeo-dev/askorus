@@ -19,6 +19,12 @@ export type NativeTailnet = {
   /** The other devices of the person's own account, as JSON (#58). */
   peers(): Promise<string>;
   fetch(method: string, url: string, headers: string, body: string, timeoutMs: number): Promise<NativeFetchResult>;
+  /**
+   * fetch with a file of the app's own as the body (#14: a photo that goes
+   * with a question). path is a file:// address in the app's cache or files.
+   * A build from before it has none.
+   */
+  sendFile?(method: string, url: string, headers: string, path: string, timeoutMs: number): Promise<NativeFetchResult>;
   recentLog(): Promise<string>;
 };
 

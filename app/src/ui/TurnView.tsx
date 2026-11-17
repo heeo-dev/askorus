@@ -17,6 +17,7 @@ import type { Info, RunPart } from '@/api/types';
 import { plainNames } from '@/ask/aiNames';
 import { answered, compareErrorText, compareState, synthBy, synthErrorText, synthState } from '@/ask/compare';
 import { answeredAgents, blockTitle, cardPreview, metaLine, type PartView, partViews, steps, synthExpected } from '@/ask/present';
+import type { TurnPhoto } from '@/ask/photos';
 import type { Turn } from '@/ask/thread';
 import { t } from '@/i18n';
 
@@ -51,6 +52,8 @@ export type TurnActions = {
   carryOn: (key: string, p: RunPart) => (() => void) | undefined;
   /** The debate on the combined answer (P2-5). */
   debate: DebateActions;
+  /** Show one of the question's photos large (#14). */
+  openPhoto?: (photos: TurnPhoto[], index: number) => void;
 };
 
 export function TurnView({
@@ -75,7 +78,7 @@ export function TurnView({
   if (turn.queued) {
     return (
       <View style={s.turn}>
-        <ThreadBubble text={turn.question} />
+        <ThreadBubble text={turn.question} photos={turn.photos} onOpenPhoto={(i) => act.openPhoto?.(turn.photos ?? [], i)} />
         <Text style={s.caption} accessibilityLiveRegion="polite">
           {t(turn.queuedFor === 'debate' ? 'ask.queuedDebate' : turn.queuedFor === 'synth' ? 'ask.queuedSynth' : 'ask.queued')}
         </Text>
@@ -95,7 +98,7 @@ export function TurnView({
   if (!st) {
     return (
       <View style={s.turn}>
-        <ThreadBubble text={turn.question} />
+        <ThreadBubble text={turn.question} photos={turn.photos} onOpenPhoto={(i) => act.openPhoto?.(turn.photos ?? [], i)} />
         <RecordLine context={turn.req.context} onOpen={act.openRecord} />
         <RefineLine refine={turn.run?.refine} onOpen={act.openRefine} />
         {turn.error && !turn.run
@@ -123,7 +126,7 @@ export function TurnView({
     const caption = going && turn.compare?.start === 'auto' && turn.compare.synth && !turn.compare.synth.off ? t('ask.willSynth') : undefined;
     return (
       <View style={s.turn}>
-        <ThreadBubble text={turn.question} />
+        <ThreadBubble text={turn.question} photos={turn.photos} onOpenPhoto={(i) => act.openPhoto?.(turn.photos ?? [], i)} />
         <RecordLine context={turn.req.context} onOpen={act.openRecord} />
         <RefineLine refine={turn.run?.refine} onOpen={act.openRefine} />
         {turn.error && !turn.run ? null : <AnsweringList rows={views} heading={going ? t('ask.answering') : undefined} caption={caption} />}
@@ -134,7 +137,7 @@ export function TurnView({
 
   return (
     <View style={s.turn}>
-      <ThreadBubble text={turn.question} />
+      <ThreadBubble text={turn.question} photos={turn.photos} onOpenPhoto={(i) => act.openPhoto?.(turn.photos ?? [], i)} />
       <RecordLine context={turn.req.context} onOpen={act.openRecord} />
       <RefineLine refine={turn.run?.refine} onOpen={act.openRefine} />
       <Result turn={turn} info={info} views={views} only={only} notes={notes} act={act} />

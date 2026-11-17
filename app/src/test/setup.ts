@@ -8,6 +8,7 @@ import { conversations } from '@/ask/conversations';
 import { setLang } from '@/i18n';
 import { resetRefused } from '@/api/refused';
 import { resetTailnet } from '@/tailnet/node';
+import { resetMockPhotos } from './photos';
 import { resetMockTailnet } from './tailnet';
 import { resetPCs } from '@/ui/shell/pcs';
 import { resetPCStatus } from '@/ui/shell/pcStatus';
@@ -80,9 +81,75 @@ jest.mock('@/tailnet/native', () => {
       const res = await globalThis.fetch(url, { method, headers: JSON.parse(headers), body: body || undefined });
       return { status: res.status, headers: '{}', body: await res.text() };
     },
+    // A photo (#14): the pretend PC gets the file's address in place of its bytes.
+    sendFile: async (method: string, url: string, headers: string, path: string) => {
+      state.calls.push(`sendFile ${path}`);
+      const res = await globalThis.fetch(url, { method, headers: JSON.parse(headers), body: JSON.stringify({ file: path }) });
+      return { status: res.status, headers: '{}', body: await res.text() };
+    },
     recentLog: async () => '',
   };
   return { __esModule: true, nativeTailnet: () => (state.available ? mod : null), mockTailnetState: state };
+});
+
+// Photos for a question (#14, modules/photo-picker and the app's files):
+// stand-ins a test steers through mockPhotos (test/photos.ts). Until a test
+// says otherwise the build has no photo picker, so no screen shows the +.
+jest.mock('@/ask/photoPick', () => {
+  const state = {
+    available: false,
+    // What the picker and the camera give next; an Error is thrown.
+    picked: [] as unknown,
+    taken: null as unknown,
+    calls: [] as string[],
+    n: 0,
+  };
+  // Written out (no parameter property): a mock's factory may name nothing outside itself.
+  class PhotoError extends Error {
+    code: string;
+    constructor(why: string) {
+      super(why);
+      this.name = 'PhotoError';
+      this.code = why;
+    }
+  }
+  const give = (v: unknown) => {
+    if (v instanceof Error) throw v;
+    return v;
+  };
+  return {
+    __esModule: true,
+    PhotoError,
+    photosAvailable: () => state.available,
+    pickPhotos: async (limit: number) => {
+      state.calls.push(`pick ${limit}`);
+      return (give(state.picked) as unknown[]).slice(0, limit);
+    },
+    takePhoto: async () => {
+      state.calls.push('take');
+      return give(state.taken);
+    },
+    mockPhotoState: state,
+  };
+});
+
+jest.mock('@/ask/photoFiles', () => {
+  const state = { kept: [] as string[], dropped: [] as string[], conversations: [] as string[], all: 0, pending: 0 };
+  return {
+    __esModule: true,
+    // A kept photo's address says which conversation's folder it went to.
+    keepPhotos: async (id: string, photos: Array<{ uri: string }>) =>
+      photos.map((p) => {
+        const uri = p.uri.replace('/cache/photos-pending/', `/files/photos/${id}/`);
+        state.kept.push(uri);
+        return { ...p, uri };
+      }),
+    dropPhotos: (photos: Array<{ uri: string }>) => void state.dropped.push(...photos.map((p) => p.uri)),
+    dropConversationPhotos: (id: string) => void state.conversations.push(id),
+    dropAllPhotos: () => void state.all++,
+    dropPending: () => void state.pending++,
+    mockPhotoFiles: state,
+  };
 });
 
 jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn(async () => true), getStringAsync: jest.fn(async () => '') }));
@@ -126,6 +193,7 @@ beforeEach(() => {
   // the screens under test are those of a phone that can reach its PCs.
   mockSecure.set('tailnet.on.v1', '1');
   resetMockTailnet();
+  resetMockPhotos();
   resetTailnet();
   for (const m of mockSQLite.values()) m.clear();
   conversations.reset();

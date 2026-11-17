@@ -6,6 +6,9 @@
 // kept last, which is the one on screen). Nothing leaves the phone: the
 // app is kept out of Android's backup (app.json allowBackup false).
 //
+// The photos of questions (#14) are files beside it (photoFiles.ts), a
+// folder per conversation; a conversation that goes takes its folder along.
+//
 // The functions run one after another (queue), so the list never loses a
 // write to a race.
 
@@ -14,6 +17,7 @@ import { SQLiteStorage } from 'expo-sqlite/kv-store';
 import type { KeyValue } from '@/connections/store';
 
 import type { Conversation, ConversationHead } from './conversations';
+import { dropAllPhotos, dropConversationPhotos } from './photoFiles';
 
 export const maxKept = 100;
 export const maxBytes = 20 * 1024 * 1024;
@@ -113,6 +117,7 @@ export function keep(c: Conversation, kv: KeyValue = phoneHistory): Promise<Stor
       if (out[i].id === c.id) continue;
       total -= out[i].bytes;
       await kv.remove(convKey(out[i].id));
+      dropConversationPhotos(out[i].id); // its photos go with it (#14)
       out.splice(i, 1);
     }
     await writeIndex(kv, out);
@@ -124,6 +129,7 @@ export function keep(c: Conversation, kv: KeyValue = phoneHistory): Promise<Stor
 export function forget(id: string, kv: KeyValue = phoneHistory): Promise<StoredHead[]> {
   return queue(async () => {
     await kv.remove(convKey(id));
+    dropConversationPhotos(id);
     const heads = (await readIndex(kv)).filter((h) => h.id !== id);
     await writeIndex(kv, heads);
     return heads;
@@ -134,6 +140,7 @@ export function forget(id: string, kv: KeyValue = phoneHistory): Promise<StoredH
 export function forgetAll(kv: HistoryKV = phoneHistory): Promise<void> {
   return queue(async () => {
     for (const k of await kv.keys()) if (k.startsWith('conv.')) await kv.remove(k);
+    dropAllPhotos();
     await writeIndex(kv, []);
   });
 }

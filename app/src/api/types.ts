@@ -67,7 +67,16 @@ export type AdapterInfo = {
    * Set for AIs that can ask (Phase 2): the model of each tier, and (11-06,
    * newer agents) the efforts each of those models may take, least to most.
    */
-  ask?: { tiers: Record<string, { model: string; effort?: string }>; efforts?: Record<string, string[]> };
+  ask?: {
+    tiers: Record<string, { model: string; effort?: string }>;
+    efforts?: Record<string, string[]>;
+    /**
+     * Which of the AI's models see photos sent with a question (#14): all,
+     * or the ones listed (a model's name without its '#variant'). Left out,
+     * the AI takes no photos.
+     */
+    images?: { all?: boolean; models?: string[] };
+  };
 };
 
 /** A stable error code from the agent; message is English detail (or an AI's own words). */
@@ -94,7 +103,12 @@ export type Info = {
   moderator?: ModeratorInfo;
   /** The agent lets a paired phone answer a pairing request (#58); an older agent leaves it out. */
   pairing?: { approve: boolean };
+  /** The agent takes photos with a question (#14); an older agent leaves it out, and the phone offers none. */
+  attachments?: { maxCount: number; maxBytes: number; types: string[] };
 };
+
+/** A photo the PC keeps for a question (POST /v1/uploads, #14). */
+export type Upload = { id: string; type: string; bytes: number };
 
 /** /v1/hello: what a phone of the same Tailscale account may know of a PC before it is paired (#58). */
 export type Hello = {
@@ -238,6 +252,12 @@ export type RunRequest = {
   context?: RequestContext;
   /** Ask the moderator alone (#25): agents, compare and refine are then not read. */
   moderator?: RunModerator;
+  /**
+   * The ids of the photos the question comes with (#14), uploaded first.
+   * They are set when the run is sent and never kept with the turn: the PC
+   * deletes a photo ten minutes after its last use.
+   */
+  attachments?: string[];
 };
 
 /**

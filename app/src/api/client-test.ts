@@ -437,3 +437,61 @@ test('comparisonPolling: waiting or running, or whatever the PC still wants poll
   expect(comparisonPolling({ status: 'later', pollAfterMs: 0 })).toBe(false);
   expect(comparisonPolling({ status: 'later' })).toBe(false);
 });
+
+// #14: a photo goes as a file through the node, with the device token; the
+// PC's answer is read like any other.
+test('uploadPhoto sends the file with the token and gives the id; errors keep their code', async () => {
+  const sent: Array<{ url: string; method?: string; headers?: Record<string, string>; file: string }> = [];
+  const answers = [json(201, { id: 'up_0123', type: 'image/jpeg', bytes: 1234 })(), json(429, { error: { code: 'upload_limit', message: 'too many' } })()];
+  const sendFile = async (url: string, init: { method?: string; headers?: Record<string, string>; file: string }) => {
+    sent.push({ url, ...init });
+    return answers.shift()!;
+  };
+  const f = fakeFetch([]);
+  const c = new AgentClient(base, { token: 'tok', fetch: f.fn, sendFile });
+  expect(await c.uploadPhoto('file:///data/photos/a.jpg')).toEqual({ id: 'up_0123', type: 'image/jpeg', bytes: 1234 });
+  expect(sent[0]).toMatchObject({ url: `${base}/v1/uploads`, method: 'POST', file: 'file:///data/photos/a.jpg' });
+  expect(sent[0].headers?.Authorization).toBe('Bearer tok');
+  await expect(c.uploadPhoto('file:///data/photos/b.jpg')).rejects.toMatchObject({ code: 'upload_limit', status: 429 });
+  // Nothing went through plain fetch, and withToken keeps the same way of sending files.
+  expect(f.calls).toHaveLength(0);
+  answers.push(json(201, { id: 'up_0456', type: 'image/png', bytes: 9 })());
+  expect((await c.withToken('other').uploadPhoto('file:///x.png')).id).toBe('up_0456');
+  expect(sent[2].headers?.Authorization).toBe('Bearer other');
+});
+
+test('a photo that could not be sent is a NetworkError, a cancelled one a CancelledError, a refused token sends nothing', async () => {
+  const f = fakeFetch([]);
+  const failing = new AgentClient(base, {
+    token: 'tok',
+    fetch: f.fn,
+    sendFile: async () => {
+      throw new TypeError('Network request failed');
+    },
+  });
+  await expect(failing.uploadPhoto('file:///a.jpg')).rejects.toBeInstanceOf(NetworkError);
+  const ctl = new AbortController();
+  ctl.abort();
+  await expect(failing.uploadPhoto('file:///a.jpg', ctl.signal)).rejects.toBeInstanceOf(CancelledError);
+
+  let sent = 0;
+  const refused = new AgentClient('http://refused.example.ts.net:8790', {
+    token: 'gone',
+    fetch: f.fn,
+    sendFile: async () => {
+      sent++;
+      return json(401, { error: { code: 'unauthorized' } })();
+    },
+  });
+  await expect(refused.uploadPhoto('file:///a.jpg')).rejects.toMatchObject({ code: 'unauthorized' });
+  await expect(refused.uploadPhoto('file:///a.jpg')).rejects.toMatchObject({ code: 'unauthorized' });
+  expect(sent).toBe(1);
+  expect(tokenRefused(agentBase('refused.example.ts.net', 8790), 'gone')).toBe(true);
+  forgetRefused(agentBase('refused.example.ts.net', 8790));
+});
+
+test('deleteUpload names the photo by its encoded id', async () => {
+  const f = fakeFetch([() => new Response(null, { status: 204 })]);
+  await new AgentClient(base, { token: 'tok', fetch: f.fn }).deleteUpload('up_01/..');
+  expect(f.calls[0]).toMatchObject({ method: 'DELETE', url: `${base}/v1/uploads/up_01%2F..` });
+});

@@ -40,6 +40,9 @@ import { canSynthesize, polling, writerFor } from '@/ask/compare';
 import { conversations, recentQuestions, useConversations } from '@/ask/conversations';
 import { features } from '@/ask/features';
 import { modelLabel, pickOf, runsWith } from '@/ask/models';
+import { dropPending, dropPhotos, keepPhotos } from '@/ask/photoFiles';
+import { PhotoError, photosAvailable, pickPhotos, takePhoto } from '@/ask/photoPick';
+import { byPhotos, photoLimit, type TurnPhoto } from '@/ask/photos';
 import { aiStatus, askErrorText, metaLine, partViews, rowValue } from '@/ask/present';
 import { type AskPrefs, defaultAskPrefs, loadAskPrefs, saveAskPrefs } from '@/ask/prefs';
 import { debating } from '@/ask/debate';
@@ -66,7 +69,7 @@ import { AISheet, type AISheetRow } from '@/ui/AISheet';
 import { answerBy } from '@/ui/AnswerBlock';
 import { AnswerSheet } from '@/ui/AnswerSheet';
 import { Button } from '@/ui/Button';
-import { Composer, FollowBar } from '@/ui/Composer';
+import { Composer, FollowBar, type PhotoTools } from '@/ui/Composer';
 import { Spinner } from '@/ui/controls';
 import { DebateDock, DebateEnd } from '@/ui/Debate';
 import { Header } from '@/ui/Header';
@@ -75,6 +78,8 @@ import { useSafeInsets } from '@/ui/keyboard';
 import { ModelSheet } from '@/ui/ModelSheet';
 import { PCLine } from '@/ui/PCLine';
 import { PCPickerSheet } from '@/ui/PCPickerSheet';
+import { PhotoSheet } from '@/ui/PhotoSheet';
+import { PhotoViewer } from '@/ui/PhotoViewer';
 import { RecordNotice, RecordSheet } from '@/ui/Record';
 import { RefineSheet } from '@/ui/Refine';
 import { ReachError } from '@/ui/ReachError';
@@ -104,6 +109,7 @@ type SheetState =
   | { kind: 'answer'; turn: string; agent: string }
   | { kind: 'refine'; turn: string }
   | { kind: 'record'; turn: string }
+  | { kind: 'photo' }
   | null;
 
 // An agent from before asks (P2-1) reports Claude alone and no tiers; a
@@ -136,6 +142,14 @@ export default function Ask() {
   const [sheet, setSheet] = useState<SheetState>(null);
   // The notice before the first follow-up that carries the record (#29).
   const [askRecord, setAskRecord] = useState(false);
+  // The photos picked for the question being written (#14), what is said
+  // about them, and the photos shown large.
+  const [photos, setPhotos] = useState<TurnPhoto[]>([]);
+  const photosRef = useRef<TurnPhoto[]>([]);
+  photosRef.current = photos;
+  const [photoSaid, setPhotoSaid] = useState<{ text: string; error?: boolean } | null>(null);
+  const [viewer, setViewer] = useState<{ photos: TurnPhoto[]; index: number } | null>(null);
+  const sending = useRef(false);
   const follows = useRef(new Map<string, AbortController>());
   const pcRef = useRef<PC | null>(null);
   const turnsRef = useRef<Turn[]>([]);
@@ -404,6 +418,11 @@ export default function Ask() {
     setSheet(null);
     setAskRecord(false);
     setPick(null);
+    // Photos picked for a question that was never sent go with it.
+    dropPhotos(photosRef.current);
+    setPhotos([]);
+    setPhotoSaid(null);
+    setViewer(null);
   }, [keepNow, finishBg, jobsOf]);
 
   // The current PC answers; its info says which AIs can.
@@ -510,6 +529,11 @@ export default function Ask() {
     return () => current.forEach((c) => c.abort());
   }, []);
 
+  // Photos picked and never sent before the app was closed are deleted.
+  useEffect(() => {
+    dropPending();
+  }, []);
+
   // The conversation on screen was not asked on the current PC (#53): it can be read,
   // and nothing of it is sent to the PC that happens to be current. Its PC is not
   // paired any more (orphan), or it is and can be switched to (awayPC: the PC was
@@ -537,11 +561,21 @@ export default function Ask() {
   // One AI alone (the old 'only this AI'), shown as its chip while others are on.
   const one = !modAsk && follow.agents.length === 1 && on.length > 1 ? follow.agents[0] : null;
 
+  // Photos (#14): how many this PC takes (0: none, an older agent), and of
+  // the AIs the next question goes to, which see photos. An AI that does
+  // not is left out of a question with photos, and named before it goes.
+  const maxPhotos = photoLimit(info);
+  const nextAgents = turns.length ? (modAsk && modAgent ? [modAgent] : follow.agents) : on;
+  const nextTier = turns.length ? follow.tier : prefs.tier;
+  const nextModels = modAsk && modAgent ? (prefs.synthModels[modAgent] ? { [modAgent]: prefs.synthModels[modAgent].model } : {}) : prefs.models;
+  const seen = info && photos.length ? byPhotos(info, nextAgents, nextTier, nextModels) : null;
+  const photosOK = !seen || seen.sees.length > 0;
+
   // record: the answer to the notice (#29), left out when none was shown.
-  const sendWith = (record?: 'with' | 'without') => {
+  const sendWith = async (record?: 'with' | 'without') => {
     const question = text.trim();
     const p = pcRef.current;
-    if (!p || !info || !question || busy || away) return;
+    if (!p || !info || !question || busy || away || sending.current || !photosOK) return;
     // What this conversation concludes is still coming (its combined answer or debate): a
     // question that carries the record waits for it (#29); one sent without a record goes now.
     const coming = concluding(turns);
@@ -560,11 +594,25 @@ export default function Ask() {
     }
     // The first question goes to everyone turned on with the tier set; a follow-up as its bar says (#22).
     const modPick = toModerator && modAgent ? prefs.synthModels[modAgent] : undefined;
+    // The conversation gets its id now, so its photos have their folder: they move from the
+    // cache into the app's own files before the question goes.
+    const newHead: Head | null = head.current ? null : { id: Crypto.randomUUID(), pcId: p.conn.id, startedAt: Date.now(), title: question };
+    let kept: TurnPhoto[] = [];
+    if (photos.length) {
+      sending.current = true;
+      try {
+        kept = await keepPhotos((head.current ?? newHead!).id, photos);
+      } finally {
+        sending.current = false;
+      }
+    }
+    // With photos the question goes to the AIs that see them.
+    const withPhotos = seen && seen.blind.length > 0 ? { agents: seen.sees } : null;
     let turn = newTurn({
       id: Crypto.randomUUID(),
       question,
       tier: followUp ? follow.tier : prefs.tier,
-      to: followUp ? { agents: follow.agents } : 'all',
+      to: withPhotos ?? (followUp ? { agents: follow.agents } : 'all'),
       on,
       turns,
       models: prefs.models,
@@ -576,6 +624,7 @@ export default function Ask() {
         toModerator && modAgent
           ? { agent: modAgent, ...(modPick ? { model: modPick.model, ...(modPick.effort ? { effort: modPick.effort } : {}) } : {}), answers: moderatorAnswers(turns) }
           : undefined,
+      photos: kept,
       at: Date.now(),
     });
     if (!turn.agents.length) return;
@@ -588,19 +637,66 @@ export default function Ask() {
       turn.queued = true;
       if (!waitBg && waitHere) turn.queuedFor = waitHere;
     } else turn = carry(turn, turns, info, prefs.carryRecord);
-    if (!head.current) {
-      head.current = { id: Crypto.randomUUID(), pcId: p.conn.id, startedAt: Date.now(), title: question };
+    if (!head.current && newHead) {
+      head.current = newHead;
       conversations.setCurrent(head.current);
     }
     turnsRef.current = [...turnsRef.current, turn];
     setTurns((ts) => [...ts, turn]);
     setText('');
+    setPhotos([]);
+    setPhotoSaid(null);
     setPick(null);
     Keyboard.dismiss();
     stick.current = true;
     if (!wait) track(turn.id, followRun(p.client, turn, deps));
   };
-  const send = () => sendWith();
+  const send = () => void sendWith();
+
+  // The + button (#14): the photo sheet, or why no photo can be added now.
+  const addPhoto = () => {
+    Keyboard.dismiss();
+    if (!maxPhotos) setPhotoSaid({ text: t('ask.photo.oldAgent') });
+    else if (photos.length >= maxPhotos) setPhotoSaid({ text: t('ask.photo.full', { max: maxPhotos }) });
+    else setSheet({ kind: 'photo' });
+  };
+  const getPhotos = async (how: 'take' | 'pick') => {
+    setSheet(null);
+    setPhotoSaid(null);
+    try {
+      const room = maxPhotos - photosRef.current.length;
+      const one = how === 'take' ? await takePhoto() : null;
+      const got = how === 'take' ? (one ? [one] : []) : await pickPhotos(room);
+      if (!got.length) return;
+      // The room is counted again: the person may have picked while another pick was open.
+      const fits = got.slice(0, Math.max(0, maxPhotos - photosRef.current.length));
+      dropPhotos(got.slice(fits.length));
+      if (fits.length) setPhotos((ps) => [...ps, ...fits]);
+      setPhotoSaid(fits.length < got.length ? { text: t('ask.photo.full', { max: maxPhotos }) } : null);
+    } catch (e) {
+      setPhotoSaid({ text: t(`ask.photo.${e instanceof PhotoError ? e.code : 'failed'}`), error: true });
+    }
+  };
+  const removePhoto = (index: number) => {
+    const gone = photos[index];
+    if (gone) dropPhotos([gone]);
+    setPhotos((ps) => ps.filter((_, i) => i !== index));
+    setPhotoSaid(null);
+  };
+  // What the bar says about the photos: what the + answered, else who sits the question out.
+  const photoNote =
+    photoSaid ??
+    (seen && seen.blind.length
+      ? seen.sees.length
+        ? { text: t('ask.photo.blind', { names: seen.blind.map(agentName).join(', ') }) }
+        : { text: t('ask.photo.noneSee'), error: true }
+      : undefined);
+  // The + is there in a build that can get photos; on a PC that takes none it is dimmed and says so.
+  const photoTools: PhotoTools | undefined =
+    photosAvailable() && info
+      ? { photos, onAdd: addPhoto, onOpen: (index) => setViewer({ photos, index }), onRemove: removePhoto, note: photoNote ?? undefined, dim: !maxPhotos }
+      : undefined;
+  const openPhoto = (ps: TurnPhoto[], index: number) => setViewer({ photos: ps, index });
 
   const note = (key: string, n: Note | null) =>
     setNotes((m) => {
@@ -653,6 +749,7 @@ export default function Ask() {
     only: () => undefined,
     carryOn: () => undefined,
     debate: { start: nothing, stop: nothing, poll: nothing, copy, openAIs: () => setSheet({ kind: 'ais', turn: turn.id }), noticed: true, notice: nothing },
+    openPhoto,
   });
 
   const actsFor = (turn: Turn): TurnActions => ({
@@ -694,6 +791,7 @@ export default function Ask() {
       noticed: prefs.debateNoticed,
       notice: () => change({ debateNoticed: true }),
     },
+    openPhoto,
   });
 
   // The last AI that is on stays on (UX-10): a question always has an AI to go to.
@@ -842,6 +940,8 @@ export default function Ask() {
 
   const sheets = (
     <>
+      <PhotoSheet open={sheet?.kind === 'photo'} onClose={() => setSheet(null)} onTake={() => void getPhotos('take')} onPick={() => void getPhotos('pick')} />
+      <PhotoViewer photos={viewer?.photos ?? []} index={viewer ? viewer.index : null} onClose={() => setViewer(null)} />
       <PCPickerSheet
         open={pcPicker}
         onClose={() => setPCPicker(false)}
@@ -1022,7 +1122,8 @@ export default function Ask() {
             value={text}
             onChangeText={setText}
             onSend={send}
-            canSend={!!text.trim() && on.length > 0 && !busy}
+            canSend={!!text.trim() && on.length > 0 && !busy && photosOK}
+            photo={photoTools}
             placeholder={t('ask.placeholder')}
             agents={on}
             pickLabel={on.length ? t('ask.pickAIs', { n: on.length, names: on.map(agentName).join(', ') }) : t('ask.pickAIsNone')}
@@ -1101,13 +1202,14 @@ export default function Ask() {
           }}
         />
       ) : null}
-      {askRecord && !away ? <RecordNotice onGo={() => sendWith('with')} onWithout={() => sendWith('without')} /> : null}
+      {askRecord && !away ? <RecordNotice onGo={() => void sendWith('with')} onWithout={() => void sendWith('without')} /> : null}
       {away ? null : (
         <FollowBar
         value={text}
         onChangeText={setText}
         onSend={send}
-        canSend={!!text.trim() && !busy && !!info && follow.agents.length > 0}
+        canSend={!!text.trim() && !busy && !!info && follow.agents.length > 0 && photosOK}
+        photo={photoTools}
         placeholder={modAsk ? t('ask.followModerator') : one ? t('ask.followTo', { name: oneName }) : t('ask.followPlaceholder')}
         sendLabel={modAsk ? t('ask.sendModerator') : one ? t('ask.sendTo', { name: oneName }) : t('ask.sendIcon')}
         sendHint={busy ? t('ask.sendWait') : undefined}

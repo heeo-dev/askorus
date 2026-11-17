@@ -52,6 +52,29 @@ private suspend fun <T> call(block: () -> T): T = withContext(Dispatchers.IO) {
   }
 }
 
+// ownFile is the file at path (a plain path or a file:// address) when it
+// lies in the app's cache or files folder and outside the node's folder,
+// by its real path; else null.
+private fun ownFile(context: Context, path: String): File? {
+  val plain = if (path.startsWith("file://")) android.net.Uri.parse(path).path ?: return null else path
+  val file = try {
+    File(plain).canonicalFile
+  } catch (e: Throwable) {
+    return null
+  }
+  if (!file.isFile) return null
+  fun inside(dir: File?): Boolean {
+    val root = try {
+      dir?.canonicalPath ?: return false
+    } catch (e: Throwable) {
+      return false
+    }
+    return file.path.startsWith(root + File.separator)
+  }
+  if (inside(File(context.filesDir, "tailnet"))) return null
+  return if (inside(context.cacheDir) || inside(context.filesDir)) file else null
+}
+
 class TailnetModule : Module() {
   private val watching = AtomicBoolean(false)
 
@@ -88,6 +111,22 @@ class TailnetModule : Module() {
     AsyncFunction("fetch") Coroutine { method: String, url: String, headers: String, body: String, timeoutMs: Int ->
       call {
         val r = Tsbridge.fetch(method, url, headers, body, timeoutMs.toLong())
+        mapOf("status" to r.status.toInt(), "headers" to r.headers, "body" to r.body)
+      }
+    }
+
+    // fetch with a file of the app's own as the body (#14: a photo that
+    // goes with a question). Only a file in the app's cache or files folder
+    // is sent, never one of the node's own folder (its key is there); the
+    // library checks that again, and sends it only to a device of the
+    // person's own Tailscale account.
+    AsyncFunction("sendFile") Coroutine { method: String, url: String, headers: String, path: String, timeoutMs: Int ->
+      val context = appContext.reactContext?.applicationContext
+        ?: throw TailnetException("tailnet_off", "the app is not ready", null)
+      call {
+        val file = ownFile(context, path)
+          ?: throw TailnetException("tailnet_bad_request", "not a file of the app's own", null)
+        val r = Tsbridge.sendFile(method, url, headers, file.path, timeoutMs.toLong())
         mapOf("status" to r.status.toInt(), "headers" to r.headers, "body" to r.body)
       }
     }

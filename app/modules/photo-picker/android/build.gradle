@@ -1,0 +1,31 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'app.askorus'
+version = '1.0.0'
+
+android {
+  namespace "app.askorus.photopicker"
+  defaultConfig {
+    versionCode 1
+    versionName '1.0.0'
+  }
+}
+
+// Photos for a question (#14) come from Android's own photo picker and the
+// phone's camera app, and are scaled down here with the platform's own
+// Bitmap code. Only AndroidX is used: no image library, no Google Play
+// services, and no storage permission (the picker hands over only what the
+// person picked).
+dependencies {
+  // The versions the app already has (scripts/android-libs.json): the
+  // photo picker's contracts are in androidx.activity since 1.7.
+  implementation 'androidx.activity:activity:1.8.1'
+  implementation 'androidx.core:core:1.17.0'
+  implementation 'androidx.exifinterface:exifinterface:1.4.2'
+  implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2'
+
+  testImplementation 'junit:junit:4.13.2'
+}
