@@ -9,6 +9,8 @@ type FileState = { kept: string[]; dropped: string[]; conversations: string[]; a
 
 export const mockPhotos: PickState = (jest.requireMock('@/ask/photoPick') as { mockPhotoState: PickState }).mockPhotoState;
 export const mockPhotoFiles: FileState = (jest.requireMock('@/ask/photoFiles') as { mockPhotoFiles: FileState }).mockPhotoFiles;
+type SaveState = { available: boolean; saved: string[]; fail: string | null };
+export const mockPhotoSave: SaveState = (jest.requireMock('@/ask/photoSave') as { mockPhotoSave: SaveState }).mockPhotoSave;
 
 /** A photo as the native module hands it over: a scaled-down copy waiting in the app's cache. */
 export function pendingPhoto(name: string, width = 2048, height = 1536): TurnPhoto {
@@ -26,6 +28,9 @@ export function resetMockPhotos() {
   mockPhotoFiles.conversations = [];
   mockPhotoFiles.all = 0;
   mockPhotoFiles.pending = 0;
+  mockPhotoSave.available = true;
+  mockPhotoSave.saved = [];
+  mockPhotoSave.fail = null;
 }
 
 /** The error the stand-in throws for a camera that is not allowed, a build that cannot, or anything else. */

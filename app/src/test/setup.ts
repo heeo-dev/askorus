@@ -152,6 +152,20 @@ jest.mock('@/ask/photoFiles', () => {
   };
 });
 
+// Saving a picture into the phone's pictures (#14): a test reads what was saved, or makes it fail.
+jest.mock('@/ask/photoSave', () => {
+  const state = { available: true, saved: [] as string[], fail: null as string | null };
+  return {
+    __esModule: true,
+    savingAvailable: () => state.available,
+    savePicture: async (png: string) => {
+      if (state.fail) throw Object.assign(new Error(state.fail), { code: state.fail });
+      state.saved.push(png);
+    },
+    mockPhotoSave: state,
+  };
+});
+
 jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn(async () => true), getStringAsync: jest.fn(async () => '') }));
 
 // The theme sets the window's background (S5c); tests can read what it set.
@@ -176,7 +190,7 @@ jest.mock('@/ui/QrScanner', () => {
 jest.mock('react-native-webview', () => {
   const { createElement } = require('react');
   const { View } = require('react-native');
-  const WebView = (props: Record<string, unknown>) => createElement(View, { ...props, testID: 'math-webview' });
+  const WebView = (props: Record<string, unknown>) => createElement(View, { ...props, testID: props.testID ?? 'math-webview' });
   return { __esModule: true, default: WebView, WebView };
 });
 

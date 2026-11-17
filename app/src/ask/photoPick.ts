@@ -19,6 +19,12 @@ export type NativePhotoPicker = {
   pick(limit: number, edge: number, quality: number): Promise<NativePhoto[]>;
   /** One photo from the camera app, scaled down; null when none was taken. */
   capture(edge: number, quality: number): Promise<NativePhoto | null>;
+  /**
+   * Puts a picture of the app's own (a file:// address of a .png or .jpg in
+   * its cache or files) into the phone's pictures, as name. Android 10 and
+   * later; code photo_save_unsupported before that.
+   */
+  savePicture?(path: string, name: string): Promise<void>;
 };
 
 let cached: NativePhotoPicker | null | undefined;

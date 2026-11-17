@@ -609,5 +609,12 @@
   "error.upload_bad_type": "The PC doesn't take this kind of file. Only photos can be attached.",
   "error.upload_limit": "Too many photos were sent to the PC. Try again in a few minutes.",
   "error.upload_gone": "The PC no longer has the photo. Send it again.",
-  "ask.error.no_image_support": "This AI's model can't see photos."
+  "ask.error.no_image_support": "This AI's model can't see photos.",
+  "picture.label": "A picture the AI drew as code",
+  "picture.showCode": "Show code",
+  "picture.hideCode": "Hide code",
+  "picture.save": "Save",
+  "picture.saved": "Saved to your phone's photos.",
+  "picture.saveFailed": "Couldn't save it.",
+  "picture.saveUnsupported": "This phone can't save it. Android 10 and later can."
 }

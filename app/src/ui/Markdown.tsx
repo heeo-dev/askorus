@@ -29,6 +29,8 @@ import { lettersOrDigits, korean, mathAt, type MathToken, prose } from './inline
 import { shownElsewhere } from './linkCheck';
 import { type LinkAsk, LinkSheet } from './LinkSheet';
 import { MathBlock, drawable } from './MathBlock';
+import { svgOf } from './svg';
+import { SvgBlock } from './SvgBlock';
 import { texToUnicode } from './tex';
 import { type AIColour, aiColour, type Theme, useAIColours, useTheme } from './theme';
 
@@ -720,14 +722,20 @@ function block(t: Token, c: Ctx, key: number): ReactNode {
         </Text>
       );
     }
-    case 'code':
+    case 'code': {
+      // A drawing an AI made as SVG code is shown as a picture (#14); any
+      // other code, and an SVG that is more than a drawing, as written.
+      const code = t as Tokens.Code;
+      const svg = svgOf(code.lang, code.text);
+      if (svg !== null) return <SvgBlock key={key} svg={svg} source={code.text} />;
       return (
         <ScrollView key={key} horizontal style={s.codeBlock} contentContainerStyle={s.codePad}>
           <Text style={s.codeText} selectable>
-            {(t as Tokens.Code).text}
+            {code.text}
           </Text>
         </ScrollView>
       );
+    }
     case 'blockquote':
       return (
         <View key={key} style={s.quote}>

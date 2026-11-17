@@ -1,5 +1,6 @@
 // Photos for a question (#14, AskorusPhotoPicker), used through
-// src/ask/photoPick.ts. Two ways in: Android's own photo picker (pick: the
+// src/ask/photoPick.ts (and src/ask/photoSave.ts for savePicture, which
+// puts a picture the app made into the phone's own pictures). Two ways in: Android's own photo picker (pick: the
 // app sees only what the person picked, and needs no permission for it) and
 // the phone's camera app (capture). Either way each picture is read once,
 // turned upright, scaled down so its long edge is at most what the caller
@@ -11,6 +12,7 @@ package app.askorus.photopicker
 
 import android.app.Activity
 import android.content.ClipData
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -19,6 +21,8 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Matrix
 import android.net.Uri
+import android.os.Build
+import android.os.Environment
 import android.provider.MediaStore
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts.PickMultipleVisualMedia
@@ -145,10 +149,75 @@ class PhotoPickerModule : Module() {
       }
     }
 
+    // savePicture(path, name): puts a picture of the app's own (a PNG or
+    // JPEG in its cache or files) into the phone's pictures, in
+    // Pictures/Askorus, under name. Android 10 and later, where MediaStore
+    // takes a new picture without any permission; before that the app
+    // would need the storage permission, which it does not ask for.
+    AsyncFunction("savePicture") Coroutine { path: String, name: String ->
+      val ctx = context
+      withContext(Dispatchers.IO) { savePicture(ctx, path, name) }
+    }
+
     RegisterActivityContracts {
       pickLauncher = registerForActivityResult(PickContract())
       captureLauncher = registerForActivityResult(CaptureContract())
     }
+  }
+}
+
+// ownPicture is the .png or .jpg at path (a plain path or a file://
+// address) when it lies in the app's cache or files folder, by its real
+// path; else null.
+private fun ownPicture(context: Context, path: String): File? {
+  val plain = if (path.startsWith("file://")) Uri.parse(path).path ?: return null else path
+  val file = try {
+    File(plain).canonicalFile
+  } catch (e: Throwable) {
+    return null
+  }
+  val name = file.name.lowercase()
+  if (!file.isFile || !(name.endsWith(".png") || name.endsWith(".jpg"))) return null
+  for (root in listOf(context.cacheDir, context.filesDir)) {
+    val base = try {
+      root.canonicalPath
+    } catch (e: Throwable) {
+      continue
+    }
+    if (file.path.startsWith(base + File.separator)) return file
+  }
+  return null
+}
+
+private fun savePicture(context: Context, path: String, name: String) {
+  if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+    throw PhotoException("photo_save_unsupported", "saving a picture needs Android 10 or later")
+  }
+  val file = ownPicture(context, path) ?: throw PhotoException("photo_save_failed", "not a picture of the app's own")
+  val png = file.name.lowercase().endsWith(".png")
+  // The name is the app's own; anything else in it becomes an underscore.
+  val safe = name.replace(Regex("[^A-Za-z0-9._-]"), "_").take(80).ifEmpty { if (png) "askorus.png" else "askorus.jpg" }
+  val resolver = context.contentResolver
+  val values = ContentValues().apply {
+    put(MediaStore.Images.Media.DISPLAY_NAME, safe)
+    put(MediaStore.Images.Media.MIME_TYPE, if (png) "image/png" else "image/jpeg")
+    put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/Askorus")
+    put(MediaStore.Images.Media.IS_PENDING, 1)
+  }
+  val target = resolver.insert(MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY), values)
+    ?: throw PhotoException("photo_save_failed", "the phone's pictures took no new picture")
+  try {
+    val out = resolver.openOutputStream(target) ?: throw PhotoException("photo_save_failed", "the new picture cannot be written")
+    out.use { o -> file.inputStream().use { it.copyTo(o) } }
+    resolver.update(target, ContentValues().apply { put(MediaStore.Images.Media.IS_PENDING, 0) }, null, null)
+  } catch (e: Throwable) {
+    // Half a picture never stays.
+    try {
+      resolver.delete(target, null, null)
+    } catch (ignored: Throwable) {
+    }
+    if (e is PhotoException) throw e
+    throw PhotoException("photo_save_failed", "the picture could not be saved", e)
   }
 }
 
