@@ -213,6 +213,9 @@ func (s *Server) attachCompare(owner, question string, run runs.Run, targets []R
 		Owner: owner, RunID: run.ID, Question: question,
 		Earlier: c.Earlier, Judges: judges, Asked: asked, Conversation: conv, Images: images,
 	}
+	if len(images) > 0 {
+		spec.HoldImages = s.imageHolder(owner, images)
+	}
 	if sy := c.Synthesis; sy != nil {
 		spec.Synth = &compares.SynthSpec{Off: sy.Off, Agent: sy.Agent, Tier: run.Tier, Model: sy.Model, Effort: sy.Effort}
 	}

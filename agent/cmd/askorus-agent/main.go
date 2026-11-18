@@ -342,10 +342,12 @@ func serve(dir string, args []string) error {
 	// few minutes. Without it questions still work, without photos.
 	var photos *uploads.Store
 	if askFolder != "" {
+		// The errors name the folder, which holds the person's user name: the
+		// log says only that photos are off.
 		if folder, err := config.UploadsFolder(dir); err != nil {
-			logger.Error("no uploads folder; photos are off", "err", err.Error())
+			logger.Error("no uploads folder; photos are off")
 		} else if photos, err = uploads.Open(folder); err != nil {
-			logger.Error("the uploads folder cannot be used; photos are off", "err", err.Error())
+			logger.Error("the uploads folder cannot be used; photos are off")
 			photos = nil
 		} else {
 			defer photos.Close()

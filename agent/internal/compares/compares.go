@@ -158,6 +158,11 @@ type RunSpec struct {
 	// combined answer gets them when its model sees photos and the files
 	// are still there; else it writes from the answers alone.
 	Images []core.Image
+	// HoldImages keeps Images on the PC while the combined answer waits for
+	// its turn and is written, and gives the function that lets them go. It
+	// reports false when they are gone already. Nil: nothing holds them, and
+	// the writer looks whether the files are there.
+	HoldImages func() (release func(), ok bool)
 }
 
 // DirectAnswer is one answer of a DirectSpec. Via is judge.ViaPC (Agent is

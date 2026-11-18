@@ -327,8 +327,10 @@ type synthInput struct {
 	// qspec is the run's question spec when it was refined (milestone C,
 	// off since 2026-11-04). It rides in the task; synth-v5 does not use it.
 	qspec *judge.QuestionSpec
-	// images are the question's photos (#14, a run's comparison only).
+	// images are the question's photos (#14, a run's comparison only), and
+	// hold what keeps them on the PC while the combined answer is written.
 	images []core.Image
+	hold   func() (release func(), ok bool)
 }
 
 // writerImages are the photos w gets with the combined answer: all of
@@ -382,6 +384,17 @@ func (m *Manager) synthRun(c *comparison) (string, *judge.Error) {
 		return "", synthFailure(core.ErrCodeNoJudge, "")
 	}
 	w = m.withPick(w, in.spec.Agent, in.spec.Model, in.spec.Effort)
+	// The photos stay on the PC from here to the end of the writing: the
+	// wait for a slot and a second try included (R-120). Photos that are
+	// gone already (a combined answer asked for long after its question)
+	// are left out, and the answer is written from the answers alone.
+	if len(in.images) > 0 && in.hold != nil {
+		if release, ok := in.hold(); ok {
+			defer release()
+		} else {
+			in.images = nil
+		}
+	}
 	// The earlier questions are the ones every listed AI already got (part
 	// 20, R-35; the request's judges, spec.Listed): a writer that is not
 	// one of them gets none.
@@ -499,6 +512,7 @@ func (m *Manager) synthInputLocked(c *comparison) synthInput {
 	case c.runSpec != nil:
 		in.allowed = slices.Clone(c.runSpec.Asked)
 		in.images = slices.Clone(c.runSpec.Images)
+		in.hold = c.runSpec.HoldImages
 		if in.tier == "" && c.run != nil {
 			in.tier = c.run.Tier
 		}

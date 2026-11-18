@@ -516,12 +516,16 @@ export function footnoteNumbers(tokens: Token[]): Map<string, number> {
 // KaTeX runs on the JS thread, so one answer gets only so many formulas
 // drawn; the rest are shown as written.
 const mathBudget = { count: 40, chars: 12_000 };
+// Each picture is a web view of its own: an answer gets this many, and the
+// SVG blocks after them are shown as code (R-122).
+const maxPictures = 6;
 
 type Ctx = {
   s: ReturnType<typeof styles>;
   notes: Map<string, number>;
   depth: number;
   math: { count: number; chars: number };
+  pictures: { left: number };
   /** The AIs a combined answer may name in braces (#6), drawn as chips: name to the AI's own colour, if any. */
   names?: ReadonlyMap<string, AIColour | undefined>;
   /** Shows where a link really goes before it opens (#47, ui/LinkSheet). */
@@ -594,7 +598,7 @@ function Drawn({ text, s, names, onLink }: { text: string; s: Ctx['s']; names?: 
   const [head, rest] = useMemo(() => split(text), [text]);
   const tokens = useMemo(() => lex(head), [head]);
   const notes = useMemo(() => footnoteNumbers(tokens), [tokens]);
-  const c: Ctx = { s, notes, depth: 0, math: { ...mathBudget }, names, onLink };
+  const c: Ctx = { s, notes, depth: 0, math: { ...mathBudget }, pictures: { left: maxPictures }, names, onLink };
   const defs = footnoteDefs(tokens).sort((a, b) => (notes.get(a.id) ?? 0) - (notes.get(b.id) ?? 0));
   return (
     <View style={s.root}>
@@ -726,8 +730,11 @@ function block(t: Token, c: Ctx, key: number): ReactNode {
       // A drawing an AI made as SVG code is shown as a picture (#14); any
       // other code, and an SVG that is more than a drawing, as written.
       const code = t as Tokens.Code;
-      const svg = svgOf(code.lang, code.text);
-      if (svg !== null) return <SvgBlock key={key} svg={svg} source={code.text} />;
+      const svg = c.pictures.left > 0 ? svgOf(code.lang, code.text) : null;
+      if (svg !== null) {
+        c.pictures.left -= 1;
+        return <SvgBlock key={key} svg={svg} source={code.text} />;
+      }
       return (
         <ScrollView key={key} horizontal style={s.codeBlock} contentContainerStyle={s.codePad}>
           <Text style={s.codeText} selectable>

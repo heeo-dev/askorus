@@ -3,6 +3,8 @@ package api
 import (
 	"errors"
 	"net/http"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -36,6 +38,11 @@ const (
 	// own limit for a request (15 s) is too short for 4 MiB over a relayed
 	// connection.
 	uploadReadLimit = 2 * time.Minute
+	// uploadAnswerLimit is how long after that the answer may take. The
+	// server counts its write limit (60 s) from when the request began, so
+	// a photo that took longer to arrive would be kept and never answered:
+	// the phone would send it again (R-119).
+	uploadAnswerLimit = 30 * time.Second
 	// maxUploading bounds the uploads being read at once, each of which
 	// holds up to core.MaxImageBytes in memory.
 	maxUploading = 4
@@ -72,8 +79,10 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusTooManyRequests, CodeUploadLimit, "too many photos are coming in at once")
 		return
 	}
-	// Not every ResponseWriter can move its deadline; the server's own then stays.
-	_ = http.NewResponseController(w).SetReadDeadline(time.Now().Add(uploadReadLimit))
+	// Not every ResponseWriter can move its deadlines; the server's own then stay.
+	rc := http.NewResponseController(w)
+	_ = rc.SetReadDeadline(time.Now().Add(uploadReadLimit))
+	_ = rc.SetWriteDeadline(time.Now().Add(uploadReadLimit + uploadAnswerLimit))
 	up, err := s.o.Uploads.Put(deviceOf(r), http.MaxBytesReader(w, r.Body, core.MaxImageBytes+1))
 	var tooLong *http.MaxBytesError
 	switch {
@@ -134,6 +143,27 @@ func (h *runHolds) done(runID string) {
 	h.mu.Unlock()
 	if release != nil {
 		release()
+	}
+}
+
+// imageHolder gives a comparison the way to keep its question's photos on
+// the PC while its combined answer waits and is written: the same hold a
+// run takes, by the photos' ids. It reports false when one is gone.
+func (s *Server) imageHolder(owner string, images []core.Image) func() (func(), bool) {
+	ids := make([]string, len(images))
+	for i, im := range images {
+		name := filepath.Base(im.Path)
+		ids[i] = strings.TrimSuffix(name, filepath.Ext(name))
+	}
+	return func() (func(), bool) {
+		if s.o.Uploads == nil {
+			return nil, false
+		}
+		_, release, err := s.o.Uploads.Hold(owner, ids)
+		if err != nil {
+			return nil, false
+		}
+		return release, true
 	}
 }
 

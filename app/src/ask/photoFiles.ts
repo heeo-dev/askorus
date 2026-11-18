@@ -13,6 +13,9 @@ import type { TurnPhoto } from './photos';
 
 const keptRoot = () => new Directory(Paths.document, 'photos');
 const pendingRoot = () => new Directory(Paths.cache, 'photos-pending');
+// Where the camera app writes a new picture (the native module deletes it
+// once it has its own copy; one is left only when the app died in between).
+const captureRoot = () => new Directory(Paths.cache, 'photo-capture');
 
 // A conversation's id is a UUID the app made; anything else names no folder.
 const safeId = (id: string) => /^[0-9a-zA-Z-]{8,64}$/.test(id);
@@ -72,7 +75,7 @@ export function dropConversationPhotos(conversationId: string): void {
 
 /** dropAllPhotos deletes every kept photo, and those still waiting. */
 export function dropAllPhotos(): void {
-  for (const root of [keptRoot, pendingRoot]) {
+  for (const root of [keptRoot, pendingRoot, captureRoot]) {
     quiet(() => {
       const folder = root();
       if (folder.exists) folder.delete();
@@ -80,10 +83,12 @@ export function dropAllPhotos(): void {
   }
 }
 
-/** dropPending deletes the photos that were picked and never sent (the app was closed first). */
+/** dropPending deletes the photos that were picked and never sent (the app was closed first), and a camera picture left half way. */
 export function dropPending(): void {
-  quiet(() => {
-    const folder = pendingRoot();
-    if (folder.exists) folder.delete();
-  });
+  for (const root of [pendingRoot, captureRoot]) {
+    quiet(() => {
+      const folder = root();
+      if (folder.exists) folder.delete();
+    });
+  }
 }

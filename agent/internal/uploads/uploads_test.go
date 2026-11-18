@@ -193,6 +193,24 @@ func TestHoldSaysGoneWhenTheFileIsMissing(t *testing.T) {
 	}
 }
 
+// A photo's file that is no longer a plain file (something else was put in
+// its place) is not handed to an AI.
+func TestHoldSaysGoneWhenTheFileIsNoFile(t *testing.T) {
+	s := open(t)
+	up, _ := s.Put("phone", bytes.NewReader(jpeg))
+	ims, release, _ := s.Hold("phone", []string{up.ID})
+	release()
+	if err := os.Remove(ims[0].Path); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(ims[0].Path, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := s.Hold("phone", []string{up.ID}); !errors.Is(err, ErrGone) {
+		t.Fatalf("got %v, want ErrGone", err)
+	}
+}
+
 func TestOpenClearsOnlyItsOwnLeftovers(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "uploads")
 	if err := os.MkdirAll(dir, 0o700); err != nil {

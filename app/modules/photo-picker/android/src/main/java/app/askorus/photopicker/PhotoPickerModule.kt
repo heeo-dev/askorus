@@ -128,6 +128,8 @@ class PhotoPickerModule : Module() {
     AsyncFunction("capture") Coroutine { edge: Int, quality: Int ->
       val ctx = context
       val folder = File(ctx.cacheDir, captureFolder).apply { mkdirs() }
+      // A picture left by a capture the app did not live to finish goes first.
+      folder.listFiles()?.forEach { it.delete() }
       val shot = File(folder, "shot-${UUID.randomUUID()}.jpg")
       try {
         val uri = FileProvider.getUriForFile(ctx, ctx.packageName + providerSuffix, shot)

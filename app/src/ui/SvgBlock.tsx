@@ -40,10 +40,16 @@ export function SvgBlock({ svg, source }: { svg: string; source: string }) {
   const [saving, setSaving] = useState<Saving>('idle');
   // The WebView, for the one thing asked of it: to run the page's own PNG function.
   const web = useRef<{ injectJavaScript?: (js: string) => void } | null>(null);
+  // A PNG is taken only as the answer to a press of Save, and once.
+  const asked = useRef(false);
 
   const onMessage = (e: WebViewMessageEvent): void => {
     const m = svgMessage(e.nativeEvent.data);
     if (!m) return;
+    if ('png' in m || 'pngError' in m) {
+      if (!asked.current) return;
+      asked.current = false;
+    }
     if ('png' in m) {
       savePicture(m.png).then(
         () => setSaving('saved'),
@@ -101,6 +107,7 @@ export function SvgBlock({ svg, source }: { svg: string; source: string }) {
 
   const save = (): void => {
     setSaving('busy');
+    asked.current = true;
     // The page draws itself on a canvas and sends the PNG back (onMessage).
     web.current?.injectJavaScript?.(`window.askorusPng && window.askorusPng(${saveEdge}); true;`);
   };

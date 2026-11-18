@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"regexp"
+	"strings"
 )
 
 // Photos with a question (#14, 2026-11-18). The phone uploads each photo
@@ -92,10 +93,12 @@ func CheckImages(ims []Image) error {
 		if err := CheckImage(im); err != nil {
 			return err
 		}
-		if seen[im.Path] {
+		// Windows and macOS read two spellings of a name as one file.
+		key := strings.ToLower(im.Path)
+		if seen[key] {
 			return fmt.Errorf("an image is named twice")
 		}
-		seen[im.Path] = true
+		seen[key] = true
 	}
 	return nil
 }

@@ -182,6 +182,8 @@ func (s *Store) Put(owner string, r io.Reader) (Upload, error) {
 	}
 	tmp := path + tmpExt
 	if err := os.WriteFile(tmp, data, 0o600); err != nil {
+		// A write cut off half way (a full disk) leaves no file behind.
+		_ = os.Remove(tmp)
 		return Upload{}, err
 	}
 	if err := os.Rename(tmp, path); err != nil {
@@ -204,7 +206,8 @@ func (s *Store) Hold(owner string, ids []string) (images []core.Image, release f
 		if !ok || it.owner != owner {
 			return nil, nil, ErrGone
 		}
-		if _, err := os.Stat(it.path); err != nil {
+		// The file itself, not what a link put in its place points at.
+		if info, err := os.Lstat(it.path); err != nil || !info.Mode().IsRegular() {
 			return nil, nil, ErrGone
 		}
 		held = append(held, it)
