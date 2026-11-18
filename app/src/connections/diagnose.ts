@@ -1,6 +1,7 @@
 // Connection checks for one PC, in the order things break: can the phone
 // reach the PC, does the PC still know this phone, is Claude Code there.
 
+import { agentBehind, appVersion } from '../api/agentUpdate';
 import { agentName, noticeIsNote, noticeText, signInNotice } from '../api/agents';
 import type { AgentClient } from '../api/client';
 import { errorText, type MessageKey, t } from '../i18n';
@@ -54,6 +55,9 @@ export async function diagnose(client: AgentClient): Promise<Check[]> {
       ? { ok: true, text: t('diag.agent', { version: info.version }) }
       : { ok: false, text: t('diag.agentOld', { version: info.version }) },
   ];
+  // Older than this app (11-18): it still works, but the new features wait for it.
+  const app = appVersion();
+  if (agentBehind(info.version, app)) out.push({ ok: true, note: true, text: t('diag.agentBehind', { want: app }) });
   for (const a of info.agents) {
     const name = agentName(a.agent);
     if (a.agent === 'claude') {

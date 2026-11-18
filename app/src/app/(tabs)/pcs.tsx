@@ -21,6 +21,7 @@ import { connect } from '@/connections/open';
 import { type Cause, cause } from '@/connections/reach';
 import { type Connection, ConnectionStore } from '@/connections/store';
 import { errorText, has, label, t } from '@/i18n';
+import { AgentUpdate } from '@/ui/AgentUpdate';
 import { Button } from '@/ui/Button';
 import { Chip, Spinner, StatusDot } from '@/ui/controls';
 import { ago, sessionStatus, sessionTitle } from '@/ui/format';
@@ -128,6 +129,7 @@ function Sessions({ conn, detail, onPick }: { conn: Connection; detail: string; 
   const [info, setInfo] = useState<Reach>({ state: 'checking' });
   const [caps, setCaps] = useState<string[]>([]);
   const [notices, setNotices] = useState<string[]>([]);
+  const [agentOS, setAgentOS] = useState('');
   const [sessions, setSessions] = useState<Session[]>([]);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
@@ -158,6 +160,7 @@ function Sessions({ conn, detail, onPick }: { conn: Connection; detail: string; 
       const i = await pc.client.info();
       rememberOS(pc.conn.id, i.os).catch(() => undefined);
       setInfo({ state: 'ok', version: i.version });
+      setAgentOS(i.os);
       setCaps(i.capabilities);
       // Only the AIs whose sessions this list shows; one that only
       // answers questions is reported in the connection check.
@@ -313,6 +316,7 @@ function Sessions({ conn, detail, onPick }: { conn: Connection; detail: string; 
           {n}
         </Text>
       ))}
+      {info.state === 'ok' ? <AgentUpdate pcId={conn.id} version={info.version} os={agentOS} style={s.update} /> : null}
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chips} keyboardShouldPersistTaps="handled">
         {filters.map((f) => (
@@ -492,6 +496,7 @@ const styles = themed((th) =>
     list: { paddingTop: 6 },
     top: { gap: 16 },
     pad: { paddingHorizontal: 16 },
+    update: { marginHorizontal: 16 },
     pcBlock: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingLeft: 20, paddingRight: 8 },
     pcNames: { flex: 1, minWidth: 0, gap: 2 },
     pcName: { fontSize: 18, fontWeight: '600', lineHeight: 24, letterSpacing: -0.18, color: th.text },

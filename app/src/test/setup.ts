@@ -6,6 +6,7 @@
 
 import { conversations } from '@/ask/conversations';
 import { setLang } from '@/i18n';
+import { resetAgentUpdate } from '@/api/agentUpdate';
 import { resetRefused } from '@/api/refused';
 import { resetTailnet } from '@/tailnet/node';
 import { resetMockPhotos } from './photos';
@@ -213,4 +214,5 @@ beforeEach(() => {
   conversations.reset();
   resetPCs();
   resetPCStatus();
+  resetAgentUpdate();
 });

@@ -23,6 +23,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Linking, Platform, Pressable, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { installLine } from '@/api/agentUpdate';
 import { AgentError, CancelledError, NetworkError } from '@/api/client';
 import { findPCs, type FoundPC, newMatch } from '@/connections/discover';
 import { osName } from '@/connections/label';
@@ -52,8 +53,8 @@ const pairCommand = 'askorus-agent pair';
 // The install line and the README's install section, in the app's language.
 // The one line that installs the agent, per system (#52: macOS and Linux as well).
 const installCommands = [
-  { os: 'Windows', how: 'pair.installWin', line: 'irm https://github.com/heeo-dev/askorus/releases/latest/download/install.ps1 | iex' },
-  { os: 'macOS, Linux', how: 'pair.installUnix', line: 'curl -fsSL https://github.com/heeo-dev/askorus/releases/latest/download/install.sh | sh' },
+  { os: 'Windows', how: 'pair.installWin', line: installLine.windows },
+  { os: 'macOS, Linux', how: 'pair.installUnix', line: installLine.unix },
 ] as const;
 function installGuide(): string {
   return currentLang() === 'ko'

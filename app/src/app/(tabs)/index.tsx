@@ -65,6 +65,7 @@ import { connect } from '@/connections/open';
 import { type Cause, cause } from '@/connections/reach';
 import { type Connection, ConnectionStore } from '@/connections/store';
 import { errorText, has, t } from '@/i18n';
+import { AgentUpdate } from '@/ui/AgentUpdate';
 import { AISheet, type AISheetRow } from '@/ui/AISheet';
 import { answerBy } from '@/ui/AnswerBlock';
 import { AnswerSheet } from '@/ui/AnswerSheet';
@@ -1080,6 +1081,8 @@ export default function Ask() {
           keyboardShouldPersistTaps="handled"
         >
           {reach}
+          {/* Before the first question: an agent older than the app (11-18). */}
+          {info ? <AgentUpdate pcId={currentId} version={info.version} os={info.os} /> : null}
           {load.state === 'loading' ? <Spinner size={24} /> : null}
           {info && !anyAsk ? <Text style={s.body}>{oldAgent(info) ? t('ask.oldAgent') : t('ask.noAI')}</Text> : null}
           {info && anyAsk ? (

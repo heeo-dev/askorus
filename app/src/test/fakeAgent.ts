@@ -99,7 +99,9 @@ export class FakeAgent {
   tokenValid = true;
   /** The system this PC's info reports (#53). */
   os = 'windows';
-  remoteUrl = 'https://claude.ai/code/session_test';
+  /** The agent's version in /v1/info (tests set the app's own version to compare, 11-18). */
+  version = '0.1.0';
+  remoteUrl ='https://claude.ai/code/session_test';
   /** Codes /v1/info reports for Claude, such as claude_service_elevated. */
   notices: string[] = [];
   /** Claude's sign-in fields beside its notices in /v1/info (#60, #62). */
@@ -736,7 +738,7 @@ export class FakeAgent {
     if (key === 'GET /v1/info') {
       return json(200, {
         name: 'askorus-agent',
-        version: '0.1.0',
+        version: this.version,
         apiVersion: 1,
         hostname: 'DESKTOP-TEST',
         os: this.os,

@@ -1,5 +1,7 @@
 // The connection check of one PC: the AIs' sign-in (#60).
 
+import Constants from 'expo-constants';
+
 import type { AgentClient } from '../api/client';
 import type { Info } from '../api/types';
 import { setLang } from '../i18n';
@@ -94,4 +96,24 @@ test('an AI that is signed in shows no sign-in line', async () => {
   const checks = await diagnose(client(info));
   expect(checks.every((c) => c.ok && !c.note)).toBe(true);
   expect(checks.map((c) => c.text)).toContain('Claude Code 2.1.325');
+});
+
+// 11-18: the store updates the app on its own, the PC's agent only by hand.
+// An agent older than the app still passes, with a note under its line.
+test('an agent older than the app gets a note to update it; the same version none', async () => {
+  const config = Constants.expoConfig as { version?: string } | null;
+  const saved = config?.version;
+  try {
+    if (config) config.version = '0.4.0';
+    const info = { ...base, agents: [{ agent: 'claude', version: '2.1.325', available: true, capabilities: ['list', 'ask'] }] } as Info;
+    const checks = await diagnose(client(info));
+    expect(checks.slice(2, 4)).toEqual([
+      { ok: true, text: 'Agent 0.3.3' },
+      { ok: true, note: true, text: 'The app is 0.4.0. Update the agent on the PC.' },
+    ]);
+    const same = await diagnose(client({ ...info, version: '0.4.0' }));
+    expect(same.some((c) => c.note)).toBe(false);
+  } finally {
+    if (config) config.version = saved;
+  }
 });
