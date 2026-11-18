@@ -15,7 +15,7 @@ import { type AdapterInfo, type Info, tiers } from '@/api/types';
 import { modelLabel } from '@/ask/models';
 import { type AskPrefs, defaultAskPrefs, loadAskPrefs, saveAskPrefs, toggleOff } from '@/ask/prefs';
 import { whenAgain } from '@/ask/present';
-import { percentLeft, tightest, used } from '@/ask/usage';
+import { percentLeft, used } from '@/ask/usage';
 import { pcLabel } from '@/connections/label';
 import { has, type MessageKey, t } from '@/i18n';
 import { Avatar } from '@/ui/Avatar';
@@ -26,7 +26,7 @@ import { PCPickerSheet } from '@/ui/PCPickerSheet';
 import { Sheet } from '@/ui/Sheet';
 import { currentPC, usePCs } from '@/ui/shell/pcs';
 import { publishInfo } from '@/ui/shell/pcUsage';
-import { UsageMini, usageWords, windowLabel } from '@/ui/Usage';
+import { byWindow, UsageMini, usageWords, windowLabel } from '@/ui/Usage';
 import { type Theme, themed, useTheme } from '@/ui/theme';
 
 
@@ -136,8 +136,8 @@ export default function ManageAIs() {
             <Group>
               {found.map((a) => {
                 const st = statusLine(a);
-                // The usage under it (#20): the tightest window, when the AI is signed in and says.
-                const tight = signedOut(a) ? undefined : tightest(a.usage);
+                // The usage under it (#20): every window, when the AI is signed in and says.
+                const windows = signedOut(a) ? [] : byWindow(a.usage ?? []);
                 const on = !ask.off.includes(a.agent);
                 return (
                   <Row
@@ -145,8 +145,8 @@ export default function ManageAIs() {
                     title={agentName(a.agent)}
                     subtitle={st.text}
                     subtitleTone={st.bad ? 'danger' : 'sub'}
-                    below={tight ? <UsageMini g={tight} /> : undefined}
-                    accessibilityLabel={[agentName(a.agent), st.text, tight ? usageWords(tight) : ''].filter(Boolean).join(', ')}
+                    below={windows.length ? windows.map((g) => <UsageMini key={`${g.window ?? ''}${g.name}`} g={g} />) : undefined}
+                    accessibilityLabel={[agentName(a.agent), st.text, ...windows.map(usageWords)].filter(Boolean).join(', ')}
                     left={<Avatar agent={a.agent} size={28} />}
                     right={<MiniSwitch on={on} label={t('ais.useFor', { name: agentName(a.agent) })} onChange={() => toggle(a.agent)} th={th} />}
                     minHeight={60}

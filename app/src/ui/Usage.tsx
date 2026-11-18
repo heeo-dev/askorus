@@ -27,6 +27,12 @@ import { themed, type Theme, useTheme } from './theme';
 
 const windowOrder = ['5h', 'week', 'month'];
 
+/** byWindow sorts usage groups: 5 hours, week, month, then the rest. */
+export function byWindow(groups: UsageGroup[]): UsageGroup[] {
+  const at = (g: UsageGroup) => (windowOrder.indexOf(g.window ?? '') + 4) % 4;
+  return [...groups].sort((x, y) => at(x) - at(y));
+}
+
 /** windowLabel names a window ('5시간', '이번 주', '이번 달'), else the AI's own name for the group. */
 export function windowLabel(g: UsageGroup): string {
   return g.window && windowOrder.includes(g.window) ? t(`usage.window.${g.window}` as 'usage.window.5h') : g.name;
@@ -91,7 +97,7 @@ function Bar({ a, th }: { a: AIUsage; th: Theme }) {
       </View>
     );
   }
-  const h = Math.max(3, Math.round(Math.min(1, a.tight.left) * 18));
+  const h = Math.max(3, Math.round(Math.min(1, a.tight.left) * 22));
   return (
     <View style={[s.bar, s.barTrack]} testID={`usage-bar-${a.agent}-${a.state}`}>
       <View style={[s.fill, { height: h }, a.state === 'low' ? s.lowFill : s.okFill]} />
@@ -241,17 +247,17 @@ const styles = themed((th) =>
   StyleSheet.create({
     slot: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
     mark: { fontSize: 16, fontWeight: '600', color: th.textSub },
-    bars: { flexDirection: 'row', alignItems: 'flex-end', gap: 3, height: 18 },
-    bar: { width: 5, height: 18, borderRadius: 2.5, overflow: 'hidden', justifyContent: 'flex-end' },
-    barTrack: { backgroundColor: th.borderStrong },
+    bars: { flexDirection: 'row', alignItems: 'flex-end', gap: 3, height: 22 },
+    bar: { width: 7, height: 22, borderRadius: 2.5, overflow: 'hidden', justifyContent: 'flex-end' },
+    barTrack: { backgroundColor: th.caption + '66' },
     okFill: { backgroundColor: th.textSub },
     lowFill: { backgroundColor: th.mark },
     fill: { width: '100%' },
     out: { borderWidth: 1.5, borderColor: th.danger, justifyContent: 'center' },
     cross: { height: 1.5, backgroundColor: th.danger },
     unknown: { borderWidth: 1.2, borderColor: th.caption, borderStyle: 'dashed' },
-    mini: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
-    miniTrack: { width: 44, height: 4, borderRadius: 2, backgroundColor: th.borderStrong, overflow: 'hidden' },
+    mini: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 3 },
+    miniTrack: { width: 72, height: 5, borderRadius: 2.5, backgroundColor: th.caption + '4D', overflow: 'hidden' },
     miniFill: { height: '100%', borderRadius: 2, backgroundColor: th.textSub },
     miniText: { fontSize: 13, lineHeight: 18, color: th.textSub },
     body: { gap: 12, paddingHorizontal: 16, paddingBottom: 12 },
