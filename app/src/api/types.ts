@@ -65,10 +65,14 @@ export type AdapterInfo = {
   signInHint?: string;
   /**
    * How much of the AI's plan is left, per group of models that share a
-   * limit (Antigravity's weekly limits, #20): left is 0 to 1, resetAt
-   * (RFC 3339) when it refreshes. Older agents and other AIs leave it out.
+   * limit or per time window (#20: Antigravity's weekly limits; Codex's,
+   * Claude's and OpenCode Go's windows): left is 0 to 1, resetAt (RFC 3339)
+   * when it refreshes, window the time it runs over ('5h', 'week',
+   * 'month'), limited when the AI says it is used up, at when the agent read
+   * it if not just now (Claude's comes with the last question). Older
+   * agents and other AIs leave it out.
    */
-  usage?: { name: string; left: number; resetAt?: string }[];
+  usage?: { name: string; left: number; resetAt?: string; window?: string; limited?: boolean; at?: string }[];
   /**
    * Set for AIs that can ask (Phase 2): the model of each tier, and (11-06,
    * newer agents) the efforts each of those models may take, least to most.

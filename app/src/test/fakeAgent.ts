@@ -142,6 +142,8 @@ export class FakeAgent {
   notices: string[] = [];
   /** Claude's sign-in fields beside its notices in /v1/info (#60, #62). */
   claudeLogin: Pick<AdapterInfo, 'loginExpiresAt' | 'signInHint'> = {};
+  /** Claude's usage in /v1/info (#20); none by default. */
+  claudeUsage: AdapterInfo['usage'] = undefined;
   /** AIs beside Claude that /v1/info lists, such as Codex that only asks (Phase 2). */
   askAgents: AdapterInfo[] = [];
   /** What /v1/info announces; drop 'preview' to act like an older agent. */
@@ -449,7 +451,8 @@ export class FakeAgent {
     const ask = this.capabilities.includes('ask')
       ? { ask: { tiers: { quick: { model: 'haiku' }, standard: { model: 'sonnet' }, deep: { model: 'opus' } }, ...(this.photosOn ? { images: { all: true } } : {}) } }
       : {};
-    return { agent: 'claude', version: '2.1.310', available: true, capabilities: this.capabilities, notices: this.notices, ...this.claudeLogin, ...ask };
+    const usage = this.claudeUsage ? { usage: this.claudeUsage } : {};
+    return { agent: 'claude', version: '2.1.310', available: true, capabilities: this.capabilities, notices: this.notices, ...this.claudeLogin, ...usage, ...ask };
   }
 
   private known(agent: string): boolean {

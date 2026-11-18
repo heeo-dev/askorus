@@ -73,6 +73,7 @@ import { RecordNotice, RecordSheet } from '@/ui/Record';
 import { RefineSheet } from '@/ui/Refine';
 import { ReachError } from '@/ui/ReachError';
 import { rememberOS, usePCs } from '@/ui/shell/pcs';
+import { publishInfo, refreshPCUsage } from '@/ui/shell/pcUsage';
 import { themed, type Theme, useTheme } from '@/ui/theme';
 import { TierSheet } from '@/ui/TierSheet';
 import { type Note, type TurnActions, TurnView } from '@/ui/TurnView';
@@ -209,6 +210,7 @@ export default function Ask() {
     try {
       const info = await p.client.info();
       rememberOS(p.conn.id, info.os).catch(() => undefined);
+      publishInfo(p.conn.id, info); // the top bar's usage button reads it too (#20)
       if (pcRef.current === p) setLoad({ state: 'ok', info });
     } catch (e) {
       if (pcRef.current === p) setLoad({ state: 'error', cause: cause(e), text: errorText(e) });
@@ -537,6 +539,12 @@ export default function Ask() {
   const anyAsk = list.some((a) => a.canAsk);
   const on = list.filter((a) => a.canAsk && !prefs.off.includes(a.agent)).map((a) => a.agent);
   const busy = turns.some(running);
+  // The answers are in: what is left of the plans changed (#20).
+  const wasBusy = useRef(false);
+  useEffect(() => {
+    if (wasBusy.current && !busy) refreshPCUsage({ force: true }).catch(() => undefined);
+    wasBusy.current = busy;
+  }, [busy]);
   const canOpen = info?.capabilities.includes('open_official') ?? false;
   const canAsk = (agent: string) => list.some((a) => a.agent === agent && a.canAsk);
   const now = Date.now();

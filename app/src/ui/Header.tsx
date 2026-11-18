@@ -12,11 +12,12 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { t } from '@/i18n';
 
-import { Icon, IconButton } from './Icon';
+import { IconButton } from './Icon';
 import { useSafeInsets } from './keyboard';
 import { usePCStatus } from './shell/pcStatus';
 import { useShell } from './shell/Shell';
 import { themed, useTheme } from './theme';
+import { UsageButton } from './Usage';
 
 export type Entrance = 'ask' | 'pcs';
 export const entranceHref: Record<Entrance, '/' | '/pcs'> = { ask: '/', pcs: '/pcs' };
@@ -31,8 +32,13 @@ export function Header({ entrance, right }: { entrance: Entrance; right?: ReactN
   const waiting = usePCStatus()?.waiting.length ?? 0;
   return (
     <View style={{ paddingTop: insets.top, backgroundColor: th.bg }}>
+      {/* Both sides are 88 wide so the switch stays in the middle (#20, decision 20). */}
       <View style={s.bar}>
-        <IconButton name="menu" label={t('nav.menu')} onPress={openDrawer} size={22} />
+        <View style={s.side}>
+          <IconButton name="menu" label={t('nav.menu')} onPress={openDrawer} size={22} />
+          <View style={s.spacer} />
+        </View>
+        <View style={s.mid}>
         <View accessibilityRole="tablist" accessibilityLabel={t('nav.entrances')} style={s.track}>
           {entrances.map((k) => {
             const on = k === entrance;
@@ -50,7 +56,6 @@ export function Header({ entrance, right }: { entrance: Entrance; right?: ReactN
                 hitSlop={{ top: 7, bottom: 7 }}
                 style={[s.seg, on ? s.segOn : s.segOff]}
               >
-                <Icon name={k === 'ask' ? 'ask' : 'pc'} size={16} color={on ? th.onSelected : th.textSub} />
                 <Text style={[s.segText, on ? s.segTextOn : s.segTextOff]} numberOfLines={1}>
                   {name}
                 </Text>
@@ -59,13 +64,36 @@ export function Header({ entrance, right }: { entrance: Entrance; right?: ReactN
             );
           })}
         </View>
-        {right ?? <View style={s.spacer} />}
+        </View>
+        <View style={s.side}>
+          <UsageButton />
+          {right ?? <View style={s.spacer} />}
+        </View>
       </View>
     </View>
   );
 }
 
-export function TopBar({ title, subtitle, onBack, right, brand }: { title?: string; subtitle?: string; onBack?: () => void; right?: ReactNode; brand?: boolean }) {
+/**
+ * TopBar is the top of a stacked screen. usage (the default) puts the usage
+ * button left of right (#20, decision 16); a screen in the middle of a flow
+ * (pairing) leaves it out.
+ */
+export function TopBar({
+  title,
+  subtitle,
+  onBack,
+  right,
+  brand,
+  usage = true,
+}: {
+  title?: string;
+  subtitle?: string;
+  onBack?: () => void;
+  right?: ReactNode;
+  brand?: boolean;
+  usage?: boolean;
+}) {
   const th = useTheme();
   const s = styles(th);
   const insets = useSafeInsets();
@@ -80,11 +108,16 @@ export function TopBar({ title, subtitle, onBack, right, brand }: { title?: stri
               {t('app.name')}
             </Text>
           </View>
+        ) : usage ? (
+          <View style={s.side}>
+            {back ?? <View style={s.spacer} />}
+            <View style={s.spacer} />
+          </View>
         ) : (
           (back ?? <View style={s.spacer} />)
         )}
         {!brand && (title || subtitle) ? (
-          <View style={s.centre} pointerEvents="none">
+          <View style={[s.centre, usage && s.centreWide]} pointerEvents="none">
             {title ? (
               <Text style={s.title} numberOfLines={1} accessibilityRole="header">
                 {title}
@@ -97,7 +130,14 @@ export function TopBar({ title, subtitle, onBack, right, brand }: { title?: stri
             ) : null}
           </View>
         ) : null}
-        {right ?? <View style={s.spacer} />}
+        {usage ? (
+          <View style={s.side}>
+            <UsageButton />
+            {right ?? <View style={s.spacer} />}
+          </View>
+        ) : (
+          (right ?? <View style={s.spacer} />)
+        )}
       </View>
     </View>
   );
@@ -107,6 +147,8 @@ const styles = themed((th) =>
   StyleSheet.create({
     bar: { height: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 6 },
     spacer: { width: 44, height: 44 },
+    side: { width: 88, flexDirection: 'row', alignItems: 'center' },
+    mid: { flex: 1, minWidth: 0, alignItems: 'center' },
     track: {
       height: 36,
       flexDirection: 'row',
@@ -116,9 +158,10 @@ const styles = themed((th) =>
       backgroundColor: th.segTrack,
       borderWidth: 1,
       borderColor: th.segLine,
+      maxWidth: '100%',
     },
     seg: { height: 30, borderRadius: 15, flexDirection: 'row', alignItems: 'center', gap: 6 },
-    segOn: { backgroundColor: th.selected, paddingLeft: 12, paddingRight: 14 },
+    segOn: { backgroundColor: th.selected, paddingHorizontal: 12 },
     segOff: { paddingHorizontal: 12 },
     segText: { fontSize: 14, lineHeight: 20 },
     segTextOn: { fontWeight: '600', color: th.onSelected },
@@ -126,6 +169,7 @@ const styles = themed((th) =>
     dot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: th.mark },
     brand: { flexDirection: 'row', alignItems: 'center' },
     centre: { position: 'absolute', left: 56, right: 56, top: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', gap: 1 },
+    centreWide: { left: 94, right: 94 },
     title: { fontSize: 17, fontWeight: '600', lineHeight: 23, letterSpacing: -0.17, color: th.text },
     subtitle: { fontSize: 13, lineHeight: 18, color: th.caption },
   }),

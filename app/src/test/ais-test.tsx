@@ -26,10 +26,7 @@ const agy: AdapterInfo = {
     tiers: { quick: { model: 'gemini-3.8-flash', effort: 'low' }, standard: { model: 'gemini-3.8-flash', effort: 'medium' }, deep: { model: 'gemini-3.8-flash', effort: 'high' } },
     images: { all: true, newOnly: true },
   },
-  usage: [
-    { name: 'Gemini Models', left: 0.81, resetAt: '2026-11-25T07:21:31Z' },
-    { name: 'Claude and GPT models', left: 1, resetAt: '2026-11-25T08:47:59Z' },
-  ],
+  usage: [{ name: 'Gemini Models', left: 0.81, resetAt: '2026-11-25T07:21:31Z', window: 'week' }],
 };
 
 beforeEach(() => {
@@ -62,7 +59,7 @@ test("the PC's AIs with version, sign-in and usage, and a switch each", async ()
   const user = await open();
   expect(await screen.findByText('AIs on DESKTOP-TEST')).toBeTruthy();
   for (const name of ['Claude', 'Codex', 'OpenCode', 'Antigravity']) expect(screen.getByText(name)).toBeTruthy();
-  expect(screen.getByText('1.5.11 · signed in · 81% left this week')).toBeTruthy();
+  expect(screen.getByText('1.5.11 · signed in · This week: 81% left')).toBeTruthy();
   expect(screen.getByText('0.164.0 · not signed in')).toBeTruthy();
   expect(screen.queryByText('Not on this PC')).toBeNull();
 
@@ -83,8 +80,9 @@ test("a row's sheet: usage, tier models, what it does and where questions go", a
   await user.press(await screen.findByText('Antigravity'));
   const sheet = await screen.findByTestId('ai-sheet');
   const s = within(sheet);
-  expect(s.getByText('Gemini Models')).toBeTruthy();
-  expect(s.getAllByText('81% left this week').length).toBe(1);
+  // A row per window (#20, decision 12), named by the window.
+  expect(s.getByText('This week')).toBeTruthy();
+  expect(s.getAllByText('81% left').length).toBe(1);
   expect(s.getByText('gemini-3.8-flash · low')).toBeTruthy();
   expect(s.getByText('gemini-3.8-flash · high')).toBeTruthy();
   for (const f of ['Ask', 'Follow-up', 'Moderator', 'Debate']) expect(s.getByText(f)).toBeTruthy();

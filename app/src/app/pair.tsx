@@ -264,7 +264,7 @@ export default function Pair() {
 
   return (
     <View style={s.screen}>
-      <TopBar brand onBack={canGoBack ? () => router.back() : undefined} />
+      <TopBar brand onBack={canGoBack ? () => router.back() : undefined} usage={false} />
       <FormScroll style={s.screen} contentContainerStyle={s.body}>
         {step.kind === 'start' && (
           <>
@@ -563,7 +563,7 @@ function Scanner({ onLink, onCancel }: { onLink: (text: string) => boolean; onCa
   if (!scannerAvailable()) {
     return (
       <View style={s.screen}>
-        <TopBar onBack={onCancel} />
+        <TopBar onBack={onCancel} usage={false} />
         <View style={s.cameraAsk}>
           <Icon name="camera" size={28} color={th.textSub} />
           <Text style={s.intro}>{t('pair.noScanner')}</Text>
@@ -578,7 +578,7 @@ function Scanner({ onLink, onCancel }: { onLink: (text: string) => boolean; onCa
   if (!permission.granted) {
     return (
       <View style={s.screen}>
-        <TopBar onBack={onCancel} />
+        <TopBar onBack={onCancel} usage={false} />
         <View style={s.cameraAsk}>
           <Icon name="camera" size={28} color={th.textSub} />
           <Text style={s.intro}>{t('pair.cameraWhy')}</Text>

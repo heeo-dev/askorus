@@ -13,6 +13,7 @@ import { resetMockPhotos } from './photos';
 import { resetMockTailnet } from './tailnet';
 import { resetPCs } from '@/ui/shell/pcs';
 import { resetPCStatus } from '@/ui/shell/pcStatus';
+import { resetPCUsage } from '@/ui/shell/pcUsage';
 
 const mockSecure = new Map<string, string>();
 const mockSQLite = new Map<string, Map<string, string>>();
@@ -214,5 +215,6 @@ beforeEach(() => {
   conversations.reset();
   resetPCs();
   resetPCStatus();
+  resetPCUsage();
   resetAgentUpdate();
 });

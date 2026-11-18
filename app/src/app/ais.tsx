@@ -15,6 +15,7 @@ import { type AdapterInfo, type Info, tiers } from '@/api/types';
 import { modelLabel } from '@/ask/models';
 import { type AskPrefs, defaultAskPrefs, loadAskPrefs, saveAskPrefs, toggleOff } from '@/ask/prefs';
 import { whenAgain } from '@/ask/present';
+import { percentLeft, tightest, used } from '@/ask/usage';
 import { pcLabel } from '@/connections/label';
 import { has, type MessageKey, t } from '@/i18n';
 import { Avatar } from '@/ui/Avatar';
@@ -24,10 +25,10 @@ import { Group, Row, SectionLabel } from '@/ui/List';
 import { PCPickerSheet } from '@/ui/PCPickerSheet';
 import { Sheet } from '@/ui/Sheet';
 import { currentPC, usePCs } from '@/ui/shell/pcs';
+import { publishInfo } from '@/ui/shell/pcUsage';
+import { windowLabel } from '@/ui/Usage';
 import { type Theme, themed, useTheme } from '@/ui/theme';
 
-/** percent is a usage share as a whole percent. */
-const percent = (left: number) => Math.round(Math.min(1, Math.max(0, left)) * 100);
 
 /** canAnswer: the AI is installed and reports the ask capability. */
 const canAnswer = (a: AdapterInfo) => a.available && a.capabilities.includes('ask');
@@ -44,9 +45,12 @@ export function statusLine(a: AdapterInfo): { text: string; bad: boolean } {
   const parts = [a.version ?? ''];
   const out = signedOut(a);
   parts.push(out ? t('ais.signedOut') : t('ais.signedIn'));
-  const main = a.usage?.[0];
-  if (!out && main) parts.push(t('ais.usageLeft', { pct: percent(main.left) }));
-  return { text: parts.filter(Boolean).join(' · '), bad: out };
+  const tight = tightest(a.usage);
+  if (!out && tight) {
+    const window = windowLabel(tight);
+    parts.push(used(tight) ? t('usage.windowOut', { window }) : t('usage.windowLeft', { window, pct: percentLeft(tight.left) }));
+  }
+  return { text: parts.filter(Boolean).join(' · '), bad: out || (!!tight && used(tight)) };
 }
 
 /**
@@ -81,7 +85,12 @@ export default function ManageAIs() {
     loadAskPrefs().then(setAsk);
     setFailed(false);
     currentPC()
-      .then((p) => (p ? p.client.info() : null))
+      .then(async (p) => {
+        if (!p) return null;
+        const info = await p.client.info();
+        publishInfo(p.conn.id, info); // the top bar's usage button reads it too (#20)
+        return info;
+      })
       .then(setInfo)
       .catch(() => {
         setInfo(null);
@@ -231,13 +240,14 @@ function Details({ a }: { a: AdapterInfo }) {
         {a.available ? <Row title={t('ais.login')} right={<Text style={[s.value, out && s.bad]}>{login}</Text>} /> : null}
         {(a.usage ?? []).map((u) => (
           <Row
-            key={u.name}
-            title={u.name}
-            subtitle={t('ais.usageLeftLong', { pct: percent(u.left) })}
-            subtitleTone="sub"
+            key={`${u.window ?? ''}${u.name}`}
+            title={windowLabel(u)}
+            subtitle={used(u) ? t('usage.out') : t('usage.left', { pct: percentLeft(u.left) })}
+            subtitleTone={used(u) ? 'danger' : 'sub'}
             right={u.resetAt ? <Text style={s.value}>{t('ais.resets', { time: whenAgain(u.resetAt) })}</Text> : undefined}
           />
         ))}
+        {a.usage?.[0]?.at ? <Text style={s.asOf}>{t('usage.asOf', { time: whenAgain(a.usage[0].at) })}</Text> : null}
         {tiers.map((x) => {
           const m = a.ask?.tiers?.[x];
           return m?.model ? <Row key={x} title={t(`ask.tier.${x}`)} right={<Text style={s.value}>{modelLabel(m)}</Text>} /> : null;
@@ -274,6 +284,7 @@ const styles = themed((th) =>
     caption: { paddingHorizontal: 4, fontSize: 13, lineHeight: 19.5, color: th.caption },
     link: { fontSize: 14, lineHeight: 20, fontWeight: '500', color: th.accent },
     value: { maxWidth: 190, fontSize: 14, lineHeight: 20, color: th.textSub, textAlign: 'right' },
+    asOf: { fontSize: 12.5, lineHeight: 18, color: th.caption, paddingHorizontal: 16, paddingVertical: 8 },
     bad: { color: th.danger },
     track: { width: 44, height: 26, borderRadius: 13, padding: 3, flexDirection: 'row', alignItems: 'center' },
     knob: { width: 20, height: 20, borderRadius: 10 },

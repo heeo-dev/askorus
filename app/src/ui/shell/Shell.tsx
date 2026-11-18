@@ -8,6 +8,12 @@ import { AppState } from 'react-native';
 import { Drawer } from '../Drawer';
 import { usePCs } from './pcs';
 import { refreshPCStatus, statusEveryMs } from './pcStatus';
+import { refreshPCUsage, refreshStatusThenUsage, usageEveryMs } from './pcUsage';
+
+/** refreshBoth reads the current PC's status, then its usage. */
+function refreshBoth() {
+  refreshStatusThenUsage().catch(() => undefined);
+}
 
 type ShellCtx = { openDrawer: () => void; closeDrawer: () => void; drawerOpen: boolean };
 
@@ -20,19 +26,26 @@ export function ShellProvider({ children }: { children: ReactNode }) {
 
   // On start, on a new current PC, when the app comes to the front, and
   // every 30 s while it is in front.
+  // The usage of the top bar's button (#20): on start, on a new current PC,
+  // when the app comes to the front, and every 5 minutes. After the status:
+  // a token the PC refused then sends nothing more (R-115).
   useEffect(() => {
-    refreshPCStatus().catch(() => undefined);
+    refreshBoth();
   }, [currentId]);
   useEffect(() => {
     const sub = AppState.addEventListener('change', (s) => {
-      if (s === 'active') refreshPCStatus().catch(() => undefined);
+      if (s === 'active') refreshBoth();
     });
     const timer = setInterval(() => {
       if (AppState.currentState === 'active') refreshPCStatus().catch(() => undefined);
     }, statusEveryMs);
+    const usageTimer = setInterval(() => {
+      if (AppState.currentState === 'active') refreshPCUsage({ force: true }).catch(() => undefined);
+    }, usageEveryMs);
     return () => {
       sub.remove();
       clearInterval(timer);
+      clearInterval(usageTimer);
     };
   }, []);
 
