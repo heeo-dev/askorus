@@ -61,6 +61,37 @@ func TestIT25Usage(t *testing.T) {
 			t.Errorf("opencode not signed in to the Console %+v", oc)
 		}
 	})
+	// Claude's comes with the calls the agent makes (U2): none before the
+	// first, then both windows as of that call; a used-up window says so,
+	// and a call whose stream has no event (an API key sign-in) leaves the
+	// last one as it was.
+	t.Run("claude from its stream", func(t *testing.T) {
+		r := newRig(t, nil)
+		r.addDevice()
+		if u := agentInfo(t, r.info(), fakecli.RoleClaude).Usage; len(u) != 0 {
+			t.Fatalf("claude usage before any call %+v", u)
+		}
+		before := time.Now().Add(-time.Second)
+		r.waitRun(r.ask([]map[string]string{{"agent": "claude"}}, nil).ID)
+		cl := agentInfo(t, r.info(), fakecli.RoleClaude).Usage
+		if len(cl) != 2 || cl[0].Window != core.Window5h || cl[1].Window != core.WindowWeek ||
+			cl[0].Left != 1-fakecli.ClaudeUsed5h || cl[1].Left != 1-fakecli.ClaudeUsedWeek || cl[0].ResetAt == "" || cl[0].Limited {
+			t.Fatalf("claude usage %+v", cl)
+		}
+		if at, err := time.Parse(time.RFC3339, cl[0].At); err != nil || at.Before(before.Truncate(time.Second)) || at.After(time.Now()) {
+			t.Errorf("claude usage at %q", cl[0].At)
+		}
+		t.Setenv(fakecli.EnvUsage, "claude=out")
+		r.waitRun(r.ask([]map[string]string{{"agent": "claude"}}, nil).ID)
+		if cl := agentInfo(t, r.info(), fakecli.RoleClaude).Usage; len(cl) != 2 || !cl[0].Limited || cl[0].Left != 0 {
+			t.Errorf("claude used up %+v", cl)
+		}
+		t.Setenv(fakecli.EnvUsage, "claude=none")
+		r.waitRun(r.ask([]map[string]string{{"agent": "claude"}}, nil).ID)
+		if cl := agentInfo(t, r.info(), fakecli.RoleClaude).Usage; len(cl) != 2 || !cl[0].Limited {
+			t.Errorf("a call without the event dropped the kept usage %+v", cl)
+		}
+	})
 	t.Run("codex without the read", func(t *testing.T) {
 		r := newRig(t, func(o *rigOptions) {
 			o.env = map[string]string{fakecli.EnvUsage: "codex=none"}

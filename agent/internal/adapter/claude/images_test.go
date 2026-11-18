@@ -101,12 +101,13 @@ func TestAskWithPhotosCarriesOnAndOneOff(t *testing.T) {
 		!slices.Equal(cs[1].Args[len(cs[1].Args)-4:], append([]string{"--no-session-persistence"}, tail...)) {
 		t.Fatalf("calls = %+v", cs)
 	}
-	// Without photos the command is the one it always was.
+	// Without photos the command is the same since 0.5.0 (#20): the message
+	// has the text only.
 	if _, err := a.Ask(context.Background(), core.AskRequest{Folder: folder, Prompt: "q", Tier: core.TierStandard}); err != nil {
 		t.Fatal(err)
 	}
 	last := fakecli.Calls(t)[2]
-	if !slices.Equal(last.Args, askArgs("sonnet", "medium", "", false)) || last.Stdin != "q" || slices.Contains(last.Args, "--verbose") {
+	if !slices.Equal(last.Args, askArgs("sonnet", "medium", "", false)) || last.Prompt != "q" || last.Photos != 0 {
 		t.Errorf("plain ask = %q, stdin %q", last.Args, last.Stdin)
 	}
 }
@@ -145,7 +146,9 @@ func TestCheckAskArgsStreamFormsGoTogether(t *testing.T) {
 	if err := checkAskArgs(askImageArgs("sonnet", "", "12345678-1234-4234-8234-123456789abc", false)); err != nil {
 		t.Errorf("a follow-up with photos: %v", err)
 	}
-	plain := askArgs("sonnet", "medium", "", false)
+	// The json form of before 0.5.0 (#20), and its stream pieces alone.
+	plain := []string{"-p", "--output-format", "json", "--model", "sonnet", "--effort", "medium",
+		"--tools", askWebTools, "--allowedTools", askWebTools, "--strict-mcp-config", "--settings", noFileReads}
 	bad := map[string][]string{
 		"stream output alone":    slices.Replace(slices.Clone(plain), 2, 3, "stream-json"),
 		"verbose alone":          append(slices.Clone(plain), "--verbose"),
@@ -172,8 +175,7 @@ func TestSynthesizeSendsPhotosOnStdin(t *testing.T) {
 		t.Fatalf("Synthesize = %+v, %v", res, err)
 	}
 	cs := fakecli.Calls(t)
-	want := append(wantSynthArgs("sonnet", "medium"), "--input-format", "stream-json", "--verbose")
-	want[2] = "stream-json"
+	want := wantSynthArgs("sonnet", "medium")
 	if len(cs) != 1 || !slices.Equal(cs[0].Args, want) || cs[0].Photos != 2 {
 		t.Fatalf("call = %+v\nwant args %q", cs, want)
 	}

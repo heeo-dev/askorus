@@ -139,6 +139,40 @@ func codexRateLimits(mode string) map[string]any {
 	}}
 }
 
+// The fake Claude's usage (ok), as fractions used: its stream says 23% of
+// the 5 hours and 38% of the week are used, as this PC's on 2026-11-18.
+const (
+	ClaudeUsed5h   = 0.23
+	ClaudeUsedWeek = 0.38
+)
+
+// claudeRateLimits prints the rate_limit_event of Claude Code's stream
+// (2.1.327): "ok" both windows allowed, "out" the 5 hours rejected,
+// "none" no event (an API key sign-in), "bad" a broken event.
+func claudeRateLimits() {
+	mode, err := usageMode(RoleClaude)
+	if err != nil || mode == UsageNone {
+		return
+	}
+	if mode == UsageBad {
+		fmt.Println(`{"type":"rate_limit_event","rate_limit_info":`)
+		return
+	}
+	used5h, status := ClaudeUsed5h, "allowed"
+	if mode == UsageOut {
+		used5h, status = 1, "rejected"
+	}
+	now := time.Now()
+	printJSON(map[string]any{"type": "rate_limit_event", "rate_limit_info": map[string]any{
+		"status": status, "resetsAt": now.Add(3 * time.Hour).Unix(), "rateLimitType": "five_hour",
+		"overageStatus": "rejected", "isUsingOverage": false,
+		"unifiedWindows": map[string]any{
+			"five_hour": map[string]any{"utilization": used5h, "resetsAt": now.Add(3 * time.Hour).Unix(), "status": status},
+			"seven_day": map[string]any{"utilization": ClaudeUsedWeek, "resetsAt": now.Add(6 * 24 * time.Hour).Unix(), "status": "allowed"},
+		},
+	}})
+}
+
 // opencodeUsage plays `opencode api --standalone experimental.usage.limits`.
 func opencodeUsage(args []string) int {
 	if !slices.Equal(args, []string{"api", "--standalone", "experimental.usage.limits"}) {

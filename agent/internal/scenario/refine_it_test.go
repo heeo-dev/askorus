@@ -56,7 +56,7 @@ func TestRefineAsksWithTheTemplateAndWritesV5(t *testing.T) {
 	}
 	// One refine call, by the moderator, with the refine prompt and nothing of the question in its arguments.
 	refines := callsOfKind(t, kindRefine)
-	if len(refines) != 1 || refines[0].Role != fakecli.RoleClaude || !strings.HasPrefix(refines[0].Stdin, "[Askorus refine v1]") {
+	if len(refines) != 1 || refines[0].Role != fakecli.RoleClaude || !strings.HasPrefix(refines[0].Prompt, "[Askorus refine v1]") {
 		t.Fatalf("refine calls %+v", refines)
 	}
 	noContentIn(t, "refine arguments", strings.Join(refines[0].Args, "\x00"))
@@ -66,8 +66,8 @@ func TestRefineAsksWithTheTemplateAndWritesV5(t *testing.T) {
 		t.Fatalf("%d asks", len(asks))
 	}
 	for _, a := range asks {
-		if !strings.Contains(a.Stdin, question+"\n\n"+templateMark) || !a.At.After(refines[0].At) {
-			t.Errorf("%s ask stdin lacks the template (or came before refining): %q", a.Role, a.Stdin)
+		if !strings.Contains(a.Prompt, question+"\n\n"+templateMark) || !a.At.After(refines[0].At) {
+			t.Errorf("%s ask stdin lacks the template (or came before refining): %q", a.Role, a.Prompt)
 		}
 	}
 	// The combined answer is synth-v5, which reads the question itself as
@@ -77,7 +77,7 @@ func TestRefineAsksWithTheTemplateAndWritesV5(t *testing.T) {
 	if s.Status != compares.SynthDone || len(writers) != 1 {
 		t.Fatalf("synth %+v, %d writer calls", s, len(writers))
 	}
-	if w := writers[0].Stdin; !strings.HasPrefix(w, "[Askorus synthesis v5.1]") || strings.Contains(w, "\nSPEC: ") || strings.Contains(w, "\nFORM. ") ||
+	if w := writers[0].Prompt; !strings.HasPrefix(w, "[Askorus synthesis v5.1]") || strings.Contains(w, "\nSPEC: ") || strings.Contains(w, "\nFORM. ") ||
 		strings.Contains(w, templateMark) {
 		t.Errorf("writer prompt is not synth-v5 with the question as written: %q", w[:min(len(w), 200)])
 	}
@@ -96,7 +96,7 @@ func TestRefineThatFailsAsksTheQuestionAsWritten(t *testing.T) {
 		t.Fatalf("%d refine calls, want 2 (asked again once)", n)
 	}
 	for _, a := range callsOfKind(t, kindAsk) {
-		if strings.Contains(a.Stdin, templateMark) || !strings.Contains(a.Stdin, question) {
+		if strings.Contains(a.Prompt, templateMark) || !strings.Contains(a.Prompt, question) {
 			t.Errorf("%s was not asked the question as written", a.Role)
 		}
 	}
@@ -129,14 +129,14 @@ func TestRefineIsOffInTheAgent(t *testing.T) {
 		t.Fatalf("%d asks", len(asks))
 	}
 	for _, a := range asks {
-		if strings.Contains(a.Stdin, templateMark) || !strings.Contains(a.Stdin, question) {
+		if strings.Contains(a.Prompt, templateMark) || !strings.Contains(a.Prompt, question) {
 			t.Errorf("%s was not asked the question as written", a.Role)
 		}
 	}
 	c, _ := r.waitComparison(st.ComparisonID)
 	s := synthOf(t, c)
 	writers := callsOfKind(t, kindSynth)
-	if s.Status != compares.SynthDone || len(writers) != 1 || !strings.HasPrefix(writers[0].Stdin, "[Askorus synthesis v5.1]") {
+	if s.Status != compares.SynthDone || len(writers) != 1 || !strings.HasPrefix(writers[0].Prompt, "[Askorus synthesis v5.1]") {
 		t.Fatalf("synth %+v, %d writer calls", s, len(writers))
 	}
 	// A moderator name that is no AI's is not refused either: the field is ignored.

@@ -79,7 +79,7 @@ func TestIT19Debate(t *testing.T) {
 			if c.Role != fakecli.RoleClaude {
 				t.Errorf("a %s writer call", c.Role)
 			}
-			heads = append(heads, strings.SplitN(c.Stdin, "]", 2)[0]+"]")
+			heads = append(heads, strings.SplitN(c.Prompt, "]", 2)[0]+"]")
 		}
 		if strings.Join(heads, ",") != "[Askorus debate-plan v4],[Askorus debate-check v2],[Askorus debate-check v2],[Askorus synthesis debate-v4]" {
 			t.Errorf("moderator calls %v", heads)
@@ -91,8 +91,8 @@ func TestIT19Debate(t *testing.T) {
 			t.Fatalf("%d asks", len(asks))
 		}
 		for _, c := range asks {
-			if !strings.Contains(c.Stdin, "[Askorus debate-turn v2]") || !strings.EqualFold(filepath.Clean(c.Dir), filepath.Clean(r.judge)) {
-				t.Errorf("turn %s in %q: %.120q", c.Role, c.Dir, c.Stdin)
+			if !strings.Contains(c.Prompt, "[Askorus debate-turn v2]") || !strings.EqualFold(filepath.Clean(c.Dir), filepath.Clean(r.judge)) {
+				t.Errorf("turn %s in %q: %.120q", c.Role, c.Dir, c.Prompt)
 			}
 			for _, a := range c.Args {
 				if strings.Contains(a, "debate-turn") || strings.Contains(a, "첫 배") {

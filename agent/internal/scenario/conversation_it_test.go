@@ -99,10 +99,10 @@ func TestIT20ConversationRecord(t *testing.T) {
 		t.Fatalf("%d asks", len(asks))
 	}
 	for _, c := range asks {
-		data := recordLines(t, c.Role, c.Stdin)
-		if !strings.HasSuffix(strings.TrimRight(c.Stdin, "\n"), "The new question:\n"+followUp+"\n\n(Write the answer in Korean.)") ||
+		data := recordLines(t, c.Role, c.Prompt)
+		if !strings.HasSuffix(strings.TrimRight(c.Prompt, "\n"), "The new question:\n"+followUp+"\n\n(Write the answer in Korean.)") ||
 			!strings.Contains(strings.Join(data, "\n"), "SETTLED: "+string(settledLine)) || !strings.Contains(strings.Join(data, "\n"), "PREVIOUS ANSWER: "+string(lastLine)) {
-			t.Errorf("%s's ask: %q", c.Role, c.Stdin)
+			t.Errorf("%s's ask: %q", c.Role, c.Prompt)
 		}
 		earlier := len(linesWith(data, "EARLIER QUESTIONS (context only, do not answer them): "+string(earlierLine)))
 		if want := map[bool]int{true: 1, false: 0}[c.Role == fakecli.RoleOpenCode]; earlier != want {
@@ -117,10 +117,10 @@ func TestIT20ConversationRecord(t *testing.T) {
 	c2, b := r.waitComparison(st.ComparisonID)
 	s2 := synthOf(t, c2)
 	writes := calls(t, from, kindSynth, "")
-	if s2.Status != compares.SynthDone || len(writes) != 1 || !strings.HasPrefix(writes[0].Stdin, "[Askorus synthesis v6]") {
+	if s2.Status != compares.SynthDone || len(writes) != 1 || !strings.HasPrefix(writes[0].Prompt, "[Askorus synthesis v6]") {
 		t.Fatalf("turn 2's combined answer: %s", b)
 	}
-	data := recordLines(t, "writer", writes[0].Stdin)
+	data := recordLines(t, "writer", writes[0].Prompt)
 	if len(linesWith(data, "SETTLED: ")) != 1 || len(linesWith(data, "PREVIOUS ANSWER: ")) != 1 || len(linesWith(data, "EARLIER QUESTIONS")) != 1 || len(linesWith(data, "ANSWER: ")) != 3 {
 		t.Errorf("synth-v6 data: %q", data)
 	}
@@ -135,15 +135,15 @@ func TestIT20ConversationRecord(t *testing.T) {
 	}
 	var heads []string
 	for _, c := range calls(t, from, kindSynth, "") {
-		heads = append(heads, strings.SplitN(c.Stdin, "]", 2)[0]+"]")
+		heads = append(heads, strings.SplitN(c.Prompt, "]", 2)[0]+"]")
 		switch {
-		case strings.HasPrefix(c.Stdin, "[Askorus debate-plan v5]"):
-			data := recordLines(t, "plan", c.Stdin)
-			if len(linesWith(data, "SETTLED: ")) != 1 || len(linesWith(data, "PREVIOUS")) != 0 || !strings.Contains(c.Stdin, "재검토:") {
-				t.Errorf("plan v3: %q", c.Stdin)
+		case strings.HasPrefix(c.Prompt, "[Askorus debate-plan v5]"):
+			data := recordLines(t, "plan", c.Prompt)
+			if len(linesWith(data, "SETTLED: ")) != 1 || len(linesWith(data, "PREVIOUS")) != 0 || !strings.Contains(c.Prompt, "재검토:") {
+				t.Errorf("plan v3: %q", c.Prompt)
 			}
-		case strings.HasPrefix(c.Stdin, "[Askorus synthesis debate-v5]"):
-			data := recordLines(t, "after", c.Stdin)
+		case strings.HasPrefix(c.Prompt, "[Askorus synthesis debate-v5]"):
+			data := recordLines(t, "after", c.Prompt)
 			if len(linesWith(data, "SETTLED: ")) != 1 || len(linesWith(data, "PREVIOUS ANSWER: ")) != 1 {
 				t.Errorf("debate-v5: %q", data)
 			}

@@ -53,14 +53,14 @@ func TestIT21ModeratorAsk(t *testing.T) {
 				t.Errorf("asked in %q, not the judge folder", c.Dir)
 			}
 			for _, part := range []string{"[Askorus moderator-ask v1]", `EARLIER QUESTIONS (context only, do not answer them): ["` + question + `"]`, `PREVIOUS ANSWER: "Fake combined answer."`, `ANSWER: {"ai":"Claude","text":`, `ANSWER: {"ai":"Codex","text":`, `ANSWER: {"ai":"OpenCode","text":`} {
-				if !strings.Contains(c.Stdin, part) {
+				if !strings.Contains(c.Prompt, part) {
 					t.Errorf("stdin lacks %q", part)
 				}
 			}
-			if !strings.HasSuffix(strings.TrimRight(c.Stdin, "\n"), "The new question:\n"+q+"\n\n(Write the answer in Korean.)") {
-				t.Errorf("stdin ends %q", c.Stdin[max(0, len(c.Stdin)-60):])
+			if !strings.HasSuffix(strings.TrimRight(c.Prompt, "\n"), "The new question:\n"+q+"\n\n(Write the answer in Korean.)") {
+				t.Errorf("stdin ends %q", c.Prompt[max(0, len(c.Prompt)-60):])
 			}
-			if nonce, opens, closes := nonceOf(c.Stdin); len(nonce) != 16 || opens != 1 || closes != 1 {
+			if nonce, opens, closes := nonceOf(c.Prompt); len(nonce) != 16 || opens != 1 || closes != 1 {
 				t.Errorf("data block: %q %d %d", nonce, opens, closes)
 			}
 			for _, a := range c.Args {

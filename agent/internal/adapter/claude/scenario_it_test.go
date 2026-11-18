@@ -435,7 +435,7 @@ func TestIT11Ask(t *testing.T) {
 	}
 	calls := askCalls(t, p.env.argsFile)
 	last := calls[len(calls)-1]
-	if !sameFolder(last.Cwd, p.ask) || last.Stdin != core.AskPrompt("대한민국의 수도는?") || slices.Contains(last.Args, "대한민국의 수도는?") {
+	if !sameFolder(last.Cwd, p.ask) || streamText(last.Args, last.Stdin) != core.AskPrompt("대한민국의 수도는?") || slices.Contains(last.Args, "대한민국의 수도는?") {
 		t.Errorf("ask call = %+v", last)
 	}
 
@@ -447,7 +447,7 @@ func TestIT11Ask(t *testing.T) {
 		t.Fatalf("follow-up = %v", run)
 	}
 	calls = askCalls(t, p.env.argsFile)
-	if args := calls[len(calls)-1].Args; !slices.Contains(args, "--resume") || args[len(args)-1] != strings.TrimPrefix(session, "claude:") {
+	if args := calls[len(calls)-1].Args; !slices.Contains(args, "--resume") || args[slices.Index(args, "--resume")+1] != strings.TrimPrefix(session, "claude:") {
 		t.Errorf("follow-up args = %q", args)
 	}
 

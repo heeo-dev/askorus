@@ -95,6 +95,7 @@
 #   Go through `opencode api --standalone experimental.usage.limits`, as the
 #   agent reads them. No model is asked. Both are experimental in their
 #   CLIs; this notices a change. OpenCode without a Go plan is logged.
+#   Claude: one Haiku ask on the stream, then Info has both windows.
 #
 # One full run writes one combined answer with Codex (LT-08 1), refines
 # once with Codex (LT-09 1), asks Codex 4 times (LT-05 3, LT-12 1), lets

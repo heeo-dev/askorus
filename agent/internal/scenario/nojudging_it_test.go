@@ -29,10 +29,10 @@ func TestIT18NoJudging(t *testing.T) {
 		if len(synths) != 1 {
 			t.Fatalf("%d synth calls", len(synths))
 		}
-		_, data := synthData(t, synths[0].Stdin)
-		if !strings.HasPrefix(synths[0].Stdin, "[Askorus synthesis v5.1] ") || strings.Contains(synths[0].Stdin, "COMPARED") ||
+		_, data := synthData(t, synths[0].Prompt)
+		if !strings.HasPrefix(synths[0].Prompt, "[Askorus synthesis v5.1] ") || strings.Contains(synths[0].Prompt, "COMPARED") ||
 			len(linesWith(data, "ANSWER: ")) != 3 || len(linesWith(data, "DIFFER: "))+len(linesWith(data, "CHECK: ")) != 0 {
-			t.Errorf("writer stdin is not synth-v5 with three answers:\n%s", synths[0].Stdin)
+			t.Errorf("writer stdin is not synth-v5 with three answers:\n%s", synths[0].Prompt)
 		}
 		for _, want := range []string{`"requests":[]`, `"items":[]`} {
 			if !strings.Contains(string(b), want) {
@@ -61,8 +61,8 @@ func TestIT18NoJudging(t *testing.T) {
 			t.Fatalf("%d synth calls", len(synths))
 		}
 		onlyAsksAndWriters(t)
-		if _, data := synthData(t, synths[0].Stdin); len(linesWith(data, "ANSWER: ")) != 2 {
-			t.Errorf("writer stdin has not the two answers:\n%s", synths[0].Stdin)
+		if _, data := synthData(t, synths[0].Prompt); len(linesWith(data, "ANSWER: ")) != 2 {
+			t.Errorf("writer stdin has not the two answers:\n%s", synths[0].Prompt)
 		}
 		r.waitIdle(c.ID)
 	})

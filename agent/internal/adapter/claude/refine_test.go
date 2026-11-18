@@ -25,10 +25,10 @@ func TestRefineArgsAndOutput(t *testing.T) {
 	if len(calls) != 1 {
 		t.Fatalf("calls = %+v", calls)
 	}
-	want := []string{"-p", "--output-format", "json", "--model", "haiku", "--effort", "low",
+	want := []string{"-p", "--output-format", "stream-json", "--model", "haiku", "--effort", "low",
 		"--tools", "", "--strict-mcp-config", "--settings", noFileReads, "--no-session-persistence", "--safe-mode",
-		"--json-schema", core.RefineSchemaV1}
-	if !slices.Equal(calls[0].Args, want) || calls[0].Stdin != p {
+		"--json-schema", core.RefineSchemaV1, "--input-format", "stream-json", "--verbose"}
+	if !slices.Equal(calls[0].Args, want) || calls[0].Prompt != plainAt(p) || calls[0].Photos != 0 {
 		t.Fatalf("args %q", calls[0].Args)
 	}
 	spec, err := judge.ValidateRefine(res.Output)

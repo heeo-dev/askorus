@@ -37,9 +37,9 @@ func synthRequest(t *testing.T, folder string) (core.SynthRequest, string) {
 }
 
 func wantSynthArgs(model, effort string) []string {
-	return []string{"-p", "--output-format", "json", "--model", model, "--effort", effort,
+	return []string{"-p", "--output-format", "stream-json", "--model", model, "--effort", effort,
 		"--tools", "", "--strict-mcp-config", "--settings", noFileReads, "--no-session-persistence", "--safe-mode",
-		"--json-schema", core.SynthSchemaV1}
+		"--json-schema", core.SynthSchemaV1, "--input-format", "stream-json", "--verbose"}
 }
 
 func TestSynthArgsAndStdin(t *testing.T) {
@@ -57,10 +57,10 @@ func TestSynthArgsAndStdin(t *testing.T) {
 	if !slices.Equal(c.Args, wantSynthArgs("sonnet", "medium")) {
 		t.Errorf("args = %q", c.Args)
 	}
-	if len(c.Args) != 16 || c.Args[8] != "" || c.Args[11] != noFileReads || c.Args[15] != core.SynthSchemaV1 {
+	if len(c.Args) != 19 || c.Args[8] != "" || c.Args[11] != noFileReads || c.Args[15] != core.SynthSchemaV1 {
 		t.Errorf("--tools or schema = %q", c.Args)
 	}
-	if c.Stdin != req.Prompt {
+	if c.Prompt != plainAt(req.Prompt) || c.Photos != 0 {
 		t.Errorf("stdin = %q", c.Stdin)
 	}
 	if !sameFolder(c.Dir, folder) {

@@ -2,6 +2,7 @@ package claude
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -35,13 +36,17 @@ func TestAskSendsThePromptOnStdin(t *testing.T) {
 	if len(calls) != 1 {
 		t.Fatalf("calls = %+v", calls)
 	}
-	want := []string{"-p", "--output-format", "json", "--model", "opus", "--effort", "medium",
-		"--tools", "WebSearch,WebFetch", "--allowedTools", "WebSearch,WebFetch", "--strict-mcp-config", "--settings", noFileReads}
+	// Since 0.5.0 (#20) every ask takes the stream: the prompt is the text
+	// of the one stream-json message on stdin.
+	want := []string{"-p", "--output-format", "stream-json", "--model", "opus", "--effort", "medium",
+		"--tools", "WebSearch,WebFetch", "--allowedTools", "WebSearch,WebFetch", "--strict-mcp-config", "--settings", noFileReads,
+		"--input-format", "stream-json", "--verbose"}
 	if !reflect.DeepEqual(calls[0].Args, want) {
 		t.Errorf("args = %q", calls[0].Args)
 	}
-	if calls[0].Stdin != prompt {
-		t.Errorf("stdin = %q", calls[0].Stdin)
+	var msg imageMessage
+	if err := json.Unmarshal([]byte(calls[0].Stdin), &msg); err != nil || len(msg.Message.Content) != 1 || msg.Message.Content[0].Text != prompt {
+		t.Errorf("stdin = %q (%v)", calls[0].Stdin, err)
 	}
 	if !sameFolder(calls[0].Cwd, folder) {
 		t.Errorf("cwd = %q, want %q", calls[0].Cwd, folder)
@@ -63,8 +68,9 @@ func TestAskSendsThePromptOnStdin(t *testing.T) {
 		t.Errorf("follow-up session = %s", res2.SessionID)
 	}
 	got := recordedCalls(t, argsFile)[1].Args
-	want = []string{"-p", "--output-format", "json", "--model", "haiku", "--effort", "low",
-		"--tools", "WebSearch,WebFetch", "--allowedTools", "WebSearch,WebFetch", "--strict-mcp-config", "--settings", noFileReads, "--resume", res.SessionID}
+	want = []string{"-p", "--output-format", "stream-json", "--model", "haiku", "--effort", "low",
+		"--tools", "WebSearch,WebFetch", "--allowedTools", "WebSearch,WebFetch", "--strict-mcp-config", "--settings", noFileReads, "--resume", res.SessionID,
+		"--input-format", "stream-json", "--verbose"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("follow-up args = %q", got)
 	}
@@ -210,7 +216,7 @@ func TestCheckAskArgs(t *testing.T) {
 	}
 	// 11-06: a one-off ask (a debate turn) keeps no session, and never resumes.
 	oneOff := askArgs("sonnet", "medium", "", true)
-	if err := checkAskArgs(oneOff); err != nil || oneOff[len(oneOff)-1] != "--no-session-persistence" {
+	if err := checkAskArgs(oneOff); err != nil || !slices.Contains(oneOff, "--no-session-persistence") {
 		t.Fatalf("one-off args %q: %v", oneOff, err)
 	}
 	if err := checkAskArgs(append(slices.Clone(oneOff), "--resume", "12345678-1234-4234-8234-123456789abc")); !errors.Is(err, ErrArgRejected) {

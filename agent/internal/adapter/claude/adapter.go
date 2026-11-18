@@ -7,6 +7,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -66,6 +67,11 @@ type Adapter struct {
 	version string
 	verErr  error
 	verAt   time.Time
+
+	// The usage the last call's stream reported (#20, usage.go).
+	usageMu sync.Mutex
+	usage   []core.UsageGroup
+	usageAt time.Time
 
 	// The sign-in state (#60, login.go). loginCheck is nil outside tests.
 	loginMu    sync.Mutex
@@ -199,6 +205,9 @@ func (a *Adapter) Info(ctx context.Context) core.AdapterInfo {
 	} else {
 		info.Version, info.Available = v, true
 		a.loginNotices(ctx, &info)
+		if !slices.Contains(info.Notices, NoticeSignedOut) {
+			info.Usage = a.keptUsage()
+		}
 	}
 	if os.Getenv("CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC") != "" || os.Getenv("DISABLE_GROWTHBOOK") != "" {
 		info.Notices = append(info.Notices, NoticeRCDisabledEnv)

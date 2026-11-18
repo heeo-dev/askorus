@@ -7,6 +7,9 @@ import (
 	"testing"
 	"time"
 
+	"os"
+
+	"github.com/heeo-dev/askorus/agent/internal/adapter/claude"
 	"github.com/heeo-dev/askorus/agent/internal/adapter/codex"
 	"github.com/heeo-dev/askorus/agent/internal/adapter/opencode"
 	"github.com/heeo-dev/askorus/agent/internal/core"
@@ -35,6 +38,33 @@ func TestLT18Usage(t *testing.T) {
 		}
 		checkGroups(t, g)
 		t.Logf("    codex: 5 hours %.0f%% left, week %.0f%% left, %.1f s", g[0].Left*100, g[1].Left*100, took.Seconds())
+	})
+	// Claude's comes with a call (#20, U2): one quick ask on the stream, then
+	// Info has both windows as of it. One Haiku call.
+	t.Run("claude", func(t *testing.T) {
+		claudeDir, err := claude.DefaultClaudeDir()
+		if err != nil {
+			t.Fatal(err)
+		}
+		a := claude.New(claude.Options{ClaudeDir: claudeDir})
+		if info := a.Info(ctx); !info.Available {
+			t.Skipf("claude is not usable here: %v", info.Notices)
+		}
+		folder := askFolder(t)
+		if err := os.MkdirAll(folder, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		start := time.Now()
+		res, err := a.Ask(ctx, core.AskRequest{Folder: folder, Prompt: core.AskPrompt("Reply with the single word: ok"), Tier: core.TierQuick, OneOff: true})
+		if err != nil || res.Answer == "" {
+			t.Fatalf("ask: %+v %v", res, err)
+		}
+		g := a.Info(ctx).Usage
+		if len(g) != 2 || g[0].Window != core.Window5h || g[1].Window != core.WindowWeek || g[0].At == "" {
+			t.Fatalf("usage after the ask = %+v (an API key sign-in has none)", g)
+		}
+		checkGroups(t, g)
+		t.Logf("    claude: 5 hours %.0f%% left, week %.0f%% left, ask %.1f s", g[0].Left*100, g[1].Left*100, time.Since(start).Seconds())
 	})
 	t.Run("opencode", func(t *testing.T) {
 		a := opencode.New(opencode.Options{})

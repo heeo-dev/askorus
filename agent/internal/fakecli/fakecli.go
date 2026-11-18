@@ -138,7 +138,7 @@ type Call struct {
 	// Photos is how many photos the call got (photos.go, #14); Prompt is
 	// the question's text: Stdin, or the text of claude's stream message.
 	Photos int       `json:"photos,omitempty"`
-	Prompt string    `json:"-"`
+	Prompt string    `json:"prompt,omitempty"`
 	At     time.Time `json:"at"`
 }
 

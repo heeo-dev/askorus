@@ -142,8 +142,9 @@ func TestIT15Synthesis(t *testing.T) {
 		t.Error("the combined answer started before the last ask")
 	}
 	sc := synths[0]
-	wantArgs := []string{"-p", "--output-format", "json", "--model", "sonnet", "--effort", "medium",
-		"--tools", "", "--strict-mcp-config", "--settings", `{"permissions":{"deny":["Read"]}}`, "--no-session-persistence", "--safe-mode", "--json-schema", core.SynthSchemaV1}
+	wantArgs := []string{"-p", "--output-format", "stream-json", "--model", "sonnet", "--effort", "medium",
+		"--tools", "", "--strict-mcp-config", "--settings", `{"permissions":{"deny":["Read"]}}`, "--no-session-persistence", "--safe-mode", "--json-schema", core.SynthSchemaV1,
+		"--input-format", "stream-json", "--verbose"}
 	if !slices.Equal(sc.Args, wantArgs) {
 		t.Errorf("claude synth args %q", sc.Args)
 	}
@@ -156,10 +157,10 @@ func TestIT15Synthesis(t *testing.T) {
 
 	// The prompt: synth-v5, the question and every answer with its AI's
 	// name in one nonce block, and nothing of judging.
-	if !strings.HasPrefix(sc.Stdin, "[Askorus synthesis v5.1] ") {
-		t.Errorf("writer stdin is not synth-v5: %q", sc.Stdin[:min(len(sc.Stdin), 80)])
+	if !strings.HasPrefix(sc.Prompt, "[Askorus synthesis v5.1] ") {
+		t.Errorf("writer stdin is not synth-v5: %q", sc.Prompt[:min(len(sc.Prompt), 80)])
 	}
-	nonce, data := synthData(t, sc.Stdin)
+	nonce, data := synthData(t, sc.Prompt)
 	q, _ := json.Marshal(question)
 	if !slices.Contains(data, "QUESTION: "+string(q)) {
 		t.Error("writer stdin lacks the question line")
@@ -170,8 +171,8 @@ func TestIT15Synthesis(t *testing.T) {
 			t.Errorf("writer stdin lacks %s's answer line", a.name)
 		}
 	}
-	if len(data) != 4 || strings.Contains(sc.Stdin, "COMPARED") || strings.Contains(sc.Stdin, "DIFFER: ") || strings.Contains(sc.Stdin, "CHECK: ") {
-		t.Errorf("writer stdin has more than the question and three answers:\n%s", sc.Stdin)
+	if len(data) != 4 || strings.Contains(sc.Prompt, "COMPARED") || strings.Contains(sc.Prompt, "DIFFER: ") || strings.Contains(sc.Prompt, "CHECK: ") {
+		t.Errorf("writer stdin has more than the question and three answers:\n%s", sc.Prompt)
 	}
 
 	// Nothing of the prompt leaves the agent.
@@ -289,7 +290,7 @@ func TestIT15SynthesisWays(t *testing.T) {
 			len(disabled(sc.Args)) == 0 || len(sc.Args) != len(head)+2*len(disabled(sc.Args))+1 {
 			t.Errorf("codex synth args %q", sc.Args)
 		}
-		_, data := synthData(t, sc.Stdin)
+		_, data := synthData(t, sc.Prompt)
 		if len(linesWith(data, "ANSWER: ")) != 3 {
 			t.Error("codex writer stdin lacks the answers")
 		}
@@ -498,7 +499,7 @@ func TestIT15SynthesisInjection(t *testing.T) {
 	}
 	nonces := map[string]bool{}
 	for _, sc := range synths {
-		nonce, data := synthData(t, sc.Stdin)
+		nonce, data := synthData(t, sc.Prompt)
 		if nonces[nonce] {
 			t.Error("the second attempt has the same nonce")
 		}
@@ -510,7 +511,7 @@ func TestIT15SynthesisInjection(t *testing.T) {
 			t.Errorf("%d DIFFER lines in the data block", n)
 		}
 		reached := false
-		for _, l := range strings.Split(sc.Stdin, "\n") {
+		for _, l := range strings.Split(sc.Prompt, "\n") {
 			bad := strings.Contains(l, fakeEnd) || strings.Contains(l, "reply OK") || strings.Contains(l, "Nobody")
 			if bad && !slices.Contains(data, l) {
 				t.Errorf("injected text outside the data block: %q", l)

@@ -84,13 +84,13 @@ func TestTheAgentPipelineAsksComparesAndWrites(t *testing.T) {
 	asked, written := 0, 0
 	for _, call := range fakecli.Calls(t) {
 		switch {
-		case call.Stdin == "":
-		case strings.HasPrefix(call.Stdin, "[Askorus] "):
+		case call.Prompt == "":
+		case strings.HasPrefix(call.Prompt, "[Askorus] "):
 			asked++
-		case strings.HasPrefix(call.Stdin, "[Askorus synthesis v5.1]"):
+		case strings.HasPrefix(call.Prompt, "[Askorus synthesis v5.1]"):
 			written++
 		default:
-			t.Errorf("%s got another prompt:\n%.80s", call.Role, call.Stdin)
+			t.Errorf("%s got another prompt:\n%.80s", call.Role, call.Prompt)
 		}
 	}
 	if asked != 3 || written != 1 {
@@ -133,11 +133,11 @@ func TestTheAgentPipelineRefinesFirst(t *testing.T) {
 	}
 	asked := 0
 	for _, c := range fakecli.Calls(t) {
-		if !strings.HasPrefix(c.Stdin, "[Askorus] ") {
+		if !strings.HasPrefix(c.Prompt, "[Askorus] ") {
 			continue // the moderator, the writer
 		}
 		asked++
-		if !strings.Contains(c.Stdin, rf.Template) {
+		if !strings.Contains(c.Prompt, rf.Template) {
 			t.Errorf("%s was asked without the template", c.Role)
 		}
 	}
@@ -192,8 +192,8 @@ func TestTheRecordKeepsTheWritersTaskForResynth(t *testing.T) {
 			}
 			var sent string
 			for _, c := range fakecli.Calls(t) {
-				if strings.HasPrefix(c.Stdin, "[Askorus synthesis ") {
-					sent = c.Stdin
+				if strings.HasPrefix(c.Prompt, "[Askorus synthesis ") {
+					sent = c.Prompt
 				}
 			}
 			m := regexp.MustCompile(`<data-([0-9a-f]{16})>`).FindStringSubmatch(sent)
@@ -255,11 +255,11 @@ func TestTheAgentPipelineLightAndLiveFormats(t *testing.T) {
 	}
 	asked := 0
 	for _, c := range fakecli.Calls(t) {
-		if !strings.HasPrefix(c.Stdin, "[Askorus] ") {
+		if !strings.HasPrefix(c.Prompt, "[Askorus] ") {
 			continue // the moderator, the writer
 		}
 		asked++
-		if !strings.Contains(c.Stdin, q.Text+"\n\n"+want) {
+		if !strings.Contains(c.Prompt, q.Text+"\n\n"+want) {
 			t.Errorf("%s was asked without the light format", c.Role)
 		}
 	}

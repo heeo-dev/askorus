@@ -85,7 +85,7 @@ func fakeClaude(args []string) int {
 		}
 		fmt.Print(out)
 	case len(args) > 0 && args[0] == "-p":
-		return fakeAsk(args, stdin)
+		return fakeAsk(args, streamText(args, stdin))
 	case len(args) > 0 && args[0] == "--bg":
 		return fakeBackground(args)
 	case len(args) > 0 && args[0] == "remote-control":
@@ -151,6 +151,20 @@ func fakeBackground(args []string) int {
 //
 //	ASKORUS_FAKE_ASK "badmodel": an unknown model, "noresume": the
 //	                   resumed session does not exist, "garbage": no JSON
+//
+// streamText is the prompt of a call: the text of the one stream-json
+// message on stdin (every call since 0.5.0, #20), or stdin itself.
+func streamText(args []string, stdin string) string {
+	if fakeFlag(args, "--input-format") != "stream-json" {
+		return stdin
+	}
+	var m imageMessage
+	if json.Unmarshal([]byte(stdin), &m) != nil || len(m.Message.Content) == 0 {
+		return ""
+	}
+	return m.Message.Content[0].Text
+}
+
 func fakeAsk(args []string, prompt string) int {
 	cwd, _ := os.Getwd()
 	id := fakeFlag(args, "--resume")

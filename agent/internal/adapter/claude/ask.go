@@ -100,8 +100,11 @@ func (a *Adapter) AskTiers() map[string]core.AskModel {
 
 // askArgs builds the command line of one ask. The prompt is not in it. A
 // one-off ask (a debate turn) keeps no conversation and never resumes.
+// Since 0.5.0 every ask runs as a question with photos did (#14): the
+// input is one stream-json message on stdin and the output the event
+// stream, which carries the plan's usage (#20, usage.go).
 func askArgs(model, effort, resume string, oneOff bool) []string {
-	return askArgsFor(model, effort, resume, oneOff, false)
+	return askArgsFor(model, effort, resume, oneOff, true)
 }
 
 // askImageArgs is askArgs for a question with photos (#14): the same
@@ -301,14 +304,12 @@ func (a *Adapter) Ask(ctx context.Context, req core.AskRequest) (core.AskResult,
 	if req.OneOff && req.Resume != "" {
 		return core.AskResult{}, core.Fail(core.ErrCodeInternal, "a one-off ask never resumes")
 	}
-	args, stdin := askArgs(model, effort, req.Resume, req.OneOff), plainAt(req.Prompt)
-	if len(req.Images) > 0 {
-		// The photos go on stdin with the prompt; no path reaches the command.
-		var err error
-		if stdin, err = imageStdin(stdin, req.Images); err != nil {
-			return core.AskResult{}, core.Fail(core.ErrCodeAskFailed, err.Error())
-		}
-		args = askImageArgs(model, effort, req.Resume, req.OneOff)
+	// The prompt, and the photos when there are some, go on stdin as one
+	// stream-json message; no path reaches the command.
+	args := askArgs(model, effort, req.Resume, req.OneOff)
+	stdin, err := imageStdin(plainAt(req.Prompt), req.Images)
+	if err != nil {
+		return core.AskResult{}, core.Fail(core.ErrCodeAskFailed, err.Error())
 	}
 	if err := checkAskArgs(args); err != nil {
 		return core.AskResult{}, err
@@ -335,6 +336,7 @@ func (a *Adapter) Ask(ctx context.Context, req core.AskRequest) (core.AskResult,
 	case err != nil:
 		return core.AskResult{}, core.Fail(core.ErrCodeAskFailed, err.Error())
 	}
+	a.noteUsage(res.Stdout)
 	out, err := parseAskOutput(res, model)
 	if req.OneOff {
 		out.SessionID = "" // nothing was kept to carry on

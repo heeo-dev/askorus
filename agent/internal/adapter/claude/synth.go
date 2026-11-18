@@ -50,37 +50,35 @@ func synthArgs(model, effort string) []string { return writerArgs(model, effort,
 // the refine schema.
 func refineArgs(model, effort string) []string { return writerArgs(model, effort, core.RefineSchemaV1) }
 
+// writerArgs is the locked-down one-off command. Since 0.5.0 it always
+// takes the stream formats, as a question with photos did (#14): the
+// prompt (and any photos) is one stream-json message on stdin, and the
+// event stream carries the plan's usage (#20).
 func writerArgs(model, effort, schema string) []string {
-	return []string{"-p", "--output-format", "json", "--model", model, "--effort", effort,
+	return []string{"-p", "--output-format", streamJSON, "--model", model, "--effort", effort,
 		"--tools", "", "--strict-mcp-config", "--settings", noFileReads, "--no-session-persistence", "--safe-mode",
-		"--json-schema", schema}
+		"--json-schema", schema, "--input-format", streamJSON, "--verbose"}
 }
 
-// synthImageArgs is synthArgs for a question with photos (#14): the same
-// locked-down command with the stream formats, as askImageArgs. The
-// photos are in the one message on stdin.
-func synthImageArgs(model, effort string) []string {
-	args := synthArgs(model, effort)
-	args[2] = streamJSON
-	return append(args, "--input-format", streamJSON, "--verbose")
-}
+// synthImageArgs is synthArgs for a question with photos (#14): the
+// photos are in the one message on stdin, the command is the same.
+func synthImageArgs(model, effort string) []string { return synthArgs(model, effort) }
 
-// synthArgCount is len(synthArgs(…)); synthImageArgs has three more.
-const synthArgCount = 16
+// synthArgCount is len(synthArgs(…)).
+const synthArgCount = 19
 
 // checkSynthArgs accepts exactly what synthArgs, synthImageArgs or
 // refineArgs makes for a valid model and effort, the synth or refine
 // schema byte for byte: never another schema, a permission flag, a tool,
 // an MCP config, a resume or a prompt argument.
 func checkSynthArgs(args []string) error {
-	if len(args) != synthArgCount && len(args) != synthArgCount+3 {
+	if len(args) != synthArgCount {
 		return fmt.Errorf("%w: a combined answer has %d arguments, not %d", ErrArgRejected, synthArgCount, len(args))
 	}
 	if !config.ValidModel(args[4]) || !config.ValidEffort(args[6]) {
 		return fmt.Errorf("%w: a combined answer needs a valid model and effort", ErrArgRejected)
 	}
-	if !slices.Equal(args, synthArgs(args[4], args[6])) && !slices.Equal(args, refineArgs(args[4], args[6])) &&
-		!slices.Equal(args, synthImageArgs(args[4], args[6])) {
+	if !slices.Equal(args, synthArgs(args[4], args[6])) && !slices.Equal(args, refineArgs(args[4], args[6])) {
 		return fmt.Errorf("%w: not the combined-answer command", ErrArgRejected)
 	}
 	return nil
@@ -111,16 +109,13 @@ func (a *Adapter) Synthesize(ctx context.Context, req core.SynthRequest) (core.S
 	if !config.ValidEffort(effort) {
 		return core.SynthResult{}, core.Fail(core.ErrCodeBadModel, "effort "+effort)
 	}
-	args, stdin := build(model, effort), plainAt(req.Prompt)
-	if len(req.Images) > 0 {
-		if req.Refine {
-			return core.SynthResult{}, core.Fail(core.ErrCodeInternal, "a question spec takes no photos")
-		}
-		var err error
-		if stdin, err = imageStdin(stdin, req.Images); err != nil {
-			return core.SynthResult{}, core.Fail(core.ErrCodeJudgeFailed, err.Error())
-		}
-		args = synthImageArgs(model, effort)
+	args := build(model, effort)
+	if len(req.Images) > 0 && req.Refine {
+		return core.SynthResult{}, core.Fail(core.ErrCodeInternal, "a question spec takes no photos")
+	}
+	stdin, err := imageStdin(plainAt(req.Prompt), req.Images)
+	if err != nil {
+		return core.SynthResult{}, core.Fail(core.ErrCodeJudgeFailed, err.Error())
 	}
 	if err := checkSynthArgs(args); err != nil {
 		return core.SynthResult{}, core.Fail(core.ErrCodeInternal, err.Error())
@@ -139,6 +134,7 @@ func (a *Adapter) Synthesize(ctx context.Context, req core.SynthRequest) (core.S
 	case err != nil:
 		return r, core.Fail(core.ErrCodeJudgeFailed, "claude could not run")
 	}
+	a.noteUsage(res.Stdout)
 	// The one-off command's parser reads the result object: structured_output,
 	// permission denials, the model that answered and the tokens.
 	jr, err := parseJudgeOutput(res, model)

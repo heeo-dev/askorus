@@ -148,7 +148,7 @@ func TestIT23Photos(t *testing.T) {
 		}
 	}
 	for _, c := range calls(t, from, kindAsk, "") {
-		if c.Photos != 0 || slices.Contains(c.Args, "-i") || slices.Contains(c.Args, "--file") || slices.Contains(c.Args, "--verbose") {
+		if c.Photos != 0 || slices.Contains(c.Args, "-i") || slices.Contains(c.Args, "--file") {
 			t.Errorf("%s follow-up args = %q", c.Role, c.Args)
 		}
 	}

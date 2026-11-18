@@ -14,8 +14,10 @@ import (
 // lists no running session. Any other --json-schema is unexpected.
 func claudeMain(c *Call) int {
 	if flagValue(c.Args, "--output-format") == "stream-json" {
-		// The event stream: an init line before the result line.
+		// The event stream: an init line and the plan's usage (#20) before
+		// the result line.
 		printJSON(map[string]any{"type": "system", "subtype": "init", "tools": []string{}})
+		claudeRateLimits()
 	}
 	switch {
 	case len(c.Args) > 0 && c.Args[0] == "-p" && isSynthSchema(flagValue(c.Args, "--json-schema")):

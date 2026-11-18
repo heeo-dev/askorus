@@ -51,7 +51,8 @@ func photoInput(role string, args []string, stdin string) (photos int, prompt st
 }
 
 // claudeStream reads claude's stream-json input: one user message with a
-// text block and image blocks, with the stream output and --verbose.
+// text block and image blocks (none since 0.5.0, when every call takes the
+// stream, #20), with the stream output and --verbose.
 func claudeStream(args []string, stdin string) (int, string, error) {
 	if flagValue(args, "--input-format") != "stream-json" || flagValue(args, "--output-format") != "stream-json" || !hasFlag(args, "--verbose") {
 		return 0, "", errors.New("stream-json input needs stream-json output and --verbose")
@@ -93,8 +94,8 @@ func claudeStream(args []string, stdin string) (int, string, error) {
 			return 0, "", errors.New("unknown content block " + b.Type)
 		}
 	}
-	if texts != 1 || photos == 0 {
-		return 0, "", errors.New("the message needs one text block and at least one image")
+	if texts != 1 {
+		return 0, "", errors.New("the message needs one text block")
 	}
 	return photos, prompt, nil
 }
