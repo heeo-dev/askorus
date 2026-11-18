@@ -27,7 +27,7 @@ func newTestRelease(t *testing.T) *testRelease {
 	root, rootSec := mustKey(t)
 	_, relSec := mustKey(t)
 	return &testRelease{t: t, root: root, rootSec: rootSec, relSec: relSec, keySeq: 1, m: Manifest{
-		Kind:      kindRelease,
+		Kind:      KindRelease,
 		Product:   Product,
 		Version:   "0.5.1",
 		Published: t0.Add(-24 * time.Hour),
@@ -41,7 +41,7 @@ func newTestRelease(t *testing.T) *testRelease {
 }
 
 func (r *testRelease) keyFile() []byte {
-	b, _ := json.Marshal(KeyCert{Kind: kindKey, Key: r.relSec.Public().Base64(), Seq: r.keySeq, Issued: t0.Add(-48 * time.Hour)})
+	b, _ := json.Marshal(KeyCert{Kind: KindKey, Key: r.relSec.Public().Base64(), Seq: r.keySeq, Issued: t0.Add(-48 * time.Hour)})
 	return b
 }
 
@@ -177,7 +177,7 @@ func TestCheckRefusesABadManifest(t *testing.T) {
 	win := func(r *testRelease) *Program { return &r.m.Programs[0] }
 	cases := map[string]func(r *testRelease){
 		"another product":        func(r *testRelease) { r.m.Product = "askorus-app" },
-		"another kind":           func(r *testRelease) { r.m.Kind = kindKey },
+		"another kind":           func(r *testRelease) { r.m.Kind = KindKey },
 		"a build of a branch":    func(r *testRelease) { r.m.Version = "0.5.1-dev+abc" },
 		"a version of two parts": func(r *testRelease) { r.m.Version = "0.5" },
 		"no programs":            func(r *testRelease) { r.m.Programs = nil },

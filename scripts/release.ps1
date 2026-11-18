@@ -7,19 +7,30 @@
 #   install.ps1                      scripts\install.ps1 (it must stay ASCII)
 #   install.sh                       scripts\install.sh (ASCII, LF line ends)
 #   SHA256SUMS.txt                   "<sha-256>  <file name>" per file, as sha256sum
+#   release.json(.minisig)           what an agent updates to, signed by the
+#   release-key.json(.minisig)       release key the root key vouches for (#35)
 # Every agent is built with -trimpath and the version. It only builds and
 # checks; publishing the GitHub release is a step of its own.
-#   powershell -NoProfile -File scripts\release.ps1 -Version 0.3.0 [-Out DIR]
-# The default folder is .local\release\v<version> of this checkout. Keep this
-# file ASCII: Windows PowerShell 5.1 reads scripts without a BOM as the ANSI
-# code page.
+#   powershell -NoProfile -File scripts\release.ps1 -Version 0.5.0 -SignDir DIR [-Out DIR]
+# A release version (three numbers) is signed with the release key in
+# -SignDir (askorus-sign, Phase 1 plan part 27), so agents can update to it
+# from the phone; -NoSign leaves it unsigned on purpose. A test version
+# (0.0.1-test) is never signed. The default folder is .local\release\v<version>
+# of this checkout. Keep this file ASCII: Windows PowerShell 5.1 reads
+# scripts without a BOM as the ANSI code page.
 param(
     [Parameter(Mandatory = $true)][string]$Version,
-    [string]$Out
+    [string]$Out,
+    [string]$SignDir,
+    [switch]$NoSign
 )
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 if ($Version -notmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?$') { throw "the version must look like 0.2.0 or 0.2.0-rc.1, not $Version" }
+$isRelease = $Version -match '^\d+\.\d+\.\d+$'
+if ($isRelease -and -not $SignDir -and -not $NoSign) { throw "a release version is signed: give -SignDir <the release key folder>, or -NoSign to leave it unsigned (phones then cannot update agents to it)" }
+if (-not $isRelease -and $SignDir) { throw "$Version is a test version; only release versions (three numbers) are signed" }
+if ($SignDir -and $NoSign) { throw 'give -SignDir or -NoSign, not both' }
 if (-not $Out) { $Out = Join-Path $root ".local\release\v$Version" }
 $go = Join-Path $env:USERPROFILE 'sdk\go1.27.3\bin'
 if (Test-Path $go) { $env:Path = "$go;" + $env:Path }
@@ -108,11 +119,30 @@ $lines = foreach ($name in $names) {
 }
 [IO.File]::WriteAllText((Join-Path $Out 'SHA256SUMS.txt'), (($lines -join "`n") + "`n"), [Text.Encoding]::ASCII)
 
+# The signed release information (#35): written by askorus-sign with the
+# release key, then checked the way the agents just built will check it,
+# with the root keys they carry.
+$signed = @()
+if ($SignDir) {
+    Push-Location (Join-Path $root 'agent')
+    try {
+        & go run ./cmd/askorus-sign release $SignDir $Out $Version
+        if ($LASTEXITCODE -ne 0) { throw 'askorus-sign release failed' }
+        & go run ./cmd/askorus-sign verify $Out
+        if ($LASTEXITCODE -ne 0) { throw 'the signed release does not check out with the root keys the agents carry (agent\internal\update\roots)' }
+    } finally {
+        Pop-Location
+    }
+    $signed = @('release.json', 'release.json.minisig', 'release-key.json', 'release-key.json.minisig')
+} elseif ($isRelease) {
+    Write-Warning "not signed (-NoSign): phones cannot update agents to $Version"
+}
+
 Write-Output "release files for $Version in ${Out}:"
 Get-ChildItem $Out | ForEach-Object { '  {0,-34} {1,10:N0} bytes' -f $_.Name, $_.Length }
 Write-Output ''
 Write-Output 'To publish:'
-$files = ($names + 'SHA256SUMS.txt' | ForEach-Object { "`"$Out\$_`"" }) -join ' '
+$files = ($names + 'SHA256SUMS.txt' + $signed | ForEach-Object { "`"$Out\$_`"" }) -join ' '
 Write-Output "  gh release create v$Version $files --title `"Askorus $Version`" --notes-file <notes file>"
 Write-Output ''
 Write-Output "Also attach askorus-android-$Version.apk, THIRD-PARTY-NOTICES.md and THIRD-PARTY-GO.md,"

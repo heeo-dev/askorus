@@ -124,6 +124,21 @@ func TestSignRefusesATrustedCommentOfTwoLines(t *testing.T) {
 	}
 }
 
+// Every key the agent is built with reads; with none yet, the list is empty.
+func TestEmbeddedRootsRead(t *testing.T) {
+	keys, err := Roots()
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := map[KeyID]bool{}
+	for _, k := range keys {
+		if seen[k.ID] {
+			t.Fatalf("two root keys with id %s", k.ID)
+		}
+		seen[k.ID] = true
+	}
+}
+
 func TestPublicKeyText(t *testing.T) {
 	pub, _ := mustKey(t)
 	if !regexp.MustCompile(`^[0-9A-F]{16}$`).MatchString(pub.ID.String()) {

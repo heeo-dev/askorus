@@ -28,8 +28,9 @@ const (
 	// Product is the program a manifest is for.
 	Product = "askorus-agent"
 
-	kindKey     = "askorus-release-key"
-	kindRelease = "askorus-release"
+	// KindKey and KindRelease are the kind fields of the two files.
+	KindKey     = "askorus-release-key"
+	KindRelease = "askorus-release"
 
 	// maxJSON bounds a key or release file read from the network.
 	maxJSON = 64 << 10
@@ -44,6 +45,18 @@ const (
 	ReleaseFile    = "release.json"
 	ReleaseSigFile = "release.json.minisig"
 )
+
+// Systems are the systems a release has an agent for, as GOOS and GOARCH.
+var Systems = [][2]string{{"windows", "amd64"}, {"darwin", "arm64"}, {"darwin", "amd64"}, {"linux", "amd64"}, {"linux", "arm64"}}
+
+// ProgramName is the release asset of one system's agent.
+func ProgramName(goos, goarch string) string {
+	n := "askorus-agent-" + goos + "-" + goarch
+	if goos == "windows" {
+		n += ".exe"
+	}
+	return n
+}
 
 // KeyCert is the release key a root key vouches for.
 type KeyCert struct {
@@ -125,7 +138,7 @@ func checkKey(roots []PublicKey, data, sig []byte) (KeyCert, PublicKey, error) {
 	if err := json.Unmarshal(data, &c); err != nil {
 		return KeyCert{}, PublicKey{}, fmt.Errorf("%w: %s: %v", ErrBadFiles, KeyFile, err)
 	}
-	if c.Kind != kindKey || c.Seq < 1 {
+	if c.Kind != KindKey || c.Seq < 1 {
 		return KeyCert{}, PublicKey{}, fmt.Errorf("%w: %s is not a release key", ErrBadFiles, KeyFile)
 	}
 	// The signed comment names what was signed, so a signature of one kind
@@ -165,13 +178,13 @@ func checkManifest(key PublicKey, data, sig []byte, now time.Time) (Manifest, er
 }
 
 // KeyTrusted and ReleaseTrusted are the signed comments of the two files.
-func KeyTrusted(seq int) string            { return fmt.Sprintf("%s %d", kindKey, seq) }
-func ReleaseTrusted(version string) string { return kindRelease + " " + version }
+func KeyTrusted(seq int) string            { return fmt.Sprintf("%s %d", KindKey, seq) }
+func ReleaseTrusted(version string) string { return KindRelease + " " + version }
 
 var programName = regexp.MustCompile(`^askorus-agent-(windows|darwin|linux)-(amd64|arm64)(\.exe)?$`)
 
 func (m Manifest) valid() error {
-	if m.Kind != kindRelease || m.Product != Product {
+	if m.Kind != KindRelease || m.Product != Product {
 		return errors.New("not an agent release")
 	}
 	if !IsRelease(m.Version) {
