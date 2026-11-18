@@ -95,6 +95,9 @@
 #   powershell -NoProfile -File scripts\test-live.ps1 -Run LT15    # only LT-15
 #   powershell -NoProfile -File scripts\test-live.ps1 -Run LT16    # only LT-16
 param([string]$Run)
+# One heavy job at a time on this PC (heavy-job.ps1).
+. (Join-Path $PSScriptRoot 'heavy-job.ps1')
+$heavy = Enter-HeavyJob 'test-live'
 $go = Join-Path $env:USERPROFILE 'sdk\go1.27.3\bin'
 if (Test-Path $go) { $env:Path = "$go;" + $env:Path }
 # The agent starts at logon, not inside a Claude Code session: when this
@@ -111,4 +114,5 @@ go @goArgs 2>&1 | ForEach-Object { "$_" } | Select-String -Pattern '^(--- |    |
 $code = $LASTEXITCODE
 Pop-Location
 if ($code -eq 0) { Write-Output 'LIVE PASSED' } else { Write-Output 'LIVE FAILED' }
+Exit-HeavyJob $heavy
 exit $code
