@@ -36,11 +36,18 @@ Askorus server. Reports of these kinds are especially useful:
   PC, an open pairing window, or a paired phone)
 - reaching the agent from a device that is not in the PC owner's Tailscale
   account, or the agent or the app sending anything outside the Tailscale
-  tunnel
+  tunnel, other than the agent's update check (from 0.5.0 it asks this
+  repository's GitHub releases for the latest version when a phone asks)
+- making the agent install a program that is not a release signed with the
+  project's keys, or a version older than the one it runs
+- a phone kept from updating (`askorus-agent devices update <id> off`) still
+  starting an update, or the agent asking GitHub while updates are off
+  (`askorus-agent update off`)
 
 Not in scope: what an AI company's own program or service does with your
 question, problems that need administrator (root) rights or the same user account
-on the PC, whichever system it runs, and the unsigned first releases (planned, see the README).
+on the PC, whichever system it runs, and that the releases do not carry a Windows or Apple
+publisher signature yet (planned, see the README).
 
 ## Supported versions
 
@@ -75,11 +82,13 @@ Askorus는 PC 에이전트(`agent/`, 내 PC에서 돌며 내 AI 프로그램을 
 - 웹페이지, 링크, QR이 앱이나 에이전트를 남 대신 움직이게 하는 것
 - 설치 스크립트(`scripts/install.ps1`, `scripts/install.sh`)가 배포된 파일이 아닌 것을 설치하는 것
 - 사람이 허용하지 않았는데 폰이 짝 맺어지는 것(PC 화면의 창, 열어 둔 짝 맺기 창, 짝 맺은 폰)
-- PC 주인의 Tailscale 계정에 없는 기기가 에이전트에 닿는 것, 에이전트나 앱이 Tailscale 터널 밖으로 무언가를 보내는 것
+- PC 주인의 Tailscale 계정에 없는 기기가 에이전트에 닿는 것, 에이전트나 앱이 Tailscale 터널 밖으로 무언가를 보내는 것(에이전트의 업데이트 확인은 빼고: 0.5.0부터 폰이 물을 때 이 저장소의 GitHub 배포판에 최신 판을 묻습니다)
+- 프로젝트의 키로 서명된 배포판이 아닌 것이나 지금보다 옛 판을 에이전트가 설치하게 하는 것
+- 업데이트를 막은 폰(`askorus-agent devices update <id> off`)이 업데이트를 시키는 것, 업데이트를 껐는데(`askorus-agent update off`) 에이전트가 GitHub에 묻는 것
 
 범위 밖: AI 회사의 프로그램과 서비스가 질문을 다루는 방식, 어느 운영체제든 PC의 관리자(root)
-권한이나 같은 사용자 계정이 있어야 되는 문제, 서명 없는 초기 배포판(예정된 일,
-README 참고).
+권한이나 같은 사용자 계정이 있어야 되는 문제, 배포판에 Windows나 Apple의 게시자 서명이
+아직 없는 것(예정된 일, README 참고).
 
 ### 지원하는 판
 
