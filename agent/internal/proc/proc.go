@@ -10,10 +10,12 @@
 package proc
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -130,6 +132,82 @@ func Run(ctx context.Context, c Cmd) (Result, error) {
 	release := contain(cmd)
 	err := cmd.Wait()
 	release() // ends whatever the command left running
+	res := Result{Stdout: stdout.Bytes(), Stderr: stderr.Bytes()}
+	var exitErr *exec.ExitError
+	switch {
+	case ctx.Err() != nil:
+		return res, ErrTimeout
+	case errors.As(err, &exitErr):
+		res.ExitCode = exitErr.ExitCode()
+		return res, nil
+	case err != nil && !errors.Is(err, exec.ErrWaitDelay):
+		return res, err
+	}
+	return res, nil
+}
+
+// closeWait is how long RunUntil gives a program to end after its stdin
+// closed before it is killed.
+const closeWait = 2 * time.Second
+
+// RunUntil is Run for a program that answers line by line on stdout and
+// ends only when its stdin closes, a JSON-RPC server such as `codex
+// app-server` (#20). It writes c.Stdin and keeps stdin open: `codex
+// app-server` ends without answering when stdin closes before the answer.
+// Each stdout line goes to last; once last says it is the line the caller
+// waited for, stdin closes and the program has closeWait to end before it
+// is killed. ctx ending kills it too (ErrTimeout). Stdout is kept as Run
+// keeps it, line by line.
+func RunUntil(ctx context.Context, c Cmd, last func(line []byte) bool) (Result, error) {
+	if err := CheckExe(c.Exe); err != nil {
+		return Result{}, err
+	}
+	if info, err := os.Stat(c.Dir); err != nil || !info.IsDir() || !filepath.IsAbs(c.Dir) {
+		return Result{}, fmt.Errorf("working folder %q is not an absolute existing folder", c.Dir)
+	}
+	cmd := exec.CommandContext(ctx, c.Exe, c.Args...)
+	cmd.Dir = c.Dir
+	cmd.Env = mergeEnv(os.Environ(), c.Env)
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return Result{}, err
+	}
+	out, err := cmd.StdoutPipe()
+	if err != nil {
+		return Result{}, err
+	}
+	stderr := &capBuffer{max: maxStderr}
+	cmd.Stderr = stderr
+	cmd.WaitDelay = closeWait
+	prepare(cmd)
+	if err := cmd.Start(); err != nil {
+		return Result{}, err
+	}
+	release := contain(cmd)
+	go func() { io.WriteString(stdin, c.Stdin) }() // stdin stays open
+	stdout := &capBuffer{max: maxStdout}
+	var kill *time.Timer
+	closeIn := func() {
+		if kill == nil {
+			stdin.Close()
+			kill = time.AfterFunc(closeWait, func() { cmd.Process.Kill() })
+		}
+	}
+	sc := bufio.NewScanner(out)
+	sc.Buffer(make([]byte, 64<<10), maxStdout)
+	for sc.Scan() {
+		line := sc.Bytes()
+		stdout.Write(line)
+		stdout.Write([]byte{'\n'})
+		if kill == nil && last(line) {
+			closeIn()
+		}
+	}
+	io.Copy(io.Discard, out) // a line too long for the scanner: keep the pipe flowing
+	closeIn()
+	err = cmd.Wait()
+	kill.Stop()
+	release()
 	res := Result{Stdout: stdout.Bytes(), Stderr: stderr.Bytes()}
 	var exitErr *exec.ExitError
 	switch {

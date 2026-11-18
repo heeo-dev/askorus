@@ -107,19 +107,38 @@ type AdapterInfo struct {
 	// notice as before.
 	SignInHint string `json:"signInHint,omitempty"`
 	// Usage is how much of the AI's plan is left, per group of models that
-	// share a limit, when the AI says (Antigravity's weekly limits, #20).
-	// Older apps leave it out.
+	// share a limit or per time window, when the AI says (#20: Antigravity's
+	// weekly limits; Codex's, Claude's and OpenCode Go's windows). Older apps
+	// leave it out.
 	Usage []UsageGroup `json:"usage,omitempty"`
 }
 
-// UsageGroup is one group of an AI's models that share a usage limit.
+// UsageGroup is one limit of an AI's plan: a group of models that share it,
+// or one time window of it.
 type UsageGroup struct {
-	Name string `json:"name"` // as the AI names it ("Gemini Models")
+	Name string `json:"name"` // as the AI names it ("Gemini Models"), or the window in English
 	// Left is the share of the limit left, 0 to 1.
 	Left float64 `json:"left"`
 	// ResetAt is when it refreshes (RFC 3339, UTC), "" when the AI does not say.
 	ResetAt string `json:"resetAt,omitempty"`
+	// Window is the time the limit runs over: Window5h, WindowWeek or
+	// WindowMonth; "" when the AI does not say. The app names the limit by
+	// it when set.
+	Window string `json:"window,omitempty"`
+	// Limited: the AI says this limit is used up (it may still show a little
+	// left, rounded).
+	Limited bool `json:"limited,omitempty"`
+	// At is when the agent read it (RFC 3339, UTC), set only when that was
+	// not just now: Claude's comes with the last question the agent asked it.
+	At string `json:"at,omitempty"`
 }
+
+// The time windows of a usage limit (UsageGroup.Window).
+const (
+	Window5h    = "5h"
+	WindowWeek  = "week"
+	WindowMonth = "month"
+)
 
 // SignInHintMacKeychain: the agent runs on a Mac outside the screen's
 // session (started over SSH, for example), where the AI's sign-in in the

@@ -1,6 +1,7 @@
 package proc
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -24,10 +25,46 @@ import (
 //	echo   print stdin and ASKORUS_PROC_X
 //	spawn  start a sleeping copy that holds stdout, write its pid to
 //	       ASKORUS_PROC_PIDFILE, and end at once
+//	rpc    answer each stdin line "ask N" with "answer N" after 100 ms, as
+//	       codex app-server does; end when stdin closes, without the
+//	       answers not yet written
+//	stay   like rpc, but never end
 func TestMain(m *testing.M) {
 	switch os.Getenv("ASKORUS_PROC_HELPER") {
 	case "":
 		os.Exit(m.Run())
+	case "rpc", "stay":
+		stay := os.Getenv("ASKORUS_PROC_HELPER") == "stay"
+		lines := make(chan string)
+		go func() {
+			sc := bufio.NewScanner(os.Stdin)
+			for sc.Scan() {
+				lines <- sc.Text()
+			}
+			close(lines)
+		}()
+		var due []string
+		tick := time.NewTicker(100 * time.Millisecond)
+		for {
+			select {
+			case l, ok := <-lines:
+				if !ok {
+					if stay {
+						lines = nil
+						continue
+					}
+					os.Exit(0)
+				}
+				if n, ok := strings.CutPrefix(l, "ask "); ok {
+					due = append(due, n)
+				}
+			case <-tick.C:
+				for _, n := range due {
+					fmt.Println("answer " + n)
+				}
+				due = nil
+			}
+		}
 	case "sleep":
 		time.Sleep(30 * time.Second)
 	case "exit3":
@@ -125,6 +162,53 @@ func TestRunLeavesNoChildren(t *testing.T) {
 				p.Kill()
 			}
 		}
+	}
+}
+
+// #20: RunUntil keeps stdin open until the line it waits for, then closes
+// it and the program ends. Run, which closes stdin at once, gets no answer
+// from such a program.
+func TestRunUntilKeepsStdinOpen(t *testing.T) {
+	c := helper(t, "rpc", nil)
+	c.Stdin = "ask 1\nask 2\n"
+	res, err := Run(context.Background(), c)
+	if err != nil || strings.Contains(string(res.Stdout), "answer") {
+		t.Fatalf("run = %q %v, want no answer", res.Stdout, err)
+	}
+	start := time.Now()
+	res, err = RunUntil(context.Background(), c, func(line []byte) bool { return string(line) == "answer 2" })
+	if err != nil || res.ExitCode != 0 {
+		t.Fatalf("run until = %v %d", err, res.ExitCode)
+	}
+	if got := string(res.Stdout); got != "answer 1\nanswer 2\n" {
+		t.Errorf("stdout = %q", got)
+	}
+	if d := time.Since(start); d > closeWait {
+		t.Errorf("took %v: the program did not end when stdin closed", d)
+	}
+}
+
+// A program that does not end when its stdin closes is killed closeWait
+// later; one that never gives the line ends with ctx.
+func TestRunUntilEnds(t *testing.T) {
+	c := helper(t, "stay", nil)
+	c.Stdin = "ask 1\n"
+	start := time.Now()
+	res, err := RunUntil(context.Background(), c, func(line []byte) bool { return string(line) == "answer 1" })
+	if err != nil {
+		t.Fatalf("stay: %v", err)
+	}
+	if d := time.Since(start); d < closeWait || d > closeWait+5*time.Second {
+		t.Errorf("stay took %v, want about %v", d, closeWait)
+	}
+	if string(res.Stdout) != "answer 1\n" {
+		t.Errorf("stdout = %q", res.Stdout)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	_, err = RunUntil(ctx, c, func([]byte) bool { return false })
+	if !errors.Is(err, ErrTimeout) {
+		t.Errorf("never the line: %v, want ErrTimeout", err)
 	}
 }
 

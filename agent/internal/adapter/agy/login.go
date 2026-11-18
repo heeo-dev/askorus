@@ -102,7 +102,7 @@ func readUsage(res proc.Result) loginState {
 				if t, err := time.Parse(time.RFC3339, b.ResetTime); err == nil {
 					reset = t.UTC().Format(time.RFC3339)
 				}
-				st.groups = append(st.groups, UsageGroup{Name: clip(g.Name, 60), Left: left, ResetAt: reset})
+				st.groups = append(st.groups, UsageGroup{Name: clip(g.Name, 60), Left: left, ResetAt: reset, Window: core.WindowWeek, Limited: left <= 0})
 			}
 		}
 		return st

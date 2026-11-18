@@ -90,6 +90,12 @@
 #   on the bare command must hold. About 8 AI calls, Gemini quota only;
 #   skipped when agy is not installed or not signed in.
 #
+# LT-18, what is left of the plans (#20, agent/internal/live/usage_live_test.go):
+#   Codex through `codex app-server` (account/rateLimits/read) and OpenCode
+#   Go through `opencode api --standalone experimental.usage.limits`, as the
+#   agent reads them. No model is asked. Both are experimental in their
+#   CLIs; this notices a change. OpenCode without a Go plan is logged.
+#
 # One full run writes one combined answer with Codex (LT-08 1), refines
 # once with Codex (LT-09 1), asks Codex 4 times (LT-05 3, LT-12 1), lets
 # Codex speak once or twice in a debate (LT-11) and asks Codex 3 times with
@@ -105,6 +111,7 @@
 #   powershell -NoProfile -File scripts\test-live.ps1 -Run LT15    # only LT-15
 #   powershell -NoProfile -File scripts\test-live.ps1 -Run LT16    # only LT-16
 #   powershell -NoProfile -File scripts\test-live.ps1 -Run LT17    # only LT-17
+#   powershell -NoProfile -File scripts\test-live.ps1 -Run LT18    # only LT-18
 param([string]$Run)
 # One heavy job at a time on this PC (heavy-job.ps1).
 . (Join-Path $PSScriptRoot 'heavy-job.ps1')

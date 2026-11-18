@@ -395,7 +395,7 @@ func TestInfoAndUsage(t *testing.T) {
 	if !info.Available || info.Version != "1.5.10" || !slices.Equal(info.Capabilities, []core.Capability{core.CapAsk}) || len(info.Notices) != 0 {
 		t.Errorf("info = %+v", info)
 	}
-	if len(info.Usage) != 1 || info.Usage[0] != (core.UsageGroup{Name: "Gemini Models", Left: 0.94, ResetAt: fakecli.AgyResetTime}) {
+	if len(info.Usage) != 1 || info.Usage[0] != (core.UsageGroup{Name: "Gemini Models", Left: 0.94, ResetAt: fakecli.AgyResetTime, Window: core.WindowWeek}) {
 		t.Errorf("info usage = %+v", info.Usage)
 	}
 	u := a.Usage(context.Background())

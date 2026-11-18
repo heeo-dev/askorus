@@ -176,6 +176,12 @@ func Main(args []string) int {
 	if role == RoleAgy && len(args) > 1 && args[0] == "-p" && args[1] == "/usage" {
 		return agyUsage(args) // the sign-in and usage check: not recorded
 	}
+	if role == RoleCodex && len(args) > 0 && args[0] == "app-server" {
+		return codexAppServer(args) // the usage read (#20): not recorded, stdin read line by line
+	}
+	if role == RoleOpenCode && len(args) > 0 && args[0] == "api" {
+		return opencodeUsage(args) // the usage read (#20): not recorded
+	}
 	in, _ := io.ReadAll(os.Stdin)
 	c := &Call{Role: role, Args: args, Stdin: string(in), At: time.Now().UTC()}
 	c.Dir, _ = os.Getwd()
@@ -534,7 +540,7 @@ func setEnv(t testing.TB, role string) {
 	t.Setenv(EnvRole, role)
 	t.Setenv(EnvRecord, t.TempDir())
 	t.Setenv(EnvState, t.TempDir())
-	for _, k := range []string{EnvSynth, EnvSleep, EnvVersion, EnvFail, EnvAnswers, EnvAsk, EnvDebate} {
+	for _, k := range []string{EnvSynth, EnvSleep, EnvVersion, EnvFail, EnvAnswers, EnvAsk, EnvDebate, EnvUsage} {
 		t.Setenv(k, "")
 	}
 }

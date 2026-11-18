@@ -109,8 +109,12 @@ func TestLoginCheckRunsModels(t *testing.T) {
 	if info := a.Info(context.Background()); len(info.Notices) != 0 {
 		t.Errorf("models failed: %+v", info)
 	}
-	if cs := calls(t, argsFile); len(cs) != 0 {
-		t.Errorf("the check ran more than models: %+v", cs)
+	// Info also reads the Go usage in the background (#20); nothing else ran.
+	a.usage.Wait(context.Background())
+	for _, c := range calls(t, argsFile) {
+		if !slices.Equal(c.Args, usageArgs) {
+			t.Errorf("the check ran more than models: %+v", c)
+		}
 	}
 }
 

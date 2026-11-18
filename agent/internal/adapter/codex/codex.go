@@ -103,6 +103,10 @@ type Adapter struct {
 	loginAt    time.Time
 	loginCheck func(context.Context) loginState
 
+	// usage is what is left of the plan (#20, usage.go), read in the
+	// background and kept usageTTL.
+	usage *core.UsageCache
+
 	// schemaDir holds the schema files: absolute, or "" when there is no
 	// agent folder.
 	schemaDir string
@@ -123,6 +127,7 @@ type Adapter struct {
 func New(o Options) *Adapter {
 	a := &Adapter{tiers: o.Tiers, schemaDir: o.SchemaDir}
 	a.exe, a.exeErr = findExe(o.Path)
+	a.usage = &core.UsageCache{TTL: usageTTL, Read: a.readUsage}
 	if a.schemaDir == "" {
 		a.schemaDir, _ = config.Dir() // none: a combined answer fails as internal
 	}
@@ -186,6 +191,9 @@ func (a *Adapter) Info(ctx context.Context) core.AdapterInfo {
 			info.Version, info.Available = v, true
 			info.Capabilities = append(info.Capabilities, core.CapAsk)
 			a.loginNotices(ctx, &info)
+			if a.cachedLogin(ctx).signedIn {
+				info.Usage = a.usage.Get()
+			}
 		}
 	}
 	return info

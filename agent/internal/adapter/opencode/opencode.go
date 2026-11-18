@@ -117,12 +117,17 @@ type Adapter struct {
 	loginAt    time.Time
 	loginDone  chan struct{}
 	loginCheck func(context.Context) loginState
+
+	// usage is what is left of the OpenCode Go plan (#20, usage.go), read
+	// in the background and kept usageTTL.
+	usage *core.UsageCache
 }
 
 // New finds opencode. A missing opencode is not an error: /v1/info says so.
 func New(o Options) *Adapter {
 	a := &Adapter{tiers: o.Tiers}
 	a.exe, a.exeErr = findExe(o.Path)
+	a.usage = &core.UsageCache{TTL: usageTTL, Read: a.readUsage}
 	return a
 }
 
@@ -173,6 +178,7 @@ func (a *Adapter) Info(ctx context.Context) core.AdapterInfo {
 			info.Version, info.Available = v, true
 			info.Capabilities = append(info.Capabilities, core.CapAsk)
 			a.loginNotices(ctx, &info)
+			info.Usage = a.usage.Get()
 		}
 	}
 	return info
