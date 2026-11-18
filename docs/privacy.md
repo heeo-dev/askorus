@@ -1,6 +1,6 @@
 # Askorus 개인정보처리방침
 
-시행일: 2026년 11월 14일
+시행일: 2026년 11월 18일
 
 Askorus는 질문 하나를 여러 AI에게 한 번에 묻고, 사회자 AI가 답을 정리하며, 의견이 다른 곳은 AI끼리 토론하게 하는 앱이다. 폰에서 사용자 PC의 코딩 AI 세션을 보고 켜는 기능도 있다. AI에게 묻고, 정리하고, 토론시키는 일은 사용자의 PC가 한다. 개발자는 서버를 두지 않고, 사용자의 데이터를 받지 않는다.
 
@@ -30,7 +30,7 @@ Askorus는 Anthropic, OpenAI 같은 AI 회사의 공식 제품이 아니다.
 
 # Askorus Privacy Policy
 
-Effective date: November 14, 2026
+Effective date: November 18, 2026
 
 Askorus asks one question to several AIs at once; a moderator AI sums up their answers, and where the AIs disagree, they debate. It also lets you see and start the coding AI sessions on your own PC from your phone. Your own PC does the asking, the summing up and the debating. The developer runs no server and receives none of your data.
 
