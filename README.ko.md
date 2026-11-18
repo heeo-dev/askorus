@@ -76,7 +76,7 @@ Askorus는 PC에 설치한 각 AI의 공식 CLI(터미널 프로그램)로 묻�
 |---|---|---|
 | [Claude Code](https://code.claude.com/docs/en/setup) | Windows: `irm https://claude.ai/install.ps1 \| iex`<br>macOS, Linux: `curl -fsSL https://claude.ai/install.sh \| bash` | `claude auth login` (Claude 유료 요금제가 필요합니다) |
 | [Codex](https://developers.openai.com/codex/cli) | Windows: `powershell -ExecutionPolicy ByPass -c "irm https://chatgpt.com/codex/install.ps1 \| iex"`<br>macOS, Linux: `curl -fsSL https://chatgpt.com/codex/install.sh \| sh` | `codex login` |
-| [OpenCode](https://opencode.ai/docs) | 공식 문서의 운영체제별 방법(Windows는 내려받기) | `opencode`를 실행하고 `/connect` |
+| [OpenCode](https://opencode.ai/docs) | 공식 문서의 운영체제별 방법(Windows는 내려받기) | `opencode auth login`을 실행하고 쓰는 모델의 공급자를 고릅니다(Askorus의 기본은 OpenCode Go). `opencode`를 실행하고 `/connect`도 됩니다 |
 
 설치하고 로그인한 뒤 PC에서 `askorus-agent check`를 실행하면, 찾았는지와 로그인되어 있는지를 AI마다 보여 줍니다. 앱의 설정 > PC > 연결 진단에도 나옵니다.
 
@@ -201,7 +201,7 @@ PC의 Claude Code나 Codex에 내 운영체제에 맞는 글을 붙여 넣으세
 - **Mac에서 Claude가 로그인되어 있지 않다고 하는데, 터미널에서는 `claude`가 잘 됩니다.** 에이전트를 SSH에서 켠 경우입니다(SSH에서 설치 줄을 실행한 경우 등). Claude Code는 로그인을 키체인에 두는데, SSH에서 켠 프로그램은 SSH를 끊은 뒤에도 그것을 읽지 못합니다. 다시 로그인해도 고쳐지지 않습니다. Mac 화면에서 터미널을 열고 `askorus-agent shutdown`, `askorus-agent start`를 차례로 실행하세요.
 - **새 Claude Code 세션이 시작되지 않습니다.** Claude Code는 폴더마다 한 번 신뢰할지 묻습니다. PC에서 그 폴더로 가서 `claude`를 한 번 실행하고 허용하세요.
 - **폴더 열어 두기가 '켜는 중'에 머물거나 실패합니다.** Claude Code에서 Remote Control을 한 번 켜야 합니다. PC에서 `claude remote-control`을 실행해 `y`로 답하고 Ctrl+C로 끄세요.
-- **한 AI만 '로그인되어 있지 않다'며 답하지 않습니다.** PC에서 그 AI의 CLI가 로그인되어 있지 않거나 로그인이 끝났습니다(Claude Code의 로그인은 끝나는 날이 있습니다). PC의 터미널에서 Claude Code는 `claude auth login`, Codex는 `codex login`을 실행하세요. 데스크톱 앱(Claude, Codex)에 로그인한 것과는 따로입니다. 앱의 연결 진단과 `askorus-agent check`가 로그인 상태와 곧 끝나는 날을 알려 줍니다.
+- **한 AI만 '로그인되어 있지 않다'며 답하지 않습니다.** PC에서 그 AI의 CLI가 로그인되어 있지 않거나 로그인이 끝났습니다(Claude Code의 로그인은 끝나는 날이 있습니다). PC의 터미널에서 Claude Code는 `claude auth login`, Codex는 `codex login`, OpenCode는 `opencode auth login`을 실행하세요(OpenCode는 공급자마다 로그인합니다. 모델의 공급자를 고르세요. 기본은 OpenCode Go). 데스크톱 앱(Claude, Codex)에 로그인한 것과는 따로입니다. 앱의 연결 진단과 `askorus-agent check`가 로그인 상태와 곧 끝나는 날을 알려 줍니다.
 - **AI가 목록에 없습니다.** PC에 설치하고 로그인한 뒤 `check`를 다시 실행하세요. `autostart on` 뒤에 설치한 프로그램은 흔한 설치 폴더에서 찾습니다. 못 찾으면 `autostart on`을 다시 실행하세요.
 
 그래도 안 되면 `askorus-agent check` 결과를 붙여 [이슈를 열어 주세요](https://github.com/heeo-dev/askorus/issues/new/choose)(계정, PC 이름, Tailscale 주소는 지우고).

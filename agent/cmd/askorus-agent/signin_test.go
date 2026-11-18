@@ -8,6 +8,7 @@ import (
 
 	"github.com/heeo-dev/askorus/agent/internal/adapter/claude"
 	"github.com/heeo-dev/askorus/agent/internal/adapter/codex"
+	"github.com/heeo-dev/askorus/agent/internal/adapter/opencode"
 	"github.com/heeo-dev/askorus/agent/internal/core"
 )
 
@@ -20,6 +21,10 @@ func TestSignInLine(t *testing.T) {
 	}
 	if ok := signInLine(c, "Codex", core.AdapterInfo{Agent: codex.Name, Available: true, Notices: []string{codex.NoticeSignedOut}}); ok || !strings.Contains(out.String(), "codex login") || c.warn != 1 {
 		t.Errorf("signed out: ok %v, printed %q", ok, out.String())
+	}
+	out.Reset()
+	if ok := signInLine(c, "OpenCode", core.AdapterInfo{Agent: opencode.Name, Available: true, Notices: []string{opencode.NoticeSignedOut}}); ok || !strings.Contains(out.String(), "opencode auth login") || c.warn != 2 {
+		t.Errorf("OpenCode signed out: ok %v, printed %q", ok, out.String())
 	}
 	out.Reset()
 	end := time.Date(2026, 11, 27, 3, 2, 52, 0, time.UTC)

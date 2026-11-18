@@ -168,6 +168,10 @@ const (
 	// (#60). Detail is the command that signs it in again on the PC
 	// ("claude auth login"), not the AI's own message.
 	ErrCodeSignedOut = "ai_signed_out"
+	// ErrCodeFreeLimit: the AI's free models reached their usage limit
+	// (OpenCode without a sign-in, 2026-11-18). Detail is when they can be
+	// used again (RFC 3339, UTC), "" when the AI does not say.
+	ErrCodeFreeLimit = "ai_free_limit"
 )
 
 // A model name for an ask: letters, digits and . _ - / : # [ ], never

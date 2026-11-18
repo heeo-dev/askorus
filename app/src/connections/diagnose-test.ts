@@ -27,6 +27,8 @@ test('a signed-out AI fails the check and says how to sign in (#60)', async () =
     agents: [
       { agent: 'claude', version: '2.1.325', available: true, capabilities: ['list', 'ask'], notices: ['claude_signed_out'] },
       { agent: 'codex', version: '0.167.1', available: true, capabilities: ['ask'], notices: ['codex_signed_out'] },
+      // 11-18: OpenCode signs in per provider; the notice is about its model's.
+      { agent: 'opencode', version: '2.2.7', available: true, capabilities: ['ask'], notices: ['opencode_signed_out'] },
     ],
   } as Info;
   const checks = await diagnose(client(info));
@@ -34,6 +36,7 @@ test('a signed-out AI fails the check and says how to sign in (#60)', async () =
   expect(failed).toEqual([
     "Claude Code on the PC isn't signed in, so it can't answer. Run claude auth login in a terminal on the PC.",
     "Codex on the PC isn't signed in, so it can't answer. Run codex login in a terminal on the PC.",
+    "OpenCode on the PC isn't signed in for its model, so it can't answer. Run opencode auth login in a terminal on the PC and pick the model's provider (OpenCode Go by default).",
   ]);
 });
 

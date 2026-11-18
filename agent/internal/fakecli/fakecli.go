@@ -6,7 +6,8 @@
 // question (synth.go), and OpenCode's session list and delete. Every
 // call but --version is recorded with its arguments, folder, the
 // environment the adapters set and stdin, so a test can check that the
-// question went on stdin and never into an argument.
+// question went on stdin and never into an argument. OpenCode's model list
+// (`opencode models`, its sign-in check) is not recorded either.
 //
 // Only tests import this package; TestNotInAgent checks that the agent
 // does not. Hook it in as the first line of a package's TestMain:
@@ -44,12 +45,17 @@
 //	                           "opencode=fail,codex=empty"; fail is the AI's
 //	                           usage limit (exit 1), empty an answer with
 //	                           no text, signedout the AI's not-signed-in
-//	                           message (claude, codex; exit 1), ok (the
-//	                           default) an answer
-//	ASKORUS_FAKECLI_SIGNIN   sign-in state for `claude auth status --json`
-//	                           and `codex login status` (signin.go): "in"
-//	                           (default), "out", "soon" (claude), for every
-//	                           AI or per AI "claude=out"
+//	                           message (claude, codex; exit 1; opencode: the
+//	                           provider refuses the key, 401), freelimit
+//	                           OpenCode's free models at their limit
+//	                           (opencode only), ok (the default) an answer
+//	ASKORUS_FAKECLI_SIGNIN   sign-in state for `claude auth status --json`,
+//	                           `codex login status` and `opencode models`
+//	                           (signin.go): "in" (default), "out", "soon"
+//	                           (claude), for every AI or per AI
+//	                           "claude=out"; an OpenCode that is out lists
+//	                           only free models and does not know the
+//	                           others
 //	ASKORUS_FAKE_DEBATE      the debate (debate.go): "" one point, "two"
 //	                           a taste point too, "next" one more turn at
 //	                           every check that may, "none" no point
@@ -88,10 +94,13 @@ const (
 	AskOK    = "ok"    // the default: an answer
 	AskFail  = "fail"  // the AI's usage limit: Claude is_error, Codex turn.failed, OpenCode an error event; exit 1
 	AskEmpty = "empty" // the ask ends well with no answer text
+	// AskFreeLimit: OpenCode's free models reached their usage limit
+	// (opencode only; 11-18), with about 7 hours to wait.
+	AskFreeLimit = "freelimit"
 )
 
 // AskModes lists the ask modes.
-var AskModes = []string{AskOK, AskFail, AskEmpty, AskSignedOut}
+var AskModes = []string{AskOK, AskFail, AskEmpty, AskSignedOut, AskFreeLimit}
 
 // Roles.
 const (
@@ -153,6 +162,9 @@ func Main(args []string) int {
 	}
 	if len(args) == 1 && args[0] == "--version" {
 		return printVersion(role)
+	}
+	if role == RoleOpenCode && len(args) > 0 && args[0] == "models" {
+		return opencodeModels(args) // a check like --version: not recorded
 	}
 	in, _ := io.ReadAll(os.Stdin)
 	c := &Call{Role: role, Args: args, Stdin: string(in), At: time.Now().UTC()}

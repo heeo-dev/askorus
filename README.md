@@ -77,7 +77,7 @@ Askorus asks each AI through its official CLI (the terminal program) on the PC. 
 |---|---|---|
 | [Claude Code](https://code.claude.com/docs/en/setup) | Windows: `irm https://claude.ai/install.ps1 \| iex`<br>macOS, Linux: `curl -fsSL https://claude.ai/install.sh \| bash` | `claude auth login` (needs a paid Claude plan) |
 | [Codex](https://developers.openai.com/codex/cli) | Windows: `powershell -ExecutionPolicy ByPass -c "irm https://chatgpt.com/codex/install.ps1 \| iex"`<br>macOS, Linux: `curl -fsSL https://chatgpt.com/codex/install.sh \| sh` | `codex login` |
-| [OpenCode](https://opencode.ai/docs) | The official docs' way for each system (on Windows, a download) | run `opencode`, then `/connect` |
+| [OpenCode](https://opencode.ai/docs) | The official docs' way for each system (on Windows, a download) | `opencode auth login`, then pick the provider of the model you use (Askorus uses OpenCode Go by default). Or run `opencode`, then `/connect` |
 
 After installing and signing in, run `askorus-agent check` on the PC: it shows, for each AI, whether it was found and is signed in. The app shows the same in Settings > the PC > connection check.
 
@@ -202,7 +202,7 @@ Run `askorus-agent check` on the PC first. It lists what is missing, each line w
 - **On a Mac, Claude says it is not signed in, but `claude` works in Terminal.** The agent was started over SSH (for example, the install line was run over SSH). Claude Code keeps its sign-in in the keychain, which a program started over SSH cannot read, even after SSH ends. Signing in again does not help: on the Mac itself, open Terminal and run `askorus-agent shutdown`, then `askorus-agent start`.
 - **A new Claude Code session does not start.** Claude Code asks once per folder whether you trust it: on the PC, run `claude` in that folder once and accept.
 - **Keeping a folder open stays at "starting" or fails.** Remote Control has to be turned on once in Claude Code: on the PC, run `claude remote-control`, answer `y`, then stop it with Ctrl+C.
-- **One AI does not answer and says it isn't signed in.** That AI's CLI on the PC is not signed in, or its sign-in ended (Claude Code's sign-in has an end date). In a terminal on the PC, run `claude auth login` for Claude Code or `codex login` for Codex. Signing in to the desktop apps (Claude, Codex) is separate. The app's connection check and `askorus-agent check` show the sign-in state and a sign-in that ends soon.
+- **One AI does not answer and says it isn't signed in.** That AI's CLI on the PC is not signed in, or its sign-in ended (Claude Code's sign-in has an end date). In a terminal on the PC, run `claude auth login` for Claude Code, `codex login` for Codex, or `opencode auth login` for OpenCode (OpenCode signs in per provider: pick the one of its model, OpenCode Go by default). Signing in to the desktop apps (Claude, Codex) is separate. The app's connection check and `askorus-agent check` show the sign-in state and a sign-in that ends soon.
 - **An AI is missing from the list.** Install it and sign in to it on the PC, then run `check` again. A program installed after `autostart on` is found in its usual folder, or run `autostart on` again.
 
 Still stuck? [Open an issue](https://github.com/heeo-dev/askorus/issues/new/choose) with the output of `askorus-agent check` (take your account, PC names and Tailscale addresses out first).
