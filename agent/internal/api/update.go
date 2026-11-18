@@ -33,6 +33,9 @@ const (
 	CodeUpdateChanged     = "update_changed"      // the latest release is not the one the phone saw
 	CodeUpdateRunning     = "update_running"      // one is under way already
 	CodeUpdateCheckFailed = "update_check_failed" // GitHub did not answer, or the release did not check out
+	// CodeUpdateFailedRecently: this version did not come up within the
+	// last hour; it is not tried again yet (R-133).
+	CodeUpdateFailedRecently = "update_failed_recently"
 )
 
 // Updater is the agent's side of the update (cmd/askorus-agent). Nil: no
@@ -53,6 +56,8 @@ var (
 	ErrUpdateNotAllowed = errors.New(CodeUpdateNotAllowed)
 	ErrUpdateChanged    = errors.New(CodeUpdateChanged)
 	ErrUpdateRunning    = errors.New(CodeUpdateRunning)
+	// ErrUpdateFailedRecently: this version did not come up a moment ago.
+	ErrUpdateFailedRecently = errors.New(CodeUpdateFailedRecently)
 )
 
 // Work is what an update asks of the server.
@@ -148,6 +153,8 @@ func (s *Server) startUpdate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, CodeUpdateChanged, "the latest release is not the one the phone saw")
 	case errors.Is(err, ErrUpdateRunning):
 		writeError(w, http.StatusConflict, CodeUpdateRunning, "an update is under way")
+	case errors.Is(err, ErrUpdateFailedRecently):
+		writeError(w, http.StatusConflict, CodeUpdateFailedRecently, "this version did not come up a moment ago; try again in an hour")
 	default:
 		writeError(w, http.StatusBadGateway, CodeUpdateCheckFailed, err.Error())
 	}
@@ -166,13 +173,23 @@ func (s *Server) Busy() UpdateBusy {
 	return b
 }
 
-// Hold refuses new work while an update is under way.
-func (s *Server) Hold(on bool) { s.holding.Store(on) }
+// Hold refuses new work while an update is under way. Once it returns,
+// every request that starts work either came in before (and WaitIdle
+// waits for it) or is refused (R-137).
+func (s *Server) Hold(on bool) {
+	s.workMu.Lock()
+	s.holding = on
+	s.workMu.Unlock()
+}
 
-// WaitIdle waits until no ask, comparison or debate runs, or ctx ends.
+// WaitIdle waits until no request that starts work is under way and no
+// ask, comparison or debate runs, or ctx ends.
 func (s *Server) WaitIdle(ctx context.Context) error {
 	for {
-		if b := s.Busy(); b.Asks == 0 {
+		s.workMu.Lock()
+		entering := s.entering
+		s.workMu.Unlock()
+		if entering == 0 && s.Busy().Asks == 0 {
 			return nil
 		}
 		select {
@@ -183,13 +200,22 @@ func (s *Server) WaitIdle(ctx context.Context) error {
 	}
 }
 
-// held answers 503 when an update is under way; the handlers that start
-// work call it first.
-func (s *Server) held(w http.ResponseWriter) bool {
-	if !s.holding.Load() {
-		return false
+// enter lets a request that starts work in, or answers 503 while an
+// update is under way. The handlers that start work call it first and
+// leave when they return: by then their work is counted by Busy.
+func (s *Server) enter(w http.ResponseWriter) (leave func(), ok bool) {
+	s.workMu.Lock()
+	if s.holding {
+		s.workMu.Unlock()
+		w.Header().Set("Retry-After", "60")
+		writeError(w, http.StatusServiceUnavailable, CodeUpdating, "the agent is updating; try again in a minute")
+		return nil, false
 	}
-	w.Header().Set("Retry-After", "60")
-	writeError(w, http.StatusServiceUnavailable, CodeUpdating, "the agent is updating; try again in a minute")
-	return true
+	s.entering++
+	s.workMu.Unlock()
+	return func() {
+		s.workMu.Lock()
+		s.entering--
+		s.workMu.Unlock()
+	}, true
 }

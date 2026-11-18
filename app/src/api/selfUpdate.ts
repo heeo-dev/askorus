@@ -40,7 +40,7 @@ export type FollowOptions = {
   signal?: AbortSignal;
   /** How often to ask (3 s). */
   every?: number;
-  /** How long to follow: the ten minutes of waiting and the swap (15 min). */
+  /** How long to follow: up to ten minutes of waiting, ten of downloading and the swap (25 min, R-138). */
   limitMs?: number;
   now?: () => number;
 };
@@ -61,7 +61,7 @@ const pause = (ms: number, signal?: AbortSignal) =>
 export async function followUpdate(client: AgentClient, to: string, o: FollowOptions = {}): Promise<UpdateOutcome> {
   const every = o.every ?? followTiming.every;
   const now = o.now ?? Date.now;
-  const end = now() + (o.limitMs ?? 15 * 60 * 1000);
+  const end = now() + (o.limitMs ?? 25 * 60 * 1000);
   while (!o.signal?.aborted) {
     try {
       const st = await client.updateStatus(o.signal);

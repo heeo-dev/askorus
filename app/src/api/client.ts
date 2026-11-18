@@ -414,12 +414,14 @@ export class AgentClient {
 
   /** The agent's update status (#35); the PC asks GitHub at most every six hours. */
   updateStatus(signal?: AbortSignal) {
-    return this.request<UpdateStatus>('GET', 'update', undefined, signal);
+    // The PC may ask GitHub first (up to 20 s, R-138).
+    return this.request<UpdateStatus>('GET', 'update', undefined, signal, 30_000);
   }
 
   /** Takes the release the phone saw (#35); the agent refuses one that changed meanwhile. */
   startUpdate(version: string) {
-    return this.request<{ state: string }>('POST', 'update', { version });
+    // The PC checks the release afresh before it answers (up to a minute, R-138).
+    return this.request<{ state: string }>('POST', 'update', { version }, undefined, 75_000);
   }
 
   /** Unpairs this phone on the PC, so its token stops working there. */

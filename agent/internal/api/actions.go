@@ -266,9 +266,11 @@ type StartRequest struct {
 }
 
 func (s *Server) startSession(w http.ResponseWriter, r *http.Request) {
-	if s.held(w) {
+	leaveWork, entered := s.enter(w)
+	if !entered {
 		return
 	}
+	defer leaveWork()
 	var req StartRequest
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<10)).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, CodeBadRequest, "body must be {folder, name, model, effort}")

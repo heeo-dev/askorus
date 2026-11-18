@@ -109,9 +109,11 @@ func comparisonStatus(c compares.Comparison) ComparisonStatus {
 // path and status only), and errors go out through writeError with fixed
 // text, never actionError, which logs an error's detail.
 func (s *Server) startComparison(w http.ResponseWriter, r *http.Request) {
-	if s.held(w) {
+	leaveWork, entered := s.enter(w)
+	if !entered {
 		return
 	}
+	defer leaveWork()
 	var req ComparisonRequest
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxComparisonBody)).Decode(&req); err != nil {
 		var tooBig *http.MaxBytesError
@@ -186,9 +188,11 @@ func (s *Server) getComparison(w http.ResponseWriter, r *http.Request) {
 // never took its answers (cancelled while it waited, or its run was gone)
 // starts over (202). Any other ended comparison comes back as it is.
 func (s *Server) retryComparison(w http.ResponseWriter, r *http.Request) {
-	if s.held(w) {
+	leaveWork, entered := s.enter(w)
+	if !entered {
 		return
 	}
+	defer leaveWork()
 	c, err := s.compares.Retry(deviceOf(r), r.PathValue("id"))
 	switch {
 	case err == nil:
@@ -207,9 +211,11 @@ func (s *Server) retryComparison(w http.ResponseWriter, r *http.Request) {
 // with the body's AI or the one asked for before. A done one comes back as
 // it is; 409 while the comparison or its combined answer waits or runs.
 func (s *Server) writeSynthesis(w http.ResponseWriter, r *http.Request) {
-	if s.held(w) {
+	leaveWork, entered := s.enter(w)
+	if !entered {
 		return
 	}
+	defer leaveWork()
 	var req SynthesisRequest
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxSynthesisBody))
 	if err != nil {

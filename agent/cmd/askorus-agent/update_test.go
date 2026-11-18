@@ -37,11 +37,18 @@ type updatePC struct {
 	launches []string
 	// comesUp says whether a started serve comes up (by the program's bytes).
 	comesUp func(program []byte) bool
-	done    chan struct{}
+	// neverReady: a started serve that comes up never listens (R-134).
+	neverReady bool
+	ready      map[int]bool
+	// helperDies: the new program ends before it takes over (R-135).
+	helperDies bool
+	killed     []int
+	hits       int // requests to the pretend GitHub
+	done       chan struct{}
 }
 
 func newUpdatePC(t *testing.T) *updatePC {
-	p := &updatePC{t: t, dir: t.TempDir(), newProg: []byte("agent 0.5.1"), alive: map[int]bool{}, nextPID: 200, done: make(chan struct{}, 4)}
+	p := &updatePC{t: t, dir: t.TempDir(), newProg: []byte("agent 0.5.1"), alive: map[int]bool{}, ready: map[int]bool{}, nextPID: 200, done: make(chan struct{}, 4)}
 	p.comesUp = func([]byte) bool { return true }
 
 	// The release, signed by a root this test trusts.
@@ -58,6 +65,9 @@ func newUpdatePC(t *testing.T) *updatePC {
 	relSig, _ := update.Sign(relSec, rel, update.ReleaseTrusted("0.5.1"))
 	p.files = map[string][]byte{update.KeyFile: cert, update.KeySigFile: certSig, update.ReleaseFile: rel, update.ReleaseSigFile: relSig}
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		p.mu.Lock()
+		p.hits++
+		p.mu.Unlock()
 		if name, ok := strings.CutPrefix(r.URL.Path, "/releases/latest/download/"); ok && p.files[name] != nil {
 			w.Write(p.files[name])
 			return
@@ -79,7 +89,9 @@ func newUpdatePC(t *testing.T) *updatePC {
 	os.WriteFile(p.exe, []byte("agent 0.5.0"), 0o755)
 
 	saved := []any{version, updateSource, updateRoots, updateExe, updateHome, updateLaunch, updatePID, updateUp, updateStop, updateWaitOld, updateWaitNew, updateSettle, updatePoll, update.Says}
+	savedReady, savedKill, savedHandshake := updateReady, killProcess, updateHandshake
 	t.Cleanup(func() {
+		updateReady, killProcess, updateHandshake = savedReady, savedKill, savedHandshake
 		version = saved[0].(string)
 		updateSource, updateRoots = saved[1].(func() update.Source), saved[2].(func() ([]update.PublicKey, error))
 		updateExe, updateHome = saved[3].(func() (string, error)), saved[4].(func() (string, error))
@@ -100,6 +112,9 @@ func newUpdatePC(t *testing.T) *updatePC {
 		return "askorus-agent " + strings.TrimPrefix(string(b), "agent "), nil
 	}
 	updateWaitOld, updateWaitNew, updateSettle, updatePoll = 2*time.Second, 300*time.Millisecond, 50*time.Millisecond, 5*time.Millisecond
+	updateHandshake = time.Second
+	updateReady = func(_ string, pid int) bool { p.mu.Lock(); defer p.mu.Unlock(); return p.ready[pid] }
+	killProcess = func(pid int) { p.mu.Lock(); p.killed = append(p.killed, pid); p.alive[pid] = false; p.mu.Unlock() }
 	updatePID = func(pid int) bool { p.mu.Lock(); defer p.mu.Unlock(); return p.alive[pid] }
 	updateUp = func(int) bool { p.mu.Lock(); defer p.mu.Unlock(); return p.up }
 	updateStop = func(int) error {
@@ -118,6 +133,9 @@ func newUpdatePC(t *testing.T) *updatePC {
 		pid := p.nextPID
 		p.mu.Unlock()
 		if args[0] == updateFinishArg {
+			if p.helperDies {
+				return pid, nil // started, and gone before it said anything
+			}
 			// The new program takes over in the background, as it would.
 			go func() { updateFinishCmd(dir, args[1:]); p.done <- struct{}{} }()
 			return pid, nil
@@ -126,6 +144,7 @@ func newUpdatePC(t *testing.T) *updatePC {
 		if p.comesUp(prog) {
 			p.mu.Lock()
 			p.alive[pid], p.up = true, true
+			p.ready[pid] = !p.neverReady
 			p.mu.Unlock()
 		}
 		return pid, nil

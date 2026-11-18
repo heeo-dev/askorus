@@ -30,7 +30,9 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/heeo-dev/askorus/agent/internal/update"
@@ -341,15 +343,57 @@ func keyFolder(dir string) error {
 	if err != nil {
 		return err
 	}
-	for d := abs; ; d = filepath.Dir(d) {
-		if _, err := os.Stat(filepath.Join(d, ".git")); err == nil {
-			return fmt.Errorf("%s is inside the git checkout %s; keep keys outside any repository", abs, d)
-		}
-		if filepath.Dir(d) == d {
-			break
+	// A link or junction may lead into a checkout from outside it (R-139):
+	// the folder is checked where it really is.
+	real, err := realPath(abs)
+	if err != nil {
+		return err
+	}
+	for _, p := range []string{abs, real} {
+		for d := p; ; d = filepath.Dir(d) {
+			if _, err := os.Stat(filepath.Join(d, ".git")); err == nil {
+				return fmt.Errorf("%s is inside the git checkout %s; keep keys outside any repository", abs, d)
+			}
+			if filepath.Dir(d) == d {
+				break
+			}
 		}
 	}
-	return os.MkdirAll(abs, 0o700)
+	if err := os.MkdirAll(abs, 0o700); err != nil {
+		return err
+	}
+	// And once more as made, in case a link appeared on the way.
+	if made, err := finalPath(abs); err != nil || !samePath(made, real) {
+		return fmt.Errorf("%s did not end up where it was checked", abs)
+	}
+	return nil
+}
+
+// realPath resolves the links in the part of p that exists and keeps the
+// rest as written.
+func realPath(p string) (string, error) {
+	rest := ""
+	for d := p; ; d = filepath.Dir(d) {
+		if _, err := os.Lstat(d); err == nil {
+			r, err := finalPath(d)
+			if err != nil {
+				return "", err
+			}
+			return filepath.Join(r, rest), nil
+		}
+		if filepath.Dir(d) == d {
+			return p, nil
+		}
+		rest = filepath.Join(filepath.Base(d), rest)
+	}
+}
+
+func samePath(a, b string) bool {
+	a, b = filepath.Clean(a), filepath.Clean(b)
+	if runtime.GOOS == "windows" {
+		return strings.EqualFold(a, b)
+	}
+	return a == b
 }
 
 // terminalPassword reads a password from the terminal without showing it.

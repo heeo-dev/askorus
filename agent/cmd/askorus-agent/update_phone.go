@@ -123,8 +123,20 @@ func (u *phoneUpdater) Start(device, want string, w api.Work) error {
 	if err != nil {
 		return api.ErrUpdateOff
 	}
+	// A version that did not come up a moment ago is not tried again at
+	// once: each try holds the questions and restarts the agent (R-133).
+	if p, ok := update.ReadProgress(u.dir); ok && p.To == want && (p.State == update.ProgressRolledBack || p.State == update.ProgressFailed) {
+		if since := updateNow().Sub(p.At); since >= 0 && since < updateRetryAfter {
+			return api.ErrUpdateFailedRecently
+		}
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
+	// What the phone saw came from the remembered check: a version that is
+	// not the one remembered is refused without asking GitHub (R-133).
+	if f, err := u.checker.Check(ctx, false); err == nil && f.Latest != "" && f.Latest != want {
+		return api.ErrUpdateChanged
+	}
 	f, err := u.checker.Check(ctx, true)
 	if err != nil {
 		return err
@@ -133,20 +145,50 @@ func (u *phoneUpdater) Start(device, want string, w api.Work) error {
 		return api.ErrUpdateChanged
 	}
 	u.running = true
-	go u.run(cfg, exe, f, w)
+	go u.run(device, cfg, exe, f, w)
 	return nil
 }
 
+// updateRetryAfter is how long a version that did not come up waits
+// before the phone may try it again (R-133).
+var updateRetryAfter = time.Hour
+
+// stillGo checks again, after the wait, what Start checked (R-132): the
+// update and this phone may have been turned off, the phone disconnected,
+// or the release changed or expired meanwhile. It returns the release to
+// take.
+func (u *phoneUpdater) stillGo(device string, f update.Found) (update.Found, error) {
+	info := u.Info(device)
+	if !info.Can || !info.Allowed {
+		return update.Found{}, errors.New("updates were turned off, or this phone was disconnected or turned off, while the agent waited")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	now, err := u.checker.Check(ctx, true)
+	if err != nil {
+		return update.Found{}, err
+	}
+	if !now.Newer || now.Latest != f.Latest {
+		return update.Found{}, errors.New("the latest release changed while the agent waited")
+	}
+	return now, nil
+}
+
 // run is the update after the phone's go: hold, wait, hand over, end.
-func (u *phoneUpdater) run(cfg config.Config, exe string, f update.Found, w api.Work) {
+func (u *phoneUpdater) run(device string, cfg config.Config, exe string, f update.Found, w api.Work) {
+	to := f.Latest
 	w.Hold(true)
 	ctx, cancel := context.WithTimeout(context.Background(), updateWorkWait)
 	_ = w.WaitIdle(ctx) // after ten minutes what still runs is cut off, as the phone said
 	cancel()
-	if err := handOver(u.dir, cfg, exe, f, os.Getpid(), true); err != nil {
+	err := error(nil)
+	if f, err = u.stillGo(device, f); err == nil {
+		err = handOver(u.dir, cfg, exe, f, os.Getpid(), true)
+	}
+	if err != nil {
 		// Nothing was changed (or it was put back): work goes on.
-		if p, ok := update.ReadProgress(u.dir); !ok || p.To != f.Latest || p.State == update.ProgressSwapped {
-			_ = update.WriteProgress(u.dir, update.Progress{From: version, To: f.Latest, State: update.ProgressNotTaken, Reason: err.Error(), At: updateNow()})
+		if p, ok := update.ReadProgress(u.dir); !ok || p.To != to || p.State == update.ProgressSwapped || p.State == update.ProgressFinishing {
+			_ = update.WriteProgress(u.dir, update.Progress{From: version, To: to, State: update.ProgressNotTaken, Reason: err.Error(), At: updateNow()})
 		}
 		w.Hold(false)
 		u.mu.Lock()
@@ -162,7 +204,7 @@ func (u *phoneUpdater) run(cfg config.Config, exe string, f update.Found, w api.
 // which version is running now.
 func settleProgress(dir string) {
 	p, ok := update.ReadProgress(dir)
-	if !ok || p.State != update.ProgressSwapped || updateNow().Sub(p.At) < updateWaitOld+updateWaitNew+updateSettle {
+	if !ok || (p.State != update.ProgressSwapped && p.State != update.ProgressFinishing) || updateNow().Sub(p.At) < updateWaitOld+updateWaitNew+updateSettle {
 		return
 	}
 	switch version {

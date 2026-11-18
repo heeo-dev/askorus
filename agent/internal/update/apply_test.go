@@ -189,7 +189,7 @@ func TestCheckerRemembersSixHours(t *testing.T) {
 	if !f.Newer || f.Latest != "0.5.1" || f.Release == nil || f.Program.Name != "askorus-agent-windows-amd64.exe" {
 		t.Fatalf("first check: %+v", f)
 	}
-	if st := LoadState(dir); st.KeySeq != 1 || st.Latest != "0.5.1" || !st.Checked.Equal(t0) {
+	if st, err := LoadState(dir); err != nil || st.KeySeq != 1 || st.Latest != "0.5.1" || !st.Checked.Equal(t0) {
 		t.Fatalf("state: %+v", st)
 	}
 	hits := g.hits.Load()

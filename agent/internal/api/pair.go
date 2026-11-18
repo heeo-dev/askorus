@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/heeo-dev/askorus/agent/internal/devices"
 	"github.com/heeo-dev/askorus/agent/internal/pairing"
 )
 
@@ -192,7 +193,16 @@ func (s *Server) pairAnswer(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, CodeBadRequest, "body must be {id, allow}")
 		return
 	}
-	if s.o.Pairer == nil || s.o.Pairer.Answer(req.ID, req.Allow) != nil {
+	// A phone kept from updating lets in only devices kept from it too (R-131).
+	noUpdate := false
+	if g, ok := s.o.Devices.(interface {
+		Get(id string) (devices.Device, bool)
+	}); ok {
+		if d, ok := g.Get(deviceOf(r)); ok {
+			noUpdate = d.NoUpdate
+		}
+	}
+	if s.o.Pairer == nil || s.o.Pairer.AnswerAs(req.ID, req.Allow, noUpdate) != nil {
 		writeError(w, http.StatusNotFound, CodePairUnknown, "no such pairing request (answered already, or its time is up)")
 		return
 	}

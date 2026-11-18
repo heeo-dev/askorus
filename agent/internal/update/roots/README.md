@@ -11,3 +11,6 @@ signed it.
   already trust. Remove a key only after every agent in use carries another.
 - With no key here, agents built from this folder cannot update themselves
   and say so.
+- When a release key is replaced (a new `askorus-sign certify` number),
+  raise `MinKeySeq` in `../roots.go` to that number in the same release, so
+  an agent whose update.json was deleted still refuses the old key.

@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -38,16 +39,26 @@ type State struct {
 	Latest  string    `json:"latest,omitempty"` // the latest version seen then
 }
 
-// LoadState reads update.json; a missing or broken file is a fresh state.
-// A broken file loses the key number seen, which only loosens the check
-// back to the root keys: it never lets an unsigned file through.
-func LoadState(dir string) State {
+// ErrBadState: update.json cannot be read. The check stops rather than
+// forget the release key number it saw (R-140, review of #35): starting
+// over would take a release key that was replaced. Deleting the file
+// starts over from MinKeySeq on purpose.
+var ErrBadState = errors.New("the update state (update.json) cannot be read; delete it to start over")
+
+// LoadState reads update.json; a missing file is a fresh state.
+func LoadState(dir string) (State, error) {
 	var s State
 	b, err := os.ReadFile(filepath.Join(dir, stateFile))
-	if err == nil {
-		_ = json.Unmarshal(b, &s)
+	if errors.Is(err, os.ErrNotExist) {
+		return s, nil
 	}
-	return s
+	if err != nil {
+		return s, fmt.Errorf("%w: %v", ErrBadState, err)
+	}
+	if err := json.Unmarshal(b, &s); err != nil || s.KeySeq < 0 {
+		return State{}, ErrBadState
+	}
+	return s, nil
 }
 
 // SaveState writes update.json.
@@ -75,7 +86,20 @@ type Checker struct {
 	Now     func() time.Time
 
 	mu sync.Mutex
+	// The last time GitHub was asked and what came of it (R-133): a fresh
+	// check within FreshFor answers from it, and a failed one is not
+	// tried again for FailFor, so no phone can make the agent ask GitHub
+	// over and over.
+	askedAt time.Time
+	asked   Found
+	askErr  error
 }
+
+// FreshFor and FailFor bound how often GitHub is asked (R-133).
+var (
+	FreshFor = time.Minute
+	FailFor  = 30 * time.Minute
+)
 
 // Found is what a check learned.
 type Found struct {
@@ -91,14 +115,24 @@ type Found struct {
 }
 
 // Check answers from the last check when it is younger than CacheFor and
-// fresh is false; otherwise it asks GitHub and checks the signatures.
+// fresh is false; otherwise it asks GitHub and checks the signatures. A
+// failed ask is remembered for FailFor, and any ask for FreshFor.
 func (c *Checker) Check(ctx context.Context, fresh bool) (Found, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	now := c.Now()
-	st := LoadState(c.Dir)
+	st, err := LoadState(c.Dir)
+	if err != nil {
+		return Found{}, err
+	}
 	if !fresh && st.Latest != "" && now.Sub(st.Checked) >= 0 && now.Sub(st.Checked) < CacheFor {
 		return Found{Current: c.Current, Latest: st.Latest, Checked: st.Checked, Newer: Newer(st.Latest, c.Current)}, nil
+	}
+	if !c.askedAt.IsZero() && now.Sub(c.askedAt) >= 0 {
+		since := now.Sub(c.askedAt)
+		if since < FreshFor || (c.askErr != nil && since < FailFor) {
+			return c.asked, c.askErr
+		}
 	}
 	roots, err := c.Roots()
 	if err != nil {
@@ -109,11 +143,18 @@ func (c *Checker) Check(ctx context.Context, fresh bool) (Found, error) {
 	if len(roots) == 0 {
 		return Found{}, ErrNoRoot
 	}
+	f, err := c.ask(ctx, roots, st, now)
+	c.askedAt, c.asked, c.askErr = now, f, err
+	return f, err
+}
+
+func (c *Checker) ask(ctx context.Context, roots []PublicKey, st State, now time.Time) (Found, error) {
 	signed, err := c.Source.Latest(ctx)
 	if err != nil {
 		return Found{}, err
 	}
-	r, err := Check(roots, st.KeySeq, signed, now)
+	// The build's floor (R-140) holds even when update.json was deleted.
+	r, err := Check(roots, max(st.KeySeq, MinKeySeq), signed, now)
 	if err != nil {
 		return Found{}, err
 	}
@@ -252,12 +293,78 @@ func rename(from, to string) error {
 	}
 }
 
+// ErrBusy: another update holds the lock.
+var ErrBusy = errors.New("another update is under way")
+
+const lockFile = "update.lock"
+
+// Lock takes the update lock in dir for pid (update.lock), so the phone's
+// update and the terminal's never touch the same files at once (R-136). A
+// lock whose process has ended is taken over; alive reports whether a pid
+// still runs. The returned func lets it go.
+func Lock(dir string, pid int, alive func(int) bool) (func(), error) {
+	path := filepath.Join(dir, lockFile)
+	for range 2 {
+		f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+		if err == nil {
+			_, werr := fmt.Fprintf(f, "%d\n", pid)
+			if cerr := f.Close(); werr == nil {
+				werr = cerr
+			}
+			if werr != nil {
+				os.Remove(path)
+				return nil, werr
+			}
+			return func() { ReleaseLock(dir, pid) }, nil
+		}
+		if !errors.Is(err, os.ErrExist) {
+			return nil, err
+		}
+		if held := lockHolder(path); held > 0 && alive(held) {
+			return nil, ErrBusy
+		}
+		os.Remove(path) // its process ended (or never wrote its pid)
+	}
+	return nil, ErrBusy
+}
+
+func lockHolder(path string) int {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return 0
+	}
+	n, _ := strconv.Atoi(strings.TrimSpace(string(b)))
+	return n
+}
+
+// TransferLock hands the lock from one process to another: the old agent
+// to the new program that finishes the update.
+func TransferLock(dir string, from, to int) error {
+	path := filepath.Join(dir, lockFile)
+	switch lockHolder(path) {
+	case from:
+	case 0:
+		return nil // nothing is held any more
+	default:
+		return ErrBusy
+	}
+	return config.WriteFileAtomic(path, []byte(strconv.Itoa(to)+"\n"))
+}
+
+// ReleaseLock lets the lock go when pid holds it.
+func ReleaseLock(dir string, pid int) {
+	path := filepath.Join(dir, lockFile)
+	if lockHolder(path) == pid {
+		os.Remove(path)
+	}
+}
+
 // Progress is the last update's course, for the phone to read once the
 // agent is back (update-progress.json).
 type Progress struct {
 	From   string    `json:"from"`
 	To     string    `json:"to"`
-	State  string    `json:"state"` // ProgressSwapped, ProgressDone, ProgressRolledBack, ProgressFailed, ProgressNotTaken
+	State  string    `json:"state"` // ProgressSwapped, ProgressFinishing, ProgressDone, ProgressRolledBack, ProgressFailed, ProgressNotTaken
 	Reason string    `json:"reason,omitempty"`
 	At     time.Time `json:"at"`
 }
@@ -265,6 +372,7 @@ type Progress struct {
 // The states of Progress.
 const (
 	ProgressSwapped    = "swapped"     // the new program is in place, starting it
+	ProgressFinishing  = "finishing"   // the new program runs and takes over (R-135)
 	ProgressDone       = "done"        // the new agent is up
 	ProgressRolledBack = "rolled-back" // it did not come up; the old one is back
 	ProgressFailed     = "failed"      // it did not come up, nor did the old one

@@ -211,6 +211,7 @@
   "update.error.update_unavailable": "PC에서 업데이트가 꺼졌거나, 이 에이전트는 스스로 올릴 수 없습니다.",
   "update.error.update_running": "이미 업데이트하는 중입니다.",
   "update.error.update_check_failed": "PC가 새 판을 확인하지 못했습니다. 잠시 뒤 다시 해 보세요.",
+  "update.error.update_failed_recently": "이 판은 조금 전에 켜지지 않아 되돌렸습니다. 한 시간쯤 뒤에 다시 해 보세요.",
   "error.updating": "PC 에이전트가 업데이트하는 중입니다. 1분 뒤 다시 하세요.",
   "ask.error.updating": "PC 에이전트가 업데이트하는 중입니다. 1분 뒤 다시 물어보세요.",
   "notice.codex_script_only": "Codex가 npm 스크립트(codex.cmd)로만 깔려 있습니다. agent.json의 codexPath에 실제 codex.exe를 적으세요.",

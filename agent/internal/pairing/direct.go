@@ -63,6 +63,16 @@ type direct struct {
 	mu       sync.Mutex
 	state    State  // StatePending until settled
 	windowID string // the window that let it in, if one did
+	// noUpdate: a paired phone that may not update the agent let it in, so
+	// the new device may not either (R-131, #35): otherwise that phone
+	// could pair itself again under another name to get round it.
+	noUpdate bool
+}
+
+func (d *direct) keepsFromUpdating() bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.noUpdate
 }
 
 // settle records the outcome if there is none yet, and reports whether it
@@ -275,6 +285,12 @@ func (p *Pairer) awaitDirect(id string, d *direct, ended func(State)) {
 	switch state {
 	case StateApproved:
 		token, dev, err := p.Devices.Add(d.q.DeviceName)
+		if err == nil && d.keepsFromUpdating() {
+			id := dev.ID
+			if dev, err = p.Devices.SetUpdate(id, false); err != nil {
+				_, _ = p.Devices.Revoke(id) // never a token that may do more than its approver
+			}
+		}
 		if err != nil {
 			e.state, res.Reason = StateFailed, "store"
 		} else {
@@ -325,11 +341,24 @@ func (p *Pairer) Pending() []Question {
 
 // Answer is a paired phone's answer to the waiting request.
 func (p *Pairer) Answer(questionID string, allow bool) error {
+	return p.AnswerAs(questionID, allow, false)
+}
+
+// AnswerAs is Answer from a phone that may not update the agent when
+// noUpdate is set: the device it lets in may not either (R-131).
+func (p *Pairer) AnswerAs(questionID string, allow, noUpdate bool) error {
 	p.mu.Lock()
 	d := p.direct
 	p.mu.Unlock()
 	if d == nil || questionID == "" || d.q.ID != questionID {
 		return ErrUnknownRequest
+	}
+	if allow && noUpdate {
+		d.mu.Lock()
+		if d.state == StatePending {
+			d.noUpdate = true
+		}
+		d.mu.Unlock()
 	}
 	if !d.settle(answerState(allow), "") {
 		// Settled already: the screen, a window, another phone or the time.

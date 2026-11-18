@@ -95,9 +95,11 @@ func debateStatus(d compares.Debate) DebateStatus {
 
 // startDebate is POST /v1/debates. It answers 202 at once.
 func (s *Server) startDebate(w http.ResponseWriter, r *http.Request) {
-	if s.held(w) {
+	leaveWork, entered := s.enter(w)
+	if !entered {
 		return
 	}
+	defer leaveWork()
 	var req DebateRequest
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxDebateBody)).Decode(&req); err != nil {
 		var tooBig *http.MaxBytesError

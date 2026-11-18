@@ -295,9 +295,11 @@ func (s *Server) askersFor(w http.ResponseWriter, ctx context.Context, targets [
 // then shows each AI's answer as it comes. The prompt and answers are
 // never logged (the request log has method, path and status only).
 func (s *Server) startRun(w http.ResponseWriter, r *http.Request) {
-	if s.held(w) {
+	leaveWork, entered := s.enter(w)
+	if !entered {
 		return
 	}
+	defer leaveWork()
 	var req RunRequest
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxRunBody)).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, CodeBadRequest, "body must be {mode, prompt, tier, agents}")

@@ -211,6 +211,7 @@
   "update.error.update_unavailable": "Updates are off on the PC, or this agent cannot update itself.",
   "update.error.update_running": "An update is under way already.",
   "update.error.update_check_failed": "The PC could not check the new version. Try again in a while.",
+  "update.error.update_failed_recently": "This version did not come up a moment ago, so the old one is back. Try again in about an hour.",
   "error.updating": "The PC's agent is updating. Try again in a minute.",
   "ask.error.updating": "The PC's agent is updating. Ask again in a minute.",
   "notice.codex_script_only": "Codex is installed only as an npm script (codex.cmd). Set codexPath in agent.json to the real codex.exe.",

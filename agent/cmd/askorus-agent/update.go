@@ -48,11 +48,16 @@ var (
 	updatePID    = processRunning
 	updateUp     = func(port int) bool { return agentRunning(port) }
 	updateStop   = signalStop
+	// updateReady: the agent started as pid is listening on its Tailscale
+	// node; serve writes its pid file only then (R-134). The stop event or
+	// lock that updateUp sees comes before Tailscale starts.
+	updateReady = func(dir string, pid int) bool { return readPID(dir) == pid }
 
-	updateWaitOld = 60 * time.Second // for the old agent to end
-	updateWaitNew = 60 * time.Second // for the new one to come up (part 27)
-	updateSettle  = 5 * time.Second  // and stay up
-	updatePoll    = 200 * time.Millisecond
+	updateWaitOld   = 60 * time.Second // for the old agent to end
+	updateWaitNew   = 60 * time.Second // for the new one to come up (part 27)
+	updateSettle    = 5 * time.Second  // and stay up
+	updateHandshake = 15 * time.Second // for the new program to say it takes over (R-135)
+	updatePoll      = 200 * time.Millisecond
 )
 
 func updateCmd(dir string, args []string, out io.Writer) error {
@@ -132,7 +137,9 @@ func updateStatus(dir string, cfg config.Config, out io.Writer) error {
 	if _, err := selfUpdatable(cfg); cfg.UpdatesOn() && errors.As(err, &why) {
 		say(out, why.msg)
 	}
-	if st := update.LoadState(dir); st.Latest != "" {
+	if st, err := update.LoadState(dir); err != nil {
+		say(out, msg{en: err.Error(), ko: "업데이트 상태 파일(update.json)을 읽을 수 없습니다. 지우면 처음부터 다시 확인합니다"})
+	} else if st.Latest != "" {
 		say(out, m("latest release seen: %s (%s)", "본 최신 판: %s (%s)", st.Latest, st.Checked.Local().Format("2006-01-02 15:04")))
 	}
 	if p, ok := update.ReadProgress(dir); ok {
@@ -223,8 +230,24 @@ func updateNowCmd(dir string, cfg config.Config, out io.Writer) error {
 
 // handOver stages f, swaps it in and starts the new program as
 // update-finish. The caller then stops the old agent (the terminal by
-// signalStop, the agent itself by its own shutdown).
+// signalStop, the agent itself by its own shutdown). It holds the update
+// lock (R-136) and hands it to the new program, and returns only once the
+// new program says it is there to take over (R-135): otherwise the old
+// program is put back and the old agent goes on.
 func handOver(dir string, cfg config.Config, exe string, f update.Found, oldPID int, start bool) error {
+	unlock, err := update.Lock(dir, os.Getpid(), updatePID)
+	if errors.Is(err, update.ErrBusy) {
+		return fail("another update of this agent is under way", "이 에이전트의 다른 업데이트가 진행 중입니다")
+	}
+	if err != nil {
+		return err
+	}
+	handed := false
+	defer func() {
+		if !handed {
+			unlock()
+		}
+	}()
 	staged, err := update.Stage(context.Background(), updateSource(), f, runtime.GOOS, exe)
 	if err != nil {
 		return updateFailed(err)
@@ -234,25 +257,44 @@ func handOver(dir string, cfg config.Config, exe string, f update.Found, oldPID 
 		os.Remove(staged)
 		return err
 	}
-	p := update.Progress{From: version, To: f.Latest, State: update.ProgressSwapped, At: updateNow()}
+	started := updateNow()
+	p := update.Progress{From: version, To: f.Latest, State: update.ProgressSwapped, At: started}
 	if err := update.WriteProgress(dir, p); err != nil {
 		_ = update.Restore(exe, prev, runtime.GOOS)
 		return err
 	}
 	if err := os.MkdirAll(filepath.Join(dir, "logs"), 0o700); err != nil {
+		_ = update.Restore(exe, prev, runtime.GOOS)
 		return err
 	}
 	startArg := "0"
 	if start {
 		startArg = "1"
 	}
-	if _, err := updateLaunch(exe, []string{updateFinishArg, strconv.Itoa(oldPID), version, f.Latest, startArg}, dir, filepath.Join(dir, "logs", "update.out")); err != nil {
+	putBack := func(why string) error {
 		if rerr := update.Restore(exe, prev, runtime.GOOS); rerr != nil {
-			return fmt.Errorf("%v; and putting the old agent back failed: %v", err, rerr)
+			_ = update.WriteProgress(dir, update.Progress{From: version, To: f.Latest, State: update.ProgressFailed, Reason: why + "; putting the old agent back failed: " + rerr.Error(), At: updateNow()})
+			return fmt.Errorf("%s; and putting the old agent back failed: %v", why, rerr)
 		}
-		_ = update.WriteProgress(dir, update.Progress{From: version, To: f.Latest, State: update.ProgressRolledBack, Reason: "the new agent did not start: " + err.Error(), At: updateNow()})
-		return err
+		_ = update.WriteProgress(dir, update.Progress{From: version, To: f.Latest, State: update.ProgressNotTaken, Reason: why, At: updateNow()})
+		return errors.New(why)
 	}
+	helper, err := updateLaunch(exe, []string{updateFinishArg, strconv.Itoa(oldPID), version, f.Latest, startArg}, dir, filepath.Join(dir, "logs", "update.out"))
+	if err != nil {
+		return putBack("the new agent did not start: " + err.Error())
+	}
+	took := waitFor(func() bool {
+		p, ok := update.ReadProgress(dir)
+		return ok && p.To == f.Latest && p.State != update.ProgressSwapped && !p.At.Before(started)
+	}, updateHandshake)
+	if !took {
+		killProcess(helper)
+		return putBack("the new agent did not take over")
+	}
+	// The new program has taken over: the lock is its own now. When it was
+	// quick enough to end already there is nothing left to hand over.
+	_ = update.TransferLock(dir, os.Getpid(), helper)
+	handed = true
 	return nil
 }
 
@@ -288,7 +330,7 @@ func updateLines(dir string, cfg config.Config) []checkLine {
 func waitProgress(dir, to string, since time.Time, d time.Duration) (update.Progress, bool) {
 	deadline := time.Now().Add(d)
 	for {
-		if p, ok := update.ReadProgress(dir); ok && p.To == to && !p.At.Before(since) && p.State != update.ProgressSwapped {
+		if p, ok := update.ReadProgress(dir); ok && p.To == to && !p.At.Before(since) && p.State != update.ProgressSwapped && p.State != update.ProgressFinishing {
 			return p, true
 		}
 		if time.Now().After(deadline) {
@@ -315,8 +357,15 @@ func updateFinishCmd(dir string, args []string) error {
 		return err
 	}
 	prev := update.Sibling(exe, runtime.GOOS, "prev")
+	// The lock is this program's once the old agent hands it over; it goes
+	// when the update has ended, however it ended.
+	defer update.ReleaseLock(dir, os.Getpid())
 	record := func(state, reason string) error {
 		return update.WriteProgress(dir, update.Progress{From: from, To: to, State: state, Reason: reason, At: updateNow()})
+	}
+	// Say at once that this program runs: only then does the old agent end (R-135).
+	if err := record(update.ProgressFinishing, ""); err != nil {
+		return err
 	}
 	// The old agent ends first: two would fight for the PC's Tailscale node.
 	if oldPID > 0 && !waitFor(func() bool { return !updatePID(oldPID) }, updateWaitOld) {
@@ -350,7 +399,8 @@ func startAndWatch(dir string, port int, exe string) (string, bool) {
 	if err != nil {
 		return "it did not start: " + err.Error(), false
 	}
-	if !waitFor(func() bool { return updateUp(port) }, updateWaitNew) {
+	// Up means this very agent listens on its Tailscale node (R-134).
+	if !waitFor(func() bool { return updateUp(port) && updateReady(dir, pid) }, updateWaitNew) {
 		stopStarted(port, pid)
 		return "it did not come up within a minute", false
 	}
@@ -366,9 +416,14 @@ func stopStarted(port, pid int) {
 	_ = updateStop(port)
 	waitFor(func() bool { return !updatePID(pid) }, 15*time.Second)
 	if updatePID(pid) {
-		if p, err := os.FindProcess(pid); err == nil {
-			_ = p.Kill()
-		}
+		killProcess(pid)
+	}
+}
+
+// killProcess ends a program this update started; tests replace it.
+var killProcess = func(pid int) {
+	if p, err := os.FindProcess(pid); err == nil {
+		_ = p.Kill()
 	}
 }
 

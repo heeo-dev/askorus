@@ -8,6 +8,12 @@ import (
 	"strings"
 )
 
+// MinKeySeq is the lowest release key number this build takes (R-140):
+// raise it to the new number whenever a release key is replaced, so an
+// agent whose update.json was deleted still refuses the old key. A var
+// only so the tests can raise it.
+var MinKeySeq = 0
+
 // The root keys the agent is built with (roots/README.md).
 //
 //go:embed roots

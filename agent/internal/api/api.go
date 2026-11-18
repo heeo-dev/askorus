@@ -14,7 +14,6 @@ import (
 	"slices"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/heeo-dev/askorus/agent/internal/compares"
@@ -68,7 +67,8 @@ type Pairer interface {
 	StartDirect(deviceName, match string, o pairing.Origin, ended func(pairing.State)) (requestID string, err error)
 	WindowIsOpen() bool
 	Pending() []pairing.Question
-	Answer(questionID string, allow bool) error
+	// AnswerAs: a phone that may not update the agent lets in a device that may not either (R-131).
+	AnswerAs(questionID string, allow, noUpdate bool) error
 }
 
 // Options configures the server.
@@ -153,8 +153,11 @@ type Server struct {
 	// run's photos until the run has ended (uploads.go).
 	uploading chan struct{}
 	holds     runHolds
-	// holding: an update is under way, new work is refused (update.go).
-	holding atomic.Bool
+	// An update holds new work (update.go): holding refuses it, entering
+	// counts the requests that came in before, both under workMu (R-137).
+	workMu   sync.Mutex
+	holding  bool
+	entering int
 }
 
 // New builds a server.

@@ -113,8 +113,11 @@ func TestPhoneUpdaterStatus(t *testing.T) {
 		t.Fatal("a status while off asked GitHub")
 	}
 	e.run("on")
-	// A release without signed information says so.
+	// A release without signed information says so (a new agent: this one
+	// remembers its last ask for a minute, R-133).
 	delete(e.files, update.ReleaseFile)
+	os.Remove(filepath.Join(e.dir, "update.json"))
+	e.u.checker = updateChecker(e.dir)
 	if st := e.u.Status(context.Background(), e.phone); st.CheckError != "no_release_info" {
 		t.Fatalf("no release.json: %+v", st)
 	}
