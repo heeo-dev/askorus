@@ -80,6 +80,16 @@
 #   writes a combined answer with the photos attached to its one-off
 #   command. 9 AI calls (Codex 3).
 #
+# LT-17, Antigravity (#20, agent/internal/live/agy_live_test.go): the real
+#   agy on the quick tier in the live ask folder. A question that asks for
+#   a command, a file outside the folder and the folder's listing gets none
+#   of them; a Korean question that needs the web is answered in Korean; a
+#   follow-up remembers it; the two test photos are read in a folder of
+#   their own and no file outside it; agy writes a combined answer with the
+#   photos. Then each lock alone (only the deny rules, only the agent file)
+#   on the bare command must hold. About 8 AI calls, Gemini quota only;
+#   skipped when agy is not installed or not signed in.
+#
 # One full run writes one combined answer with Codex (LT-08 1), refines
 # once with Codex (LT-09 1), asks Codex 4 times (LT-05 3, LT-12 1), lets
 # Codex speak once or twice in a debate (LT-11) and asks Codex 3 times with
@@ -94,6 +104,7 @@
 #   powershell -NoProfile -File scripts\test-live.ps1 -Run LT14    # only LT-14
 #   powershell -NoProfile -File scripts\test-live.ps1 -Run LT15    # only LT-15
 #   powershell -NoProfile -File scripts\test-live.ps1 -Run LT16    # only LT-16
+#   powershell -NoProfile -File scripts\test-live.ps1 -Run LT17    # only LT-17
 param([string]$Run)
 # One heavy job at a time on this PC (heavy-job.ps1).
 . (Join-Path $PSScriptRoot 'heavy-job.ps1')

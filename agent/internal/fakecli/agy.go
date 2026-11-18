@@ -16,8 +16,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
+
+	"github.com/heeo-dev/askorus/agent/internal/uploads"
 )
 
 // EnvAgy is the fake agy's own run mode, beside ASKORUS_FAKE_ASK and
@@ -154,8 +157,30 @@ func agyStream(args []string, stdin string) (int, string, error) {
 	if m.Event != "user" || m.Message.Role != "user" || len(m.Message.Content) != 1 || m.Message.Content[0].Type != "text" {
 		return 0, "", errors.New("stream-json message: want one user message with one text block")
 	}
-	return 0, m.Message.Content[0].Text, nil
+	photos := 0
+	if agent := flagValue(args, "--agent"); strings.HasSuffix(agent, "-photo") {
+		// The photo agents look at photo-<n>.<ext> in the folder they run in.
+		dir, _ := os.Getwd()
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			return 0, "", err
+		}
+		for _, e := range entries {
+			if !agyPhotoRe.MatchString(e.Name()) {
+				continue
+			}
+			b, err := os.ReadFile(filepath.Join(dir, e.Name()))
+			if err != nil || uploads.Sniff(b) == "" {
+				return 0, "", errors.New("photo: " + e.Name() + " is not an image")
+			}
+			photos++
+		}
+	}
+	return photos, m.Message.Content[0].Text, nil
 }
+
+// agyPhotoRe is the name the adapter gives a photo in a run's folder.
+var agyPhotoRe = regexp.MustCompile(`^photo-[1-4]\.(jpg|png|webp)$`)
 
 // agyEvent prints one stream-json event.
 func agyEvent(v any) { printJSON(v) }

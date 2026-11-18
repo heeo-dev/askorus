@@ -61,6 +61,15 @@ func lockSettings(denyReads, slash bool) string {
 // askSettings are an ask's: every read denied, no slash commands.
 var askSettings = lockSettings(true, false)
 
+// askInstructions are the body of the ask's agent files: agy's own
+// system prompt is left out for it. The search line keeps a question agy
+// cannot answer from searching until the run's time limit (2026-11-18:
+// asked to read a page, it searched 19 times for 240 seconds).
+const askInstructions = "You answer one general question sent by the Askorus app to several AIs at once. It is not a coding task. " +
+	"Answer only the question; do not add next-step suggestions or extra sections. " +
+	"Search the web only when the question needs it, a few times at most, then answer with what you found. " +
+	"Never write file paths or links to files in the answer.\n"
+
 // askAgentFile is the ask's agent file. Its tool list is the first lock:
 // agy hands the model these tools and no other (manage_task, its own to-do
 // list, always comes along). commandExecutionPolicy off and subagent false
@@ -73,9 +82,7 @@ const askAgentFile = "---\n" +
 	"subagent: false\n" +
 	"commandExecutionPolicy: off\n" +
 	"---\n" +
-	"You answer one general question sent by the Askorus app to several AIs at once. It is not a coding task. " +
-	"Answer only the question; do not add next-step suggestions or extra sections. " +
-	"Never write file paths or links to files in the answer.\n"
+	askInstructions
 
 // permissionMode is the mode the start event must report: what
 // askSettings sets.
@@ -85,36 +92,47 @@ const permissionMode = "request-review"
 // agent file did not hand over, and the answer is thrown away.
 var askTools = map[string]bool{"search_web": true, "manage_task": true}
 
-// askArgs builds one ask. The question is not among them: it goes on
-// stdin (stdinMessage).
+// askArgs builds one ask without photos; runArgs any ask. The question is
+// not among them: it goes on stdin (stdinMessage).
 //
-//	--agent askorus-ask --model M [--conversation C] --input-format stream-json --output-format stream-json --disable-slash-commands --settings S
+//	--agent A --model M [--conversation C] --input-format stream-json --output-format stream-json --disable-slash-commands --settings S
 func askArgs(model, conversation string) []string {
-	args := []string{"--agent", askAgent, "--model", model}
+	return runArgs(askAgent, askSettings, model, conversation)
+}
+
+func runArgs(agent, settings, model, conversation string) []string {
+	args := []string{"--agent", agent, "--model", model}
 	if conversation != "" {
 		args = append(args, "--conversation", conversation)
 	}
 	return append(args, "--input-format", "stream-json", "--output-format", "stream-json",
-		"--disable-slash-commands", "--settings", askSettings)
+		"--disable-slash-commands", "--settings", settings)
 }
 
-// checkArgs accepts exactly what askArgs makes from a valid model and
-// conversation: no other option (a mode, --dangerously-skip-permissions, a
-// project, another agent or other settings) reaches agy through an ask.
+// askAgentSettings pairs each ask agent with its deny rules.
+var askAgentSettings = map[string]string{askAgent: askSettings, photoAgent: photoSettings}
+
+// checkArgs accepts exactly what runArgs makes for one of the ask agents
+// with its own deny rules, a valid model and conversation: no other option
+// (a mode, --dangerously-skip-permissions, a project, another agent or
+// other settings) reaches agy through an ask.
 func checkArgs(args []string) error {
-	model, conversation := "", ""
+	agent, model, conversation := "", "", ""
 	if len(args) > 3 {
-		model = args[3]
+		agent, model = args[1], args[3]
 	}
 	if len(args) > 5 && args[4] == "--conversation" {
 		conversation = args[5]
 	}
+	settings, ok := askAgentSettings[agent]
 	switch {
+	case !ok:
+		return fmt.Errorf("agy ask: agent %q refused", agent)
 	case !modelRe.MatchString(model):
 		return fmt.Errorf("agy ask: model %q refused", model)
 	case conversation != "" && !conversationRe.MatchString(conversation):
 		return fmt.Errorf("agy ask: conversation %q refused", conversation)
-	case !slices.Equal(args, askArgs(model, conversation)):
+	case !slices.Equal(args, runArgs(agent, settings, model, conversation)):
 		return fmt.Errorf("agy ask: arguments %q refused", args)
 	}
 	return nil
@@ -193,19 +211,31 @@ func (a *Adapter) Ask(ctx context.Context, req core.AskRequest) (core.AskResult,
 		return core.AskResult{}, core.Fail(core.ErrCodeNotFound, "")
 	case req.OneOff && req.Resume != "":
 		return core.AskResult{}, core.Fail(core.ErrCodeInternal, "a one-off ask never resumes")
-	case len(req.Images) > 0:
+	case len(req.Images) > 0 && !a.SeesImages(model):
 		return core.AskResult{}, core.Fail(core.ErrCodeNoImages, "")
 	}
 	m := cliModel(model, effort)
-	dir, err := a.askFolder(req.Folder)
-	if err != nil {
-		return core.AskResult{}, err
+	agent, settings, tools, prompt := askAgent, askSettings, askTools, req.Prompt
+	var dir string
+	if len(req.Images) > 0 {
+		d, names, cleanup, err := photoFolder(req.Folder, photoAgent, photoAgentFile, req.Images)
+		if err != nil {
+			return core.AskResult{}, err
+		}
+		defer cleanup()
+		dir, agent, settings, tools, prompt = d, photoAgent, photoSettings, photoTools, photoLine(names)+req.Prompt
+	} else {
+		d, err := a.askFolder(req.Folder)
+		if err != nil {
+			return core.AskResult{}, err
+		}
+		dir = d
 	}
-	args := askArgs(m, req.Resume)
+	args := runArgs(agent, settings, m, req.Resume)
 	if err := checkArgs(args); err != nil {
 		return core.AskResult{}, core.Fail(core.ErrCodeBadModel, m)
 	}
-	res, err := proc.Run(ctx, proc.Cmd{Exe: a.exe, Dir: dir, Args: args, Stdin: stdinMessage(req.Prompt)})
+	res, err := proc.Run(ctx, proc.Cmd{Exe: a.exe, Dir: dir, Args: args, Stdin: stdinMessage(prompt)})
 	switch {
 	case errors.Is(err, proc.ErrTimeout):
 		return core.AskResult{}, core.Fail(core.ErrCodeAskTimeout, "")
@@ -214,7 +244,7 @@ func (a *Adapter) Ask(ctx context.Context, req core.AskRequest) (core.AskResult,
 	case err != nil:
 		return core.AskResult{}, core.Fail(core.ErrCodeAskFailed, err.Error())
 	}
-	out, err := parseAsk(res, askAgent, askTools, m, req.Resume)
+	out, err := parseAsk(res, agent, tools, m, req.Resume)
 	if req.OneOff {
 		out.SessionID = "" // agy keeps the conversation, but nothing carries it on
 	}

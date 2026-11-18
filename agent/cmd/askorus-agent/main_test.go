@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/heeo-dev/askorus/agent/internal/adapter/agy"
 	"github.com/heeo-dev/askorus/agent/internal/adapter/claude"
 	"github.com/heeo-dev/askorus/agent/internal/adapter/codex"
 	"github.com/heeo-dev/askorus/agent/internal/adapter/opencode"
@@ -151,7 +152,7 @@ func TestJudgeGate(t *testing.T) {
 	if g.Folder != core.JudgeFolder(cfg.Ask.Folder) || g.Settings.PerAI != 1 {
 		t.Errorf("gate = %+v", g)
 	}
-	want := map[string]string{claude.Name: claude.JudgeMinVersion, codex.Name: codex.JudgeMinVersion, opencode.Name: opencode.JudgeMinVersion}
+	want := map[string]string{claude.Name: claude.JudgeMinVersion, codex.Name: codex.JudgeMinVersion, opencode.Name: opencode.JudgeMinVersion, agy.Name: agy.JudgeMinVersion}
 	if !maps.Equal(g.MinVersions, want) {
 		t.Errorf("min versions = %v, want %v", g.MinVersions, want)
 	}

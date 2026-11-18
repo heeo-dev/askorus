@@ -164,6 +164,7 @@ func (r *rig) start() {
 		AskFolder: r.askDir, Judge: r.o.judge, Refine: r.o.refine, Uploads: photos,
 		JudgeMinVersions: map[string]string{
 			claude.Name: claude.JudgeMinVersion, codex.Name: codex.JudgeMinVersion, opencode.Name: opencode.JudgeMinVersion,
+			agy.Name: agy.JudgeMinVersion,
 		},
 	}))
 	r.srv = httptest.NewServer(apitest.AsOwner(r.server.Handler()))

@@ -300,13 +300,14 @@ func TestAskRefusedBeforeRunning(t *testing.T) {
 		req  core.AskRequest
 		code string
 	}{
-		"claude model": {core.AskRequest{Model: "claude-sonnet-4-6"}, core.ErrCodeBadModel},
-		"flag model":   {core.AskRequest{Model: "--mode=auto"}, core.ErrCodeBadModel},
-		"bad effort":   {core.AskRequest{Effort: "ultra"}, core.ErrCodeBadModel},
-		"bad resume":   {core.AskRequest{Resume: "ses_1"}, core.ErrCodeNotFound},
-		"one-off on":   {core.AskRequest{Resume: "0f3b5391-6d93-4cda-96c7-c453a27fc063", OneOff: true}, core.ErrCodeInternal},
-		"photo":        {core.AskRequest{Images: []core.Image{im}}, core.ErrCodeNoImages},
-		"no folder":    {core.AskRequest{Folder: filepath.Join(folder, "missing")}, core.ErrCodeInternal},
+		"claude model":  {core.AskRequest{Model: "claude-sonnet-4-6"}, core.ErrCodeBadModel},
+		"flag model":    {core.AskRequest{Model: "--mode=auto"}, core.ErrCodeBadModel},
+		"bad effort":    {core.AskRequest{Effort: "ultra"}, core.ErrCodeBadModel},
+		"bad resume":    {core.AskRequest{Resume: "ses_1"}, core.ErrCodeNotFound},
+		"one-off on":    {core.AskRequest{Resume: "0f3b5391-6d93-4cda-96c7-c453a27fc063", OneOff: true}, core.ErrCodeInternal},
+		"missing photo": {core.AskRequest{Images: []core.Image{im}}, core.ErrCodeInternal},
+		"photo, claude": {core.AskRequest{Images: []core.Image{im}, Model: "claude-sonnet-4-6"}, core.ErrCodeBadModel},
+		"no folder":     {core.AskRequest{Folder: filepath.Join(folder, "missing")}, core.ErrCodeInternal},
 	} {
 		if c.req.Folder == "" {
 			c.req.Folder = folder

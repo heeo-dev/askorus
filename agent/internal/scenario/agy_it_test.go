@@ -2,12 +2,14 @@ package scenario
 
 import (
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/heeo-dev/askorus/agent/internal/adapter/agy"
+	"github.com/heeo-dev/askorus/agent/internal/compares"
 	"github.com/heeo-dev/askorus/agent/internal/core"
 	"github.com/heeo-dev/askorus/agent/internal/fakecli"
 )
@@ -27,7 +29,7 @@ func TestIT24Agy(t *testing.T) {
 			t.Errorf("agy info %+v", ai)
 		}
 		if ai.Ask == nil || ai.Ask.Tiers[core.TierQuick] != (core.AskModel{Model: "gemini-3.8-flash", Effort: "low"}) ||
-			!slices.Equal(ai.Ask.Efforts["gemini-3.8-flash"], []string{"low", "medium", "high"}) || ai.Ask.Images != nil {
+			!slices.Equal(ai.Ask.Efforts["gemini-3.8-flash"], []string{"low", "medium", "high"}) || ai.Ask.Images == nil || !ai.Ask.Images.All {
 			t.Errorf("agy ask info %+v", ai.Ask)
 		}
 
@@ -115,21 +117,55 @@ func TestIT24Agy(t *testing.T) {
 		}
 	})
 
-	t.Run("photos leave agy out", func(t *testing.T) {
+	t.Run("photos in a folder of their own", func(t *testing.T) {
 		r := newRig(t, func(o *rigOptions) { o.agy = true })
 		r.addDevice()
+		if ai := agentInfo(t, r.info(), fakecli.RoleAgy); ai.Ask == nil || ai.Ask.Images == nil || !ai.Ask.Images.All {
+			t.Errorf("agy ask info %+v", ai.Ask)
+		}
 		up := r.upload(itJPEG)
 		st := r.waitRun(r.ask([]map[string]string{{"agent": "agy"}, {"agent": "claude"}}, map[string]any{"attachments": []string{up.ID}}).ID)
 		for _, p := range st.Parts {
-			if p.Agent == fakecli.RoleAgy && (p.Error == nil || p.Error.Code != core.ErrCodeNoImages) {
-				t.Errorf("agy part %+v", p.Error)
+			if p.Agent == fakecli.RoleAgy && (p.Error != nil || !strings.HasSuffix(p.Answer, " [photos: 1]")) {
+				t.Errorf("agy part %+v %q", p.Error, p.Answer)
 			}
 		}
-		for _, c := range fakecli.Calls(t) {
-			if c.Role == fakecli.RoleAgy {
-				t.Errorf("agy ran for a question with photos: %q", c.Args)
+		c := lastCall(t, fakecli.RoleAgy)
+		if filepath.Dir(c.Dir) != filepath.Join(r.askDir, agy.PhotoFolderName) || c.Photos != 1 || !slices.Contains(c.Args, "askorus-photo") {
+			t.Errorf("agy call in %q with %d photos: %q", c.Dir, c.Photos, c.Args)
+		}
+		for _, a := range c.Args {
+			if strings.Contains(a, up.ID) || strings.Contains(a, question) {
+				t.Errorf("a photo or the question is in an argument: %q", a)
 			}
 		}
+		if entries, err := os.ReadDir(filepath.Join(r.askDir, agy.PhotoFolderName)); err != nil || len(entries) != 0 {
+			t.Errorf("photo folders left: %d %v", len(entries), err)
+		}
+	})
+
+	t.Run("moderator", func(t *testing.T) {
+		r := newRig(t, func(o *rigOptions) { o.agy = true })
+		r.addDevice()
+		two := []map[string]string{{"agent": fakecli.RoleClaude}, {"agent": fakecli.RoleAgy}}
+		st := r.ask(two, map[string]any{"tier": "standard", "compare": map[string]any{
+			"judges": []string{fakecli.RoleClaude, fakecli.RoleAgy}, "synthesis": map[string]any{"agent": fakecli.RoleAgy}}})
+		if st.ComparisonID == "" || st.CompareError != nil {
+			t.Fatalf("POST /v1/runs: comparisonId %q, compareError %+v", st.ComparisonID, st.CompareError)
+		}
+		r.waitRun(st.ID)
+		c, _ := r.waitComparison(st.ComparisonID)
+		if s := synthOf(t, c); c.Status != compares.Done || s.Status != compares.SynthDone || s.Agent != fakecli.RoleAgy || s.Text != fakecli.SynthLead {
+			t.Fatalf("comparison %s, synthesis %+v", c.Status, s)
+		}
+		w := lastCall(t, fakecli.RoleAgy)
+		if w.Dir != filepath.Join(r.judge, agy.FolderName) || !slices.Contains(w.Args, "askorus-synth") || !slices.Contains(w.Args, core.SynthSchemaV1) {
+			t.Errorf("writer call in %q: %q", w.Dir, w.Args)
+		}
+		if !strings.Contains(w.Stdin, "[Askorus synthesis ") {
+			t.Errorf("writer stdin %q", w.Stdin)
+		}
+		r.waitIdle(c.ID)
 	})
 }
 
