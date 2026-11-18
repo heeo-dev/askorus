@@ -63,7 +63,8 @@ export function a11yValue(sum: UsageSummary): string {
     if (!a.tight) return `${name} ${t('usage.unknownShort')}`;
     return a.state === 'out' ? `${name} ${t('usage.out')}` : `${name} ${percentLeft(a.tight.left)}%`;
   });
-  return `${summaryLine(sum)} ${each.join(', ')}`;
+  const head = summaryLine(sum);
+  return `${head}${/[.!?]$/.test(head) ? '' : '.'} ${each.join(', ')}`;
 }
 
 /** The icon of the button: the bars, or '…' / '−'. */
@@ -222,8 +223,8 @@ const styles = themed((th) =>
     out: { borderColor: th.danger, justifyContent: 'center' },
     cross: { height: 1.5, backgroundColor: th.danger },
     unknown: { borderColor: th.caption, borderStyle: 'dashed' },
-    body: { gap: 12, paddingBottom: 8 },
-    sum: { fontSize: 14, lineHeight: 20, color: th.text, backgroundColor: th.surface, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9 },
+    body: { gap: 12, paddingHorizontal: 16, paddingBottom: 12 },
+    sum: { fontSize: 14, lineHeight: 20, color: th.text, backgroundColor: th.bg, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9 },
     ai: { gap: 6, paddingBottom: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: th.divider },
     aiHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     aiName: { fontSize: 15, fontWeight: '600', color: th.text },
