@@ -54,7 +54,7 @@ Phase 2가 다른 AI에게 쓰는 것은 '질문 한 번(ask)'뿐이다. 명령 
 | Claude Code | `claude` | 2.1.314 | `claude -p` |
 | Codex CLI | `codex` | 0.164.0 | `codex exec` |
 | OpenCode | `opencode` | 2.2.1 | `opencode run` |
-| Antigravity CLI | `agy` | 없음 | `agy -p` |
+| Antigravity CLI | `agy` | 없음(2026-11-18: 1.5.10, 스스로 판을 올림) | `agy --agent … --input-format stream-json`(판 0.5.0, 4절 '#20') |
 | Gemini CLI | `gemini` | 없음 | — |
 
 ## 4. 시작 전에 확인할 것 (설계 'Phase 2 전에 확인할 것')
@@ -65,7 +65,7 @@ Phase 2가 다른 AI에게 쓰는 것은 '질문 한 번(ask)'뿐이다. 명령 
 | P0-2 | ask가 파일을 고치거나 명령을 실행하지 못하게 막는 방법(읽기 전용·도구 끄기) | Claude | 각 CLI 도움말과 실제 시험 |
 | P0-3 | 셋을 동시에 돌릴 때 걸리는 시간과 구독 사용량 | Claude | 같은 질문 3개를 동시에, 시간 재기 |
 | P0-4 | 공식 앱으로 넘기기: ChatGPT·Claude·Gemini 앱이 공유로 받은 글을 입력창에 넣는지, 답을 공유로 내보낼 수 있는지 | 사용자(폰), Claude(테스트 폰) 교차 확인 | 폰에서 공유 시험. **끝(2026-10-30, Android), 아래 P0-4 절** |
-| P0-5 | `agy`를 설치해 넣을지, 일단 셋으로 시작할지 | 사용자 | **셋으로 시작(2026-10-29)** |
+| P0-5 | `agy`를 설치해 넣을지, 일단 셋으로 시작할지 | 사용자 | **셋으로 시작(2026-10-29)**. 판 0.5.0에 넣기로 함(2026-11-18, 4절 '#20') |
 | P0-6 | 판정 검증용 예시 질문 30개(한국어 포함)와 사람이 단 정답 | 사용자 + Claude | Claude가 초안, 에이전트 교차 검증으로 확정(2026-10-30 사용자 결정). **끝(2026-10-30): 614쌍 정답, 아래 P0-6 절** |
 | P0-7 | 웹 검색이 필요한 질문에서 각 CLI의 검색을 켤지 | 함께 | 묻기에 기본으로 켬(2절 모드 결정). **옵션 확인 끝(2026-10-30), 아래 P0-7 절** |
 | P0-8 | 후속 질문 이어 가기(resume)와 묻기 세션을 Phase 1 목록에서 거르는 법 | Claude | CLI마다 실제 시험 |
@@ -320,6 +320,7 @@ Phase 3에서는 Codex·OpenCode 세션도 Claude처럼 목록·시작·재개·
 | Claude | `claude -p --output-format json --model M --effort E --tools "WebSearch,WebFetch" --allowedTools "WebSearch,WebFetch" --strict-mcp-config --settings '{"permissions":{"deny":["Read"]}}'` | `+ --resume <session_id>` | 웹 도구 둘만 있고 둘만 허용, **MCP 서버를 싣지 않음**(claude.ai 커넥터 포함), **파일 읽기 거부**(R-93, 11-10: 프롬프트의 `@경로` 첨부를 막음. stdin의 `@` 뒤에는 폭 없는 공백도 넣는다), 중립 폴더(CLAUDE.md 없음) |
 | Codex | `codex --search exec -s read-only --ignore-user-config --skip-git-repo-check --json -m M -c model_reasoning_effort="E" -` | `codex --search exec -s read-only resume --ignore-user-config --skip-git-repo-check --json -m M -c model_reasoning_effort="E" -c sandbox_mode="read-only" <thread_id> -` | 읽기 전용 + 사용자 설정(자동 승인·MCP) 뺌, 머리말(전역 AGENTS.md) |
 | OpenCode | `opencode.exe run --standalone --format json --agent askorus-ask -m M#변형`(npm `.cmd`가 아닌 실제 exe), 환경 `PWD`=묻기 폴더, `OPENCODE_CONFIG_CONTENT`=묻기 에이전트 | 먼저 `session list --format json --standalone`(같은 환경)로 묻기 폴더의 세션인지 확인, 그다음 `+ --session <sessionID>` | 묻기 에이전트(권한 `"*": "deny"`에 webfetch·websearch만 allow, 짧은 지시) |
+| Antigravity(판 0.5.0, #20) | `agy.exe --agent askorus-ask --model M --input-format stream-json --output-format stream-json --disable-slash-commands --settings <거부 규칙>`, 질문은 stdin의 JSON 한 줄, 폴더는 묻기 폴더 아래 agy 폴더(`.agents/agents/askorus-ask.md`가 있는 곳) | `+ --conversation <id>` | 전용 에이전트(도구 `search_web`만) + 거부 규칙(명령·파일 읽기와 쓰기·브라우저·내려받기·MCP). 4절 '#20' |
 
 - 셋 모두 셸 없이 인자 배열로, 묻기 폴더에서 실행한다. 머리말은 셋에 똑같이 붙인다.
 - 11-01: Codex 묻기에는 `--ignore-user-config`여도 기본으로 켜진 사용자 앱 도구(Gmail 등)·플러그인·하위 에이전트가 보인다. 판정처럼 해당 기능을 끄는 일을 P2-3 S3에서 한다(P2-3 14절 S2 결정 4번).
@@ -1080,6 +1081,7 @@ S5c를 worktree에서 만들었다(커밋 전, 57f9776 위). 기반(테마·아�
 | Claude | `claude -p --output-format json --model M --effort E --tools "" --strict-mcp-config --no-session-persistence --safe-mode --json-schema <판정 스키마 v1>` | 같은 명령에 `--json-schema <종합 스키마 v1>` | 대화 기록 없음(도는 동안 `~/.claude/sessions/<pid>.json`만). `--safe-mode`라 사용자의 훅·플러그인·스킬·CLAUDE.md·MCP가 돌지 않음 |
 | Codex | `codex exec -s read-only --ignore-user-config --skip-git-repo-check --ephemeral --json -m M -c model_reasoning_effort="E" -c web_search="disabled" --output-schema %APPDATA%\Askorus\judge-schema-v1.json --disable <기능 18개> -` | 같은 명령에 `--output-schema …\synth-schema-v1.json` | rollout(대화 파일) 없음. Codex 자체 `logs_2.sqlite`는 남을 수 있음 |
 | OpenCode | `opencode.exe run --standalone --format json --agent askorus-judge -m M#V --title askorus-judge`, 환경 `PWD`=판정 폴더, `OPENCODE_CONFIG_CONTENT`=판정 에이전트(`"*": "deny"`) | 에이전트만 `askorus-synth`(제목은 같음) | 대화가 생기고, 비교가 끝나면 `session list`로 판정 폴더·제목이 맞는 id만 `session delete`. 지운 글은 opencode.db에 한동안 남을 수 있음 |
+| Antigravity(판 0.5.0, #20) | 판정 없음(11-05부터 판정을 쓰지 않음) | `agy.exe --agent askorus-synth --model M --json-schema <종합 스키마 v1> --input-format stream-json --output-format stream-json --disable-slash-commands --settings <거부 규칙>`, 에이전트 도구는 `finish`만, 판정 폴더 아래 agy 폴더 | 대화가 남음(agy에 지우는 명령이 없음, 2026-11-18 결정 3) |
 
 - **공통.** 실제 exe를 셸 없이 인자 배열로 부르고, 질문·답·지시는 stdin으로만 넘긴다. 폴더는 `<묻기 폴더>\judge`(`GET /v1/sessions`·CLI `sessions`에서 숨김, 그 안의 세션은 열기·멈추기·지우기·미리보기 404). Windows job object로 묶고 판정 2분·종합 3분이면 끈다. 인자는 상수로 만들고 실행 전에 정확히 견준다(`checkJudgeArgs`·`checkSynthArgs`). 권한을 푸는 옵션, `--allowedTools`(웹 허용은 묻기만), 세션 이어 가기는 없다. 끝나면 실제로 답한 모델의 회사를 확인해, 계획과 다르면 `bad_model`로 버린다.
 - **Codex 기능 18개**(`--disable`, 묻기도 같이 끔): shell_tool, unified_exec, hooks, apps, plugins, remote_plugin, multi_agent, browser_use, browser_use_external, in_app_browser, computer_use, image_generation, view_image, goals, sleep_tool, tool_suggest, skill_search, skill_mcp_dependency_install. 도구를 0개로 할 수는 없어, `agent_message`·`reasoning`·`error`·`todo_list`가 아닌 항목(명령 실행 등)이 나오면 결과를 버리고 `judge_used_tool`이다. Codex가 모르는 이름이 있으면 'Unknown feature flag'로 실패하므로, 이름을 뺀 새 Codex에서는 목록을 고칠 때까지 묻지도 판정하지도 않는다.
@@ -1566,6 +1568,117 @@ Askorus는 사용자 자신의 PC가 있어야 동작한다. 그래서 PC가 없
 
 남은 한계: 사진 속 글이 지시처럼 읽혀 답을 흐리는 것은 막지 못한다(묻기의 AI는 웹 도구 둘뿐이고 PC의 파일은 못 읽는다). `<use>`를 겹쳐 그리기를 무겁게 만든 SVG는 WebView의 그리기 프로세스만 느려지거나 죽고, 죽으면 코드로 보인다.
 
+### #20 Antigravity(agy) 추가와 AI 관리 (2026-11-18 메인테이너 결정, 판 0.5.0)
+
+받은 의견(2026-11-04, #20): 내 PC에 설치한 Antigravity CLI를 넣고, 사용자가 AI를 더하고 뺄 수 있게 설정에 'AI 관리'를 둔다. 받은 의견에 있던 `--dangerously-skip-permissions`는 권한 해제 옵션이라 쓰지 않는다. 설계 초안은 Claude Docs '#20 Antigravity(agy) 추가와 AI 관리 설계 초안'이고, 2026-11-18 메인테이너가 정할 것 8개를 모두 추천대로 정했다.
+
+**정한 것(2026-11-18)**
+
+1. **묻기 잠금은 두 겹.** 묻기 폴더 아래 agy 폴더의 전용 에이전트 파일(도구 `search_web`만)과 `--settings`의 거부 규칙. 둘은 서로 기대지 않는다. 권한을 푸는 옵션은 넘기지 않는다.
+2. **웹은 `search_web`(Google 검색 요약)만.** 링크 페이지를 직접 읽는 도구와 브라우저는 없다.
+3. **agy에 남는 대화는 남긴다.** agy에는 대화를 지우는 명령이 없다(대화형 목록의 F4뿐). Askorus는 agy의 저장소를 지우거나 고치지 않고, 방침과 README에 적는다.
+4. **단계:** 빠르게 `gemini-3.8-flash-low`, 기본 `gemini-3.8-flash-medium`, 깊게 `gemini-3.8-flash-high`. 앱의 '모델 · 노력'에는 Gemini 3.8 Flash · 낮음/중간/높음으로 보인다. 고르기 목록은 `agy models` 중 Gemini만(agy가 주는 Claude·GPT-OSS 모델은 뺀다).
+5. **사진: 각 CLI가 주는 가장 좁은 입구를 쓴다.** 직접 실어 보내기가 있으면 그것(Claude·Codex·OpenCode, 0.4.0 그대로), 없을 때만 폴더를 제한한 읽기 도구(agy). 묻기의 AI는 Askorus가 그 질문에 넣어 준 파일(사진 사본)만 읽고, 그 밖의 PC 파일은 읽지 않는다. agy는 사진 있는 질문만 아래 '사진 폴더 구성'으로 보낸다.
+6. **사회자:** 종합 답변과 질문 정제의 사회자 후보에 넣는다. 기본 사회자는 그대로 Claude.
+7. **AI 관리:** PC마다 그 PC가 찾은 AI 목록. 켜기·끄기는 폰에 저장한다(`ask.v1`의 `off`, 폰마다 따로). 빼기는 끄기와 같고, 추가는 PC에 깔고 로그인하면 저절로 보인다.
+8. **agy 판:** agy는 스스로 판을 올린다(11-18 아침 1.5.0 → 1.5.10). 판을 막지 않고, 실행할 때마다 전용 에이전트 이름과 권한 모드를 확인해 다르면 답을 버린다.
+
+**조사(2026-11-18, agy 1.5.10, Windows 10, 실제 호출 약 35번)**
+
+- **기본 상태가 위험하다.** 사용자 설정이 `agentMode: auto`, `toolPermission: always-proceed`이고 `-p`도 이를 따른다. 조사 중 잘못 간 질문 하나에 agy가 명령을 실행해 `C:\Program Files\Git`의 권한 목록을 읽어 답했다(Git Bash가 `/help`를 경로로 바꿈. 이 PC에서 agy를 Git Bash로 부를 때는 `MSYS_NO_PATHCONV=1`).
+- `--settings`(그 실행만, 저장 안 됨)는 사용자 설정을 덮어쓴다. 시작 이벤트의 `permission_mode`가 `request-review`로 바뀐다. 거부가 허용보다 앞서므로 사용자의 허용 규칙이 있어도 막힌다.
+- 거부 규칙 `command(*)`, `unsandboxed(*)`, `read_file(*)`, `write_file(*)`, `execute_url(*)`, `download_url(*)`, `mcp(*)`로 `whoami`, 폴더 밖 표식 파일, 폴더 목록이 모두 'Permission denied'였고 모델은 그 오류를 보고 답을 이어 썼다. Windows 10에는 터미널 샌드박스가 없어 명령이 `unsandboxed(...)`로 걸린다.
+- 전용 에이전트 파일(작업 폴더의 `.agents/agents/<이름>.md`, `--agent <이름>`): `tools`에 적은 도구만 모델에게 간다(`manage_task`는 늘 있음). 입력 토큰이 8.7k에서 2.1k로 줄었다(기본 시스템 프롬프트 대신 우리 글). 공격 질문에서 명령, 파일, 목록, 브라우저, 사진 만들기, 예약, 하위 에이전트가 모두 '도구 없음'이었다. 없는 도구 이름은 exit 3, 없는 에이전트 이름은 exit 1로 바로 끝난다. 시작 이벤트의 도구 목록은 줄여도 60개 그대로라 확인은 에이전트 이름으로 한다.
+- 질문은 stdin으로 간다: `--input-format stream-json --output-format stream-json`과 JSON 한 줄 `{"event":"user","message":{"role":"user","content":[{"type":"text","text":…}]}}`. 80KB 한국어와 따옴표·역슬래시·`& | < > ^ % !`가 그대로 갔다. `-p`에 값을 주지 않으면 거부한다.
+- 출력은 한 줄에 JSON 하나(`init`, `step_update`, `result`). 결과에 `conversation_id`, `status`, `response`, 토큰. 글자는 UTF-8. 남는 프로세스는 없었다.
+- 웹: `read_url_content`는 도구 목록에만 있고 `-p`에서는 모델에게 주어지지 않는다(기본 에이전트도). 페이지를 직접 읽으라는 질문에는 검색만 19번 하다 240초를 넘겼다.
+- 모델은 `agy models`로 나온다(이 계정: `gemini-3.8-flash-low|medium|high`, `claude-sonnet-4-6`, `claude-opus-4-6-thinking`, `gpt-oss-120b-medium`). 단계가 이름에 붙어 `--effort`와 같이 쓰면 거부한다. 없는 모델은 exit 1과 목록.
+- 이어서 묻기: `--conversation <id>`로 앞 대화를 기억한다. 다른 폴더에서 불러도 이어진다. 없는 id는 stderr 경고 한 줄만 내고 새 대화를 만들어 성공으로 끝난다.
+- 종합: `--json-schema` + 에이전트 `tools: [finish]`면 `result.structured_output`에 `{"answer": …}`(30초). `tools: []`이면 `finish` 도구가 없어 4턴 100초를 돌고 구조화 출력이 없다.
+- 서버 용량 부족(503)이 잦다(17번 중 4번). 첫 시도가 실패하고 다시 해서 답이 와도 `status: ERROR`, exit 0이고 약 25초 늦다. 끝내 실패하면 stderr에 `AGY_ERROR: {short_error, status, error_code, retryable, error_id}`.
+- `agy -p /usage --output-format json`은 대화를 만들지 않고 할당량도 쓰지 않는다(5초). 묶음별 이번 주 남은 비율과 초기화 시각(Gemini, Claude·GPT).
+- 남는 것: 실행마다 `~/.gemini/antigravity-cli/conversations/<id>.db`(SQLite, 약 380KB)와 `brain/<id>/`. 조사 때 만든 대화가 약 27개 남아 있다.
+- 로그인 안 됨과 이번 주 한도는 시험하지 못했다(로그아웃은 사용자 몫). Windows에서는 로그인을 자격 증명 관리자에 둔다(변경 기록).
+
+**사진 폴더 시험(2026-11-18, 9번 + git 저장소 1번, 표식이 나온 답 0건)**
+
+| 시험 | 결과 |
+| --- | --- |
+| 사진 1장, 2장(글자가 적힌 JPEG) | 읽음. 글자와 숫자 정확, 12~20초 |
+| 폴더 밖 표식 파일(절대 경로), `../`, `..\`, 폴더와 상위 폴더 목록 | 모두 저절로 거부. 답 전체가 비고 stderr에 'auto-denied' |
+| agy 자기 설정 파일 | agy의 고정 보호 규칙으로 거부, 모델이 오류를 적어 답함 |
+| 사진 속 숨은 지시(폴더 밖 파일을 열라) | 모델이 따르지 않음, 시도도 없음 |
+| 묻기 폴더가 git 저장소 안일 때 저장소 위쪽 파일 | 거부(작업 폴더는 지금 폴더뿐) |
+| 다른 폴더에서 이어서 묻기 | 앞 사진의 글자를 기억함 |
+
+**묻기 명령**
+
+```
+agy.exe --agent askorus-ask --model <모델> [--conversation <id>]
+        --input-format stream-json --output-format stream-json
+        --disable-slash-commands --settings <거부 규칙>
+stdin: {"event":"user","message":{"role":"user","content":[{"type":"text","text":"<머리말 + 질문>"}]}}
+```
+
+- 거부 규칙(상수): `{"agentMode":"","toolPermission":"request-review","allowNonWorkspaceAccess":false,"disableSlashCommands":true,"permissions":{"allow":[],"deny":["command(*)","unsandboxed(*)","read_file(*)","write_file(*)","execute_url(*)","download_url(*)","mcp(*)"]}}`.
+- 에이전트 파일: 에이전트가 `<묻기 폴더>\agy\.agents\agents\askorus-ask.md`에 쓰고 실행 전마다 바이트까지 견준다(종합 스키마 파일과 같은 방식). `tools: [search_web]`, `mainAgent: true`, `subagent: false`, `commandExecutionPolicy: off`, 본문은 묻기 지시(파일 경로를 답에 쓰지 말 것 포함). 다른 AI의 묻기 폴더에는 두지 않는다.
+- **사진 폴더 구성:** 사진 있는 질문은 질문마다 새 폴더(`<묻기 폴더>\agy-photos\<임의 이름>`)에 그 질문의 사진 사본(`photo-1.jpg` …)과 사진용 에이전트 파일(`tools: [search_web, view_file]`)만 두고, 거부 규칙에서 `read_file(*)`만 뺀다. 머리말에 사진 파일 이름을 적는다. 실행이 끝나면 폴더를 지운다. agy는 작업 폴더 안은 묻지 않고 읽고 밖은 허락이 필요한데, 터미널 없이 돌면 저절로 거부한다. 명시 규칙이 아닌 이 기본 동작에 기대므로 LT-17이 폴더 밖 읽기를 시험한다.
+- 인자는 Codex처럼 만든 목록 전체를 같은 값으로 다시 만든 목록과 견준다(`checkArgs`). 모델은 `agy models`에 있는 Gemini 이름 모양만, 대화 id는 UUID만 받는다.
+- 실행 파일은 PATH의 `agy.exe`, 없으면 `%LOCALAPPDATA%\agy\bin\agy.exe`, 설정 `agyPath`로 바꾼다. `.cmd`는 없다.
+
+**결과 읽기와 확인(닫힌 쪽)**
+
+- 시작 이벤트의 `agent`가 우리 에이전트 이름이 아니거나 `permission_mode`가 `request-review`가 아니면 답을 버리고 실패로 한다.
+- 단계 이벤트에 허용한 도구(묻기 `search_web`·`manage_task`, 사진 질문은 `read_file`도, 종합 `finish`) 밖의 것이 보이면 답을 버린다(종합은 `judge_used_tool`).
+- 성공은 `status: SUCCESS`, 또는 503을 다시 해서 끝난 경우(오류가 `API error (attempt N)`로 시작하고, 마지막 단계가 끝난 답이고, 답 글이 있음).
+- 답의 `[이름](file:///…)` 링크는 이름만 남긴다(PC의 사용자 폴더 경로가 폰과 다른 AI로 가지 않게).
+- 이어서 묻기에서 결과의 대화 id가 보낸 id와 다르면 `session_not_found`.
+
+| 상황 | Askorus 코드 |
+| --- | --- |
+| 설치 안 됨 | 알림 `agy_not_found`, 묻기 `agent_unavailable` |
+| 로그인 안 됨(`/usage` 실패, `AGY_ERROR` status UNAUTHENTICATED로 봄) | 알림 `agy_signed_out`, 묻기 `ai_signed_out`(PC에서 `agy`를 열어 로그인) |
+| 이번 주 한도 | 새 코드 `ai_usage_limit`, Detail은 `/usage`의 초기화 시각 |
+| 503 끝내 실패 | `ask_failed`, 앱 문구 'Google 서버가 바빠요. 잠시 뒤 다시' |
+| 사진 폴더 밖을 열려다 거부되어 빈 답 | `ask_failed`, 앱 문구 'AI가 사진 폴더 밖 파일을 열려다 멈췄어요' |
+| 없는 모델 | `bad_model` |
+| 시간 넘김 | `ask_timeout`(프로세스를 끈다. `--print-timeout`은 쓰지 않음) |
+
+**사회자와 토론**
+
+- 종합 답변·질문 정제: 판정 폴더 아래 agy 폴더, 에이전트 `askorus-synth`(`tools: [finish]`), `--json-schema`에 종합 또는 정제 스키마 문자열, 웹 없음. 사회자의 모델이 사진을 보면 사진 폴더 구성처럼 그 사진만 둔 폴더에서 쓴다.
+- 회사(`Family`): `gemini-*` google, `claude-*` anthropic, `gpt-oss-*` openai, 모르면 ""(쓰지 않음).
+- 토론 발언은 묻기와 같은 명령(일회성). 대화는 남는다(결정 3).
+- 종합 답변이 부르는 이름은 'Antigravity'.
+
+**AI 관리(설정 > 묻기 > AI 관리, 영어 Settings > Ask > Manage AIs)**
+
+- 지금 고른 PC가 찾은 AI 목록. PC가 여럿이면 맨 위에 PC 줄.
+- 한 줄: 아바타, 이름, 상태 한 줄(판 · 로그인 · 사용량), 스위치 '묻기에 쓰기'. 로그인 안 됨은 빨강(#60 연결 진단과 같은 글).
+- 줄을 누르면 시트: 판, 로그인, 되는 기능(묻기, 이어서 묻기, 사회자, 토론, 사진), 단계별 모델, 사용량, 'AI 설치 안내 열기'.
+- '이 PC에 없는 AI': 지원하는 CLI 중 안 깔린 것과 설치 안내.
+- 끄면 답할 AI 고르기와 이어서 묻기의 기본, 사회자 후보에서 빠진다.
+- API(더하기만): `/v1/info`의 AI별 항목에 `features`(되는 기능)와 `usage`(있는 AI만, 묶음별 남은 비율과 초기화 시각).
+
+**개인정보와 문서:** agy를 켜면 질문과 답(사회자를 맡으면 다른 AI의 답까지)이 사용자의 Google 계정으로 Google에 간다. `docs/privacy.md`·`docs/privacy/index.html`, 스토어 글 두 언어, README 두 언어('AI 프로그램 설치'와 지원 AI 표), 메뉴 지도 두 장을 고친다. Play 데이터 보안 답은 그대로(개발자가 받지 않음).
+
+**시험:** UT(인자 만들기와 검사, 고정 거부 규칙, 에이전트 파일, stream-json 읽기와 503·다른 에이전트·허용 밖 도구·대화 id·`AGY_ERROR`, 모델과 노력, `Family`, 로그인·사용량 읽기), IT(가짜 agy: 묻기, 이어서, 사진, 종합, 정제, 토론, 시간 넘김, 로그인 안 됨, 한도, `/v1/info`), 화면 시나리오(답할 AI·사회자 목록, AI 관리), LT-17(실제 agy: 두 겹 잠금, 사진 폴더 밖 읽기, 웹, 한국어, 이어서, 종합). agy가 스스로 판을 올리므로 LT-17은 판을 내기 전에도 돌린다.
+
+**만드는 순서(워크트리 `agy-20`)**
+
+| 단계 | 할 일 |
+| --- | --- |
+| S1 | 어댑터 `agy`의 묻기: 찾기, 판, 두 겹 잠금, stream-json, 오류. UT·IT·LT-17 |
+| S2 | 이어서 묻기, 토론 발언, 사진 폴더 구성, 종합·정제 사회자, 로그인·사용량(`/usage`) |
+| S3 | `/v1/info`의 `features`·`usage`, 설정 `agyPath`·`ask.tiers.agy`, `check`·`setup`의 agy 줄 |
+| S4 | 앱: Antigravity 모델 줄, 답할 AI·사회자 목록, 새 오류 문구(한·영) |
+| S5 | 앱: AI 관리 화면 |
+| S6 | 문서(방침, 스토어 글, README, 메뉴 지도, `docs/testing.md`, 설계 문서 원본), 2호 보안 검토, test-all·test-live |
+
+#35(에이전트 업데이트)와 같은 0.5.0이라 `cmd/askorus-agent/main.go`, `internal/api`, `internal/config`, 앱 설정 화면, `docs/testing.md`가 겹칠 수 있다. 먼저 끝난 쪽부터 main에 넣고, R 번호는 합칠 때 main의 다음 번호를 쓴다.
+
+**하지 않는 것:** 만든 사진 받기(0.5.0의 다음 일. 어댑터는 대화 id를 남겨 그때 `brain/<id>/`의 JPEG를 가져오게 한다), WSL·macOS·Linux의 agy, ACP(`agy acp`)로 바꾸기, agy 세션 목록(Phase 3), PC에서 AI CLI 설치 돕기(#59).
+
 ## 5. 단계 (초안)
 
 | 단계 | 할 일 |
@@ -1577,3 +1690,4 @@ Askorus는 사용자 자신의 PC가 있어야 동작한다. 그래서 PC가 없
 | P2-5 | 토론(내 PC, 2026-11-05 사용자 결정, #26): 종합 답변 아래 '토론하기'를 누르면 답한 AI들이 다른 곳(쟁점 1~2개)을 채팅방처럼 한 명씩 토론하고 사회자가 '토론 뒤 정리'를 쓴다(판정하지 않음). 예전 '더 따져 보기'(결정 6)를 대신한다. **설계와 C7 실험, 4절 'P2-5 토론'** |
 | P2-6 | 기록은 폰에만(비교 결과 `turn.compare`도). 판정 검증 2단계(네 답 형식, 요청 3번 형식, 두 번 판정)와 CLI·모델이 바뀔 때 다시 재기(P0-6, 4절 'P2-3 비교 판정 설계' 9). |
 | P2-8 | 사진 붙여서 묻기와 답 속 SVG 그림 보기(#14, 판 0.4.0, 2026-11-18 메인테이너 결정). 이어서 0.5.0에 Antigravity 추가(#20)와 만든 사진 받기. **0.4.0으로 냄(2026-11-18).** 설계와 조사, 만든 것과 보안 검토는 4절 '#14 사진 붙여서 묻기와 그림 보기'. 0.5.0은 남음 |
+| P2-9 | Antigravity(agy) 추가와 설정의 AI 관리(#20, 판 0.5.0, 2026-11-18 메인테이너 결정: 정할 것 8개 모두 추천대로). **설계와 조사, 4절 '#20 Antigravity(agy) 추가와 AI 관리'** |
