@@ -22,15 +22,62 @@ type UsageCache struct {
 	done   chan struct{} // set while a read runs
 }
 
+// The reads of every cache run under one context, so the agent can end
+// them and wait for them when it stops or hands over to an update (R-147,
+// 2ho's release review): a read left running would outlive the agent.
+var usageReads = newReads()
+
+type reads struct {
+	ctx     context.Context
+	cancel  context.CancelFunc
+	wg      sync.WaitGroup
+	mu      sync.Mutex
+	stopped bool
+}
+
+func newReads() *reads {
+	r := &reads{}
+	r.ctx, r.cancel = context.WithCancel(context.Background())
+	return r
+}
+
+// StopUsageReads ends the usage reads that run, starts no new one, and
+// waits for them at most wait. For agent shutdown.
+func StopUsageReads(wait time.Duration) {
+	r := usageReads
+	r.mu.Lock()
+	r.stopped = true
+	r.mu.Unlock()
+	r.cancel()
+	done := make(chan struct{})
+	go func() { r.wg.Wait(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(wait):
+	}
+}
+
+// begin counts a read in, false once stopped.
+func (r *reads) begin() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.stopped {
+		return false
+	}
+	r.wg.Add(1)
+	return true
+}
+
 // Get returns the kept usage, and starts a read when it is missing or old.
 func (c *UsageCache) Get() []UsageGroup {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if c.done == nil && (c.at.IsZero() || time.Since(c.at) >= c.TTL) {
+	if c.done == nil && (c.at.IsZero() || time.Since(c.at) >= c.TTL) && usageReads.begin() {
 		done := make(chan struct{})
 		c.done = done
 		go func() {
-			g := c.Read(context.Background())
+			defer usageReads.wg.Done()
+			g := c.Read(usageReads.ctx)
 			c.mu.Lock()
 			c.groups, c.at, c.done = g, time.Now(), nil
 			c.mu.Unlock()

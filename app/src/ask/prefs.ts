@@ -126,4 +126,15 @@ export async function loadAskPrefs(kv: KeyValue = secureKeyValue): Promise<AskPr
 
 export async function saveAskPrefs(p: AskPrefs, kv: KeyValue = secureKeyValue): Promise<void> {
   await kv.set(key, JSON.stringify(p));
+  for (const fn of [...saved]) fn(p);
+}
+
+const saved = new Set<(p: AskPrefs) => void>();
+
+/** onAskPrefsSaved tells fn each time the ask preferences are saved (the usage button follows Manage AIs at once); it returns the way to stop. */
+export function onAskPrefsSaved(fn: (p: AskPrefs) => void): () => void {
+  saved.add(fn);
+  return () => {
+    saved.delete(fn);
+  };
 }

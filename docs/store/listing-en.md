@@ -50,6 +50,8 @@ FEATURES
 - Photos with a question: take or pick up to 4
 - Pictures an AI draws as code (SVG), shown as pictures you can save
 - Pick the model and how hard each AI thinks
+- See how much of each AI's plan is left, from any screen
+- Update the PC agent from the app
 - Your history stays on your phone
 - For developers: see, start and continue the Claude Code sessions on your own PC from your phone
 - English and Korean, light and dark

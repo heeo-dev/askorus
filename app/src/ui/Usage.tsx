@@ -13,7 +13,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { agentName } from '@/api/agents';
-import { type AskPrefs, defaultAskPrefs, loadAskPrefs } from '@/ask/prefs';
+import { type AskPrefs, defaultAskPrefs, loadAskPrefs, onAskPrefsSaved } from '@/ask/prefs';
 import { whenAgain } from '@/ask/present';
 import { type AIUsage, lowest, percentLeft, stateOf, summarize, type UsageGroup, type UsageSummary } from '@/ask/usage';
 import { t } from '@/i18n';
@@ -136,6 +136,7 @@ export function usageWords(g: UsageGroup): string {
 /** usePrefs reads the ask preferences each time the screen comes into focus (Manage AIs may change them). */
 function usePrefs(): AskPrefs {
   const [prefs, setPrefs] = useState<AskPrefs>(defaultAskPrefs);
+  useEffect(() => onAskPrefsSaved(setPrefs), []); // a switch of Manage AIs on this very screen
   useFocusEffect(
     useCallback(() => {
       let live = true;

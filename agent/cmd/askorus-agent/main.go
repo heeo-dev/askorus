@@ -41,7 +41,7 @@ import (
 )
 
 // version is set at release time with -ldflags "-X main.version=...".
-var version = "0.4.0-dev"
+var version = "0.5.0-dev"
 
 const usage = `Askorus PC agent (not an official Anthropic product)
 Askorus PC 에이전트 (Anthropic의 공식 제품이 아닙니다)
@@ -440,7 +440,8 @@ func serve(dir string, args []string) error {
 	defer cancel()
 	logger.Info("stopping")
 	err = srv.Shutdown(shutdown)
-	apiSrv.Close() // ends asks still running, with their AI processes
+	apiSrv.Close()                       // ends asks still running, with their AI processes
+	core.StopUsageReads(3 * time.Second) // and the usage reads (R-147)
 	// Folder servers end with the agent; Ctrl+C lets each clean up.
 	stopRec()
 	<-rec.done

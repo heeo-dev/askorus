@@ -6,7 +6,7 @@
 // awaited (R-07).
 
 import { userEvent } from '@testing-library/react-native';
-import { renderRouter, screen, within } from 'expo-router/testing-library';
+import { renderRouter, screen, waitFor, within } from 'expo-router/testing-library';
 
 import { defaultAskPrefs, saveAskPrefs } from '@/ask/prefs';
 import { ConnectionStore } from '@/connections/store';
@@ -119,6 +119,15 @@ test('values the PC could not refresh say how old they are', async () => {
   const s = within(await screen.findByTestId('usage-sheet'));
   expect(await s.findByText(/^The PC did not answer: these are as read at /)).toBeTruthy();
   expect(s.getByText('Codex: the 5-hour limit is used up.')).toBeTruthy();
+});
+
+// 2ho's release review (0.5.0): turning an AI off in Manage AIs takes its
+// bar away at once, on that same screen.
+test('turning an AI off on Manage AIs takes its bar away at once', async () => {
+  const user = await open('/ais');
+  expect(await screen.findByTestId('usage-bar-opencode-low')).toBeTruthy();
+  await user.press(screen.getByRole('switch', { name: 'Use OpenCode for questions' }));
+  await waitFor(() => expect(screen.queryByTestId('usage-bar-opencode-low')).toBeNull());
 });
 
 // Last: the pairing screen leaves its own state behind.

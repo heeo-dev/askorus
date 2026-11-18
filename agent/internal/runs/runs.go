@@ -118,6 +118,7 @@ type Task struct {
 
 // Manager keeps runs in memory. Runs do not survive an agent restart.
 type Manager struct {
+	ending    int // runs whose OnEnd has not returned yet (under mu)
 	Now       func() time.Time
 	PartLimit time.Duration // PartLimit when zero; tests shorten it
 	// OnPart is told when a part ends, for the agent log. It gets no
@@ -267,10 +268,16 @@ func (m *Manager) runPart(r *Run, i int, t Task) {
 	m.mu.Lock()
 	r.telling--
 	end := r.left == 0 && r.telling == 0
+	if end {
+		m.ending++ // until OnEnd has started what follows (R-146)
+	}
 	final := r.snapshot()
 	m.mu.Unlock()
 	if end {
 		m.ended(final)
+		m.mu.Lock()
+		m.ending--
+		m.mu.Unlock()
 	}
 }
 
@@ -375,13 +382,15 @@ func (m *Manager) Wait(ctx context.Context, owner, id string) (Run, bool) {
 }
 
 // Running is the number of runs with a part still asking an AI (#35: an
-// update waits for them).
+// update waits for them), or whose end is still being told: OnEnd starts
+// the combined answer, and between the last answer and that start nothing
+// else counts the work (R-146, 2ho's release review).
 func (m *Manager) Running() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	n := 0
+	n := m.ending
 	for _, r := range m.runs {
-		if r.left > 0 {
+		if r.left > 0 || r.telling > 0 {
 			n++
 		}
 	}

@@ -379,3 +379,31 @@ func TestOneOffPartHasNoSession(t *testing.T) {
 		t.Errorf("parts: %+v", r.Parts)
 	}
 }
+
+// R-146 (2ho's release review, 0.5.0): between a run's last answer and what
+// its OnEnd starts (the combined answer), the run still counts as running,
+// so an update waiting for idle does not slip in.
+func TestRunningCountsARunTellingItsEnd(t *testing.T) {
+	m := NewManager()
+	entered, release := make(chan struct{}), make(chan struct{})
+	m.OnEnd = func(Run) {
+		close(entered)
+		<-release
+	}
+	r, _ := m.Start(Spec{Owner: "phone", Mode: core.ModeAsk, Tasks: []Task{{Agent: "a", Ask: answer("1", "ok")}}})
+	<-entered
+	if done := wait(t, m, "phone", r.ID); done.Status != Done {
+		t.Fatalf("run = %+v", done)
+	}
+	if n := m.Running(); n != 1 {
+		t.Errorf("running while OnEnd is under way = %d, want 1", n)
+	}
+	close(release)
+	deadline := time.Now().Add(5 * time.Second)
+	for m.Running() != 0 {
+		if time.Now().After(deadline) {
+			t.Fatalf("running after OnEnd = %d", m.Running())
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}

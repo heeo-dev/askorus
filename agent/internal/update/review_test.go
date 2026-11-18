@@ -118,3 +118,41 @@ func TestBrokenStateStopsAndTheFloorHolds(t *testing.T) {
 		t.Fatalf("key 1 with the build's floor at 2: %v", err)
 	}
 }
+
+// R-145 (2ho's release review, 0.5.0): many updates starting at once over a
+// lock left by a process that ended: one takes it, never two, and the lock
+// file is never seen without a pid.
+func TestUpdateLockTakenOnce(t *testing.T) {
+	for round := 0; round < 20; round++ {
+		dir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(dir, lockFile), []byte("7\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		alive := func(pid int) bool { return pid != 7 }
+		const n = 16
+		got := make(chan error, n)
+		start := make(chan struct{})
+		for i := 0; i < n; i++ {
+			go func(pid int) {
+				<-start
+				_, err := Lock(dir, pid, alive)
+				got <- err
+			}(1000 + i)
+		}
+		close(start)
+		won := 0
+		for i := 0; i < n; i++ {
+			if err := <-got; err == nil {
+				won++
+			} else if !errors.Is(err, ErrBusy) {
+				t.Fatalf("lock: %v", err)
+			}
+		}
+		if won > 1 {
+			t.Fatalf("round %d: %d updates took the lock", round, won)
+		}
+		if h := lockHolder(filepath.Join(dir, lockFile)); won == 1 && h < 1000 {
+			t.Fatalf("round %d: the lock holds %d", round, h)
+		}
+	}
+}

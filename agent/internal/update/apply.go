@@ -302,19 +302,22 @@ const lockFile = "update.lock"
 // update and the terminal's never touch the same files at once (R-136). A
 // lock whose process has ended is taken over; alive reports whether a pid
 // still runs. The returned func lets it go.
+//
+// The lock file appears with its pid already in it (written beside it and
+// hard-linked into place), and a lock left by a process that ended is
+// removed only under a second, short-lived lock (update.lock.take), so two
+// updates starting together can neither see an empty lock nor remove each
+// other's new one (R-145, 2ho's release review).
 func Lock(dir string, pid int, alive func(int) bool) (func(), error) {
 	path := filepath.Join(dir, lockFile)
+	tmp := fmt.Sprintf("%s.%d.tmp", path, pid)
+	if err := os.WriteFile(tmp, []byte(strconv.Itoa(pid)+"\n"), 0o600); err != nil {
+		return nil, err
+	}
+	defer os.Remove(tmp)
 	for range 2 {
-		f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+		err := os.Link(tmp, path)
 		if err == nil {
-			_, werr := fmt.Fprintf(f, "%d\n", pid)
-			if cerr := f.Close(); werr == nil {
-				werr = cerr
-			}
-			if werr != nil {
-				os.Remove(path)
-				return nil, werr
-			}
 			return func() { ReleaseLock(dir, pid) }, nil
 		}
 		if !errors.Is(err, os.ErrExist) {
@@ -323,9 +326,34 @@ func Lock(dir string, pid int, alive func(int) bool) (func(), error) {
 		if held := lockHolder(path); held > 0 && alive(held) {
 			return nil, ErrBusy
 		}
-		os.Remove(path) // its process ended (or never wrote its pid)
+		if !removeStale(path, alive) {
+			return nil, ErrBusy
+		}
 	}
 	return nil, ErrBusy
+}
+
+// takeWait is how old a takeover lock must be to count as left behind.
+const takeWait = 30 * time.Second
+
+// removeStale removes the lock at path if its process has ended, one
+// caller at a time; false when another caller is at it.
+func removeStale(path string, alive func(int) bool) bool {
+	take := path + ".take"
+	f, err := os.OpenFile(take, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		if info, serr := os.Stat(take); serr == nil && time.Since(info.ModTime()) > takeWait {
+			os.Remove(take) // left by a process that ended mid-takeover
+		}
+		return false
+	}
+	f.Close()
+	defer os.Remove(take)
+	if held := lockHolder(path); held > 0 && alive(held) {
+		return false // someone took it meanwhile
+	}
+	os.Remove(path)
+	return true
 }
 
 func lockHolder(path string) int {

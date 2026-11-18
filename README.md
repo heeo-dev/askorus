@@ -44,7 +44,7 @@ The moderator is one of the AIs you asked. The debate is optional.
 - Photos with a question (take or pick up to 4), and pictures an AI draws as code (SVG) shown as pictures
 - A combined answer, with where the AIs agree and where they differ
 - AI debates with a result for every point (agreed, or depends on the situation)
-- Pick the model and how hard each AI thinks; turn AIs on or off, and see their sign-in and usage, in Manage AIs
+- Pick the model and how hard each AI thinks; turn AIs on or off, and see their sign-in and usage, in Manage AIs; the top bar shows how much of each AI's plan is left
 - Share an answer, or report it; see an example conversation before you set up a PC
 - Several PCs on one phone (Windows, macOS, Linux): the app shows which one answers and lets you switch
 - Conversation history saved on your phone

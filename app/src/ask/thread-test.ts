@@ -557,3 +557,15 @@ test('followDefault: the last question to the AIs, those that can still answer, 
   expect(targetNames({ agent: 'b' }, ['a', 'b'])).toEqual(['b']);
   expect(targetNames({ agents: ['b', 'c'] }, ['a'])).toEqual(['b', 'c']);
 });
+
+// R-144 (2ho's release review, 0.5.0): an AI turned off since the last
+// question is not in the follow-up's default; the screen passes "can ask
+// and is turned on" as canAsk.
+test('the follow-up default leaves out an AI that was turned off since', () => {
+  const turns = [{ moderator: false, agents: ['claude', 'agy'], req: { tier: 'quick' } }] as unknown as Turn[];
+  const off = ['agy'];
+  const usable = (a: string) => !off.includes(a);
+  expect(followDefault(turns, ['claude'], usable, 'standard')).toEqual({ agents: ['claude'], tier: 'quick' });
+  // All of them off: everyone turned on.
+  expect(followDefault(turns, ['codex'], (a) => a === 'codex', 'standard').agents).toEqual(['codex']);
+});

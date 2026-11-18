@@ -549,7 +549,11 @@ export default function Ask() {
   const canAsk = (agent: string) => list.some((a) => a.agent === agent && a.canAsk);
   const now = Date.now();
   // Who the next follow-up goes to (#22): what the bar picked, else the last question's AIs and tier.
-  const follow: { agents: string[]; tier: Tier; moderator?: boolean } = pick ?? followDefault(turns, on, canAsk, prefs.tier);
+  // An AI turned off in Manage AIs since (#20) is asked no follow-up either (R-144).
+  const usable = (agent: string) => canAsk(agent) && !prefs.off.includes(agent);
+  const picked = pick ? { ...pick, agents: pick.agents.filter(usable) } : null;
+  const follow: { agents: string[]; tier: Tier; moderator?: boolean } =
+    picked && (picked.agents.length > 0 || picked.moderator) ? picked : followDefault(turns, on, usable, prefs.tier);
   // The moderator (#25): the moderator AI set, else the first AI that can answer, where the PC
   // asks the moderator and there are answers to talk about.
   const moderator = moderatorOf(prefs);
