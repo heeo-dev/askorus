@@ -98,7 +98,9 @@ Step 'install script' $root 'powershell' @('-NoProfile', '-ExecutionPolicy', 'By
 
 if (-not (Test-Path (Join-Path $app 'node_modules'))) { Step 'app: npm ci' $app 'npm' @('ci', '--no-audit', '--no-fund') }
 Step 'app: typecheck' $app 'npx' @('tsc', '--noEmit')
-Step 'app: unit + screen tests' $app 'npx' @('jest', '--silent') '^Tests:'
+# Two jest workers (2026-11-19): with as many as the PC has cores, Claude Code
+# stopped test-all twice for low memory at this step while other sessions ran.
+Step 'app: unit + screen tests' $app 'npx' @('jest', '--silent', '--maxWorkers=2') '^Tests:'
 if (-not $Quick) { Step 'app: expo-doctor' $app 'npx' @('expo-doctor') 'checks passed' }
 
 if ($failed.Count) {
