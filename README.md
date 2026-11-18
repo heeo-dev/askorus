@@ -274,6 +274,7 @@ The app is React Native with Expo (`app/`); its Tailscale part is a Go library (
 - Your question goes from your phone to your PC through Tailscale, which is built into the app and the agent: encrypted between the two, and only between devices signed in to your own Tailscale account. The official AI programs on your PC send it to each AI company.
 - The app and the agent talk to Tailscale's servers to sign in and to find each other; when the two cannot connect directly, Tailscale's relay servers pass the encrypted traffic on. No diagnostic logs are sent to Tailscale.
 - The moderator AI's company gets the question and all the answers; in a debate, the companies of the AIs that answered get each other's answers.
+- Photos you add to a question go, as smaller copies without shooting data, through your PC to the companies of the AIs you asked. The PC deletes them about ten minutes after use; on the phone they stay with that conversation.
 - The app keeps your conversation history on your phone. The AI programs on your PC may keep their own history, and the agent keeps answers in the PC's memory for a day.
 
 Details: [docs/privacy.md](docs/privacy.md).
