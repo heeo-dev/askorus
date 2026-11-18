@@ -55,9 +55,12 @@ export function Row({
   accessibilityRole,
   accessibilityState,
   accessibilityValue,
+  below,
 }: {
   title: string;
   subtitle?: string;
+  /** below goes under the subtitle; its words belong in accessibilityLabel. */
+  below?: ReactNode;
   subtitleTone?: RowTone;
   left?: ReactNode;
   right?: ReactNode;
@@ -80,6 +83,7 @@ export function Row({
       <View style={s.middle}>
         <Text style={[s.title, titleStyle]}>{title}</Text>
         {subtitle ? <Text style={[s.subtitle, { color: tone }]}>{subtitle}</Text> : null}
+        {below}
       </View>
       {right}
       {chevron ? <Icon name="chevronRight" size={18} color={th.caption} /> : null}

@@ -59,7 +59,8 @@ test("the PC's AIs with version, sign-in and usage, and a switch each", async ()
   const user = await open();
   expect(await screen.findByText('AIs on DESKTOP-TEST')).toBeTruthy();
   for (const name of ['Claude', 'Codex', 'OpenCode', 'Antigravity']) expect(screen.getByText(name)).toBeTruthy();
-  expect(screen.getByText('1.5.11 · signed in · This week: 81% left')).toBeTruthy();
+  expect(screen.getByText('1.5.11 · signed in')).toBeTruthy();
+  expect(screen.getByText('This week: 81% left')).toBeTruthy();
   expect(screen.getByText('0.164.0 · not signed in')).toBeTruthy();
   expect(screen.queryByText('Not on this PC')).toBeNull();
 
@@ -127,7 +128,8 @@ test('in Korean', async () => {
   setLang('ko');
   await open();
   expect(await screen.findByText('DESKTOP-TEST의 AI')).toBeTruthy();
-  expect(screen.getByText('1.5.11 · 로그인됨 · 이번 주 81% 남음')).toBeTruthy();
+  expect(screen.getByText('1.5.11 · 로그인됨')).toBeTruthy();
+  expect(screen.getByText('이번 주 81% 남음')).toBeTruthy();
   expect(screen.getByRole('switch', { name: '묻기에 쓰기: Antigravity' })).toBeChecked();
 });
 

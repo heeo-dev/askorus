@@ -91,12 +91,40 @@ function Bar({ a, th }: { a: AIUsage; th: Theme }) {
       </View>
     );
   }
-  const h = Math.max(3, Math.round(Math.min(1, a.tight.left) * 17));
+  const h = Math.max(3, Math.round(Math.min(1, a.tight.left) * 18));
   return (
-    <View style={[s.bar, a.state === 'low' ? s.lowLine : s.okLine]} testID={`usage-bar-${a.agent}-${a.state}`}>
+    <View style={[s.bar, s.barTrack]} testID={`usage-bar-${a.agent}-${a.state}`}>
       <View style={[s.fill, { height: h }, a.state === 'low' ? s.lowFill : s.okFill]} />
     </View>
   );
+}
+
+/**
+ * UsageMini is a usage line under a row (Manage AIs): a short bar and the
+ * tightest window's words, orange when low and red when used up.
+ */
+export function UsageMini({ g }: { g: UsageGroup }) {
+  const th = useTheme();
+  const s = styles(th);
+  const st = stateOf(g);
+  const pct = percentLeft(g.left);
+  const window = windowLabel(g);
+  return (
+    <View style={s.mini}>
+      <View style={s.miniTrack}>
+        {st === 'out' ? null : <View style={[s.miniFill, { width: `${pct}%` }, st === 'low' && s.lowFill]} />}
+      </View>
+      <Text style={[s.miniText, st === 'low' && s.lowText, st === 'out' && s.outText]}>
+        {st === 'out' ? t('usage.windowOut', { window }) : t('usage.windowLeft', { window, pct })}
+      </Text>
+    </View>
+  );
+}
+
+/** usageWords is UsageMini's words, for a row's label. */
+export function usageWords(g: UsageGroup): string {
+  const window = windowLabel(g);
+  return stateOf(g) === 'out' ? t('usage.windowOut', { window }) : t('usage.windowLeft', { window, pct: percentLeft(g.left) });
 }
 
 /** usePrefs reads the ask preferences each time the screen comes into focus (Manage AIs may change them). */
@@ -213,16 +241,19 @@ const styles = themed((th) =>
   StyleSheet.create({
     slot: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
     mark: { fontSize: 16, fontWeight: '600', color: th.textSub },
-    bars: { flexDirection: 'row', alignItems: 'flex-end', gap: 3, height: 20 },
-    bar: { width: 6, height: 20, borderRadius: 2, borderWidth: 1.5, overflow: 'hidden', justifyContent: 'flex-end' },
-    okLine: { borderColor: th.textSub },
-    lowLine: { borderColor: th.mark },
+    bars: { flexDirection: 'row', alignItems: 'flex-end', gap: 3, height: 18 },
+    bar: { width: 5, height: 18, borderRadius: 2.5, overflow: 'hidden', justifyContent: 'flex-end' },
+    barTrack: { backgroundColor: th.borderStrong },
     okFill: { backgroundColor: th.textSub },
     lowFill: { backgroundColor: th.mark },
     fill: { width: '100%' },
-    out: { borderColor: th.danger, justifyContent: 'center' },
+    out: { borderWidth: 1.5, borderColor: th.danger, justifyContent: 'center' },
     cross: { height: 1.5, backgroundColor: th.danger },
-    unknown: { borderColor: th.caption, borderStyle: 'dashed' },
+    unknown: { borderWidth: 1.2, borderColor: th.caption, borderStyle: 'dashed' },
+    mini: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
+    miniTrack: { width: 44, height: 4, borderRadius: 2, backgroundColor: th.borderStrong, overflow: 'hidden' },
+    miniFill: { height: '100%', borderRadius: 2, backgroundColor: th.textSub },
+    miniText: { fontSize: 13, lineHeight: 18, color: th.textSub },
     body: { gap: 12, paddingHorizontal: 16, paddingBottom: 12 },
     sum: { fontSize: 14, lineHeight: 20, color: th.text, backgroundColor: th.bg, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9 },
     ai: { gap: 6, paddingBottom: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: th.divider },

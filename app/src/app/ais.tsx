@@ -26,7 +26,7 @@ import { PCPickerSheet } from '@/ui/PCPickerSheet';
 import { Sheet } from '@/ui/Sheet';
 import { currentPC, usePCs } from '@/ui/shell/pcs';
 import { publishInfo } from '@/ui/shell/pcUsage';
-import { windowLabel } from '@/ui/Usage';
+import { UsageMini, usageWords, windowLabel } from '@/ui/Usage';
 import { type Theme, themed, useTheme } from '@/ui/theme';
 
 
@@ -45,12 +45,7 @@ export function statusLine(a: AdapterInfo): { text: string; bad: boolean } {
   const parts = [a.version ?? ''];
   const out = signedOut(a);
   parts.push(out ? t('ais.signedOut') : t('ais.signedIn'));
-  const tight = tightest(a.usage);
-  if (!out && tight) {
-    const window = windowLabel(tight);
-    parts.push(used(tight) ? t('usage.windowOut', { window }) : t('usage.windowLeft', { window, pct: percentLeft(tight.left) }));
-  }
-  return { text: parts.filter(Boolean).join(' · '), bad: out || (!!tight && used(tight)) };
+  return { text: parts.filter(Boolean).join(' · '), bad: out };
 }
 
 /**
@@ -141,6 +136,8 @@ export default function ManageAIs() {
             <Group>
               {found.map((a) => {
                 const st = statusLine(a);
+                // The usage under it (#20): the tightest window, when the AI is signed in and says.
+                const tight = signedOut(a) ? undefined : tightest(a.usage);
                 const on = !ask.off.includes(a.agent);
                 return (
                   <Row
@@ -148,6 +145,8 @@ export default function ManageAIs() {
                     title={agentName(a.agent)}
                     subtitle={st.text}
                     subtitleTone={st.bad ? 'danger' : 'sub'}
+                    below={tight ? <UsageMini g={tight} /> : undefined}
+                    accessibilityLabel={[agentName(a.agent), st.text, tight ? usageWords(tight) : ''].filter(Boolean).join(', ')}
                     left={<Avatar agent={a.agent} size={28} />}
                     right={<MiniSwitch on={on} label={t('ais.useFor', { name: agentName(a.agent) })} onChange={() => toggle(a.agent)} th={th} />}
                     minHeight={60}
