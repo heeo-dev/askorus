@@ -1705,6 +1705,70 @@ stdin: {"event":"user","message":{"role":"user","content":[{"type":"text","text"
 
 **하지 않는 것:** 만든 사진 받기(0.5.0의 다음 일. 어댑터는 대화 id를 남겨 그때 `brain/<id>/`의 JPEG를 가져오게 한다), WSL·macOS·Linux의 agy, ACP(`agy acp`)로 바꾸기, agy 세션 목록(Phase 3), PC에서 AI CLI 설치 돕기(#59).
 
+### 남은 양과 상단 바 사용량 아이콘 (#20, 판 0.5.0, 2026-11-18 메인테이너 결정)
+
+AI 관리는 처음에 Antigravity의 남은 양만 보였다. 2026-11-18 메인테이너가 Codex, Claude Code, OpenCode Go의 남은 양도 0.5.0에 넣고(정할 것 9~14), 그 값을 모든 화면에서 보도록 상단 바에 누를 수 있는 사용량 아이콘을 두기로 했다(15~21, 디자인은 1호와 2호가 상의). 설계 초안은 Claude Docs '#20 Antigravity(agy) 추가와 AI 관리 설계 초안'의 'Codex·Claude Code·OpenCode Go 남은 양' 절이고, 아이콘 시안과 상의 기록은 '사용량 아이콘' 보드다. 정할 것은 모두 추천대로 정했다.
+
+원칙은 그대로다. 어떤 AI의 로그인 파일도 읽지 않고, 에이전트가 회사 API를 직접 부르지 않으며, 각 CLI가 스스로 내놓는 것만 쓴다. 브라우저 쿠키로 콘솔 페이지를 긁는 방법(다른 도구들이 OpenCode Go에 쓰는 것)은 로그인 정보라 쓰지 않는다.
+
+**정한 것(2026-11-18)**
+
+| 번호 | 정할 것 | 정한 것 |
+|---|---|---|
+| 9 | Codex 읽는 곳 | `codex app-server`의 `account/rateLimits/read`. 모델 호출이 없다 |
+| 10 | Claude 읽는 곳 | Askorus가 Claude를 부를 때 함께 온 `rate_limit_event`를 기억한다. 그러려고 모든 Claude 호출을 사진 경로와 같은 stream-json으로 바꾼다. 따로 확인하는 호출은 하지 않는다 |
+| 11 | 언제 읽나 | Codex·OpenCode는 `/v1/info`를 만들 때 묻고 5분 기억(agy와 같음). Claude는 부를 때마다 고친다 |
+| 12 | AI 관리 화면 | 줄에는 덜 남은 창 하나를 창 이름과 함께, 시트에는 창마다 남은 양과 초기화 시각, Claude는 기준 시각 한 줄 |
+| 13 | 기억하는 곳 | 에이전트 메모리만. 다시 켜면 비고 다음 호출 때 채운다 |
+| 14 | OpenCode Go | `opencode api --standalone experimental.usage.limits`. 5시간·주간·월간 세 창 |
+| 15 | 아이콘 모양 | 켜 둔 AI마다 세로 막대(6×20dp, 간격 3dp). 다 씀은 빈 막대에 가운데 가로선, 모름은 점선 |
+| 16 | 보이는 화면 | 상단 바가 있는 모든 화면(두 입구, 설정·AI 관리 같은 쌓인 화면). 짝 맺기처럼 흐름 중인 화면만 뺀다 |
+| 17 | 셈에 넣을 AI | 켜 둔 AI만. 끈 AI는 시트 아래에 이름만 |
+| 18 | 값이 없거나 모두 끔 | 아이콘을 남긴다(점선 막대, 모두 끔은 '−'). 시트가 이유를 말한다 |
+| 19 | '적음' | 20% 미만 |
+| 20 | 입구 전환 | 상단 바 좌우를 88dp씩 고정해 가운데에 두고, 작은 그림은 모든 폭에서 뺀다 |
+| 21 | 다섯째 AI | 지금은 넷(지원하는 AI가 넷). 다섯째가 생길 때 다시 정한다 |
+
+**조사(2026-11-18, 이 PC에서 실제로 돌림)**
+
+| | 나오는 곳 | 모델 호출 | 창과 값 |
+|---|---|---|---|
+| Codex 0.167.1 | `codex app-server`(stdin·stdout JSON-RPC)에 `initialize`, `initialized`, `account/rateLimits/read` | 없음(1.2초) | `rateLimits.primary`(300분), `secondary`(10080분): `usedPercent`(0~100), `resetsAt`(유닉스 초), `windowDurationMins`. 그 밖에 `ordinaryUsageAllowed`, `rateLimitReachedType`, `planType`, `credits`, `accountId` |
+| Claude Code 2.1.327 | `-p --output-format stream-json --verbose`의 `rate_limit_event`(호출마다 한 번) | 질문에 붙어 옴 | `rate_limit_info.unifiedWindows.five_hour`·`seven_day`: `utilization`(0~1), `resetsAt`(유닉스 초), `status` |
+| OpenCode 2.2.7 | `opencode api --standalone experimental.usage.limits`(OpenCode 서버 API, 문서에 없는 실험 API) | 없음(2초) | `data.go.rolling`·`weekly`·`monthly`: `percent`(쓴 양 0~100), `limited`, `resetsAt`(밀리초). 그 밖에 `data.workspace`(id, 이름, 콘솔 주소), `budgets`, `location` |
+
+- `codex exec --json`(지금 묻기)과 Claude의 `--output-format json`(지금 사진 없는 묻기)에는 남은 양이 없다.
+- `codex app-server`는 Codex가 '실험 기능'으로 표시한다. 같은 프로토콜에 무료 초기화를 써 버리는 명령(`ConsumeAccountRateLimitResetCredit`)도 있다. 켜 있는 동안 띄운 프로그램은 conhost뿐(MCP 서버 없음), 원격 제어는 `disabled`였다. **stdin을 세 줄 뒤에 바로 닫으면 답 없이 끝난다**(세 번 모두): 답(id 2)이 올 때까지 stdin을 열어 두어야 한다.
+- OpenCode 값은 콘솔 화면과 같았다(0%·0%·84%). 부르는 동안 서버 역할의 `opencode.exe`, `cmd.exe`, conhost가 떴다. OpenCode의 공식 문서는 '콘솔에서 본다'뿐이고, 응답마다 오는 `opencode.allowance`는 그 요청이 쓴 금액이라 남은 양이 아니다. 사용량 API 요청 이슈(#16017)는 2026-08에 PR #16513으로 닫혔다.
+- Claude의 `rate_limit_event`는 API 키·Bedrock·Vertex 로그인에는 오지 않는다고 알려져 있다.
+
+**에이전트**
+
+- `/v1/info`의 `usage` 묶음(`UsageGroup`)에 필드를 더한다(더하기만): `window`(`"5h"`, `"week"`, `"month"`), `limited`(그 창을 다 씀), `at`(그 값을 읽은 시각, 방금 읽은 것이면 비움). agy 묶음은 `window: "week"`.
+- **Codex:** `codex app-server`를 셸 없이 실제 exe로, 빈 임시 폴더에서 켠다. stdin에는 상수 세 줄만 쓰고(질문이나 폰에서 온 값은 없음, 다른 메서드는 보내지 않음), 답(id 2)이 오면 stdin을 닫고 2초 안에 안 끝나면 끈다(`proc.RunUntil`, 전체 10초). 쓰는 것은 두 창의 남은 양(100에서 `usedPercent`를 뺀 값), `resetsAt`, `limited`(`rateLimitReachedType`이 있거나 `ordinaryUsageAllowed`가 false)뿐이고, `accountId`·`planType`·`credits`·광고 글은 기록에도 폰에도 넘기지 않는다. 로그인이 안 됐으면 묻지 않는다.
+- **OpenCode Go:** 실제 `opencode.exe`(npm의 `.cmd`가 아닌 것)로 `api --standalone experimental.usage.limits`를 부른다. 작업 폴더와 환경은 로그인 확인(`models --standalone`)과 같다. 쓰는 것은 `data.go`의 세 창(남은 양은 100에서 `percent`를 뺀 값, `limited`, `resetsAt`)뿐이고, `workspace`·`budgets`·`location`은 넘기지 않는다. `data`가 null(Console에 로그인 안 함)이거나 `go`가 없으면(Go를 안 씀) 남은 양 없음.
+- **Claude:** 모든 일회성 호출(묻기, 이어서 묻기, 토론 발언, 종합 답변, 질문 정제)을 입력·출력 모두 stream-json으로 바꾸고(사진 경로의 읽기와 인자 검사를 그대로), `rate_limit_event`가 있으면 그 PC의 Claude 남은 양으로 기억한다(가장 최근 것과 읽은 시각). `status`가 rejected일 때의 한도 처리(`ai_usage_limit`)는 그대로다.
+- 옛 판이라 명령이나 메서드가 없거나, 시간이 넘거나, 모양이 다르면 조용히 남은 양 없음. 숫자는 방어적으로 읽는다.
+
+**앱**
+
+- **AI 관리:** 줄에는 덜 남은 창 하나를 창 이름과 함께('5시간 72% 남음', '이번 주 62% 남음', '이번 달 16% 남음'). 다 썼으면 '다 씀'. 시트에는 창마다 한 줄(남은 양, 초기화 시각), Claude는 'Askorus가 마지막으로 Claude를 부른 때(시각) 기준'.
+- **상단 바 사용량 아이콘:** `Header`와 `TopBar`의 오른쪽에서 두 번째 칸(새 질문·검색이 없는 화면도 마지막 44dp를 비워 자리가 흔들리지 않는다). 켜 둔 AI마다 막대 하나, 순서는 입력칸의 AI 순서, 높이는 그 AI의 창 중 가장 적게 남은 것. 채움은 남은 양, 20% 미만은 짧은 주황 채움, 다 씀은 빈 막대에 가운데 가로선, 모름은 점선. 처음 불러오는 중은 '…', 다시 읽는 동안은 이전 값과 기준 시각을 그대로 둔다. 모름을 0%로 보이지 않고, 0% 초과는 올림한다. 막대는 View의 테두리·점선·채움으로 그린다(SVG 없음).
+- **누르면 '남은 사용량' 시트:** 지금 PC 이름, 맨 위 요약 한 줄(예: 'OpenCode 이번 달 한도가 16% 남았습니다', 'Codex 5시간 한도를 다 썼습니다'), 막대와 같은 순서로 AI마다 창별 막대·%·초기화 시각, Claude 기준 시각, 값이 없는 AI의 이유, 끈 AI, 'AI 관리 열기'. 시트를 열 때 새로 읽는다.
+- 화면 읽기: '남은 사용량'(Usage left) 버튼이 상태 요약과 AI마다 남은 양을 읽는다. 화면 문자열은 한국어·영어로 나눈다. 메뉴 지도 두 장을 고친다.
+
+**개인정보:** 질문과 답이 새로 나가는 곳은 없다. 방침에 한 줄을 더한다: AI 관리와 사용량 아이콘에 남은 사용량을 보이려고 PC의 Antigravity, Codex, OpenCode가 자기 회사에 그 계정의 사용량을 묻는다(질문과 답은 보내지 않음). Claude는 질문 때 함께 온 값을 쓴다. 에이전트는 이 값을 메모리에만 두고 짝 맺은 폰에만 보낸다.
+
+**시험:** UT(Codex는 보내는 바이트와 답 읽기: 창 없음, null, 문자열 `resetsAt`, `ordinaryUsageAllowed` false, `accountId`가 결과에 없음, 5분 기억, 실패하면 비움. OpenCode는 인자와 답 읽기: `data` null, `go` 없음, 창 하나 없음, 작업 공간 값이 결과에 없음. Claude는 모든 호출의 인자 표를 stream-json으로, `rate_limit_event` 있음·없음·`utilization` 없음. `proc.RunUntil`). IT(가짜 CLI에 `codex app-server`와 `opencode api` 흉내, Claude stream 출력의 `rate_limit_event`, `/v1/info`의 `usage`). LT(실제 `codex app-server`와 `opencode api`로 읽기, 사용량이 들지 않음. Claude LT 전체가 stream-json으로 통과하는지와 `rate_limit_event`가 오는지). 화면 시나리오(아이콘 상태 8가지, 시트, AI 관리 줄, 쌓인 화면의 자리, 360dp 영어).
+
+**만드는 순서(워크트리 `usage-20`, main `c7c7602` 위)**
+
+1. U1 에이전트: `UsageGroup`의 `window`·`limited`·`at`, `proc.RunUntil`, OpenCode Go와 Codex 남은 양, UT·IT·LT.
+2. U2 에이전트: Claude의 모든 호출을 stream-json으로, 남은 양 기억, UT·IT, test-live 전체.
+3. U3 앱: AI 관리의 줄과 시트, 상단 바 사용량 아이콘과 '남은 사용량' 시트, 입구 전환 정리, 화면 시험.
+4. U4 문서: 방침(md와 html), 메뉴 지도, `docs/testing.md`.
+5. U5 2호 보안 검토와 고침, test-all, test-live, 실제 폰 확인.
+
 ## 5. 단계 (초안)
 
 | 단계 | 할 일 |
@@ -1716,4 +1780,4 @@ stdin: {"event":"user","message":{"role":"user","content":[{"type":"text","text"
 | P2-5 | 토론(내 PC, 2026-11-05 사용자 결정, #26): 종합 답변 아래 '토론하기'를 누르면 답한 AI들이 다른 곳(쟁점 1~2개)을 채팅방처럼 한 명씩 토론하고 사회자가 '토론 뒤 정리'를 쓴다(판정하지 않음). 예전 '더 따져 보기'(결정 6)를 대신한다. **설계와 C7 실험, 4절 'P2-5 토론'** |
 | P2-6 | 기록은 폰에만(비교 결과 `turn.compare`도). 판정 검증 2단계(네 답 형식, 요청 3번 형식, 두 번 판정)와 CLI·모델이 바뀔 때 다시 재기(P0-6, 4절 'P2-3 비교 판정 설계' 9). |
 | P2-8 | 사진 붙여서 묻기와 답 속 SVG 그림 보기(#14, 판 0.4.0, 2026-11-18 메인테이너 결정). 이어서 0.5.0에 Antigravity 추가(#20)와 만든 사진 받기. **0.4.0으로 냄(2026-11-18).** 설계와 조사, 만든 것과 보안 검토는 4절 '#14 사진 붙여서 묻기와 그림 보기'. 0.5.0은 남음 |
-| P2-9 | Antigravity(agy) 추가와 설정의 AI 관리(#20, 판 0.5.0, 2026-11-18 메인테이너 결정: 정할 것 8개 모두 추천대로). **설계와 조사, 4절 '#20 Antigravity(agy) 추가와 AI 관리'** |
+| P2-9 | Antigravity(agy) 추가와 설정의 AI 관리(#20, 판 0.5.0, 2026-11-18 메인테이너 결정: 정할 것 8개 모두 추천대로). **설계와 조사, 4절 '#20 Antigravity(agy) 추가와 AI 관리'**. 남은 양(Codex·Claude Code·OpenCode Go)과 상단 바 사용량 아이콘은 정할 것 9~21(2026-11-18 메인테이너 결정: 모두 추천대로), 4절 '남은 양과 상단 바 사용량 아이콘' |
