@@ -26,6 +26,23 @@ import { type KeyValue, secureKeyValue } from '@/connections/store';
  */
 export const synthWriters = ['claude', 'codex', 'opencode', 'agy'] as const;
 
+/**
+ * moderatorOf is the moderator the phone asks for (#20, R-128): the one
+ * set, unless the person turned that AI off in Manage AIs; then the first
+ * writer still on, and the one set when every writer is off.
+ */
+export function moderatorOf(p: Pick<AskPrefs, 'synthAgent' | 'off'>): string {
+  if (!p.off.includes(p.synthAgent)) return p.synthAgent;
+  return synthWriters.find((a) => !p.off.includes(a)) ?? p.synthAgent;
+}
+
+/** toggleOff turns an AI on or off (Manage AIs); turning the moderator off moves the moderator to the next writer still on (R-128). */
+export function toggleOff(p: AskPrefs, agent: string): AskPrefs {
+  const off = p.off.includes(agent) ? p.off.filter((x) => x !== agent) : [...p.off, agent];
+  const next = { ...p, off };
+  return { ...next, synthAgent: moderatorOf(next) };
+}
+
 export type AskPrefs = {
   tier: Tier;
   off: string[];

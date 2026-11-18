@@ -95,6 +95,9 @@ func (a *Adapter) AskEfforts() map[string][]string {
 type Options struct {
 	Path  string                   // empty: agy.exe on PATH, else agy's own install folder
 	Tiers map[string]core.AskModel // settings ask.tiers.agy
+	// ConfigDir is agy's config folder, where it keeps hooks, plugins and
+	// agents of the person's own; empty: ~/.gemini/config. Tests give one.
+	ConfigDir string
 }
 
 // Adapter implements core.Adapter and core.Asker for Antigravity CLI.
@@ -115,6 +118,13 @@ type Adapter struct {
 	loginAt    time.Time
 	loginCheck func(context.Context) loginState
 
+	// configDir is agy's config folder (Options.ConfigDir); safe is
+	// photosSafe's answer, kept for a minute.
+	configDir string
+	safeMu    sync.Mutex
+	safe      bool
+	safeAt    time.Time
+
 	// The agent files (agentFile): fileMu guards ready, the files this
 	// process wrote or found right, and writes (for tests).
 	fileMu sync.Mutex
@@ -124,7 +134,12 @@ type Adapter struct {
 
 // New finds agy. A missing agy is not an error: /v1/info reports it.
 func New(o Options) *Adapter {
-	a := &Adapter{tiers: o.Tiers, ready: map[string]bool{}}
+	a := &Adapter{tiers: o.Tiers, ready: map[string]bool{}, configDir: o.ConfigDir}
+	if a.configDir == "" {
+		if home, err := os.UserHomeDir(); err == nil {
+			a.configDir = filepath.Join(home, ".gemini", "config")
+		}
+	}
 	a.exe, a.exeErr = findExe(o.Path)
 	return a
 }

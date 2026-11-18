@@ -418,7 +418,7 @@
   "ais.missing": "이 PC에 없는 AI",
   "ais.noPC": "PC와 짝을 맺으면 그 PC의 AI가 보입니다.",
   "ais.loadFailed": "PC에 연결하지 못했습니다. PC가 켜져 있는지 보고 다시 열어 주세요.",
-  "ais.useFor": "{name}를 묻기에 쓰기",
+  "ais.useFor": "묻기에 쓰기: {name}",
   "ais.signedIn": "로그인됨",
   "ais.signedOut": "로그인 안 됨",
   "ais.loginEnds": "{date}에 끝남",

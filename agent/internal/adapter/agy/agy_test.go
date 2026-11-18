@@ -34,9 +34,13 @@ func TestLockSettings(t *testing.T) {
 	if askSettings != wantAskSettings {
 		t.Fatalf("askSettings = %s", askSettings)
 	}
-	usage := lockSettings(true, false)
-	if usage != wantAskSettings {
-		t.Errorf("lockSettings(true, false) = %s", usage)
+	// R-124: /usage runs with slash commands on, else it is a question to the model.
+	usage := usageArgs()
+	if s := usage[len(usage)-1]; !strings.Contains(s, `"disableSlashCommands":false`) || !strings.Contains(s, `"read_file(*)"`) || !strings.Contains(s, `"command(*)"`) {
+		t.Errorf("usage settings = %s", s)
+	}
+	if !slices.Equal(usage[:5], []string{"-p", "/usage", "--output-format", "json", "--settings"}) {
+		t.Errorf("usage args = %q", usage)
 	}
 	slash := lockSettings(true, true)
 	if !strings.Contains(slash, `"disableSlashCommands":false`) || !strings.Contains(slash, `"read_file(*)"`) {
@@ -152,8 +156,14 @@ func TestStripFileLinks(t *testing.T) {
 		"Path file:///C:/Users/someone/AppData/photo-2.jpg ends":                "Path photo-2.jpg ends",
 		"Angle <file:///home/someone/x/photo-3.png>.":                           "Angle photo-3.png.",
 		"Back [a](file:///C:\\Users\\someone\\b.jpg)":                           "Back a",
-		"Web [go](https://go.dev/doc) stays":                                    "Web [go](https://go.dev/doc) stays",
-		"No link at all":                                                        "No link at all",
+		// R-127: any case, one slash, a path as the link's text, no word that ends in file.
+		"Up FILE:///C:/Users/someone/x.jpg end":                            "Up x.jpg end",
+		"One file:/C:/Users/someone/y.png end":                             "One y.png end",
+		"[C:\\Users\\someone\\z.jpg](FILE:///C:/Users/someone/z.jpg)":      "z.jpg",
+		"[file:///C:/Users/someone/w.jpg](file:///C:/Users/someone/w.jpg)": "w.jpg",
+		"Edit the profile:settings page":                                   "Edit the profile:settings page",
+		"Web [go](https://go.dev/doc) stays":                               "Web [go](https://go.dev/doc) stays",
+		"No link at all":                                                   "No link at all",
 	} {
 		if got := stripFileLinks(in); got != want {
 			t.Errorf("stripFileLinks(%q) = %q, want %q", in, got, want)
@@ -229,7 +239,8 @@ func TestFindExe(t *testing.T) {
 func fakeAgy(t *testing.T) (*Adapter, string) {
 	t.Helper()
 	exe := fakecli.Use(t, fakecli.RoleAgy)
-	return New(Options{Path: exe}), t.TempDir()
+	// agy's own config folder: empty (no hooks, plugins or agents of the person's).
+	return New(Options{Path: exe, ConfigDir: t.TempDir()}), t.TempDir()
 }
 
 func ask(t *testing.T, a *Adapter, req core.AskRequest) (core.AskResult, error) {

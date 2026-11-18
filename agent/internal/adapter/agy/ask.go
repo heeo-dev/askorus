@@ -158,6 +158,9 @@ func stdinMessage(prompt string) string {
 func (a *Adapter) agentFile(dir, name, content string) (string, error) {
 	p := filepath.Join(dir, ".agents", "agents", name+".md")
 	want := []byte(content)
+	if a.shadowed(name) {
+		return "", core.Fail(core.ErrCodeInternal, "agy: an agent of the same name is in agy's own config folder")
+	}
 	a.fileMu.Lock()
 	defer a.fileMu.Unlock()
 	if !a.ready[p] {
@@ -218,6 +221,9 @@ func (a *Adapter) Ask(ctx context.Context, req core.AskRequest) (core.AskResult,
 	agent, settings, tools, prompt := askAgent, askSettings, askTools, req.Prompt
 	var dir string
 	if len(req.Images) > 0 {
+		if a.shadowed(photoAgent) {
+			return core.AskResult{}, core.Fail(core.ErrCodeInternal, "agy: an agent of the same name is in agy's own config folder")
+		}
 		d, names, cleanup, err := photoFolder(req.Folder, photoAgent, photoAgentFile, req.Images)
 		if err != nil {
 			return core.AskResult{}, err
@@ -340,26 +346,71 @@ func (r run) retried(haveAnswer bool) bool {
 }
 
 // fileLinkRe matches a Markdown link to a file ("[photo-1.jpg](file:///C:/…)")
-// and bareFileRe a bare file URL: agy links the files it read, and their
-// paths name the person's user folder.
+// and bareFileRe a bare file URL, in any case and with one slash or
+// three ("FILE:///…", "file:/C:/…"): agy links the files it read, and
+// their paths name the person's user folder (R-127).
 var (
-	fileLinkRe = regexp.MustCompile(`\[([^\]\n]*)\]\(<?file:[^)\n]*>?\)`)
-	bareFileRe = regexp.MustCompile(`<?file:///?[^\s)>\]]+>?`)
+	fileLinkRe = regexp.MustCompile(`(?i)\[([^\]\n]*)\]\(<?file:[^)\n]*>?\)`)
+	bareFileRe = regexp.MustCompile(`(?i)<?\bfile:/*[^\s)>\]"']+>?`)
+	// winPathRe is a Windows path as link text ("C:\Users\…\photo-1.jpg").
+	winPathRe = regexp.MustCompile(`(?i)^[a-z]:[\\/]`)
 )
 
-// stripFileLinks keeps a file link's text and drops its target, and turns
-// a bare file URL into the file's name, so no path of the PC reaches the
-// phone or another AI.
+// baseName is the last part of a path or file URL.
+func baseName(u string) string {
+	u = strings.Trim(u, "<> ")
+	u = strings.ReplaceAll(u, `\`, "/")
+	if i := strings.LastIndex(u, "/"); i >= 0 {
+		u = u[i+1:]
+	}
+	return u
+}
+
+// stripFileLinks keeps a file link's text and drops its target (the text
+// itself, when it is a path, down to the file's name), and turns a bare
+// file URL into the file's name, so no path of the PC reaches the phone or
+// another AI.
 func stripFileLinks(s string) string {
-	s = fileLinkRe.ReplaceAllString(s, "$1")
-	return bareFileRe.ReplaceAllStringFunc(s, func(u string) string {
-		u = strings.Trim(u, "<>")
-		u = strings.ReplaceAll(u, `\`, "/")
-		if i := strings.LastIndex(u, "/"); i >= 0 {
-			u = u[i+1:]
+	s = fileLinkRe.ReplaceAllStringFunc(s, func(m string) string {
+		text := fileLinkRe.FindStringSubmatch(m)[1]
+		if strings.Contains(strings.ToLower(text), "file:") || winPathRe.MatchString(text) || strings.HasPrefix(text, "/") {
+			return baseName(text)
 		}
-		return u
+		return text
 	})
+	return bareFileRe.ReplaceAllStringFunc(s, baseName)
+}
+
+// stripOutput applies stripFileLinks to every string of a writer's JSON,
+// which goes on to the phone and to the debate's AIs as it is (R-127).
+func stripOutput(raw []byte) json.RawMessage {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	var v any
+	if dec.Decode(&v) != nil {
+		return json.RawMessage(raw)
+	}
+	var walk func(any) any
+	walk = func(x any) any {
+		switch t := x.(type) {
+		case string:
+			return stripFileLinks(t)
+		case []any:
+			for i := range t {
+				t[i] = walk(t[i])
+			}
+		case map[string]any:
+			for k := range t {
+				t[k] = walk(t[k])
+			}
+		}
+		return x
+	}
+	out, err := json.Marshal(walk(v))
+	if err != nil {
+		return json.RawMessage(raw)
+	}
+	return out
 }
 
 // agyError is the line agy prints on stderr when a run ends on an error.

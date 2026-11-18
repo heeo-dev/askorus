@@ -45,10 +45,13 @@ type loginState struct {
 }
 
 // usageArgs runs /usage. --settings are the ask's locks with slash
-// commands on: a person who turned slash commands off would otherwise
-// send "/usage" to the model, in their own mode and with every tool.
+// commands on (R-124: with them off, as the ask's settings have them,
+// "/usage" went to the model as a question every few minutes, in a new
+// conversation and on the quota). A person who turned slash commands off
+// in agy is covered too; and were it a turn after all, it is locked and
+// readUsage throws it away (it has a conversation id).
 func usageArgs() []string {
-	return []string{"-p", "/usage", "--output-format", "json", "--settings", lockSettings(true, false)}
+	return []string{"-p", "/usage", "--output-format", "json", "--settings", lockSettings(true, true)}
 }
 
 // readUsage reads /usage's JSON. A run that started a turn (a

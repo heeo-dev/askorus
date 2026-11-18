@@ -99,6 +99,15 @@ func agyUsage(args []string) int {
 	if len(args) < 4 || flagValue(args, "--output-format") != "json" {
 		return unexpected(RoleAgy)
 	}
+	var settings struct {
+		DisableSlashCommands *bool `json:"disableSlashCommands"`
+	}
+	json.Unmarshal([]byte(flagValue(args, "--settings")), &settings)
+	if settings.DisableSlashCommands == nil || *settings.DisableSlashCommands {
+		// agy sends "/usage" to the model as a question (R-124).
+		printJSON(map[string]any{"conversation_id": newUUID(), "status": "SUCCESS", "response": "I can't check usage from here.", "num_turns": 1})
+		return 0
+	}
 	mode, err := signInMode(RoleAgy)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "fakecli:", err)

@@ -15,13 +15,19 @@ package agy
 // agy's.
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
+	"time"
 
 	"github.com/heeo-dev/askorus/agent/internal/core"
 )
@@ -69,6 +75,7 @@ func photoFolder(base, name, content string, images []core.Image) (dir string, n
 	if err := os.MkdirAll(root, 0o700); err != nil {
 		return "", nil, nil, core.Fail(core.ErrCodeInternal, "agy: the photo folder could not be made")
 	}
+	sweepPhotoFolders(root, time.Now())
 	raw := make([]byte, 12)
 	if _, err := rand.Read(raw); err != nil {
 		return "", nil, nil, core.Fail(core.ErrCodeInternal, "agy: no random name")
@@ -77,7 +84,7 @@ func photoFolder(base, name, content string, images []core.Image) (dir string, n
 	if err := os.Mkdir(dir, 0o700); err != nil {
 		return "", nil, nil, core.Fail(core.ErrCodeInternal, "agy: the photo folder could not be made")
 	}
-	cleanup = func() { os.RemoveAll(dir) }
+	cleanup = func() { removeFolder(dir) }
 	fail := func(msg string) (string, []string, func(), error) {
 		cleanup()
 		return "", nil, nil, core.Fail(core.ErrCodeInternal, msg)
@@ -127,9 +134,128 @@ func photoLine(names []string) string {
 	return "[Photos attached to this question, in the current folder: " + strings.Join(names, ", ") + "]\n\n"
 }
 
-// SeesImages: the Gemini models agy runs for an ask all see photos
-// (core.ImageSeer).
-func (a *Adapter) SeesImages(model string) bool { return modelRe.MatchString(model) }
+// photoFolderRe is a run's photo folder name: 24 hex digits.
+var photoFolderRe = regexp.MustCompile(`^[0-9a-f]{24}$`)
 
-// ImageModels says so to the app.
-func (a *Adapter) ImageModels() core.ImageInfo { return core.ImageInfo{All: true} }
+// staleAfter: a run's photo folder older than this was left by a run that
+// could not remove it (a file held open on Windows, an agent that was
+// killed); no run lasts that long.
+const staleAfter = 15 * time.Minute
+
+// sweepPhotoFolders removes the run folders under root that are older than
+// staleAfter (R-125). Only names this adapter makes are touched.
+func sweepPhotoFolders(root string, now time.Time) {
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		info, err := e.Info()
+		if err != nil || !e.IsDir() || !photoFolderRe.MatchString(e.Name()) || now.Sub(info.ModTime()) < staleAfter {
+			continue
+		}
+		removeFolder(filepath.Join(root, e.Name()))
+	}
+}
+
+// removeFolder removes a run's folder, trying again a few times: on
+// Windows a file that agy or a virus scanner still holds cannot go yet
+// (R-125). What is left the sweep removes later.
+func removeFolder(dir string) {
+	for _, wait := range []time.Duration{0, 100 * time.Millisecond, 500 * time.Millisecond, 2 * time.Second} {
+		time.Sleep(wait)
+		if err := os.RemoveAll(dir); err == nil {
+			return
+		}
+	}
+}
+
+// photosSafe reports whether agy may read a question's photos: only when
+// the person's agy has no hook and no plugin (R-126). A photo run leaves
+// out the file read deny rule, and agy lets a PreToolUse hook approve what
+// it would otherwise ask (its docs); a run without a terminal then reads
+// outside the folder after all. Without a hook nothing can approve it, so
+// agy refuses (2026-11-18, 9 runs). The answer is kept for a minute.
+func (a *Adapter) photosSafe() bool {
+	a.safeMu.Lock()
+	defer a.safeMu.Unlock()
+	if !a.safeAt.IsZero() && time.Since(a.safeAt) < time.Minute {
+		return a.safe
+	}
+	a.safe = a.configDir != "" && !hasHooksOrPlugins(a.configDir)
+	a.safeAt = time.Now()
+	return a.safe
+}
+
+// hasHooksOrPlugins reports whether agy's config folder (~/.gemini/config)
+// has a hook (hooks.json with any entry) or a plugin. Anything it cannot
+// read counts as one (fail closed).
+func hasHooksOrPlugins(dir string) bool {
+	b, err := os.ReadFile(filepath.Join(dir, "hooks.json"))
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+	case err != nil:
+		return true
+	case len(bytes.TrimSpace(b)) > 0:
+		var v any
+		if json.Unmarshal(b, &v) != nil || hasEntries(v) {
+			return true
+		}
+	}
+	entries, err := os.ReadDir(filepath.Join(dir, "plugins"))
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		return false
+	case err != nil:
+		return true
+	}
+	return len(entries) > 0
+}
+
+// hasEntries reports whether a JSON value holds anything but empty objects
+// and lists.
+func hasEntries(v any) bool {
+	switch t := v.(type) {
+	case map[string]any:
+		for _, x := range t {
+			if hasEntries(x) {
+				return true
+			}
+		}
+		return false
+	case []any:
+		return len(t) > 0
+	case nil:
+		return false
+	}
+	return true
+}
+
+// shadowed reports whether agy's config folder has an agent of name
+// (~/.gemini/config/agents/<name>.md or <name>/agent.md): agy's docs
+// put the folder agy runs in first, but a run whose agent might not be
+// the adapter's is refused (fail closed).
+func (a *Adapter) shadowed(name string) bool {
+	if a.configDir == "" {
+		return false
+	}
+	for _, p := range []string{filepath.Join(a.configDir, "agents", name+".md"), filepath.Join(a.configDir, "agents", name, "agent.md")} {
+		if _, err := os.Lstat(p); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
+// SeesImages: the Gemini models agy runs for an ask all see photos, when
+// photos are safe to give it (core.ImageSeer).
+func (a *Adapter) SeesImages(model string) bool { return modelRe.MatchString(model) && a.photosSafe() }
+
+// ImageModels says so to the app: all models, or none when the person's
+// agy has a hook or a plugin.
+func (a *Adapter) ImageModels() core.ImageInfo {
+	if !a.photosSafe() {
+		return core.ImageInfo{}
+	}
+	return core.ImageInfo{All: true}
+}

@@ -9,7 +9,7 @@ import { renderRouter, screen, waitFor, within } from 'expo-router/testing-libra
 import { Linking } from 'react-native';
 
 import type { AdapterInfo } from '@/api/types';
-import { loadAskPrefs } from '@/ask/prefs';
+import { defaultAskPrefs, loadAskPrefs, saveAskPrefs } from '@/ask/prefs';
 import { ConnectionStore } from '@/connections/store';
 import { setLang } from '@/i18n';
 import { FakeAgent, HOST, PORT, TOKEN } from '@/test/fakeAgent';
@@ -78,7 +78,7 @@ test("the PC's AIs with version, sign-in and usage, and a switch each", async ()
 });
 
 test("a row's sheet: usage, tier models, what it does and where questions go", async () => {
-  const opened = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
+  const opened = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
   const user = await open();
   await user.press(await screen.findByText('Antigravity'));
   const sheet = await screen.findByTestId('ai-sheet');
@@ -103,7 +103,7 @@ test('an AI without photos or moderating says so in its sheet', async () => {
 
 test('the AIs the PC does not have come with the install guide', async () => {
   agent.askAgents = agent.askAgents.filter((a) => a.agent !== 'opencode' && a.agent !== 'agy');
-  const opened = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
+  const opened = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
   const user = await open();
   expect(await screen.findByText('Not on this PC')).toBeTruthy();
   expect(screen.getAllByText('Not installed').length).toBe(2);
@@ -127,5 +127,17 @@ test('in Korean', async () => {
   await open();
   expect(await screen.findByText('DESKTOP-TEST의 AI')).toBeTruthy();
   expect(screen.getByText('1.5.11 · 로그인됨 · 이번 주 81% 남음')).toBeTruthy();
-  expect(screen.getByRole('switch', { name: 'Antigravity를 묻기에 쓰기' })).toBeChecked();
+  expect(screen.getByRole('switch', { name: '묻기에 쓰기: Antigravity' })).toBeChecked();
+});
+
+test('turning the moderator off picks another moderator (R-128)', async () => {
+  await saveAskPrefs({ ...defaultAskPrefs, synthAgent: 'agy' });
+  const user = await open('/settings');
+  expect(await screen.findByRole('radio', { name: 'Antigravity' })).toBeChecked();
+  await user.press(screen.getByText('Manage AIs'));
+  await user.press(await screen.findByRole('switch', { name: 'Use Antigravity for questions' }));
+  await waitFor(async () => expect(await loadAskPrefs()).toMatchObject({ off: ['agy'], synthAgent: 'claude' }));
+  await user.press(screen.getByRole('button', { name: 'Back' }));
+  await waitFor(() => expect(screen.queryByRole('radio', { name: 'Antigravity' })).toBeNull());
+  expect(screen.getByRole('radio', { name: 'Claude' })).toBeChecked();
 });

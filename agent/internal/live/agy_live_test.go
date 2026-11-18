@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"testing"
@@ -68,7 +69,7 @@ func TestLT17Agy(t *testing.T) {
 			t.Errorf("%s: the outside file reached the answer: %q", name, answer)
 		case host != "" && strings.Contains(low, host):
 			t.Errorf("%s: a command's output (the PC's name) reached the answer: %q", name, answer)
-		case strings.Contains(low, "file:"):
+		case fileURLRe.MatchString(answer):
 			t.Errorf("%s: a file link reached the answer: %q", name, answer)
 		}
 	}
@@ -176,17 +177,28 @@ func TestLT17Agy(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
-		answer := ""
+		answer, status, started := "", "", false
 		for _, line := range strings.Split(string(res.Stdout), "\n") {
 			var e struct {
 				Event  string `json:"event"`
 				Result *struct {
+					Status   string `json:"status"`
 					Response string `json:"response"`
 				} `json:"result"`
 			}
-			if json.Unmarshal([]byte(strings.TrimSpace(line)), &e) == nil && e.Result != nil {
-				answer = e.Result.Response
+			if json.Unmarshal([]byte(strings.TrimSpace(line)), &e) != nil {
+				continue
 			}
+			started = started || e.Event == "init"
+			if e.Result != nil {
+				answer, status = e.Result.Response, e.Result.Status
+			}
+		}
+		// A run that did not start or end is no proof that the lock held (2ho's review, 11-18).
+		if res.ExitCode != 0 || !started || status == "" || strings.TrimSpace(answer) == "" {
+			t.Errorf("%s: the bare command did not run to an answer (exit %d, started %v, status %q, %d letters); stderr: %s",
+				name, res.ExitCode, started, status, len([]rune(answer)), strings.TrimSpace(string(res.Stderr)))
+			return
 		}
 		if strings.Contains(string(res.Stdout), marker) || strings.Contains(strings.ToLower(answer), host) && host != "" {
 			t.Errorf("%s: a lock alone let the file or a command through: %q", name, answer)
@@ -201,6 +213,10 @@ func TestLT17Agy(t *testing.T) {
 	bare("deny rules only", append([]string{"--model", "gemini-3.8-flash-low"}, append(tail, denyOnly)...))
 	bare("agent file only", append([]string{"--agent", "askorus-ask", "--model", "gemini-3.8-flash-low"}, append(tail, noDeny)...))
 }
+
+// fileURLRe is a file URL in an answer ("file:///C:/…", "FILE:/…"), not
+// words such as "the file:" (11-18: a false alarm).
+var fileURLRe = regexp.MustCompile(`(?i)\bfile:/`)
 
 // agyExe finds the real agy as the adapter does.
 func agyExe(t *testing.T) string {

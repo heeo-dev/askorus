@@ -20,7 +20,7 @@ import { tiers } from '@/api/types';
 import { conversations, useConversations } from '@/ask/conversations';
 import { features } from '@/ask/features';
 import { modelLabel } from '@/ask/models';
-import { type AskPrefs, defaultAskPrefs, loadAskPrefs, saveAskPrefs, synthWriters } from '@/ask/prefs';
+import { type AskPrefs, defaultAskPrefs, loadAskPrefs, moderatorOf, saveAskPrefs, synthWriters } from '@/ask/prefs';
 import { type Asker, askers } from '@/ask/thread';
 import { loadPrefs, type Prefs, savePrefs } from '@/connections/prefs';
 import { pcDetail, pcLabel } from '@/connections/label';
@@ -174,8 +174,8 @@ export default function Settings() {
             <View style={s.writer}>
               <Text style={s.writerLabel}>{t(features.refine ? 'settings.synthAgentLong' : 'settings.moderatorAI')}</Text>
               <PillChoice
-                options={synthWriters.filter((a) => a === ask.synthAgent || !ask.off.includes(a)).map((a) => ({ value: a, label: agentName(a), agent: a }))}
-                value={ask.synthAgent as (typeof synthWriters)[number]}
+                options={synthWriters.filter((a) => !ask.off.includes(a) || a === moderatorOf(ask)).map((a) => ({ value: a, label: agentName(a), agent: a }))}
+                value={moderatorOf(ask) as (typeof synthWriters)[number]}
                 onChange={(synthAgent) => changeAsk({ ...ask, synthAgent })}
                 label={t('settings.synthAgentLong')}
               />

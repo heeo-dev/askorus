@@ -3,6 +3,7 @@ package agy
 import (
 	"context"
 	"encoding/json"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -85,7 +86,10 @@ func TestSynthesize(t *testing.T) {
 
 	// Refining: the refine schema and the quick level.
 	r, err = synthesize(t, a, core.SynthRequest{Folder: judgeDir, Refine: true, Prompt: "[Askorus refine v1] the question"})
-	if err != nil || string(r.Output) != fakecli.RefineSpec || r.Model != "gemini-3.8-flash-low" {
+	var got, want map[string]string
+	json.Unmarshal(r.Output, &got)
+	json.Unmarshal([]byte(fakecli.RefineSpec), &want)
+	if err != nil || !maps.Equal(got, want) || r.Model != "gemini-3.8-flash-low" {
 		t.Errorf("refine = %s %+v %v", r.Output, r, err)
 	}
 	if c := fakecli.Calls(t)[1]; !slices.Contains(c.Args, core.RefineSchemaV1) {

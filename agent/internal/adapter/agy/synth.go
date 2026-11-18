@@ -171,6 +171,9 @@ func (a *Adapter) Synthesize(ctx context.Context, req core.SynthRequest) (core.S
 	agent, settings, tools, prompt := synthAgent, askSettings, synthTools, req.Prompt
 	var dir string
 	if len(req.Images) > 0 {
+		if a.shadowed(synthPhotoAgent) || !a.photosSafe() {
+			return core.SynthResult{}, core.Fail(core.ErrCodeInternal, "agy synth: photos are not safe to give agy here")
+		}
 		d, names, cleanup, err := photoFolder(req.Folder, synthPhotoAgent, synthPhotoAgentFile, req.Images)
 		if err != nil {
 			return core.SynthResult{}, err
@@ -227,7 +230,7 @@ func parseSynth(res proc.Result, agent string, tools map[string]bool, model stri
 		if !structured || !json.Valid(run.result.StructuredOutput) {
 			return out, core.Fail(core.ErrCodeJudgeBadOutput, "")
 		}
-		out.Output = json.RawMessage(run.result.StructuredOutput)
+		out.Output = stripOutput(run.result.StructuredOutput)
 		return out, nil
 	}
 	msg := ae.ShortError

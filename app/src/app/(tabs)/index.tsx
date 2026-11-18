@@ -44,7 +44,7 @@ import { dropPending, dropPhotos, keepPhotos } from '@/ask/photoFiles';
 import { PhotoError, photosAvailable, pickPhotos, takePhoto } from '@/ask/photoPick';
 import { byPhotos, photoLimit, type TurnPhoto } from '@/ask/photos';
 import { aiStatus, askErrorText, metaLine, partViews, rowValue } from '@/ask/present';
-import { type AskPrefs, defaultAskPrefs, loadAskPrefs, saveAskPrefs } from '@/ask/prefs';
+import { type AskPrefs, defaultAskPrefs, loadAskPrefs, moderatorOf, saveAskPrefs } from '@/ask/prefs';
 import { debating } from '@/ask/debate';
 import { buildRecord, concluding, moderatorAnswers } from '@/ask/record';
 import {
@@ -556,7 +556,8 @@ export default function Ask() {
   const follow: { agents: string[]; tier: Tier; moderator?: boolean } = pick ?? followDefault(turns, on, canAsk, prefs.tier);
   // The moderator (#25): the moderator AI set, else the first AI that can answer, where the PC
   // asks the moderator and there are answers to talk about.
-  const modAgent = info?.moderator ? (canAsk(prefs.synthAgent) ? prefs.synthAgent : (list.find((a) => a.canAsk)?.agent ?? null)) : null;
+  const moderator = moderatorOf(prefs);
+  const modAgent = info?.moderator ? (canAsk(moderator) ? moderator : (list.find((a) => a.canAsk && !prefs.off.includes(a.agent))?.agent ?? null)) : null;
   const modOffered = !!modAgent && moderatorAnswers(turns).length > 0;
   const modAsk = !!follow.moderator && modOffered;
   // One AI alone (the old 'only this AI'), shown as its chip while others are on.
@@ -619,8 +620,8 @@ export default function Ask() {
       models: prefs.models,
       efforts: prefs.efforts,
       info,
-      synth: { on: prefs.synth, agent: prefs.synthAgent, models: prefs.synthModels },
-      refine: features.refine ? { on: prefs.refine, agent: prefs.synthAgent } : undefined,
+      synth: { on: prefs.synth, agent: moderatorOf(prefs), models: prefs.synthModels },
+      refine: features.refine ? { on: prefs.refine, agent: moderatorOf(prefs) } : undefined,
       moderator:
         toModerator && modAgent
           ? { agent: modAgent, ...(modPick ? { model: modPick.model, ...(modPick.effort ? { effort: modPick.effort } : {}) } : {}), answers: moderatorAnswers(turns) }
@@ -757,7 +758,7 @@ export default function Ask() {
     compare: (how) => {
       const p = pcRef.current;
       if (!p) return;
-      if (how === 'synth') track(turn.id, followCompare(p.client, turn, how, deps, { agent: writerFor(info, prefs.synthAgent) }));
+      if (how === 'synth') track(turn.id, followCompare(p.client, turn, how, deps, { agent: writerFor(info, moderatorOf(prefs)) }));
       else track(turn.id, followCompare(p.client, turn, how, deps));
     },
     retryRun: () => {

@@ -13,7 +13,7 @@ import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-na
 import { agentName, aiGuideUrl, loginDay, noticeIsNote, noticeText, supportedAIs } from '@/api/agents';
 import { type AdapterInfo, type Info, tiers } from '@/api/types';
 import { modelLabel } from '@/ask/models';
-import { type AskPrefs, defaultAskPrefs, loadAskPrefs, saveAskPrefs } from '@/ask/prefs';
+import { type AskPrefs, defaultAskPrefs, loadAskPrefs, saveAskPrefs, toggleOff } from '@/ask/prefs';
 import { whenAgain } from '@/ask/present';
 import { pcLabel } from '@/connections/label';
 import { has, type MessageKey, t } from '@/i18n';
@@ -90,8 +90,7 @@ export default function ManageAIs() {
   );
 
   const toggle = (agent: string) => {
-    const off = ask.off.includes(agent) ? ask.off.filter((x) => x !== agent) : [...ask.off, agent];
-    const next = { ...ask, off };
+    const next = toggleOff(ask, agent);
     setAsk(next);
     saveAskPrefs(next);
   };

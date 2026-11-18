@@ -1,4 +1,4 @@
-import { defaultAskPrefs, loadAskPrefs, saveAskPrefs, synthWriters } from './prefs';
+import { defaultAskPrefs, loadAskPrefs, moderatorOf, saveAskPrefs, synthWriters, toggleOff } from './prefs';
 
 const memory = () => {
   const mem = new Map<string, string>();
@@ -110,4 +110,17 @@ test('a missing or odd record setting carries the record, notice not seen', asyn
   }
   mem.set('ask.v1', JSON.stringify({ carryRecord: false, recordNoticed: true }));
   expect(await loadAskPrefs(kv)).toMatchObject({ carryRecord: false, recordNoticed: true });
+});
+
+// R-128 (#20): an AI turned off in Manage AIs is no moderator.
+test('turning the moderator off moves the moderator to the next writer still on', () => {
+  const p = { ...defaultAskPrefs, synthAgent: 'agy' };
+  const off = toggleOff(p, 'agy');
+  expect(off).toMatchObject({ off: ['agy'], synthAgent: 'claude' });
+  const both = toggleOff(toggleOff({ ...defaultAskPrefs }, 'claude'), 'codex');
+  expect(both).toMatchObject({ off: ['claude', 'codex'], synthAgent: 'opencode' });
+  expect(toggleOff(off, 'agy')).toMatchObject({ off: [], synthAgent: 'claude' });
+  // Prefs saved before: the moderator set but off.
+  expect(moderatorOf({ synthAgent: 'agy', off: ['agy'] })).toBe('claude');
+  expect(moderatorOf({ synthAgent: 'codex', off: [...synthWriters] })).toBe('codex');
 });

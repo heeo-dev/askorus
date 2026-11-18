@@ -60,7 +60,7 @@ func TestPhotoSettings(t *testing.T) {
 			t.Errorf("%s accepted", name)
 		}
 	}
-	a := &Adapter{}
+	a := &Adapter{configDir: t.TempDir()}
 	if !a.SeesImages("gemini-3.8-flash") || a.SeesImages("claude-sonnet-4-6") || !a.ImageModels().All {
 		t.Error("image models")
 	}

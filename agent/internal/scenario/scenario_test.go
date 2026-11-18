@@ -139,7 +139,7 @@ func newRig(t *testing.T, mutate func(*rigOptions)) *rig {
 		opencode.New(opencode.Options{Path: exes[fakecli.RoleOpenCode]}),
 	}
 	if o.agy {
-		r.adapters = append(r.adapters, agy.New(agy.Options{Path: exes[fakecli.RoleAgy]}))
+		r.adapters = append(r.adapters, agy.New(agy.Options{Path: exes[fakecli.RoleAgy], ConfigDir: filepath.Join(root, "agy-config")}))
 	}
 	store, err := devices.Open(filepath.Join(root, "devices"))
 	if err != nil {
