@@ -13,6 +13,9 @@ export function aiGuideUrl(): string {
 
 const names: Record<string, string> = { claude: 'Claude', codex: 'Codex', opencode: 'OpenCode', agy: 'Antigravity' };
 
+/** supportedAIs are the AI programs the PC's agent can drive, in the order Manage AIs lists the missing ones (#20). */
+export const supportedAIs = ['claude', 'codex', 'opencode', 'agy'] as const;
+
 /** agentName is the name to show for an agent code; unknown codes show as they are. */
 export function agentName(agent: string): string {
   return names[agent] ?? agent;

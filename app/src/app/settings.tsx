@@ -144,6 +144,8 @@ export default function Settings() {
 
         <Section title={t('settings.ask')}>
           <Group>
+            {/* #20: the PC's AIs, on or off for this phone. */}
+            <Row title={t('settings.manageAIs')} chevron onPress={() => router.push('/ais')} />
             <Row
               title={t('settings.askTierShort')}
               minHeight={56}
@@ -172,7 +174,7 @@ export default function Settings() {
             <View style={s.writer}>
               <Text style={s.writerLabel}>{t(features.refine ? 'settings.synthAgentLong' : 'settings.moderatorAI')}</Text>
               <PillChoice
-                options={synthWriters.map((a) => ({ value: a, label: agentName(a), agent: a }))}
+                options={synthWriters.filter((a) => a === ask.synthAgent || !ask.off.includes(a)).map((a) => ({ value: a, label: agentName(a), agent: a }))}
                 value={ask.synthAgent as (typeof synthWriters)[number]}
                 onChange={(synthAgent) => changeAsk({ ...ask, synthAgent })}
                 label={t('settings.synthAgentLong')}
