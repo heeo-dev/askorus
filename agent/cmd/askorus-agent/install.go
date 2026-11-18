@@ -311,6 +311,11 @@ func checkCmd(dir string, out io.Writer) error {
 	for _, l := range writerLines(st, cfg.Judge.Off) {
 		c.line(l.level, l.text)
 	}
+	// Updates (#35): on by default, the one thing the agent itself asks
+	// outside the PC besides Tailscale.
+	for _, l := range updateLines(dir, cfg) {
+		c.line(l.level, l.text)
+	}
 
 	// The agent carries Tailscale inside (#57): whether the PC is signed
 	// in is known from the running agent only.

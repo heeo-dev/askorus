@@ -26,6 +26,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/heeo-dev/askorus/agent/internal/config"
@@ -157,6 +158,8 @@ func sayProgress(out io.Writer, p update.Progress) {
 		say(out, m("last update: %s → %s did not come up and %s is back (%s): %s", "마지막 업데이트: %s → %s가 켜지지 않아 %s로 되돌렸습니다 (%s): %s", p.From, p.To, p.From, at, p.Reason))
 	case update.ProgressFailed:
 		say(out, m("last update: %s → %s failed, and so did going back (%s): %s; run the install line again", "마지막 업데이트: %s → %s가 실패했고 되돌리기도 실패했습니다 (%s): %s. 설치 한 줄을 다시 실행하세요", p.From, p.To, at, p.Reason))
+	case update.ProgressNotTaken:
+		say(out, m("last update: %s → %s stopped before anything changed (%s): %s", "마지막 업데이트: %s → %s는 아무것도 바꾸기 전에 멈췄습니다 (%s): %s", p.From, p.To, at, p.Reason))
 	default:
 		say(out, m("last update: %s → %s, %s (%s)", "마지막 업데이트: %s → %s, %s (%s)", p.From, p.To, p.State, at))
 	}
@@ -251,6 +254,34 @@ func handOver(dir string, cfg config.Config, exe string, f update.Found, oldPID 
 		return err
 	}
 	return nil
+}
+
+// updateLines are the lines check and setup show about updates: whether
+// they are on and what goes outside the PC for them, why this agent cannot
+// take them, and an update that did not take.
+func updateLines(dir string, cfg config.Config) []checkLine {
+	var lines []checkLine
+	add := func(level string, x msg) { lines = append(lines, checkLine{level, x}) }
+	if !cfg.UpdatesOn() {
+		add("info", m("updates are off: phones cannot update this agent (askorus-agent update on)", "업데이트가 꺼져 있습니다. 폰에서 이 에이전트를 업데이트할 수 없습니다 (askorus-agent update on)"))
+		return lines
+	}
+	add("ok", m("updates are on: when a phone asks, the agent asks GitHub (%s) for a newer signed release, sending only the address and its version; every paired phone may update it (off: askorus-agent update off, or devices update ID off)",
+		"업데이트가 켜져 있습니다. 폰이 물으면 에이전트가 GitHub(%s)에 서명된 새 판을 묻고, 주소와 에이전트 판만 보냅니다. 짝 맺은 폰은 모두 업데이트할 수 있습니다 (끄기: askorus-agent update off, 폰별로는 devices update ID off)", update.DefaultBase))
+	var why biError
+	if _, err := selfUpdatable(cfg); errors.As(err, &why) {
+		add("info", why.msg)
+	} else if roots, err := updateRoots(); err != nil || len(roots) == 0 {
+		add("info", m("this agent was built without an update key, so phones cannot update it; run the install line to update", "이 에이전트는 업데이트 키 없이 만들어져 폰에서 업데이트할 수 없습니다. 설치 한 줄로 올리세요"))
+	}
+	if p, ok := update.ReadProgress(dir); ok && (p.State == update.ProgressRolledBack || p.State == update.ProgressFailed) {
+		var b strings.Builder
+		sayProgress(&b, p)
+		if two := strings.SplitN(strings.TrimSpace(b.String()), "\n", 2); len(two) == 2 {
+			add("warn", msg{en: two[0], ko: two[1]})
+		}
+	}
+	return lines
 }
 
 // waitProgress waits for the update to version to finish after since.

@@ -35,6 +35,9 @@ type Device struct {
 	Name      string    `json:"name"`
 	TokenHash string    `json:"tokenHash"`
 	CreatedAt time.Time `json:"createdAt"`
+	// NoUpdate keeps this phone from updating the agent (#35): every
+	// paired phone may, unless turned off with devices update <id> off.
+	NoUpdate bool `json:"noUpdate,omitempty"`
 }
 
 // Store is the device file, safe for concurrent use.
@@ -181,6 +184,57 @@ func (s *Store) Revoke(idOrName string) (Device, error) {
 		return Device{}, err
 	}
 	return gone, nil
+}
+
+// Get is the device with that id.
+func (s *Store) Get(id string) (Device, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.refresh() != nil {
+		return Device{}, false
+	}
+	for _, d := range s.list {
+		if d.ID == id {
+			return d, true
+		}
+	}
+	return Device{}, false
+}
+
+// SetUpdate lets the device with that id or exact name update the agent,
+// or keeps it from doing so (#35).
+func (s *Store) SetUpdate(idOrName string, allow bool) (Device, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.refresh(); err != nil {
+		return Device{}, err
+	}
+	idx := -1
+	for i, d := range s.list {
+		if d.ID == idOrName {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		for i, d := range s.list {
+			if d.Name == idOrName {
+				if idx >= 0 {
+					return Device{}, fmt.Errorf("%q matches more than one device; use the id", idOrName)
+				}
+				idx = i
+			}
+		}
+	}
+	if idx < 0 {
+		return Device{}, ErrNotFound
+	}
+	next := append([]Device(nil), s.list...)
+	next[idx].NoUpdate = !allow
+	if err := s.save(next); err != nil {
+		return Device{}, err
+	}
+	return next[idx], nil
 }
 
 // save writes list and makes it the loaded state. Callers hold mu.

@@ -374,6 +374,20 @@ func (m *Manager) Wait(ctx context.Context, owner, id string) (Run, bool) {
 	}
 }
 
+// Running is the number of runs with a part still asking an AI (#35: an
+// update waits for them).
+func (m *Manager) Running() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	n := 0
+	for _, r := range m.runs {
+		if r.left > 0 {
+			n++
+		}
+	}
+	return n
+}
+
 // Close stops every running part (their AI processes are ended) and
 // refuses nothing afterwards; it is for agent shutdown.
 func (m *Manager) Close() { m.cancel() }

@@ -73,6 +73,9 @@ Usage / 사용법:
   askorus-agent devices revoke ID|NAME
       disconnect a device
       기기 연결을 끊습니다
+  askorus-agent devices update ID|NAME on|off
+      let a phone update this agent, or not (every paired phone may by default)
+      폰이 이 에이전트를 업데이트할 수 있게 하거나 막습니다 (짝 맺은 폰은 처음부터 됩니다)
   askorus-agent folders [list] | folders add [-id ID] PATH | folders remove ID
       folders new sessions may start in
       새 세션을 열 수 있는 폴더
@@ -313,6 +316,11 @@ func serve(dir string, args []string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 	stopReq := listenStop(cfg.Port) // `askorus-agent shutdown`; also what marks the agent as running
+	// An update from a phone ends this agent once the new program waits
+	// to take over (#35, update_phone.go).
+	handedOver := make(chan struct{})
+	var handOverOnce sync.Once
+	settleProgress(dir)
 
 	// The agent's own device on the person's Tailscale network (#57): the
 	// only way phones reach the API, and what says who each request is from.
@@ -387,6 +395,7 @@ func serve(dir string, args []string) error {
 		JudgeMinVersions: judgeMinVersions(),
 		Refine:           refineOn,
 		Uploads:          photos,
+		Updater:          newPhoneUpdater(dir, store, func() { handOverOnce.Do(func() { close(handedOver) }) }),
 	})
 	// The API listens inside the tailnet only: no port is opened on the
 	// PC's own addresses, not even 127.0.0.1.
@@ -424,6 +433,8 @@ func serve(dir string, args []string) error {
 	case <-ctx.Done():
 	case <-stopReq:
 		logger.Info("stop requested")
+	case <-handedOver:
+		logger.Info("stopping for an update")
 	}
 	shutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -835,13 +846,35 @@ func devicesCmd(dir string, args []string, out io.Writer) error {
 		if err != nil {
 			return err
 		}
-		fmt.Fprintln(out, "(id · 이름 · 짝 맺은 때)")
+		fmt.Fprintln(out, "(id · 이름 · 짝 맺은 때 · 에이전트 업데이트)")
 		tw := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(tw, "ID\tNAME\tPAIRED")
+		fmt.Fprintln(tw, "ID\tNAME\tPAIRED\tUPDATE")
 		for _, d := range list {
-			fmt.Fprintf(tw, "%s\t%s\t%s\n", d.ID, d.Name, d.CreatedAt.Local().Format("2006-01-02 15:04"))
+			upd := "on"
+			if d.NoUpdate {
+				upd = "off"
+			}
+			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", d.ID, d.Name, d.CreatedAt.Local().Format("2006-01-02 15:04"), upd)
 		}
 		return tw.Flush()
+	case "update":
+		// Whether this phone may update the agent (#35); every paired phone may by default.
+		if len(args) != 3 || (args[2] != "on" && args[2] != "off") {
+			return fail("usage: askorus-agent devices update ID|NAME on|off", "사용법: askorus-agent devices update ID|이름 on|off")
+		}
+		d, err := store.SetUpdate(args[1], args[2] == "on")
+		if errors.Is(err, devices.ErrNotFound) {
+			return fail("no device %q", "%q 기기가 없습니다", args[1])
+		}
+		if err != nil {
+			return err
+		}
+		if d.NoUpdate {
+			say(out, m("%s (%s) can no longer update this PC's agent", "%s (%s) 폰은 이제 이 PC의 에이전트를 업데이트할 수 없습니다", d.Name, d.ID))
+		} else {
+			say(out, m("%s (%s) can update this PC's agent", "%s (%s) 폰이 이 PC의 에이전트를 업데이트할 수 있습니다", d.Name, d.ID))
+		}
+		return nil
 	case "revoke":
 		if len(args) != 2 {
 			return fail("usage: askorus-agent devices revoke ID|NAME", "사용법: askorus-agent devices revoke ID|이름")

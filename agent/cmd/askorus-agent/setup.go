@@ -255,6 +255,10 @@ func runSetup(ctx context.Context, cfg config.Config, env setupEnv, in io.Reader
 			return err
 		}
 	}
+	// Updates are on from the start (#35): say so, and how to turn them off.
+	for _, l := range updateLines(dir, cfg) {
+		c.line(l.level, l.text)
+	}
 
 	fmt.Fprintln(out)
 	if info.Available { // the tips are all Claude Code's

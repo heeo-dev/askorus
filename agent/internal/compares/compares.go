@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode/utf8"
 
@@ -200,6 +201,7 @@ type Manager struct {
 	cancel     context.CancelFunc
 	global     chan struct{} // MaxProcesses slots
 	wg         sync.WaitGroup
+	busy       atomic.Int32 // the work goLocked runs now (#35: an update waits for it)
 
 	mu     sync.Mutex
 	closed bool
@@ -607,12 +609,18 @@ func (m *Manager) goLocked(f func()) bool {
 		return false
 	}
 	m.wg.Add(1)
+	m.busy.Add(1)
 	go func() {
 		defer m.wg.Done()
+		defer m.busy.Add(-1)
 		f()
 	}()
 	return true
 }
+
+// Busy is the number of comparisons, combined answers and debate turns
+// being worked on now (#35).
+func (m *Manager) Busy() int { return int(m.busy.Load()) }
 
 // newLocked registers a new comparison. Callers hold mu.
 func (m *Manager) newLocked(owner, key, source, runID string) *comparison {

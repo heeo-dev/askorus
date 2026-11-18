@@ -252,7 +252,7 @@ func rename(from, to string) error {
 type Progress struct {
 	From   string    `json:"from"`
 	To     string    `json:"to"`
-	State  string    `json:"state"` // ProgressSwapped, ProgressDone, ProgressRolledBack, ProgressFailed
+	State  string    `json:"state"` // ProgressSwapped, ProgressDone, ProgressRolledBack, ProgressFailed, ProgressNotTaken
 	Reason string    `json:"reason,omitempty"`
 	At     time.Time `json:"at"`
 }
@@ -263,6 +263,7 @@ const (
 	ProgressDone       = "done"        // the new agent is up
 	ProgressRolledBack = "rolled-back" // it did not come up; the old one is back
 	ProgressFailed     = "failed"      // it did not come up, nor did the old one
+	ProgressNotTaken   = "not-taken"   // the update stopped before anything changed
 )
 
 // WriteProgress records where an update is.

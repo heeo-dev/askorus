@@ -180,6 +180,44 @@ func TestUpdateOnOffAndStatus(t *testing.T) {
 	}
 }
 
+// check and setup say updates are on, what goes outside the PC, and how
+// to turn them off; and why this agent cannot take them, when it cannot.
+func TestUpdateLines(t *testing.T) {
+	p := newUpdatePC(t)
+	text := func() string {
+		cfg, _ := config.Load(p.dir)
+		var b strings.Builder
+		for _, l := range updateLines(p.dir, cfg) {
+			b.WriteString(l.level + " " + l.text.en + " | " + l.text.ko + "\n")
+		}
+		return b.String()
+	}
+	got := text()
+	if !strings.Contains(got, "ok updates are on") || !strings.Contains(got, "https://github.com/heeo-dev/askorus/releases") || !strings.Contains(got, "askorus-agent update off") || !strings.Contains(got, "업데이트가 켜져 있습니다") {
+		t.Fatalf("on:\n%s", got)
+	}
+	if strings.Contains(got, "info ") || strings.Contains(got, "—") {
+		t.Fatalf("on, with a note or a long dash:\n%s", got)
+	}
+	version = "0.5.0-dev"
+	if got := text(); !strings.Contains(got, "info this agent is not a release build") {
+		t.Fatalf("a branch build:\n%s", got)
+	}
+	version = "0.5.0"
+	updateRoots = func() ([]update.PublicKey, error) { return nil, nil }
+	if got := text(); !strings.Contains(got, "without an update key") {
+		t.Fatalf("no key:\n%s", got)
+	}
+	update.WriteProgress(p.dir, update.Progress{From: "0.5.0", To: "0.5.1", State: update.ProgressRolledBack, Reason: "it did not come up within a minute", At: time.Now()})
+	if got := text(); !strings.Contains(got, "warn last update: 0.5.0 → 0.5.1 did not come up") || !strings.Contains(got, "되돌렸습니다") {
+		t.Fatalf("a rolled-back update:\n%s", got)
+	}
+	p.run("off")
+	if got := text(); !strings.Contains(got, "info updates are off") || strings.Contains(got, "github") {
+		t.Fatalf("off:\n%s", got)
+	}
+}
+
 func TestUpdateCheck(t *testing.T) {
 	p := newUpdatePC(t)
 	out, err := p.run("check")

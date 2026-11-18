@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/heeo-dev/askorus/agent/internal/compares"
@@ -126,6 +127,9 @@ type Options struct {
 	// turns photos off: /v1/info then has no attachments, POST /v1/uploads
 	// is refused and a run that names photos is too.
 	Uploads *uploads.Store
+	// Updater takes agent updates from phones (#35, update.go). Nil: no
+	// update field in /v1/info and no /v1/update.
+	Updater Updater
 }
 
 // Server serves /v1.
@@ -149,6 +153,8 @@ type Server struct {
 	// run's photos until the run has ended (uploads.go).
 	uploading chan struct{}
 	holds     runHolds
+	// holding: an update is under way, new work is refused (update.go).
+	holding atomic.Bool
 }
 
 // New builds a server.
@@ -234,6 +240,9 @@ func (s *Server) Handler() http.Handler {
 	route("GET", "/v1/folders", s.folders)
 	route("PUT", "/v1/folders/{id}/server", s.setFolderServer)
 	route("DELETE", "/v1/devices/self", s.forgetSelf)
+	mux.HandleFunc("GET /v1/update", s.getUpdate)
+	mux.HandleFunc("POST /v1/update", s.startUpdate)
+	mux.HandleFunc("/v1/update", methodNotAllowed)
 	mux.HandleFunc("/v1/sessions/{id}/{action}", methodNotAllowed)
 	mux.HandleFunc("/v1/sessions/{id}", methodNotAllowed)
 	// Reserved for the realtime channel (principle 5).
@@ -385,8 +394,12 @@ type InfoResponse struct {
 	// (C6d, #24): it was only sent when an AI judged, so it is just never
 	// there now.
 	// Integrations are the services outside the PC the agent sends to
-	// itself. There are none (N1): it is always [].
+	// itself (N1). The one there is: the update check, while updates are
+	// on (#35); otherwise [].
 	Integrations []IntegrationInfo `json:"integrations"`
+	// Update is there when the agent takes updates from phones (#35): the
+	// phone offers the update button only then.
+	Update *UpdateInfo `json:"update,omitempty"`
 	// Debate is there when the agent runs debates (P2-5, #26): the phone
 	// shows '토론하기' only then, so an older agent never gets one.
 	Debate *DebateInfo `json:"debate,omitempty"`
@@ -434,6 +447,12 @@ func (s *Server) info(w http.ResponseWriter, r *http.Request) {
 	}
 	if s.o.Pairer != nil {
 		resp.Pairing = &PairingInfo{Approve: true}
+	}
+	if u := s.updateInfo(r); u != nil {
+		resp.Update = u
+		if u.On {
+			resp.Integrations = append(resp.Integrations, IntegrationInfo{ID: "update", Kind: "update", Destination: UpdateDestination})
+		}
 	}
 	// The CLI's info calls Announce too, so the two cannot disagree on
 	// the ask tiers or on which AIs write combined answers.
