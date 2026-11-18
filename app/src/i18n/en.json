@@ -488,6 +488,8 @@
   "usage.sum.loading": "Reading usage…",
   "usage.sum.unknown": "Usage is not known yet.",
   "usage.sum.ok": "Every AI turned on has more than 20% left.",
+  "usage.stale": "The PC did not answer: these are as read at {time}.",
+  "usage.sum.okSome": "The AIs that report usage all have more than 20% left. Unknown: {names}",
   "usage.sum.out": "{name}: the {window} limit is used up.",
   "usage.sum.low": "{name}: {pct}% of the {window} limit left.",
   "ais.notInstalled": "Not installed",

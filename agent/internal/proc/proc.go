@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -184,13 +185,28 @@ func RunUntil(ctx context.Context, c Cmd, last func(line []byte) bool) (Result, 
 		return Result{}, err
 	}
 	release := contain(cmd)
+	// end stops everything at once: the job (the program and whatever it
+	// started), the program itself where there is no job, and the read
+	// end of stdout, which a child still holding it would keep the reading
+	// below waiting on (R-141, 2ho's review).
+	var endOnce, releaseOnce sync.Once
+	releaseAll := func() { releaseOnce.Do(release) }
+	end := func() {
+		endOnce.Do(func() {
+			releaseAll()
+			cmd.Process.Kill()
+			out.Close()
+		})
+	}
+	stopOnCtx := context.AfterFunc(ctx, end)
+	defer stopOnCtx()
 	go func() { io.WriteString(stdin, c.Stdin) }() // stdin stays open
 	stdout := &capBuffer{max: maxStdout}
 	var kill *time.Timer
 	closeIn := func() {
 		if kill == nil {
 			stdin.Close()
-			kill = time.AfterFunc(closeWait, func() { cmd.Process.Kill() })
+			kill = time.AfterFunc(closeWait, end)
 		}
 	}
 	sc := bufio.NewScanner(out)
@@ -207,7 +223,7 @@ func RunUntil(ctx context.Context, c Cmd, last func(line []byte) bool) (Result, 
 	closeIn()
 	err = cmd.Wait()
 	kill.Stop()
-	release()
+	releaseAll()
 	res := Result{Stdout: stdout.Bytes(), Stderr: stderr.Bytes()}
 	var exitErr *exec.ExitError
 	switch {

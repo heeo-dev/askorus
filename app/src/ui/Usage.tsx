@@ -50,7 +50,9 @@ export function summaryLine(sum: UsageSummary): string {
     case 'low':
       return t('usage.sum.low', { name, window: limitName(low.tight), pct: percentLeft(low.tight.left) });
   }
-  return t('usage.sum.ok');
+  // R-143 (2ho's review): an AI that reports nothing is not 'more than 20% left'.
+  const unknown = sum.ais.filter((a) => !a.tight).map((a) => agentName(a.agent));
+  return unknown.length ? t('usage.sum.okSome', { names: unknown.join(', ') }) : t('usage.sum.ok');
 }
 
 /** a11yValue reads the button's state: the summary line, then each AI's bar. */
@@ -145,18 +147,19 @@ export function UsageButton() {
         <UsageBars sum={sum} th={th} />
       </Pressable>
       <Sheet open={open} onClose={() => setOpen(false)} title={t('usage.title')} subtitle={t('usage.pc', { pc: current.name })} scroll testID="usage-sheet">
-        <UsageSheetBody sum={sum} onManage={() => setOpen(false)} />
+        <UsageSheetBody sum={sum} staleAt={u?.failed ? u.at : undefined} onManage={() => setOpen(false)} />
       </Sheet>
     </>
   );
 }
 
-function UsageSheetBody({ sum, onManage }: { sum: UsageSummary; onManage: () => void }) {
+function UsageSheetBody({ sum, staleAt, onManage }: { sum: UsageSummary; staleAt?: number; onManage: () => void }) {
   const th = useTheme();
   const s = styles(th);
   return (
     <View style={s.body}>
       <Text style={s.sum}>{summaryLine(sum)}</Text>
+      {staleAt !== undefined ? <Text style={s.note}>{t('usage.stale', { time: whenAgain(new Date(staleAt).toISOString()) })}</Text> : null}
       {sum.kind === 'ready'
         ? sum.ais.map((a) => (
             <View key={a.agent} style={s.ai} testID={`usage-ai-${a.agent}`}>

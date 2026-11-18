@@ -488,6 +488,8 @@
   "usage.sum.loading": "남은 양을 읽는 중…",
   "usage.sum.unknown": "남은 양을 아직 모릅니다.",
   "usage.sum.ok": "켜 둔 AI 모두 20% 넘게 남았습니다.",
+  "usage.stale": "PC에 닿지 않아 {time}에 읽은 값입니다.",
+  "usage.sum.okSome": "알려 준 AI는 모두 20% 넘게 남았습니다. 모름: {names}",
   "usage.sum.out": "{name}: {window} 한도를 다 썼습니다.",
   "usage.sum.low": "{name}: {window} 한도가 {pct}% 남았습니다.",
   "ais.notInstalled": "설치되지 않음",

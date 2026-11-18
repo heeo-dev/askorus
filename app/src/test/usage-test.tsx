@@ -100,6 +100,27 @@ test('in Korean', async () => {
 });
 
 
+// R-143 (2ho's review): with every known AI fine, the summary names the
+// ones that report nothing instead of calling all of them fine.
+test('a fine summary names the AIs that report nothing', async () => {
+  agent.askAgents = agent.askAgents.map((a) => (a.agent === 'codex' || a.agent === 'opencode' ? { ...a, usage: [{ name: '5 hours', left: 0.9, window: '5h' }] } : a));
+  const user = await open();
+  await user.press(await screen.findByRole('button', { name: 'Usage left' }));
+  expect(within(await screen.findByTestId('usage-sheet')).getByText('The AIs that report usage all have more than 20% left. Unknown: Antigravity')).toBeTruthy();
+});
+
+// R-142 (2ho's review): a PC that no longer answers keeps its last values,
+// and the sheet says when they were read.
+test('values the PC could not refresh say how old they are', async () => {
+  const user = await open();
+  expect(await screen.findByTestId('usage-bar-claude-ok')).toBeTruthy();
+  agent.reach = 'offline';
+  await user.press(screen.getByRole('button', { name: 'Usage left' }));
+  const s = within(await screen.findByTestId('usage-sheet'));
+  expect(await s.findByText(/^The PC did not answer: these are as read at /)).toBeTruthy();
+  expect(s.getByText('Codex: the 5-hour limit is used up.')).toBeTruthy();
+});
+
 // Last: the pairing screen leaves its own state behind.
 test('pairing, a flow, has no usage button', async () => {
   await open('/pair');

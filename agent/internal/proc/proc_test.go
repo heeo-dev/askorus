@@ -29,10 +29,22 @@ import (
 //	       codex app-server does; end when stdin closes, without the
 //	       answers not yet written
 //	stay   like rpc, but never end
+//	rpckid like rpc, after starting a sleeping copy that holds stdout and
+//	       writing its pid to ASKORUS_PROC_PIDFILE
 func TestMain(m *testing.M) {
 	switch os.Getenv("ASKORUS_PROC_HELPER") {
 	case "":
 		os.Exit(m.Run())
+	case "rpckid":
+		exe, _ := os.Executable()
+		child := exec.Command(exe)
+		child.Env = append(os.Environ(), "ASKORUS_PROC_HELPER=sleep")
+		child.Stdout = os.Stdout
+		if err := child.Start(); err != nil {
+			os.Exit(2)
+		}
+		os.WriteFile(os.Getenv("ASKORUS_PROC_PIDFILE"), []byte(strconv.Itoa(child.Process.Pid)), 0o600)
+		fallthrough
 	case "rpc", "stay":
 		stay := os.Getenv("ASKORUS_PROC_HELPER") == "stay"
 		lines := make(chan string)
@@ -209,6 +221,41 @@ func TestRunUntilEnds(t *testing.T) {
 	_, err = RunUntil(ctx, c, func([]byte) bool { return false })
 	if !errors.Is(err, ErrTimeout) {
 		t.Errorf("never the line: %v, want ErrTimeout", err)
+	}
+}
+
+// R-141 (2ho's review): a child that holds stdout after the program ended
+// does not keep RunUntil waiting: two seconds after stdin closed, or when
+// ctx ends, the whole job is stopped and stdout's read end closed.
+func TestRunUntilEndsAChildHoldingStdout(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		last string // the line RunUntil waits for; "" never comes
+		ctx  time.Duration
+	}{{"after the answer", "answer 1", time.Minute}, {"at ctx", "", time.Second}} {
+		t.Run(tc.name, func(t *testing.T) {
+			pidFile := filepath.Join(t.TempDir(), "pid")
+			c := helper(t, "rpckid", map[string]string{"ASKORUS_PROC_PIDFILE": pidFile})
+			c.Stdin = "ask 1\n"
+			ctx, cancel := context.WithTimeout(context.Background(), tc.ctx)
+			defer cancel()
+			start := time.Now()
+			_, err := RunUntil(ctx, c, func(line []byte) bool { return tc.last != "" && string(line) == tc.last })
+			if d := time.Since(start); d > closeWait+5*time.Second {
+				t.Fatalf("took %v: the child kept stdout open", d)
+			}
+			if tc.last == "" && !errors.Is(err, ErrTimeout) {
+				t.Errorf("err = %v, want ErrTimeout", err)
+			}
+			b, rerr := os.ReadFile(pidFile)
+			if rerr != nil {
+				t.Fatal(rerr)
+			}
+			pid, _ := strconv.Atoi(string(b))
+			if processRunning(pid) {
+				t.Errorf("the child %d is still running", pid)
+			}
+		})
 	}
 }
 

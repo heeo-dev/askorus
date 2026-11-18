@@ -14,7 +14,8 @@ import type { Info } from '@/api/types';
 import { currentPC, currentPCId, subscribePCs } from './pcs';
 import { refreshPCStatus } from './pcStatus';
 
-export type PCUsage = { pcId: string; info: Info; at: number };
+/** at: when info was read; failed: the last read since failed (R-142), so the sheet says how old it is. */
+export type PCUsage = { pcId: string; info: Info; at: number; failed?: boolean };
 
 export const usageEveryMs = 5 * 60 * 1000;
 const freshMs = 15000;
@@ -49,7 +50,7 @@ export async function refreshPCUsage(o: { force?: boolean } = {}): Promise<void>
   if (!pc) return;
   const id = pc.conn.id;
   const last = infos.get(id);
-  if (!o.force && last && Date.now() - last.at < freshMs) return;
+  if (!o.force && last && !last.failed && Date.now() - last.at < freshMs) return;
   const running = inflight.get(id);
   if (running) return running;
   const e0 = epoch;
@@ -58,7 +59,10 @@ export async function refreshPCUsage(o: { force?: boolean } = {}): Promise<void>
     .then((info) => {
       if (epoch === e0) put({ pcId: id, info, at: Date.now() });
     })
-    .catch(() => undefined)
+    .catch(() => {
+      const kept = infos.get(id);
+      if (epoch === e0 && kept && !kept.failed) put({ ...kept, failed: true });
+    })
     .finally(() => {
       if (epoch === e0) inflight.delete(id);
     });
