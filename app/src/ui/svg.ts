@@ -9,7 +9,7 @@
 //   elements and attributes of a drawing, with every value read as the
 //   browser will read it (entities decoded) and checked. What the page gets
 //   is the rewritten text, never the AI's own. Anything cleanSvg cannot read
-//   or does not know as part of a drawing leaves the block as code (R-121);
+//   or does not know as part of a drawing leaves the block as code (R-122);
 // - the page's Content-Security-Policy allows no connection, no frame, and
 //   only the one script built here (named by a nonce new for every page);
 // - the WebView loads only that page (SvgBlock.tsx).

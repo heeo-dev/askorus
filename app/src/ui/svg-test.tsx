@@ -110,7 +110,7 @@ test('an SVG that could run code or reach an address is not drawn', () => {
     'an entity': '<!DOCTYPE svg [<!ENTITY x SYSTEM "file:///etc/passwd">]><svg>&x;</svg>',
     'a stylesheet instruction': '<?xml-stylesheet href="https://example.com/x.css"?><svg></svg>',
     'a meta refresh': wrap('<meta http-equiv="refresh" content="0;url=https://example.com"/>'),
-    // What a review got past the first filter (R-121).
+    // What a review got past the first filter (R-122).
     'a CSS address spelled with an entity': wrap('<circle style="fill:&#x75;rl(https://example.invalid/pixel)"/>'),
     'a CSS address spelled with an entity, decimal': wrap('<circle style="fill:&#117;rl(https://example.invalid/pixel)"/>'),
     'a CSS address spelled with a CSS escape': wrap('<circle style="fill:u\\72l(https://example.invalid/pixel)"/>'),
@@ -165,7 +165,7 @@ test('what the page says is read strictly', () => {
   expect(svgMessage('{"png":"data:text/html;base64,PGI+","width":1,"height":1}')).toEqual({ pngError: true });
   expect(svgMessage('{"png":"data:image/png;base64,<script>","width":1,"height":1}')).toEqual({ pngError: true });
   expect(svgMessage('{"pngError":1}')).toEqual({ pngError: true });
-  // A PNG is a PNG by its first bytes, and its size is a size (R-122).
+  // A PNG is a PNG by its first bytes, and its size is a size (R-123).
   for (const junk of [
     '{"png":"data:image/png;base64,AAAAAAAAAAAA","width":4,"height":4}',
     '{"png":"data:image/png;base64,iVBORw0KGgo=","width":-1,"height":4}',
@@ -214,7 +214,7 @@ test('an SVG that is more than a drawing, and other code, stay code blocks', asy
   expect(screen.getByText(evil)).toBeTruthy();
 });
 
-test('an answer gets six pictures; the SVG blocks after them are shown as code (R-122)', async () => {
+test('an answer gets six pictures; the SVG blocks after them are shown as code (R-123)', async () => {
   const one = (n: number) => ['```svg', `<svg><circle r="${n}"/></svg>`, '```', ''].join('\n');
   await render(<Markdown text={Array.from({ length: 9 }, (_, i) => one(i + 1)).join('\n')} />);
   expect(screen.getAllByTestId('svg-webview')).toHaveLength(6);
@@ -222,7 +222,7 @@ test('an answer gets six pictures; the SVG blocks after them are shown as code (
   for (const n of [7, 8, 9]) expect(screen.getByText(`<svg><circle r="${n}"/></svg>`)).toBeTruthy();
 });
 
-test('the page turns a picture into a PNG no larger than asked, however large the picture says it is (R-122)', () => {
+test('the page turns a picture into a PNG no larger than asked, however large the picture says it is (R-123)', () => {
   const page = svgPage('<svg style="max-width:none;width:8192px;height:8192px"><rect width="8192" height="8192"/></svg>', nonce);
   const script = page.slice(page.indexOf(`<script nonce="${nonce}">`) + `<script nonce="${nonce}">`.length, page.lastIndexOf('</script>'));
   // The page's own script, run with stand-ins for the page and the canvas.
@@ -272,7 +272,7 @@ test('the page turns a picture into a PNG no larger than asked, however large th
   }
 });
 
-test('a PNG the page sends without Save being pressed is not saved (R-122)', async () => {
+test('a PNG the page sends without Save being pressed is not saved (R-123)', async () => {
   const user = userEvent.setup();
   await render(<SvgBlock svg={cat} source={cat} />);
   const web = screen.getByTestId('svg-webview');

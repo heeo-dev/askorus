@@ -517,7 +517,7 @@ export function footnoteNumbers(tokens: Token[]): Map<string, number> {
 // drawn; the rest are shown as written.
 const mathBudget = { count: 40, chars: 12_000 };
 // Each picture is a web view of its own: an answer gets this many, and the
-// SVG blocks after them are shown as code (R-122).
+// SVG blocks after them are shown as code (R-123).
 const maxPictures = 6;
 
 type Ctx = {

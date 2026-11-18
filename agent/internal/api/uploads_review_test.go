@@ -15,7 +15,7 @@ import (
 
 // What the review of the photo upload found (#14, 2026-11-18).
 
-// R-119: a photo that arrives more slowly than the server's write limit is
+// R-120: a photo that arrives more slowly than the server's write limit is
 // still answered. The server counts that limit from the start of the
 // request, so the answer to a slow upload came after it: the photo was kept
 // and the phone, hearing nothing, sent it again.
@@ -50,7 +50,7 @@ func TestASlowUploadIsStillAnswered(t *testing.T) {
 	}
 }
 
-// R-120: the photos stay on the PC while the combined answer waits and is
+// R-121: the photos stay on the PC while the combined answer waits and is
 // written. The run let them go when it ended and the writer only looked
 // whether the files were there, so a sweep in between deleted photos the
 // writer had already been given.

@@ -41,7 +41,7 @@ const (
 	// uploadAnswerLimit is how long after that the answer may take. The
 	// server counts its write limit (60 s) from when the request began, so
 	// a photo that took longer to arrive would be kept and never answered:
-	// the phone would send it again (R-119).
+	// the phone would send it again (R-120).
 	uploadAnswerLimit = 30 * time.Second
 	// maxUploading bounds the uploads being read at once, each of which
 	// holds up to core.MaxImageBytes in memory.

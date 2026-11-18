@@ -385,7 +385,7 @@ func (m *Manager) synthRun(c *comparison) (string, *judge.Error) {
 	}
 	w = m.withPick(w, in.spec.Agent, in.spec.Model, in.spec.Effort)
 	// The photos stay on the PC from here to the end of the writing: the
-	// wait for a slot and a second try included (R-120). Photos that are
+	// wait for a slot and a second try included (R-121). Photos that are
 	// gone already (a combined answer asked for long after its question)
 	// are left out, and the answer is written from the answers alone.
 	if len(in.images) > 0 && in.hold != nil {
