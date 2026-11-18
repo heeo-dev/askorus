@@ -100,7 +100,7 @@ irm https://github.com/heeo-dev/askorus/releases/latest/download/install.ps1 | i
 curl -fsSL https://github.com/heeo-dev/askorus/releases/latest/download/install.sh | sh
 ```
 
-스크립트가 GitHub 배포판에서 내 운영체제에 맞는 에이전트를 받아 SHA-256을 확인하고, `%LOCALAPPDATA%\Programs\Askorus`(Windows)나 `~/.local/bin`(macOS, Linux)에 둔 뒤 `askorus-agent setup`을 시작합니다. 업데이트할 때도 같은 줄을 다시 실행하면 됩니다.
+스크립트가 GitHub 배포판에서 내 운영체제에 맞는 에이전트를 받아 SHA-256을 확인하고, `%LOCALAPPDATA%\Programs\Askorus`(Windows)나 `~/.local/bin`(macOS, Linux)에 둔 뒤 `askorus-agent setup`을 시작합니다. 업데이트할 때도 같은 줄을 다시 실행하면 됩니다. 0.5.0부터는 에이전트가 서명된 새 판으로 스스로 올라갑니다. 앱에서 [지금 업데이트]를 누르거나(내 PC, 또는 설정 > 그 PC > 에이전트 업데이트) PC에서 `askorus-agent update now`를 실행하세요. 업데이트는 기본으로 켜져 있고, 에이전트는 폰이 물을 때만 GitHub에 최신 판을 묻습니다. 끄려면 `askorus-agent update off`(폰 하나만 막으려면 `askorus-agent devices update <id> off`)입니다. 0.5.0보다 옛 에이전트는 한 번만 설치 한 줄로 올리면 됩니다.
 
 setup은 차례로 안내합니다. 에이전트를 PATH에 넣고, AI 프로그램을 점검하고, 에이전트를 켜고 로그인할 때 켜지게 합니다. 그다음 이 PC를 Tailscale에 로그인할 링크를(같은 링크의 QR도) 보여 줍니다. 한 번만 하면 됩니다. 마지막으로 짝 맺기 창을 엽니다. 앱에서 같은 계정으로 Tailscale에 로그인하고 목록에 뜬 내 PC를 누르면 됩니다. QR을 찍을 필요는 없습니다(PC가 목록에 안 보이는 폰을 위해 QR도 같이 보여 줍니다). 이 창은 5분 동안 열려 있습니다. 그때까지 앱이 준비되지 않아도 괜찮습니다. 나중에 앱에서 PC를 누르고 PC 화면에 뜨는 작은 창에서 허용하거나, `askorus-agent pair`를 다시 실행하면 됩니다.
 

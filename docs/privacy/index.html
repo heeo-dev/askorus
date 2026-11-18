@@ -92,7 +92,7 @@ code { font-size: 0.92em; }
       </header>
 
       <ul class="facts" aria-label="요점">
-        <li><b>개발자가 받는 정보 없음</b>분석, 광고, 오류 보고 도구를 넣지 않았습니다. 앱에 든 Tailscale이 Tailscale의 서버로 보내는 정보는 아래 Tailscale에 있습니다.</li>
+        <li><b>개발자가 받는 정보 없음</b>분석, 광고, 오류 보고 도구를 넣지 않았습니다. 앱에 든 Tailscale이 Tailscale의 서버로 보내는 정보는 아래 Tailscale에, PC 에이전트가 업데이트를 위해 GitHub에 묻는 것은 아래 PC 에이전트 업데이트에 있습니다.</li>
         <li><b>개발자 서버 없음</b>폰은 앱에 들어 있는 Tailscale로 사용자의 PC와만 통신합니다.</li>
         <li><b>기록은 폰에</b>대화 기록은 앱 안에만 저장되고 Android 백업에서 빠집니다.</li>
       </ul>
@@ -110,6 +110,7 @@ code { font-size: 0.92em; }
               <tr><th scope="row">이어서 묻기</th><td>이 대화의 결론 기록 (설정에서 끌 수 있음)</td><td><span class="who">이어서 받는 AI들과 사회자의 회사</span></td></tr>
               <tr><th scope="row">사회자에게 묻기</th><td>질문, 결론 기록, 앞 답들</td><td><span class="who">사회자 AI의 회사</span></td></tr>
               <tr><th scope="row">웹 검색</th><td>AI가 고른 검색어</td><td>그 AI 회사의 검색, 또는 OpenCode가 고른 검색 제공자</td></tr>
+              <tr><th scope="row">에이전트 업데이트</th><td>PC의 IP 주소, 에이전트 이름과 판 (끌 수 있음)</td><td><span class="who">GitHub</span> (릴리스를 내려받는 곳)</td></tr>
               <tr><th scope="row">개발자</th><td class="none">없음</td><td class="none">받는 것 없음</td></tr>
             </tbody>
           </table>
@@ -141,6 +142,11 @@ code { font-size: 0.92em; }
       <section aria-labelledby="ko-pairing">
         <h2 id="ko-pairing">짝 맺기</h2>
         <p>Tailscale에 로그인하면 앱은 내 계정의 기기 목록(이름, 운영체제, 켜져 있는지)을 Tailscale에서 받아, 이름이 'askorus-'로 시작하는 기기에만 Askorus 에이전트인지 묻습니다. 에이전트는 같은 계정의 기기에만 PC 이름, 운영체제, 버전을 답합니다. 짝 맺기를 요청하면 PC는 폰 이름과 두 자리 숫자를 그 폰의 Tailscale 계정, 주소와 함께 PC 화면의 창이나 터미널에 보여 줍니다. 폰 이름과 숫자는 이미 짝 맺은 폰의 Askorus에도 보입니다(그 폰에서 허용할 수 있게). PC는 짝 맺은 폰의 이름과 토큰의 해시를 에이전트의 설정 폴더에 두고, 끊으면 지웁니다.</p>
+      </section>
+
+      <section aria-labelledby="ko-update">
+        <h2 id="ko-update">PC 에이전트 업데이트</h2>
+        <p>업데이트는 기본으로 켜져 있습니다. 폰에서 내 PC 화면이나 설정의 PC 시트를 열면 PC 에이전트가 GitHub(github.com/heeo-dev/askorus의 릴리스)에 최신 판의 서명된 정보를 묻고(6시간에 한 번까지), 폰에서 '지금 업데이트'를 누르거나 PC에서 <code>askorus-agent update now</code>를 실행하면 새 판을 그곳에서 받습니다. 폰은 GitHub에 직접 접속하지 않습니다. 이때 GitHub는 PC의 IP 주소와 에이전트의 이름과 판(예: askorus-agent/0.5.0)을 받고, GitHub의 개인정보처리방침을 따릅니다. 기기 토큰, 질문, 대화, 폴더, PC 이름은 보내지 않습니다. 받은 파일은 개발자의 서명이 맞을 때만 쓰며, 서명은 PC 안에서 확인합니다. GitHub는 릴리스 파일이 받아진 횟수를 누구나 볼 수 있게 보이지만, 누가 받았는지는 개발자에게 알려 주지 않습니다. PC에서 <code>askorus-agent update off</code>로 끄면 GitHub에 아무것도 묻지 않고, <code>askorus-agent devices update &lt;id&gt; off</code>로 폰마다 업데이트를 막을 수 있습니다. 업데이트 키 없이 만든 에이전트는 GitHub에 묻지 않습니다.</p>
       </section>
 
       <section aria-labelledby="ko-delete">
@@ -211,7 +217,7 @@ code { font-size: 0.92em; }
       </header>
 
       <ul class="facts" aria-label="In short">
-        <li><b>Nothing comes to us</b>No analytics, ads or crash reporting. What the Tailscale built into the app sends to Tailscale's servers is under Tailscale below.</li>
+        <li><b>Nothing comes to us</b>No analytics, ads or crash reporting. What the Tailscale built into the app sends to Tailscale's servers is under Tailscale below, and what the PC agent asks GitHub for its updates under PC agent updates.</li>
         <li><b>No developer server</b>The phone talks only to your own PC, through the Tailscale built into the app.</li>
         <li><b>History on your phone</b>Conversations stay in the app and are excluded from Android backup.</li>
       </ul>
@@ -229,6 +235,7 @@ code { font-size: 0.92em; }
               <tr><th scope="row">Follow-up</th><td>The conversation's record of conclusions (you can turn it off)</td><td><span class="who">The companies of the AIs you follow up with, and the moderator's</span></td></tr>
               <tr><th scope="row">Asking the moderator</th><td>The question, the record of conclusions and the earlier answers</td><td><span class="who">The moderator AI's company</span></td></tr>
               <tr><th scope="row">Web search</th><td>The search terms an AI picks</td><td>That AI company's search, or a search provider OpenCode picks</td></tr>
+              <tr><th scope="row">Agent updates</th><td>Your PC's IP address, the agent's name and version (can be turned off)</td><td><span class="who">GitHub</span> (where releases are downloaded)</td></tr>
               <tr><th scope="row">The developer</th><td class="none">Nothing</td><td class="none">Receives nothing</td></tr>
             </tbody>
           </table>
@@ -260,6 +267,11 @@ code { font-size: 0.92em; }
       <section aria-labelledby="en-pairing">
         <h2 id="en-pairing">Pairing</h2>
         <p>Once you are signed in to Tailscale, the app gets the list of your account's devices from Tailscale (name, system, whether it is online) and asks only those whose name starts with askorus- whether they are an Askorus agent. An agent tells only a device of the same account its PC name, system and version. When you ask to pair, the PC shows the phone's name and the two digits, with the phone's Tailscale account and address, in a window on its screen or in the terminal. The name and the digits also show in Askorus on phones that are already paired, so that one of them can allow it. The PC keeps the name of each paired phone and a hash of its token in the agent's settings folder until you disconnect it.</p>
+      </section>
+
+      <section aria-labelledby="en-update">
+        <h2 id="en-update">PC agent updates</h2>
+        <p>Updates are on by default. When you open My PCs or a PC in Settings on the phone, the PC agent asks GitHub (the releases of github.com/heeo-dev/askorus) for the signed information of the latest version (at most every six hours); when you tap Update now on the phone, or run <code>askorus-agent update now</code> on the PC, it downloads the new version from there. The phone does not connect to GitHub itself. GitHub then gets your PC's IP address and the agent's name and version (such as askorus-agent/0.5.0), under GitHub's own privacy policy. No device token, question, conversation, folder or PC name is sent. A downloaded file is used only when the developer's signature on it checks out, and the signature is checked on your PC. GitHub shows anyone how many times a release file was downloaded, but does not tell the developer who downloaded it. <code>askorus-agent update off</code> on the PC turns it off, and the agent then asks GitHub nothing; <code>askorus-agent devices update &lt;id&gt; off</code> keeps one phone from updating it. An agent built without an update key asks GitHub nothing.</p>
       </section>
 
       <section aria-labelledby="en-delete">

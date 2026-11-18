@@ -100,7 +100,7 @@ irm https://github.com/heeo-dev/askorus/releases/latest/download/install.ps1 | i
 curl -fsSL https://github.com/heeo-dev/askorus/releases/latest/download/install.sh | sh
 ```
 
-The script downloads the agent for your system from the GitHub release, checks its SHA-256, puts it in `%LOCALAPPDATA%\Programs\Askorus` (Windows) or `~/.local/bin` (macOS, Linux) and starts `askorus-agent setup`. Run the same line again to update.
+The script downloads the agent for your system from the GitHub release, checks its SHA-256, puts it in `%LOCALAPPDATA%\Programs\Askorus` (Windows) or `~/.local/bin` (macOS, Linux) and starts `askorus-agent setup`. Run the same line again to update. From 0.5.0 the agent also updates itself to a newer signed release: tap Update now in the app (My PCs, or Settings > the PC > Agent update), or run `askorus-agent update now` on the PC. Updates are on by default: the agent asks GitHub for the latest release only when a phone asks, and `askorus-agent update off` turns that off (`askorus-agent devices update <id> off` for one phone). An agent from before 0.5.0 is updated with the install line once.
 
 Setup goes step by step: it puts the agent on your PATH, checks the AI programs, starts the agent and makes it start at logon. Then it shows a link (and a QR code of the same link) to sign the PC in to Tailscale, once. Last, it opens a pairing window: in the app, sign in to Tailscale with the same account and tap your PC in the list. There is no QR code to scan (one is shown for a phone that does not list the PC). The window stays open for 5 minutes. If the app is not ready by then, nothing is lost: later, tap the PC in the app and allow it in the small window on the PC, or run `askorus-agent pair` again.
 
