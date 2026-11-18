@@ -24,7 +24,7 @@ import { type KeyValue, secureKeyValue } from '@/connections/store';
  * a fixed list; a PC without the picked AI writes with the first asked AI
  * that can (the agent picks).
  */
-export const synthWriters = ['claude', 'codex', 'opencode'] as const;
+export const synthWriters = ['claude', 'codex', 'opencode', 'agy'] as const;
 
 export type AskPrefs = {
   tier: Tier;

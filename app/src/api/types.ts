@@ -64,6 +64,12 @@ export type AdapterInfo = {
    */
   signInHint?: string;
   /**
+   * How much of the AI's plan is left, per group of models that share a
+   * limit (Antigravity's weekly limits, #20): left is 0 to 1, resetAt
+   * (RFC 3339) when it refreshes. Older agents and other AIs leave it out.
+   */
+  usage?: { name: string; left: number; resetAt?: string }[];
+  /**
    * Set for AIs that can ask (Phase 2): the model of each tier, and (11-06,
    * newer agents) the efforts each of those models may take, least to most.
    */

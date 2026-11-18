@@ -9,7 +9,7 @@ import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-nativ
 
 import { type AIColour, aiColour, themed, type Theme, useAIColours, useTheme } from './theme';
 
-const known: Record<string, string> = { claude: 'Cl', codex: 'Cx', opencode: 'Oc', gemini: 'Ag', antigravity: 'Ag', kimi: 'Ki' };
+const known: Record<string, string> = { claude: 'Cl', codex: 'Cx', opencode: 'Oc', agy: 'Ag', gemini: 'Ag', antigravity: 'Ag', kimi: 'Ki' };
 
 /** initials are the two letters of an AI's avatar. */
 export function initials(agent: string): string {

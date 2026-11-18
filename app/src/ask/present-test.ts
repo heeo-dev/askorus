@@ -2,6 +2,7 @@
 // models, times and previews, and the combined answer's title and step
 // (since C6 the moderator's alone: no judging, so no judging step).
 
+import { agentName } from '@/api/agents';
 import type { Comparison, Info, RunPart, Synthesis } from '@/api/types';
 import { setLang } from '@/i18n';
 
@@ -22,6 +23,7 @@ import {
   turnTimes,
   whenAgain,
 } from './present';
+import { synthWriters } from './prefs';
 import type { Turn, TurnCompare } from './thread';
 
 afterEach(() => setLang('en'));
@@ -193,6 +195,20 @@ test('free models at their limit say when they work again', () => {
   setLang('ko');
   expect(partError({ code: 'ai_free_limit', message: at })).toContain(`${whenAgain(at)}에 다시 쓸 수 있습니다.`);
   setLang('en');
+});
+
+test("a plan's usage limit (Antigravity's weekly limit, #20) says when it refreshes", () => {
+  const at = '2026-11-25T07:21:31Z';
+  expect(partError({ code: 'ai_usage_limit', message: at })).toBe(`This AI reached its plan's usage limit. It works again at ${whenAgain(at)}.`);
+  expect(partError({ code: 'ai_usage_limit' })).toBe("This AI reached its plan's usage limit for now. Ask it again later.");
+  setLang('ko');
+  expect(partError({ code: 'ai_usage_limit', message: at })).toContain(`${whenAgain(at)}에 다시 쓸 수 있습니다.`);
+  setLang('en');
+});
+
+test('Antigravity has its name, and is one of the moderators', () => {
+  expect(agentName('agy')).toBe('Antigravity');
+  expect(synthWriters).toContain('agy');
 });
 
 test('an AI still answering shows the model the turn asked for until the PC says which (UX-8)', () => {

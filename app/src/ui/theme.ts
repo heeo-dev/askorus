@@ -204,6 +204,7 @@ const aiHues = new Map<string, AIHue>([
   ['claude', 'sky'],
   ['codex', 'lilac'],
   ['opencode', 'teal'],
+  ['agy', 'rose'],
   ['antigravity', 'rose'],
   ['gemini', 'rose'],
   ['kimi', 'lime'],

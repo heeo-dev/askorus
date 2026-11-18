@@ -11,7 +11,7 @@ export function aiGuideUrl(): string {
     : 'https://github.com/heeo-dev/askorus#installing-the-ai-programs';
 }
 
-const names: Record<string, string> = { claude: 'Claude', codex: 'Codex', opencode: 'OpenCode' };
+const names: Record<string, string> = { claude: 'Claude', codex: 'Codex', opencode: 'OpenCode', agy: 'Antigravity' };
 
 /** agentName is the name to show for an agent code; unknown codes show as they are. */
 export function agentName(agent: string): string {

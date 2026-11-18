@@ -36,10 +36,15 @@ export function whenAgain(iso?: string, now = new Date()): string {
 
 /** partError explains why an AI gave no answer; the AI's own message follows. */
 export function partError(e: { code: string; message?: string; hint?: string }): string {
-  // ai_free_limit carries when the free models work again, not words.
+  // ai_free_limit carries when the free models work again, not words;
+  // ai_usage_limit (#20) when the plan's limit refreshes.
   if (e.code === 'ai_free_limit') {
     const at = whenAgain(e.message);
     return at ? t('ask.error.ai_free_limit', { time: at }) : t('ask.error.ai_free_limit_later');
+  }
+  if (e.code === 'ai_usage_limit') {
+    const at = whenAgain(e.message);
+    return at ? t('ask.error.ai_usage_limit', { time: at }) : t('ask.error.ai_usage_limit_later');
   }
   // A failure the PC gives a hint for has words of its own (#62).
   const hinted = e.hint ? `ask.error.${e.code}_${e.hint}` : '';
