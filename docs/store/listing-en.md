@@ -47,6 +47,8 @@ FEATURES
 - A combined answer from the moderator AI, with what the AIs agree on and where they differ
 - AI debates, with a result for every point (agreed, or depends on the situation)
 - Follow-up questions, to everyone, to one AI, or to the moderator only
+- Photos with a question: take or pick up to 4
+- Pictures an AI draws as code (SVG), shown as pictures you can save
 - Pick the model and how hard each AI thinks
 - Your history stays on your phone
 - For developers: see, start and continue the Claude Code sessions on your own PC from your phone
@@ -55,6 +57,7 @@ FEATURES
 PRIVACY
 - Askorus has no server of its own. Your question goes from your phone to your PC, and the official AI programs on your PC send it to each AI company.
 - The phone and the PC connect through Tailscale, which is built into the app and the PC agent. Tailscale's servers sign the two devices in, let them find each other and, when they cannot connect directly, pass the encrypted traffic on. Tailscale learns your account, the device names and when and from where they connect. It cannot read your questions or answers.
+- Photos you add to a question go, as smaller copies, through your PC to the companies of the AIs you asked. Your PC deletes them about ten minutes after use; on the phone they stay with that conversation. The app gets only the photos you pick and has no permission to see your gallery.
 - Each AI company gets the questions sent to its AI. The company of the moderator AI gets the question and all the answers; in a debate, the companies of the AIs that answered get each other's answers and debate turns.
 - The app keeps your history on your phone only. The AI programs on your PC may keep their own records. No analytics, ads or crash reporting.
 

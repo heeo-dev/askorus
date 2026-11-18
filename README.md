@@ -41,6 +41,7 @@ The moderator is one of the AIs you asked. The debate is optional.
 ## Features
 
 - Ask several AIs at once, with follow-ups to everyone, to one AI or to the moderator only
+- Photos with a question (take or pick up to 4), and pictures an AI draws as code (SVG) shown as pictures
 - A combined answer, with where the AIs agree and where they differ
 - AI debates with a result for every point (agreed, or depends on the situation)
 - Pick the model and how hard each AI thinks
