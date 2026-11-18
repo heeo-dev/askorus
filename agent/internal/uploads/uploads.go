@@ -180,6 +180,11 @@ func (s *Store) Put(owner string, r io.Reader) (Upload, error) {
 	if n >= MaxPerOwner || total+int64(len(data)) > MaxBytesPerOwner {
 		return Upload{}, ErrLimit
 	}
+	// The folder may have gone under a running agent (R-129: a test run of
+	// uninstall removed it); make it again rather than fail every photo.
+	if err := os.MkdirAll(s.dir, 0o700); err != nil {
+		return Upload{}, err
+	}
 	tmp := path + tmpExt
 	if err := os.WriteFile(tmp, data, 0o600); err != nil {
 		// A write cut off half way (a full disk) leaves no file behind.

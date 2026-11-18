@@ -56,6 +56,27 @@ func TestPutKeepsAPhotoUnderItsOwnName(t *testing.T) {
 	}
 }
 
+// R-129: the folder went under a running agent (a test run of uninstall
+// removed it): the next photo makes it again instead of failing.
+func TestPutMakesAGoneFolderAgain(t *testing.T) {
+	s := open(t)
+	if err := os.Remove(s.Dir()); err != nil {
+		t.Fatal(err)
+	}
+	up, err := s.Put("phone", bytes.NewReader(jpeg))
+	if err != nil {
+		t.Fatalf("put after the folder went: %v", err)
+	}
+	if info, err := os.Stat(s.Dir()); err != nil || !info.IsDir() {
+		t.Fatalf("the folder is not back: %v", err)
+	}
+	if _, release, err := s.Hold("phone", []string{up.ID}); err != nil {
+		t.Errorf("hold: %v", err)
+	} else {
+		release()
+	}
+}
+
 func TestPutRefusesWhatIsNoPhoto(t *testing.T) {
 	s := open(t)
 	for name, data := range map[string][]byte{
