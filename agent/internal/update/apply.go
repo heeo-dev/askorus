@@ -104,6 +104,11 @@ func (c *Checker) Check(ctx context.Context, fresh bool) (Found, error) {
 	if err != nil {
 		return Found{}, err
 	}
+	// Built without a root key, the agent could check nothing it fetched:
+	// it asks GitHub nothing at all.
+	if len(roots) == 0 {
+		return Found{}, ErrNoRoot
+	}
 	signed, err := c.Source.Latest(ctx)
 	if err != nil {
 		return Found{}, err

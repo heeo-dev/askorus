@@ -252,8 +252,12 @@ func TestCheckerFindsNothingNewer(t *testing.T) {
 	}
 	c = g.checker(t.TempDir(), "0.5.0", t0)
 	c.Roots = func() ([]PublicKey, error) { return nil, nil }
+	before := g.hits.Load()
 	if _, err := c.Check(ctx, true); !errors.Is(err, ErrNoRoot) {
 		t.Errorf("no root built in: %v", err)
+	}
+	if g.hits.Load() != before {
+		t.Error("an agent without a root key asked GitHub")
 	}
 }
 
