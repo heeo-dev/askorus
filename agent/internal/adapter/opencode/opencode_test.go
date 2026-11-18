@@ -21,7 +21,11 @@ import (
 // it records {args, cwd, pwd, config, stdin} to ASKORUS_FAKE_ARGS and
 // prints what `opencode run --format json` prints. Sessions it makes are
 // kept in ASKORUS_FAKE_SESSIONS for `session list`.
-// ASKORUS_FAKE_MODE: "badmodel", "exit" (exit 1, nothing printed).
+// ASKORUS_FAKE_MODE: "badmodel", "exit" (exit 1, nothing printed);
+// "signedout" (models lists only free models and an ask of another
+// provider is "Model unavailable"), "badkey" (the provider refuses the key,
+// 401), "modelsfail" (models ends with exit code 1). `opencode models` is
+// not recorded, as --version.
 // The combined-answer, refine and cleanup tests use internal/fakecli
 // instead.
 func TestMain(m *testing.M) {
@@ -51,6 +55,9 @@ func fakeOpenCode(args []string) int {
 	if len(args) == 1 && args[0] == "--version" {
 		fmt.Println("2.2.1")
 		return 0
+	}
+	if len(args) > 0 && args[0] == "models" {
+		return fakeModels(args)
 	}
 	in, _ := io.ReadAll(os.Stdin)
 	cwd, _ := os.Getwd()
@@ -87,8 +94,11 @@ func fakeOpenCode(args []string) int {
 		os.WriteFile(os.Getenv("ASKORUS_FAKE_SESSIONS"), b, 0o600)
 	}
 	switch os.Getenv("ASKORUS_FAKE_MODE") {
-	case "badmodel":
+	case "badmodel", "signedout":
 		fmt.Printf("{\"type\":\"error\",\"timestamp\":1,\"sessionID\":%q,\"error\":{\"type\":\"provider.no-route\",\"message\":\"Model unavailable: x\"}}\n", id)
+		return 1
+	case "badkey":
+		fmt.Printf("{\"type\":\"error\",\"timestamp\":1,\"sessionID\":%q,\"error\":{\"type\":\"provider.auth\",\"message\":\"Invalid credential\",\"status\":401}}\n", id)
 		return 1
 	case "exit":
 		return 1
@@ -111,6 +121,29 @@ func fakeOpenCode(args []string) int {
 	ev(fmt.Sprintf(`{"type":"step_start","timestamp":1,"sessionID":%q,"part":{"type":"step-start"}}`, id))
 	ev(fmt.Sprintf(`{"type":"text","timestamp":1,"sessionID":%q,"part":{"type":"text","text":%s}}`, id, answer))
 	// The last step_finish is sometimes never printed; neither here.
+	return 0
+}
+
+// fakeModels prints `opencode models` as OpenCode 2.2.7 did (11-18):
+// signed in to OpenCode Go and OpenCode Zen, or, never signed in, only the
+// free models.
+func fakeModels(args []string) int {
+	if !slices.Equal(args, modelsArgs) {
+		fmt.Fprintln(os.Stderr, "fake: unexpected models arguments", args)
+		return 2
+	}
+	free := []string{"opencode/big-pickle", "opencode/deepseek-v4.1-flash-free"}
+	list := append([]string{"opencode-go/deepseek-v4-pro", "opencode-go/deepseek-v4.1-flash", "opencode/deepseek-v4.1-flash"}, free...)
+	switch os.Getenv("ASKORUS_FAKE_MODE") {
+	case "modelsfail":
+		fmt.Fprintln(os.Stderr, "Error: database is locked")
+		return 1
+	case "signedout":
+		list = free
+	}
+	for _, m := range list {
+		fmt.Print(m + "\r\n")
+	}
 	return 0
 }
 

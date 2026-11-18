@@ -8,6 +8,7 @@ import (
 
 	"github.com/heeo-dev/askorus/agent/internal/adapter/claude"
 	"github.com/heeo-dev/askorus/agent/internal/adapter/codex"
+	"github.com/heeo-dev/askorus/agent/internal/adapter/opencode"
 	"github.com/heeo-dev/askorus/agent/internal/core"
 	"github.com/heeo-dev/askorus/agent/internal/fakecli"
 )
@@ -16,11 +17,13 @@ import (
 // 11-16 macOS test showed it as ready in the connection check and only an
 // ask failed, with the CLI's English message. Now /v1/info says so, and an
 // ask that fails for the sign-in has its own code with the command that
-// signs it in again.
+// signs it in again. OpenCode (11-18) signs in per provider: one that is
+// not signed in lists only its free models and does not know the default
+// tier model, which the app used to show as an unknown model.
 func TestIT22SignIn(t *testing.T) {
 	t.Run("signed out", func(t *testing.T) {
 		r := newRig(t, func(o *rigOptions) {
-			o.env = map[string]string{fakecli.EnvSignIn: "claude=out,codex=out", fakecli.EnvAsk: "claude=signedout,codex=signedout"}
+			o.env = map[string]string{fakecli.EnvSignIn: "claude=out,codex=out,opencode=out", fakecli.EnvAsk: "claude=signedout,codex=signedout"}
 		})
 		r.addDevice()
 		info := r.info()
@@ -31,24 +34,54 @@ func TestIT22SignIn(t *testing.T) {
 		if !cx.Available || !slices.Contains(cx.Notices, codex.NoticeSignedOut) {
 			t.Errorf("codex %+v", cx)
 		}
-		if len(oc.Notices) != 0 {
-			t.Errorf("opencode is not checked yet: %+v", oc)
+		if !oc.Available || !slices.Equal(oc.Notices, []string{opencode.NoticeSignedOut}) {
+			t.Errorf("opencode %+v", oc)
+		}
+		st := r.waitRun(r.ask(nil, nil).ID)
+		want := map[string]string{fakecli.RoleClaude: claude.LoginCommand, fakecli.RoleCodex: codex.LoginCommand, fakecli.RoleOpenCode: opencode.LoginCommand}
+		for _, p := range st.Parts {
+			if p.Error == nil || p.Error.Code != core.ErrCodeSignedOut || p.Error.Message != want[p.Agent] || p.Error.Hint != "" {
+				t.Errorf("%s part %+v, want %s with %q and no hint", p.Agent, p.Error, core.ErrCodeSignedOut, want[p.Agent])
+			}
+		}
+		if len(st.Parts) != 3 {
+			t.Errorf("%d parts", len(st.Parts))
+		}
+	})
+
+	// OpenCode signed in, but its provider refuses the key (401,
+	// "Invalid credential"): the models are listed, so the info says
+	// nothing, and the ask's part says to sign in again.
+	t.Run("OpenCode's key refused", func(t *testing.T) {
+		r := newRig(t, func(o *rigOptions) { o.env = map[string]string{fakecli.EnvAsk: "opencode=signedout"} })
+		r.addDevice()
+		if oc := agentInfo(t, r.info(), fakecli.RoleOpenCode); len(oc.Notices) != 0 {
+			t.Errorf("opencode %+v", oc)
 		}
 		st := r.waitRun(r.ask(nil, nil).ID)
 		for _, p := range st.Parts {
-			switch p.Agent {
-			case fakecli.RoleClaude, fakecli.RoleCodex:
-				want := claude.LoginCommand
-				if p.Agent == fakecli.RoleCodex {
-					want = codex.LoginCommand
-				}
-				if p.Error == nil || p.Error.Code != core.ErrCodeSignedOut || p.Error.Message != want || p.Error.Hint != "" {
-					t.Errorf("%s part %+v, want %s with %q and no hint", p.Agent, p.Error, core.ErrCodeSignedOut, want)
-				}
-			case fakecli.RoleOpenCode:
-				if p.Answer == "" {
-					t.Errorf("opencode gave no answer: %+v", p.Error)
-				}
+			if p.Agent == fakecli.RoleOpenCode && (p.Error == nil || p.Error.Code != core.ErrCodeSignedOut || p.Error.Message != opencode.LoginCommand) {
+				t.Errorf("opencode part %+v, want %s with %q", p.Error, core.ErrCodeSignedOut, opencode.LoginCommand)
+			}
+		}
+	})
+
+	// 11-18: OpenCode's free models need no sign-in but share a daily
+	// limit; the part says when they work again instead of OpenCode's
+	// English message.
+	t.Run("OpenCode's free models at their limit", func(t *testing.T) {
+		r := newRig(t, func(o *rigOptions) { o.env = map[string]string{fakecli.EnvAsk: "opencode=freelimit"} })
+		r.addDevice()
+		st := r.waitRun(r.ask(nil, nil).ID)
+		for _, p := range st.Parts {
+			if p.Agent != fakecli.RoleOpenCode {
+				continue
+			}
+			if p.Error == nil || p.Error.Code != core.ErrCodeFreeLimit {
+				t.Fatalf("opencode part %+v, want %s", p.Error, core.ErrCodeFreeLimit)
+			}
+			if at, err := time.Parse(time.RFC3339, p.Error.Message); err != nil || time.Until(at) < fakecli.FreeLimitWait-time.Minute || time.Until(at) > fakecli.FreeLimitWait+time.Minute {
+				t.Errorf("message %q (%v), want the time it works again", p.Error.Message, err)
 			}
 		}
 	})

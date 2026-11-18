@@ -20,6 +20,7 @@ import {
   steps,
   synthExpected,
   turnTimes,
+  whenAgain,
 } from './present';
 import type { Turn, TurnCompare } from './thread';
 
@@ -165,6 +166,33 @@ test('the AIs of a turn: names, models, seconds and a value that is always an ob
   expect(partError({ code: 'ai_signed_out', message: 'codex login', hint: 'some_newer_hint' })).toBe(
     "This AI isn't signed in on the PC. Run codex login in a terminal on the PC, then ask again.",
   );
+  expect(partError({ code: 'ai_signed_out', message: 'opencode auth login' })).toBe(
+    "This AI isn't signed in on the PC. Run opencode auth login in a terminal on the PC, then ask again.",
+  );
+});
+
+// 11-18: OpenCode's free models need no sign-in but share a daily limit.
+// The part says when they work again, in the phone's form, instead of
+// OpenCode's English message.
+test('free models at their limit say when they work again', () => {
+  const now = new Date(2026, 10, 18, 2, 4);
+  const today = new Date(2026, 10, 18, 9, 0);
+  const tomorrow = new Date(2026, 10, 19, 9, 0);
+  const hm = { hour: '2-digit', minute: '2-digit' } as const;
+  expect(whenAgain(today.toISOString(), now)).toBe(today.toLocaleTimeString(undefined, hm));
+  expect(whenAgain(tomorrow.toISOString(), now)).toBe(tomorrow.toLocaleString(undefined, { month: 'numeric', day: 'numeric', ...hm }));
+  expect(whenAgain('', now)).toBe('');
+  expect(whenAgain('soon', now)).toBe('');
+  const at = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+  expect(partError({ code: 'ai_free_limit', message: at })).toBe(
+    `OpenCode's free models reached their usage limit. They work again at ${whenAgain(at)}. To keep asking, run opencode auth login in a terminal on the PC and sign in to a provider (OpenCode Go, for example).`,
+  );
+  expect(partError({ code: 'ai_free_limit' })).toBe(
+    "OpenCode's free models reached their usage limit for now. To keep asking, run opencode auth login in a terminal on the PC and sign in to a provider (OpenCode Go, for example).",
+  );
+  setLang('ko');
+  expect(partError({ code: 'ai_free_limit', message: at })).toContain(`${whenAgain(at)}에 다시 쓸 수 있습니다.`);
+  setLang('en');
 });
 
 test('an AI still answering shows the model the turn asked for until the PC says which (UX-8)', () => {

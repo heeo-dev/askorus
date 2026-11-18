@@ -3,7 +3,8 @@
 // and read the web (P0-2, P0-7), and for combined answers (P2-3, synth.go
 // and judge.go), with a one-run agent that may use no tool. It is the only
 // package that runs opencode or knows its formats (principle 2), and it
-// never reads OpenCode login files (N10). Session listing comes in Phase 3.
+// never reads OpenCode login files (N10); whether it is signed in comes
+// from `opencode models` (login.go, #60). Session listing comes in Phase 3.
 package opencode
 
 import (
@@ -108,6 +109,14 @@ type Adapter struct {
 	version string
 	verErr  error
 	verAt   time.Time
+
+	// The sign-in state (#60, login.go). loginDone is set while a check
+	// runs; loginCheck is nil outside tests.
+	loginMu    sync.Mutex
+	login      loginState
+	loginAt    time.Time
+	loginDone  chan struct{}
+	loginCheck func(context.Context) loginState
 }
 
 // New finds opencode. A missing opencode is not an error: /v1/info says so.
@@ -148,7 +157,8 @@ func findExe(override string) (string, error) {
 // Agent returns "opencode".
 func (a *Adapter) Agent() string { return Name }
 
-// Info reports the version; asking is the only capability for now.
+// Info reports the version and whether the providers of the tier models
+// are signed in (login.go); asking is the only capability for now.
 func (a *Adapter) Info(ctx context.Context) core.AdapterInfo {
 	info := core.AdapterInfo{Agent: Name, Capabilities: []core.Capability{}}
 	switch {
@@ -162,6 +172,7 @@ func (a *Adapter) Info(ctx context.Context) core.AdapterInfo {
 		} else {
 			info.Version, info.Available = v, true
 			info.Capabilities = append(info.Capabilities, core.CapAsk)
+			a.loginNotices(ctx, &info)
 		}
 	}
 	return info
@@ -314,6 +325,7 @@ func (a *Adapter) Ask(ctx context.Context, req core.AskRequest) (core.AskResult,
 		return core.AskResult{}, err
 	}
 	out, perr := parseOutput(res, model)
+	perr = a.signInError(ctx, perr, model)
 	if req.OneOff || (perr != nil && req.Resume == "") {
 		// A debate turn keeps no conversation (11-06); a new one that
 		// failed (an error event, no answer) is cut off like a timeout.
@@ -464,6 +476,23 @@ type event struct {
 type eventError struct {
 	Type    string `json:"type"`
 	Message string `json:"message"`
+	Status  int    `json:"status"` // the provider's HTTP status, when it answered
+	// RetryAfterMs: how long until it may be asked again (the free models'
+	// limit, 11-18).
+	RetryAfterMs int64 `json:"retryAfterMs"`
+}
+
+// freeLimit is the error of an ask that reached the free models' usage
+// limit (11-18, never signed in: "Free usage limit reached. Connect a
+// provider or subscribe to OpenCode Go to keep going, or switch models.",
+// status 429, retryAfterMs about 7 hours, the same for every free model,
+// up to midnight UTC). Its detail is when they work again, to the minute.
+func freeLimit(e *eventError, now time.Time) error {
+	at := ""
+	if e.RetryAfterMs > 0 {
+		at = now.Add(time.Duration(e.RetryAfterMs) * time.Millisecond).UTC().Round(time.Minute).Format(time.RFC3339)
+	}
+	return core.Fail(core.ErrCodeFreeLimit, at)
 }
 
 // parseOutput reads the events. Each text part comes whole. The answer is
@@ -509,8 +538,13 @@ func parseOutput(res proc.Result, model string) (core.AskResult, error) {
 		code, msg := core.ErrCodeAskFailed, ""
 		if errEvent != nil {
 			msg = errEvent.Message
-			if errEvent.Type == "provider.no-route" || strings.HasPrefix(msg, "Model unavailable") {
-				code = core.ErrCodeBadModel
+			switch {
+			case errEvent.Type == "provider.no-route" || strings.HasPrefix(msg, "Model unavailable"):
+				code = core.ErrCodeBadModel // or not signed in: Ask tells (signInError)
+			case errEvent.Type == "provider.auth" || errEvent.Status == 401:
+				return r, core.Fail(core.ErrCodeSignedOut, LoginCommand)
+			case errEvent.Type == "provider.free-limit":
+				return r, freeLimit(errEvent, time.Now())
 			}
 		}
 		if msg == "" {

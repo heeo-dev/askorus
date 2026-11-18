@@ -22,8 +22,25 @@ import { texToUnicode } from '@/ui/tex';
 
 // ---- Errors ----
 
+/**
+ * whenAgain is when an AI's free models work again (ai_free_limit, 11-18)
+ * in the phone's own form: the time, or the day and time when it is not
+ * today. '' when the PC did not say.
+ */
+export function whenAgain(iso?: string, now = new Date()): string {
+  const d = new Date(iso ?? '');
+  if (!iso || Number.isNaN(d.getTime())) return '';
+  const hm = { hour: '2-digit', minute: '2-digit' } as const;
+  return d.toDateString() === now.toDateString() ? d.toLocaleTimeString(undefined, hm) : d.toLocaleString(undefined, { month: 'numeric', day: 'numeric', ...hm });
+}
+
 /** partError explains why an AI gave no answer; the AI's own message follows. */
 export function partError(e: { code: string; message?: string; hint?: string }): string {
+  // ai_free_limit carries when the free models work again, not words.
+  if (e.code === 'ai_free_limit') {
+    const at = whenAgain(e.message);
+    return at ? t('ask.error.ai_free_limit', { time: at }) : t('ask.error.ai_free_limit_later');
+  }
   // A failure the PC gives a hint for has words of its own (#62).
   const hinted = e.hint ? `ask.error.${e.code}_${e.hint}` : '';
   const askKey = hinted && has(hinted) ? hinted : `ask.error.${e.code}`;

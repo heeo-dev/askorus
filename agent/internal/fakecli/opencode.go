@@ -126,9 +126,24 @@ func opencodeAsk(c *Call) int {
 		fmt.Fprintln(os.Stderr, "fakecli:", err)
 		return 2
 	}
+	signIn, err := signInMode(RoleOpenCode)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "fakecli:", err)
+		return 2
+	}
+	if model := flagValue(c.Args, "-m"); signIn == SignedOut && !openCodeKnows(model) {
+		return opencodeError(id, "provider.no-route", SignedOutOpenCode+model)
+	}
 	opencodeEvent("step_start", id, opencodePart("step-start", nil))
-	if mode == AskFail {
+	switch mode {
+	case AskFail:
 		return opencodeError(id, "provider.rate-limit", UsageLimitOpenCode)
+	case AskSignedOut:
+		opencodeEvent("error", id, map[string]any{"error": map[string]any{"type": "provider.auth", "message": "Invalid credential", "status": 401}})
+		return 1
+	case AskFreeLimit:
+		opencodeEvent("error", id, map[string]any{"error": map[string]any{"type": "provider.free-limit", "message": FreeLimitOpenCode, "status": 429, "retryAfterMs": FreeLimitWait.Milliseconds()}})
+		return 1
 	}
 	if mode != AskEmpty {
 		opencodeEvent("text", id, opencodePart("text", map[string]any{"text": "검색해 볼게요."}))

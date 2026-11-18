@@ -1,13 +1,14 @@
 package fakecli
 
 // The sign-in of the fake AIs (#60): `claude auth status --json`,
-// `codex login status`, and an ask that fails because the AI is not
-// signed in.
+// `codex login status`, `opencode models`, and an ask that fails because
+// the AI is not signed in.
 
 import (
 	"fmt"
 	"os"
 	"slices"
+	"strings"
 	"time"
 )
 
@@ -57,6 +58,51 @@ func claudeAuthStatus() int {
 		printJSON(map[string]any{"loggedIn": true, "email": "someone@example.com", "loginExpiresAt": time.Now().Add(30 * 24 * time.Hour).UTC().Format(time.RFC3339Nano)})
 	}
 	return 0
+}
+
+// OpenCode's models (11-18, OpenCode 2.2.7): never signed in, it lists only
+// its free models, all of the provider "opencode".
+var (
+	OpenCodeFreeModels = []string{"opencode/big-pickle", "opencode/deepseek-v4.1-flash-free"}
+	openCodeModels     = []string{"opencode-go/deepseek-v4-pro", "opencode-go/deepseek-v4.1-flash", "opencode/deepseek-v4.1-flash"}
+)
+
+// SignedOutOpenCode is the error event's message for a model OpenCode
+// cannot use, as for one that does not exist.
+const SignedOutOpenCode = "Model unavailable: "
+
+// What OpenCode said on 11-18 when its free models reached their usage
+// limit, and about how long it said to wait.
+const (
+	FreeLimitOpenCode = "Free usage limit reached. Connect a provider or subscribe to OpenCode Go to keep going, or switch models."
+	FreeLimitWait     = 7 * time.Hour
+)
+
+// opencodeModels prints `opencode models --standalone`.
+func opencodeModels(args []string) int {
+	if !slices.Equal(args, []string{"models", "--standalone"}) {
+		return unexpected(RoleOpenCode)
+	}
+	mode, err := signInMode(RoleOpenCode)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "fakecli:", err)
+		return 2
+	}
+	list := OpenCodeFreeModels
+	if mode != SignedOut {
+		list = append(slices.Clone(openCodeModels), OpenCodeFreeModels...)
+	}
+	for _, m := range list {
+		fmt.Print(m + "\r\n")
+	}
+	return 0
+}
+
+// openCodeKnows tells whether a signed-out OpenCode can still use model:
+// a free model, with or without its variant.
+func openCodeKnows(model string) bool {
+	base, _, _ := strings.Cut(model, "#")
+	return slices.Contains(OpenCodeFreeModels, base)
 }
 
 // codexLoginStatus prints `codex login status`.

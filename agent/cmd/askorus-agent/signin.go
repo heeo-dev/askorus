@@ -11,6 +11,7 @@ import (
 
 	"github.com/heeo-dev/askorus/agent/internal/adapter/claude"
 	"github.com/heeo-dev/askorus/agent/internal/adapter/codex"
+	"github.com/heeo-dev/askorus/agent/internal/adapter/opencode"
 	"github.com/heeo-dev/askorus/agent/internal/core"
 )
 
@@ -21,6 +22,8 @@ func loginCommandFor(agent string) string {
 		return claude.LoginCommand
 	case codex.Name:
 		return codex.LoginCommand
+	case opencode.Name:
+		return opencode.LoginCommand
 	}
 	return ""
 }
