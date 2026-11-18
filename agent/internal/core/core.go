@@ -106,6 +106,19 @@ type AdapterInfo struct {
 	// <agent>_signed_out notice (#62). Older apps leave it out and show the
 	// notice as before.
 	SignInHint string `json:"signInHint,omitempty"`
+	// Usage is how much of the AI's plan is left, per group of models that
+	// share a limit, when the AI says (Antigravity's weekly limits, #20).
+	// Older apps leave it out.
+	Usage []UsageGroup `json:"usage,omitempty"`
+}
+
+// UsageGroup is one group of an AI's models that share a usage limit.
+type UsageGroup struct {
+	Name string `json:"name"` // as the AI names it ("Gemini Models")
+	// Left is the share of the limit left, 0 to 1.
+	Left float64 `json:"left"`
+	// ResetAt is when it refreshes (RFC 3339, UTC), "" when the AI does not say.
+	ResetAt string `json:"resetAt,omitempty"`
 }
 
 // SignInHintMacKeychain: the agent runs on a Mac outside the screen's

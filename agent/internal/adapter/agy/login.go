@@ -33,15 +33,8 @@ const (
 	usageTimeout = 20 * time.Second
 )
 
-// UsageGroup is one group of models that share a weekly limit, as /usage
-// names it ("Gemini Models").
-type UsageGroup struct {
-	Name string `json:"name"`
-	// Left is the share of the limit left, 0 to 1.
-	Left float64 `json:"left"`
-	// ResetAt is when it refreshes (RFC 3339, UTC), "" when agy does not say.
-	ResetAt string `json:"resetAt,omitempty"`
-}
+// UsageGroup is core's.
+type UsageGroup = core.UsageGroup
 
 // loginState: known is false when agy could not tell; then nothing is
 // shown.
@@ -148,9 +141,14 @@ func (a *Adapter) forgetLogin() {
 	a.loginMu.Unlock()
 }
 
+// loginNotices adds the sign-in notice, or the usage when agy is signed in.
 func (a *Adapter) loginNotices(ctx context.Context, info *core.AdapterInfo) {
-	if st := a.cachedLogin(ctx); st.known && !st.signedIn {
+	st := a.cachedLogin(ctx)
+	switch {
+	case st.known && !st.signedIn:
 		info.Notices = append(info.Notices, NoticeSignedOut)
+	case st.signedIn && len(st.groups) > 0:
+		info.Usage = append([]UsageGroup(nil), st.groups...)
 	}
 }
 

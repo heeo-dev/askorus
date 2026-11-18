@@ -32,6 +32,9 @@ func TestIT24Agy(t *testing.T) {
 			!slices.Equal(ai.Ask.Efforts["gemini-3.8-flash"], []string{"low", "medium", "high"}) || ai.Ask.Images == nil || !ai.Ask.Images.All {
 			t.Errorf("agy ask info %+v", ai.Ask)
 		}
+		if len(ai.Usage) != 2 || ai.Usage[0].Name != "Gemini Models" || ai.Usage[0].ResetAt != fakecli.AgyResetTime {
+			t.Errorf("agy usage %+v", ai.Usage)
+		}
 
 		st := r.waitRun(r.ask([]map[string]string{{"agent": "agy"}, {"agent": "claude"}}, nil).ID)
 		var part *struct{ agent, session, answer, model string }

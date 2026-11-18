@@ -1658,7 +1658,7 @@ stdin: {"event":"user","message":{"role":"user","content":[{"type":"text","text"
 - 줄을 누르면 시트: 판, 로그인, 되는 기능(묻기, 이어서 묻기, 사회자, 토론, 사진), 단계별 모델, 사용량, 'AI 설치 안내 열기'.
 - '이 PC에 없는 AI': 지원하는 CLI 중 안 깔린 것과 설치 안내.
 - 끄면 답할 AI 고르기와 이어서 묻기의 기본, 사회자 후보에서 빠진다.
-- API(더하기만): `/v1/info`의 AI별 항목에 `features`(되는 기능)와 `usage`(있는 AI만, 묶음별 남은 비율과 초기화 시각).
+- API(더하기만): `/v1/info`의 AI별 항목에 `usage`(있는 AI만, 묶음별 `{name, left, resetAt}`: 남은 비율 0~1과 초기화 시각). 되는 기능은 있는 값으로 앱이 정한다: 묻기·이어서 묻기·토론은 `capabilities`의 `ask`, 사회자는 `synthesize`, 사진은 `ask.images`(만들 때 정함, `features`는 더하지 않음).
 
 **개인정보와 문서:** agy를 켜면 질문과 답(사회자를 맡으면 다른 AI의 답까지)이 사용자의 Google 계정으로 Google에 간다. `docs/privacy.md`·`docs/privacy/index.html`, 스토어 글 두 언어, README 두 언어('AI 프로그램 설치'와 지원 AI 표), 메뉴 지도 두 장을 고친다. Play 데이터 보안 답은 그대로(개발자가 받지 않음).
 
@@ -1670,7 +1670,7 @@ stdin: {"event":"user","message":{"role":"user","content":[{"type":"text","text"
 | --- | --- |
 | S1 | 어댑터 `agy`의 묻기: 찾기, 판, 두 겹 잠금, stream-json, 오류. UT·IT·LT-17 |
 | S2 | 이어서 묻기, 토론 발언, 사진 폴더 구성, 종합·정제 사회자, 로그인·사용량(`/usage`) |
-| S3 | `/v1/info`의 `features`·`usage`, 설정 `agyPath`·`ask.tiers.agy`, `check`·`setup`의 agy 줄 |
+| S3 | `/v1/info`의 `usage`, 설정 `agyPath`·`ask.tiers.agy`, `check`·`setup`의 agy 줄(AI 목록이 공통이라 이름만 더함) |
 | S4 | 앱: Antigravity 모델 줄, 답할 AI·사회자 목록, 새 오류 문구(한·영) |
 | S5 | 앱: AI 관리 화면 |
 | S6 | 문서(방침, 스토어 글, README, 메뉴 지도, `docs/testing.md`, 설계 문서 원본), 2호 보안 검토, test-all·test-live |
