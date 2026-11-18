@@ -29,6 +29,7 @@ import type {
   SessionFilter,
   SessionList,
   StartRequest,
+  UpdateStatus,
   Upload,
 } from './types';
 
@@ -409,6 +410,16 @@ export class AgentClient {
   /** Stops a comparison: a combined answer not started yet is dropped, one being written finishes. */
   cancelComparison(id: string) {
     return this.request<Comparison>('POST', `comparisons/${encodeURIComponent(id)}/cancel`);
+  }
+
+  /** The agent's update status (#35); the PC asks GitHub at most every six hours. */
+  updateStatus(signal?: AbortSignal) {
+    return this.request<UpdateStatus>('GET', 'update', undefined, signal);
+  }
+
+  /** Takes the release the phone saw (#35); the agent refuses one that changed meanwhile. */
+  startUpdate(version: string) {
+    return this.request<{ state: string }>('POST', 'update', { version });
   }
 
   /** Unpairs this phone on the PC, so its token stops working there. */

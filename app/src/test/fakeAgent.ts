@@ -101,6 +101,42 @@ export class FakeAgent {
   os = 'windows';
   /** The agent's version in /v1/info (tests set the app's own version to compare, 11-18). */
   version = '0.1.0';
+  /** /v1/info's update (#35); unset is an agent from before updates. */
+  update?: { on: boolean; can: boolean; why?: string; allowed: boolean };
+  /** The latest release GET /v1/update names ('' : none known). */
+  updateLatest = '';
+  updateBusy = { asks: 0, folders: 0 };
+  updateCheckError = '';
+  updateLast?: { from: string; to: string; state: string; reason?: string; at: string };
+  /** What an update comes to after the go, and how many asks it waits and is away first. */
+  updateEnd: 'done' | 'rolled-back' | 'failed' | 'not-taken' = 'done';
+  updateWaits = 1;
+  updateAway = 1;
+  /** An error POST /v1/update answers instead of starting. */
+  updatePostError: { status: number; code: string } | null = null;
+  updateCalls: string[] = [];
+  private updateStep: number | null = null;
+  private updateFrom = '';
+
+  /** Updates on, this agent able to update itself, this phone allowed, a newer release there. */
+  enableUpdate(latest = '0.5.1') {
+    this.update = { on: true, can: true, allowed: true };
+    this.updateLatest = latest;
+  }
+
+  private updateStatus(running: boolean) {
+    const newer = !!this.updateLatest && this.updateLatest !== this.version;
+    return {
+      ...this.update,
+      current: this.version,
+      ...(this.updateLatest ? { latest: this.updateLatest } : {}),
+      newer: newer && !this.updateCheckError,
+      ...(this.updateCheckError ? { checkError: this.updateCheckError } : {}),
+      running,
+      busy: this.updateBusy,
+      ...(this.updateLast ? { last: this.updateLast } : {}),
+    };
+  }
   remoteUrl ='https://claude.ai/code/session_test';
   /** Codes /v1/info reports for Claude, such as claude_service_elevated. */
   notices: string[] = [];
@@ -749,7 +785,33 @@ export class FakeAgent {
         ...(this.contextOn ? { context: { maxSettled: 12, maxLastBytes: 8192 } } : {}),
         ...(this.moderatorOn ? { moderator: { maxAnswers: 6, maxAnswerBytes: 8192, rules: 'moderator-ask-v1' } } : {}),
         ...(this.photosOn ? { attachments: { maxCount: 4, maxBytes: 4 << 20, types: ['image/jpeg', 'image/png', 'image/webp'] } } : {}),
+        ...(this.update ? { update: this.update } : {}),
       });
+    }
+    // The update from a phone (#35): after the go, the agent waits
+    // (running) for updateWaits asks, is away for updateAway asks, then
+    // answers as updateEnd says.
+    if (key === 'GET /v1/update') {
+      this.updateCalls.push('GET');
+      if (!this.update) return err(404, 'not_supported');
+      if (this.updateStep !== null) {
+        const step = this.updateStep++;
+        if (step < this.updateWaits) return json(200, this.updateStatus(true));
+        if (step < this.updateWaits + this.updateAway) return err(503, 'agent_away');
+        if (this.updateEnd === 'done') this.version = this.updateLatest;
+        this.updateLast = { from: this.updateFrom, to: this.updateLatest, state: this.updateEnd, reason: this.updateEnd === 'done' ? undefined : 'it did not come up within a minute', at: '2026-12-01T09:05:00Z' };
+        this.updateStep = null;
+      }
+      return json(200, this.updateStatus(false));
+    }
+    if (key === 'POST /v1/update') {
+      this.updateCalls.push(`POST ${c.body?.version}`);
+      if (!this.update) return err(404, 'not_supported');
+      if (this.updatePostError) return err(this.updatePostError.status, this.updatePostError.code);
+      if (c.body?.version !== this.updateLatest) return err(409, 'update_changed');
+      this.updateFrom = this.version;
+      this.updateStep = 0;
+      return json(202, { state: 'started' });
     }
     if (key === 'POST /v1/uploads') {
       if (!this.photosOn) return err(503, 'uploads_unavailable');

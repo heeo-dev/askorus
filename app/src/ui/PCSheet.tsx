@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react';
 import { Alert, Linking, StyleSheet, Text, View } from 'react-native';
 
 import { aiGuideUrl } from '@/api/agents';
-import { AgentError } from '@/api/client';
+import { AgentError, type AgentClient } from '@/api/client';
 import { loadAskPrefs, saveAskPrefs } from '@/ask/prefs';
 import { type Check, diagnose } from '@/connections/diagnose';
 import { osName } from '@/connections/label';
@@ -18,6 +18,7 @@ import { t } from '@/i18n';
 import { Button } from './Button';
 import { Sheet } from './Sheet';
 import { themed, useTheme } from './theme';
+import { UpdatePanel } from './UpdatePanel';
 
 const store = new ConnectionStore();
 
@@ -59,8 +60,26 @@ export function PCSheet({
   const th = useTheme();
   const s = styles(th);
   const [checks, setChecks] = useState<Check[] | 'running' | null>(null);
+  // An agent that takes updates from phones (#35) gets the update panel here.
+  const [updater, setUpdater] = useState<AgentClient | null>(null);
 
-  useEffect(() => setChecks(null), [conn?.id]);
+  const connId = conn?.id;
+  useEffect(() => {
+    setChecks(null);
+    setUpdater(null);
+    if (!connId) return;
+    let live = true;
+    connect(store, connId)
+      .then(async (pc) => {
+        if (!pc) return;
+        const info = await pc.client.info();
+        if (live && info.update) setUpdater(pc.client);
+      })
+      .catch(() => undefined); // the connection check says why
+    return () => {
+      live = false;
+    };
+  }, [connId]);
 
   if (!conn) return null;
 
@@ -85,6 +104,12 @@ export function PCSheet({
     <Sheet open onClose={onClose} title={conn.name} subtitle={[osName(conn.os), `${conn.host}:${conn.port}`].filter(Boolean).join(' · ')} testID="pc-sheet">
       <View style={s.body}>
         <Text style={s.caption}>{t('settings.thisPhone', { name: conn.deviceName, id: conn.deviceId })}</Text>
+        {updater ? (
+          <View style={s.update}>
+            <Text style={s.label}>{t('update.title')}</Text>
+            <UpdatePanel client={updater} deviceId={conn.deviceId} />
+          </View>
+        ) : null}
         {Array.isArray(checks) && checks.length ? (
           <View style={s.checks}>
             {checks.map((x, i) => (
@@ -111,6 +136,8 @@ const styles = themed((th) =>
     body: { gap: 10, paddingTop: 6, paddingHorizontal: 20, paddingBottom: 8 },
     caption: { fontSize: 13, lineHeight: 19.5, color: th.caption },
     checks: { gap: 4, padding: 14, borderRadius: 14, backgroundColor: th.bg },
+    update: { gap: 8, padding: 14, borderRadius: 14, backgroundColor: th.bg },
+    label: { fontSize: 13, fontWeight: '500', lineHeight: 18, color: th.caption },
     check: { fontSize: 14, lineHeight: 20.3 },
   }),
 );

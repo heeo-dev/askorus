@@ -111,6 +111,40 @@ export type Info = {
   pairing?: { approve: boolean };
   /** The agent takes photos with a question (#14); an older agent leaves it out, and the phone offers none. */
   attachments?: { maxCount: number; maxBytes: number; types: string[] };
+  /** The agent takes updates from phones (#35); an older agent leaves it out, and the phone offers no update button. */
+  update?: UpdateInfo;
+};
+
+/**
+ * Why an agent cannot update itself (#35): updates are off on the PC, it
+ * is a build of a branch, it is not where the install script puts it, or
+ * it was built without an update key.
+ */
+export type UpdateWhy = 'off' | 'not_release' | 'not_installed' | 'no_key' | (string & {});
+
+/** /v1/info's update (#35). */
+export type UpdateInfo = {
+  on: boolean;
+  /** This agent can update itself. */
+  can: boolean;
+  why?: UpdateWhy;
+  /** This phone may start an update. */
+  allowed: boolean;
+};
+
+/** GET /v1/update (#35): what the update sheet shows. */
+export type UpdateStatus = UpdateInfo & {
+  current: string;
+  latest?: string;
+  newer: boolean;
+  checked?: string;
+  /** Why the latest release is not known: no_release_info, bad_release, expired, unreachable, no_key. */
+  checkError?: string;
+  running: boolean;
+  /** The work an update cuts off: questions still answering, folders kept open. */
+  busy: { asks: number; folders: number };
+  /** The last update: state is swapped, done, rolled-back, failed or not-taken. */
+  last?: { from: string; to: string; state: string; reason?: string; at: string };
 };
 
 /** A photo the PC keeps for a question (POST /v1/uploads, #14). */

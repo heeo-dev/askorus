@@ -15,7 +15,7 @@ import { AppState, FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, 
 
 import { noticeText } from '@/api/agents';
 import type { AgentClient } from '@/api/client';
-import type { Folder, Session } from '@/api/types';
+import type { Folder, Session, UpdateInfo } from '@/api/types';
 import { pcDetail } from '@/connections/label';
 import { connect } from '@/connections/open';
 import { type Cause, cause } from '@/connections/reach';
@@ -130,6 +130,7 @@ function Sessions({ conn, detail, onPick }: { conn: Connection; detail: string; 
   const [caps, setCaps] = useState<string[]>([]);
   const [notices, setNotices] = useState<string[]>([]);
   const [agentOS, setAgentOS] = useState('');
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | undefined>(undefined);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
@@ -161,6 +162,7 @@ function Sessions({ conn, detail, onPick }: { conn: Connection; detail: string; 
       rememberOS(pc.conn.id, i.os).catch(() => undefined);
       setInfo({ state: 'ok', version: i.version });
       setAgentOS(i.os);
+      setUpdateInfo(i.update);
       setCaps(i.capabilities);
       // Only the AIs whose sessions this list shows; one that only
       // answers questions is reported in the connection check.
@@ -316,7 +318,9 @@ function Sessions({ conn, detail, onPick }: { conn: Connection; detail: string; 
           {n}
         </Text>
       ))}
-      {info.state === 'ok' ? <AgentUpdate pcId={conn.id} version={info.version} os={agentOS} style={s.update} /> : null}
+      {info.state === 'ok' ? (
+        <AgentUpdate pcId={conn.id} version={info.version} os={agentOS} update={updateInfo} client={pc?.client} deviceId={conn.deviceId} checkLatest style={s.update} />
+      ) : null}
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chips} keyboardShouldPersistTaps="handled">
         {filters.map((f) => (

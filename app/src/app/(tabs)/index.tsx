@@ -1072,7 +1072,7 @@ export default function Ask() {
         >
           {reach}
           {/* Before the first question: an agent older than the app (11-18). */}
-          {info ? <AgentUpdate pcId={currentId} version={info.version} os={info.os} /> : null}
+          {info ? <AgentUpdate pcId={currentId} version={info.version} os={info.os} update={info.update} client={pc?.client} deviceId={pc?.conn.deviceId} /> : null}
           {load.state === 'loading' ? <Spinner size={24} /> : null}
           {info && !anyAsk ? <Text style={s.body}>{oldAgent(info) ? t('ask.oldAgent') : t('ask.noAI')}</Text> : null}
           {info && anyAsk ? (
