@@ -112,6 +112,9 @@ Usage / 사용법:
   askorus-agent path on | off | status
       put the folder of this askorus-agent program on this user's PATH
       이 askorus-agent 프로그램이 있는 폴더를 이 사용자의 PATH에 넣습니다
+  askorus-agent update status | check | now | on | off
+      look for a newer signed release and take it; on by default, and asked only when a phone asks
+      서명된 새 판을 찾아 올립니다. 기본으로 켜져 있고, 폰이 물을 때만 묻습니다
   askorus-agent uninstall [-yes] [-all]
       undo the setup (logon entry, PATH entry, the Tailscale sign-in, paired phones)
       설치한 것을 되돌립니다 (자동 시작, PATH, Tailscale 로그인, 짝 맺은 폰)
@@ -198,6 +201,10 @@ func run(args []string, in io.Reader, out io.Writer) error {
 		return checkCmd(dir, out)
 	case "uninstall":
 		return uninstallCmd(dir, args[1:], in, out)
+	case "update":
+		return updateCmd(dir, args[1:], out)
+	case updateFinishArg:
+		return updateFinishCmd(dir, args[1:])
 	}
 	return fail("unknown command %q (try: askorus-agent help)", "모르는 명령 %q입니다 (askorus-agent help로 확인하세요)", args[0])
 }

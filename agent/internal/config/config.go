@@ -60,6 +60,10 @@ type Config struct {
 	// HistoryFolders lets the phone also start sessions in folders that
 	// already have conversations (2026-10-27). On unless set to false.
 	HistoryFolders *bool `json:"historyFolders,omitempty"`
+	// Updates lets the agent ask GitHub for a newer signed release when a
+	// phone asks, and update itself (#35, Phase 1 plan part 27). On unless
+	// set to false (askorus-agent update off).
+	Updates *bool `json:"updates,omitempty"`
 }
 
 // AskConfig is the ask settings. Everything has a default.
@@ -165,6 +169,9 @@ func realPath(path string) string {
 
 // HistoryFoldersOn reports whether folders with conversations may be used.
 func (c Config) HistoryFoldersOn() bool { return c.HistoryFolders == nil || *c.HistoryFolders }
+
+// UpdatesOn reports whether the agent may look for and take updates (#35).
+func (c Config) UpdatesOn() bool { return c.Updates == nil || *c.Updates }
 
 // AddFolder allows path for new sessions and returns the saved entry. A
 // folder that is already allowed is returned as it is.
