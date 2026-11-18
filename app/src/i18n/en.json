@@ -603,6 +603,7 @@
   "ask.photo.failed": "Couldn't read the photo. Try another one.",
   "ask.photo.debate": "In a debate, the AIs don't look at the photos again.",
   "ask.photo.question": "A question with {n} photos",
+  "ask.photo.questionOne": "A question with 1 photo",
   "ask.photo.sending": "Sending the photos to your PC…",
   "error.uploads_unavailable": "This PC doesn't take photos. Update Askorus on the PC.",
   "error.upload_too_large": "The photo is too large.",

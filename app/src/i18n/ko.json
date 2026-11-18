@@ -603,6 +603,7 @@
   "ask.photo.failed": "사진을 읽지 못했습니다. 다른 사진으로 해 보세요.",
   "ask.photo.debate": "토론에서는 AI들이 사진을 다시 보지 않습니다.",
   "ask.photo.question": "사진 {n}장을 붙인 질문",
+  "ask.photo.questionOne": "사진 1장을 붙인 질문",
   "ask.photo.sending": "사진을 PC로 보내는 중…",
   "error.uploads_unavailable": "이 PC는 사진을 받지 않습니다. PC의 Askorus를 새 판으로 올리세요.",
   "error.upload_too_large": "사진이 너무 큽니다.",

@@ -75,6 +75,7 @@ test('photos picked for a question go to the PC first, then the question that na
   for (const c of agent.callsTo('POST', '/v1/uploads')) expect(c.auth).toBe(`Bearer ${TOKEN}`);
 
   // The question shows its photos; the bar is empty again.
+  expect(screen.getByLabelText('A question with 2 photos')).toBeTruthy();
   const sent = within(screen.getByTestId('turn-photos'));
   expect(sent.getByRole('imagebutton', { name: 'Open photo 2 of 2' })).toBeTruthy();
   expect(sent.queryByRole('button', { name: /^Remove photo/ })).toBeNull();
@@ -230,6 +231,8 @@ test('a follow-up may carry photos too, and one without photos carries none', as
   await user.press(screen.getByRole('button', { name: 'Send' }));
   await screen.findByText('opencode says: and this?');
   expect(agent.runRequests()[1].attachments).toHaveLength(1);
+  // One photo is "1 photo", not "1 photos" (seen on a real phone).
+  expect(screen.getByLabelText('A question with 1 photo')).toBeTruthy();
   // Both photos live in the one conversation's folder.
   expect(mockPhotoFiles.kept).toHaveLength(1);
 

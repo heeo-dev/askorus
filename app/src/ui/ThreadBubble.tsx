@@ -16,7 +16,7 @@ export function ThreadBubble({ text, photos, onOpenPhoto }: { text: string; phot
   return (
     <View style={s.column}>
       {photos && n > 0 ? (
-        <View accessibilityLabel={t('ask.photo.question', { n })} testID="turn-photos">
+        <View accessibilityLabel={n === 1 ? t('ask.photo.questionOne') : t('ask.photo.question', { n })} testID="turn-photos">
           <PhotoStrip photos={photos} onOpen={onOpenPhoto ?? (() => undefined)} size={88} align="right" />
         </View>
       ) : null}
