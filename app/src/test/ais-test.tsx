@@ -141,3 +141,11 @@ test('turning the moderator off picks another moderator (R-128)', async () => {
   await waitFor(() => expect(screen.queryByRole('radio', { name: 'Antigravity' })).toBeNull());
   expect(screen.getByRole('radio', { name: 'Claude' })).toBeChecked();
 });
+
+test('several PCs: one row shows the PC and opens the PC picker', async () => {
+  await new ConnectionStore().add({ kind: 'pc', name: 'LAPTOP-TEST', host: 'laptop-test.tail0.ts.net', port: PORT, deviceId: 'dev-2', deviceName: 'Test Phone', pairedAt: 'x' }, TOKEN);
+  const user = await open();
+  const row = await screen.findByRole('button', { name: 'PC' });
+  await user.press(row);
+  expect(await screen.findByTestId('pc-picker')).toBeTruthy();
+});

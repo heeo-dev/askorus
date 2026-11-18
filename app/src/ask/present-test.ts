@@ -206,6 +206,11 @@ test("a plan's usage limit (Antigravity's weekly limit, #20) says when it refres
   setLang('en');
 });
 
+test('a follow-up with photos to an AI that sees them only in a new question says so (R-130)', () => {
+  expect(partError({ code: 'no_image_support', hint: 'new_only' })).toBe('This AI sees photos only in a new question, not in a follow-up. To show it the photo, ask it in a new question.');
+  expect(partError({ code: 'no_image_support' })).toBe("This AI's model can't see photos.");
+});
+
 test('Antigravity has its name, and is one of the moderators', () => {
   expect(agentName('agy')).toBe('Antigravity');
   expect(synthWriters).toContain('agy');

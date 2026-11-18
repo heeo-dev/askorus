@@ -3,6 +3,7 @@ package agy
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -117,5 +118,20 @@ func TestStripOutput(t *testing.T) {
 	}
 	if strings.Contains(string(stripOutput([]byte(`["file:/C:/Users/x/a.jpg", 3]`))), "Users") {
 		t.Error("a list kept a path")
+	}
+}
+
+// A timeout while agy waits out a model that had no capacity says so
+// (2026-11-18 on the S10: 503 retries waited 5, 12 and 61 seconds).
+func TestAskTimeoutWhileServerBusy(t *testing.T) {
+	a, folder := fakeAgy(t)
+	t.Setenv(fakecli.EnvAgy, fakecli.AgyBusy)
+	t.Setenv(fakecli.EnvSleep, "10s")
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	_, err := a.Ask(ctx, core.AskRequest{Folder: folder, Prompt: "q", Tier: core.TierQuick})
+	var ae *core.ActionError
+	if !errors.As(err, &ae) || ae.Code != core.ErrCodeAskTimeout || ae.Hint != core.HintServerBusy {
+		t.Errorf("busy timeout = %v", err)
 	}
 }

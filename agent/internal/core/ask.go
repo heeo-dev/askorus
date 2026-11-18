@@ -178,6 +178,11 @@ const (
 	ErrCodeUsageLimit = "ai_usage_limit"
 )
 
+// HintServerBusy is the hint of ask_timeout when the AI spent its time
+// waiting for its company's servers (Antigravity retrying a model that had
+// no capacity, 503, with waits up to a minute; 2026-11-18 on the S10).
+const HintServerBusy = "server_busy"
+
 // A model name for an ask: letters, digits and . _ - / : # [ ], never
 // starting with "-" so it cannot pass for a flag. OpenCode names look like
 // "opencode-go/deepseek-v4.1-flash#max".

@@ -81,7 +81,7 @@ export type AdapterInfo = {
      * or the ones listed (a model's name without its '#variant'). Left out,
      * the AI takes no photos.
      */
-    images?: { all?: boolean; models?: string[] };
+    images?: { all?: boolean; models?: string[]; newOnly?: boolean };
   };
 };
 

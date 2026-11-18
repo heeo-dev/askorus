@@ -66,6 +66,17 @@ test('the AIs of a question with photos are split into those that see them and t
   expect(byPhotos(info({ agents: [] }), all, 'quick', {})).toEqual({ sees: [], blind: all });
 });
 
+// R-130 (#20): Antigravity sees photos only in a new conversation; a
+// follow-up that carries its conversation on leaves it out.
+test('an AI that sees photos only in a new conversation sits out a follow-up that carries one on', () => {
+  const base = info();
+  const i = { ...base, agents: base.agents.map((a) => (a.agent === 'agy' ? { ...a, ask: { ...a.ask!, images: { all: true, newOnly: true } } } : a)) };
+  expect(byPhotos(i, ['claude', 'agy'], 'standard', {})).toEqual({ sees: ['claude', 'agy'], blind: [] });
+  expect(byPhotos(i, ['claude', 'agy'], 'standard', {}, { claude: 'claude:a', agy: 'agy:b' })).toEqual({ sees: ['claude'], blind: ['agy'] });
+  // Carrying on Claude's conversation alone leaves Antigravity a new one.
+  expect(byPhotos(i, ['claude', 'agy'], 'standard', {}, { claude: 'claude:a' })).toEqual({ sees: ['claude', 'agy'], blind: [] });
+});
+
 test('a photo is scaled down to its long edge and never up', () => {
   expect(scaled(4000, 3000)).toEqual({ width: 2048, height: 1536 });
   expect(scaled(3000, 4000)).toEqual({ width: 1536, height: 2048 });

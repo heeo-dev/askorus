@@ -292,6 +292,8 @@
   "ask.error.ai_usage_limit": "This AI reached its plan's usage limit. It works again at {time}.",
   "ask.error.ai_usage_limit_later": "This AI reached its plan's usage limit for now. Ask it again later.",
   "ask.error.ai_signed_out_mac_keychain": "This AI's sign-in can't be read: the PC's agent was started outside the Mac's own screen (over SSH, for example). On the Mac itself, open Terminal, run askorus-agent shutdown, then askorus-agent start, and ask again.",
+  "ask.error.ask_timeout_server_busy": "This AI's company had no room on its servers for the model, and the AI kept waiting past the time limit. Ask again in a little while, or pick the Quick tier.",
+  "ask.error.no_image_support_new_only": "This AI sees photos only in a new question, not in a follow-up. To show it the photo, ask it in a new question.",
   "ask.error.session_not_found": "The PC could not find this conversation. Ask it as a new question.",
   "ask.error.session_busy": "This conversation is still answering, or it is open as a remote session on the PC.",
   "ask.error.agent_unavailable": "This AI wasn't found on the PC. Install its CLI on the PC and sign in.",

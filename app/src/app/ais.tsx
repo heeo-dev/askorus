@@ -18,10 +18,10 @@ import { whenAgain } from '@/ask/present';
 import { pcLabel } from '@/connections/label';
 import { has, type MessageKey, t } from '@/i18n';
 import { Avatar } from '@/ui/Avatar';
-import { PillChoice } from '@/ui/controls';
 import { TopBar } from '@/ui/Header';
 import { useSafeInsets } from '@/ui/keyboard';
 import { Group, Row, SectionLabel } from '@/ui/List';
+import { PCPickerSheet } from '@/ui/PCPickerSheet';
 import { Sheet } from '@/ui/Sheet';
 import { currentPC, usePCs } from '@/ui/shell/pcs';
 import { type Theme, themed, useTheme } from '@/ui/theme';
@@ -71,6 +71,7 @@ export default function ManageAIs() {
   const [failed, setFailed] = useState(false);
   const [ask, setAsk] = useState<AskPrefs>(defaultAskPrefs);
   const [open, setOpen] = useState<AdapterInfo | null>(null);
+  const [picker, setPicker] = useState(false);
 
   const load = useCallback(() => {
     loadAskPrefs().then(setAsk);
@@ -102,13 +103,21 @@ export default function ManageAIs() {
     <View style={s.screen}>
       <TopBar title={t('ais.title')} onBack={() => router.back()} />
       <ScrollView style={s.screen} contentContainerStyle={[s.body, { paddingBottom: 24 + insets.bottom }]}>
+        {/* Several PCs: one row with the PC shown, the PC picker on a press (S10, 11-18: a pill each took half the screen). */}
         {(list?.length ?? 0) > 1 && current ? (
-          <PillChoice
-            options={(list ?? []).map((c) => ({ value: c.id, label: pcLabel(c, list) }))}
-            value={current.id}
-            onChange={(id) => void pick(id)}
-            label={t('ais.pc')}
-          />
+          <Group>
+            <Row
+              title={t('ais.pc')}
+              right={
+                <Text style={s.value} numberOfLines={1}>
+                  {pcLabel(current, list)}
+                </Text>
+              }
+              chevron
+              onPress={() => setPicker(true)}
+              accessibilityValue={{ text: pcLabel(current, list) }}
+            />
+          </Group>
         ) : null}
         {!list?.length ? <Text style={s.caption}>{t('ais.noPC')}</Text> : null}
         {failed ? <Text style={s.caption}>{t('ais.loadFailed')}</Text> : null}
@@ -130,7 +139,6 @@ export default function ManageAIs() {
                     right={<MiniSwitch on={on} label={t('ais.useFor', { name: agentName(a.agent) })} onChange={() => toggle(a.agent)} th={th} />}
                     minHeight={60}
                     onPress={() => setOpen(a)}
-                    accessibilityLabel={agentName(a.agent)}
                   />
                 );
               })}
@@ -166,6 +174,20 @@ export default function ManageAIs() {
         ) : null}
       </ScrollView>
 
+      <PCPickerSheet
+        open={picker}
+        onClose={() => setPicker(false)}
+        list={list ?? []}
+        currentId={current?.id ?? null}
+        onPick={(id) => {
+          setPicker(false);
+          if (id !== current?.id) void pick(id);
+        }}
+        onPair={() => {
+          setPicker(false);
+          router.push('/pair');
+        }}
+      />
       <Sheet open={!!open} onClose={() => setOpen(null)} title={open ? agentName(open.agent) : ''} testID="ai-sheet">
         {open ? <Details a={open} /> : null}
       </Sheet>

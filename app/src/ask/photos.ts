@@ -49,12 +49,18 @@ export function askModel(info: Info, agent: string, tier: Tier, picked: Record<s
 /**
  * byPhotos splits the AIs a question with photos would go to: those that
  * see photos, and those that do not (left out of that question, and named
- * to the person before it goes).
+ * to the person before it goes). carried are the AIs whose conversation the
+ * question carries on: an AI that sees photos only in a new conversation
+ * (images.newOnly, Antigravity, R-130) does not see them there.
  */
-export function byPhotos(info: Info, agents: string[], tier: Tier, picked: Record<string, string>): { sees: string[]; blind: string[] } {
+export function byPhotos(info: Info, agents: string[], tier: Tier, picked: Record<string, string>, carried: Record<string, string> = {}): { sees: string[]; blind: string[] } {
   const sees: string[] = [];
   const blind: string[] = [];
-  for (const agent of agents) (seesPhotos(info, agent, askModel(info, agent, tier, picked)) ? sees : blind).push(agent);
+  for (const agent of agents) {
+    const newOnly = !!info.agents.find((a) => a.agent === agent)?.ask?.images?.newOnly;
+    const sees1 = seesPhotos(info, agent, askModel(info, agent, tier, picked)) && !(newOnly && carried[agent]);
+    (sees1 ? sees : blind).push(agent);
+  }
   return { sees, blind };
 }
 

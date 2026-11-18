@@ -252,10 +252,12 @@ func (a *Adapter) shadowed(name string) bool {
 func (a *Adapter) SeesImages(model string) bool { return modelRe.MatchString(model) && a.photosSafe() }
 
 // ImageModels says so to the app: all models, or none when the person's
-// agy has a hook or a plugin.
+// agy has a hook or a plugin; and only in a new conversation (R-130: a
+// conversation keeps the tools of the agent that started it, so one begun
+// without photos has no file tool when it is carried on with them).
 func (a *Adapter) ImageModels() core.ImageInfo {
 	if !a.photosSafe() {
 		return core.ImageInfo{}
 	}
-	return core.ImageInfo{All: true}
+	return core.ImageInfo{All: true, NewOnly: true}
 }

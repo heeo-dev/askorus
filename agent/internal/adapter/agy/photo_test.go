@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -153,10 +154,20 @@ func TestAskPhotos(t *testing.T) {
 	if _, err := os.Stat(c.Dir); !os.IsNotExist(err) {
 		t.Errorf("the photo folder outlived the ask: %v", err)
 	}
-	// A follow-up with photos carries the conversation on in a new folder.
-	r2, err := ask(t, a, core.AskRequest{Folder: folder, Images: ims[:1], Resume: r.SessionID})
-	if err != nil || r2.SessionID != r.SessionID || !strings.HasSuffix(r2.Answer, " [photos: 1]") {
-		t.Errorf("follow-up = %+v %v", r2, err)
+	// R-130: a follow-up with photos is refused before agy runs: the
+	// conversation keeps the tools of its first run (on the S10, 11-18, a
+	// conversation begun without photos said it could not see the photo).
+	calls := len(fakecli.Calls(t))
+	_, err = ask(t, a, core.AskRequest{Folder: folder, Images: ims[:1], Resume: r.SessionID})
+	var ae *core.ActionError
+	if !errors.As(err, &ae) || ae.Code != core.ErrCodeNoImages || ae.Hint != core.HintNewOnly {
+		t.Errorf("follow-up with photos = %v", err)
+	}
+	if n := len(fakecli.Calls(t)); n != calls {
+		t.Errorf("agy ran for a follow-up with photos")
+	}
+	if info := a.ImageModels(); !info.All || !info.NewOnly {
+		t.Errorf("image models = %+v", info)
 	}
 	// A read outside the folder ends the run without an answer.
 	t.Setenv(fakecli.EnvAgy, fakecli.AgyDenied)

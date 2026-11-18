@@ -47,19 +47,7 @@ import { aiStatus, askErrorText, metaLine, partViews, rowValue } from '@/ask/pre
 import { type AskPrefs, defaultAskPrefs, loadAskPrefs, moderatorOf, saveAskPrefs } from '@/ask/prefs';
 import { debating } from '@/ask/debate';
 import { buildRecord, concluding, moderatorAnswers } from '@/ask/record';
-import {
-  askers,
-  carry,
-  type FollowDeps,
-  followCompare,
-  followDebate,
-  followDefault,
-  followRun,
-  newTurn,
-  running,
-  stopTurns,
-  type Turn,
-} from '@/ask/thread';
+import { askers, carry, followCompare, followDebate, followDefault, type FollowDeps, followRun, lastSessions, newTurn, running, stopTurns, type Turn } from '@/ask/thread';
 import { pcDetail, pcLabel } from '@/connections/label';
 import { connect } from '@/connections/open';
 import { type Cause, cause } from '@/connections/reach';
@@ -570,7 +558,8 @@ export default function Ask() {
   const nextAgents = turns.length ? (modAsk && modAgent ? [modAgent] : follow.agents) : on;
   const nextTier = turns.length ? follow.tier : prefs.tier;
   const nextModels = modAsk && modAgent ? (prefs.synthModels[modAgent] ? { [modAgent]: prefs.synthModels[modAgent].model } : {}) : prefs.models;
-  const seen = info && photos.length ? byPhotos(info, nextAgents, nextTier, nextModels) : null;
+  // The moderator asked alone answers in a new conversation (#25); a follow-up carries each AI's own (R-130).
+  const seen = info && photos.length ? byPhotos(info, nextAgents, nextTier, nextModels, modAsk ? {} : lastSessions(turns)) : null;
   const photosOK = !seen || seen.sees.length > 0;
 
   // record: the answer to the notice (#29), left out when none was shown.

@@ -88,6 +88,11 @@ func readUsage(res proc.Result) loginState {
 	case v.Status == "SUCCESS" && v.Command != nil && v.Command.Name == "usage":
 		st := loginState{known: true, signedIn: true}
 		for _, g := range v.Command.Data.Groups {
+			// Askorus runs Gemini models only (decision 4): the other
+			// groups (agy's Claude and GPT models) would only confuse.
+			if !strings.HasPrefix(strings.ToLower(strings.TrimSpace(g.Name)), "gemini") {
+				continue
+			}
 			for _, b := range g.Buckets {
 				if b.Window != "weekly" {
 					continue

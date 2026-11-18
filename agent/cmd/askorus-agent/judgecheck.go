@@ -19,8 +19,18 @@ import (
 
 // oneOffTestedOn is the day the locked-down one-off commands (judging
 // then, the combined answer and refining now) were tested with each CLI's
-// JudgeMinVersion.
+// JudgeMinVersion; testedOn has the AIs added later.
 const oneOffTestedOn = "2026-10-31"
+
+var testedOn = map[string]string{agy.Name: "2026-11-18"}
+
+// testedDay is the day agent's one-off command was tested.
+func testedDay(agent string) string {
+	if d, ok := testedOn[agent]; ok {
+		return d
+	}
+	return oneOffTestedOn
+}
 
 // displayNames are the AI programs' names on the PC's terminal.
 var displayNames = map[string]string{
@@ -115,7 +125,7 @@ func writerLines(st []writerStatus, off bool) []checkLine {
 		for _, s := range st {
 			if s.why == "" && s.min != "" && !sameVersion(s.version, s.min) {
 				add("info", m("the one-off command was tested on %s with %s %s; this PC has %s",
-					"%[1]s에 %[2]s %[3]s 판으로 일회성 명령을 시험했습니다. 이 PC는 %[4]s입니다", oneOffTestedOn, s.name, s.min, s.version))
+					"%[1]s에 %[2]s %[3]s 판으로 일회성 명령을 시험했습니다. 이 PC는 %[4]s입니다", testedDay(s.agent), s.name, s.min, s.version))
 			}
 		}
 		if len(writing) > 0 {

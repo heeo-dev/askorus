@@ -292,6 +292,8 @@
   "ask.error.ai_usage_limit": "이 AI가 요금제의 사용 한도를 다 썼습니다. {time}에 다시 쓸 수 있습니다.",
   "ask.error.ai_usage_limit_later": "이 AI가 요금제의 사용 한도를 지금은 다 썼습니다. 나중에 다시 물어보세요.",
   "ask.error.ai_signed_out_mac_keychain": "이 AI의 로그인을 읽지 못합니다. PC의 에이전트가 Mac 화면 밖(SSH 등)에서 켜졌기 때문입니다. Mac 화면에서 터미널을 열고 askorus-agent shutdown, askorus-agent start를 차례로 실행한 뒤 다시 물어보세요.",
+  "ask.error.ask_timeout_server_busy": "이 AI 회사의 서버에 그 모델의 자리가 없어 AI가 기다리다 시간이 넘었습니다. 조금 뒤에 다시 묻거나 '빠르게' 단계로 물어보세요.",
+  "ask.error.no_image_support_new_only": "이 AI는 이어서 묻는 대화가 아니라 새 질문에서만 사진을 봅니다. 사진을 보여 주려면 새 질문으로 물어보세요.",
   "ask.error.session_not_found": "이어 갈 대화를 PC에서 찾지 못했습니다. 새 질문으로 물어보세요.",
   "ask.error.session_busy": "이 대화가 아직 답하는 중이거나 PC에서 원격 세션으로 열려 있습니다.",
   "ask.error.agent_unavailable": "PC에서 이 AI를 찾지 못했습니다. PC에 이 AI의 CLI를 설치하고 로그인하세요.",

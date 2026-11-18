@@ -216,6 +216,9 @@ func (a *Adapter) Ask(ctx context.Context, req core.AskRequest) (core.AskResult,
 		return core.AskResult{}, core.Fail(core.ErrCodeInternal, "a one-off ask never resumes")
 	case len(req.Images) > 0 && !a.SeesImages(model):
 		return core.AskResult{}, core.Fail(core.ErrCodeNoImages, "")
+	case len(req.Images) > 0 && req.Resume != "":
+		// R-130: the conversation keeps its first agent's tools; it would say it sees no photo.
+		return core.AskResult{}, &core.ActionError{Code: core.ErrCodeNoImages, Hint: core.HintNewOnly}
 	}
 	m := cliModel(model, effort)
 	agent, settings, tools, prompt := askAgent, askSettings, askTools, req.Prompt
@@ -244,6 +247,11 @@ func (a *Adapter) Ask(ctx context.Context, req core.AskRequest) (core.AskResult,
 	res, err := proc.Run(ctx, proc.Cmd{Exe: a.exe, Dir: dir, Args: args, Stdin: stdinMessage(prompt)})
 	switch {
 	case errors.Is(err, proc.ErrTimeout):
+		// The output so far says whether agy was waiting to try again (its
+		// last step an error, after any answer): Google had no capacity.
+		if r := readRun(res.Stdout, tools); r.lastErr >= 0 && r.lastErr > r.lastDone {
+			return core.AskResult{}, &core.ActionError{Code: core.ErrCodeAskTimeout, Hint: core.HintServerBusy}
+		}
 		return core.AskResult{}, core.Fail(core.ErrCodeAskTimeout, "")
 	case errors.Is(err, fs.ErrNotExist), errors.Is(err, proc.ErrScript):
 		return core.AskResult{}, core.Fail(core.ErrCodeAgentUnavailable, "agy was not found")

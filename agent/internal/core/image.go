@@ -119,4 +119,15 @@ type ImageSeer interface {
 type ImageInfo struct {
 	All    bool     `json:"all,omitempty"`
 	Models []string `json:"models,omitempty"`
+	// NewOnly: the AI sees photos only in a question that starts a new
+	// conversation with it, not in a follow-up that carries one on
+	// (Antigravity keeps the tools of the conversation's first run, R-130).
+	// The app leaves it out of a follow-up with photos. Older apps leave it
+	// out of nothing; the agent then answers no_image_support with
+	// HintNewOnly.
+	NewOnly bool `json:"newOnly,omitempty"`
 }
+
+// HintNewOnly is the hint of no_image_support for a follow-up with photos
+// to an AI whose ImageInfo is NewOnly.
+const HintNewOnly = "new_only"

@@ -395,11 +395,11 @@ func TestInfoAndUsage(t *testing.T) {
 	if !info.Available || info.Version != "1.5.10" || !slices.Equal(info.Capabilities, []core.Capability{core.CapAsk}) || len(info.Notices) != 0 {
 		t.Errorf("info = %+v", info)
 	}
-	if len(info.Usage) != 2 || info.Usage[0] != (core.UsageGroup{Name: "Gemini Models", Left: 0.94, ResetAt: fakecli.AgyResetTime}) {
+	if len(info.Usage) != 1 || info.Usage[0] != (core.UsageGroup{Name: "Gemini Models", Left: 0.94, ResetAt: fakecli.AgyResetTime}) {
 		t.Errorf("info usage = %+v", info.Usage)
 	}
 	u := a.Usage(context.Background())
-	if len(u) != 2 || u[0].Name != "Gemini Models" || u[0].Left != 0.94 || u[0].ResetAt != fakecli.AgyResetTime || u[1].Left != 1 {
+	if len(u) != 1 || u[0].Name != "Gemini Models" || u[0].Left != 0.94 || u[0].ResetAt != fakecli.AgyResetTime {
 		t.Errorf("usage = %+v", u)
 	}
 	if n := len(fakecli.Calls(t)); n != 0 {

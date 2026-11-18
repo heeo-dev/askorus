@@ -39,10 +39,11 @@ const (
 	AgyLinks      = "links"      // the answer links a file by its path
 	AgyNoInit     = "noinit"     // no start event
 	AgyOpenMode   = "always"     // the start event reports always-proceed
+	AgyBusy       = "busy"       // out of capacity, then waits ASKORUS_FAKECLI_SLEEP to try again
 )
 
 // AgyModes lists them.
-var AgyModes = []string{AgyNormal, AgyRetry, AgyCapacity, AgyBadTool, AgyWrongAgent, AgyDenied, AgyNoResume, AgyLinks, AgyNoInit, AgyOpenMode}
+var AgyModes = []string{AgyNormal, AgyRetry, AgyCapacity, AgyBadTool, AgyWrongAgent, AgyDenied, AgyNoResume, AgyLinks, AgyNoInit, AgyOpenMode, AgyBusy}
 
 // What agy prints, for tests to compare against. CapacityAgy is agy's own
 // words of 2026-11-18; the usage limit and the sign-in are not seen yet
@@ -286,6 +287,11 @@ func agyRun(c *Call) int {
 		msg := strings.Replace(CapacityAgy, "attempt 1", "attempt 3", 1)
 		agyResult(conv, "ERROR", "", msg, nil)
 		agyErrorLine(msg, "")
+		return 3
+	case mode == AgyBusy:
+		agyStep(conv, 1, "error_message", "DONE", nil)
+		os.Stdout.Sync()
+		sleepSlow()
 		return 3
 	case mode == AgyDenied:
 		agyStep(conv, 1, "tool", "DONE", map[string]any{"tool_name": "search_web"})
