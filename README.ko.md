@@ -40,11 +40,11 @@ Askorus(애스코러스)는 폰에서 질문 하나를 여러 AI에게 한 번�
 
 ## 기능
 
-- 여러 AI에게 한 번에 묻기, 모두에게·한 AI에게·사회자에게만 이어서 묻기
+- 여러 AI(Claude Code, Codex, OpenCode, Antigravity)에게 한 번에 묻기, 모두에게·한 AI에게·사회자에게만 이어서 묻기
 - 사진을 붙여서 묻기(찍거나 골라서 4장까지), AI가 코드(SVG)로 그린 그림을 그림으로 보기
 - 종합 답변과 같은 곳·다른 곳 표시
 - AI끼리 토론, 쟁점마다 결과(합의, 상황에 따라 다름)
-- AI마다 모델과 생각 깊이 고르기
+- AI마다 모델과 생각 깊이 고르기, 'AI 관리'에서 AI 켜고 끄기와 로그인·사용량 보기
 - 답을 공유하거나 신고하기, PC를 준비하기 전에 예시 대화 보기
 - 폰 하나에 PC 여러 대(Windows, macOS, Linux): 어느 PC가 답하는지 보여 주고 골라 쓰기
 - 대화 기록을 폰에 저장
@@ -55,7 +55,7 @@ Askorus(애스코러스)는 폰에서 질문 하나를 여러 AI에게 한 번�
 
 - Windows, macOS, Linux 중 하나를 쓰는 PC
 - [Tailscale](https://tailscale.com) 계정(개인은 무료). Tailscale을 따로 설치하지 않습니다. 앱과 PC 에이전트 안에 들어 있고, 폰에서 VPN을 켤 필요도 없습니다. 양쪽에서 한 번씩 로그인하면 됩니다
-- PC에 설치하고 로그인해 둔 공식 AI 프로그램 하나 이상: Claude Code, Codex, OpenCode. 둘 이상이면 종합 답변과 토론이 나오고, '내 PC'(Claude Code 세션)에는 Claude Code가 있어야 합니다. 이미 쓰는 구독과 무료 계정을 그대로 쓰며, 그 로그인 정보는 읽거나 옮기지 않습니다. 데스크톱 앱만으로는 안 되고 CLI가 있어야 합니다([AI 프로그램 설치](#ai-프로그램-설치)).
+- PC에 설치하고 로그인해 둔 공식 AI 프로그램 하나 이상: Claude Code, Codex, OpenCode, Antigravity CLI. 둘 이상이면 종합 답변과 토론이 나오고, '내 PC'(Claude Code 세션)에는 Claude Code가 있어야 합니다. 이미 쓰는 구독과 무료 계정을 그대로 쓰며, 그 로그인 정보는 읽거나 옮기지 않습니다. 데스크톱 앱만으로는 안 되고 CLI가 있어야 합니다([AI 프로그램 설치](#ai-프로그램-설치)).
 - 안드로이드 폰 (iOS는 나중에)
 
 ### Tailscale이 뭔가요?
@@ -78,6 +78,7 @@ Askorus는 PC에 설치한 각 AI의 공식 CLI(터미널 프로그램)로 묻�
 | [Claude Code](https://code.claude.com/docs/en/setup) | Windows: `irm https://claude.ai/install.ps1 \| iex`<br>macOS, Linux: `curl -fsSL https://claude.ai/install.sh \| bash` | `claude auth login` (Claude 유료 요금제가 필요합니다) |
 | [Codex](https://developers.openai.com/codex/cli) | Windows: `powershell -ExecutionPolicy ByPass -c "irm https://chatgpt.com/codex/install.ps1 \| iex"`<br>macOS, Linux: `curl -fsSL https://chatgpt.com/codex/install.sh \| sh` | `codex login` |
 | [OpenCode](https://opencode.ai/docs) | 공식 문서의 운영체제별 방법(Windows는 내려받기) | `opencode auth login`을 실행하고 쓰는 모델의 공급자를 고릅니다(Askorus의 기본은 OpenCode Go). `opencode`를 실행하고 `/connect`도 됩니다 |
+| [Antigravity CLI](https://antigravity.google/docs/features?tab=cli) (`agy`) | 공식 문서의 방법(Askorus는 아직 Windows에서만 시험함) | `agy`를 한 번 실행해 Google로 로그인합니다. Askorus는 Gemini 3.8 Flash(낮음·중간·높음)로 묻습니다 |
 
 설치하고 로그인한 뒤 PC에서 `askorus-agent check`를 실행하면, 찾았는지와 로그인되어 있는지를 AI마다 보여 줍니다. 앱의 설정 > PC > 연결 진단에도 나옵니다.
 
@@ -202,7 +203,7 @@ PC의 Claude Code나 Codex에 내 운영체제에 맞는 글을 붙여 넣으세
 - **Mac에서 Claude가 로그인되어 있지 않다고 하는데, 터미널에서는 `claude`가 잘 됩니다.** 에이전트를 SSH에서 켠 경우입니다(SSH에서 설치 줄을 실행한 경우 등). Claude Code는 로그인을 키체인에 두는데, SSH에서 켠 프로그램은 SSH를 끊은 뒤에도 그것을 읽지 못합니다. 다시 로그인해도 고쳐지지 않습니다. Mac 화면에서 터미널을 열고 `askorus-agent shutdown`, `askorus-agent start`를 차례로 실행하세요.
 - **새 Claude Code 세션이 시작되지 않습니다.** Claude Code는 폴더마다 한 번 신뢰할지 묻습니다. PC에서 그 폴더로 가서 `claude`를 한 번 실행하고 허용하세요.
 - **폴더 열어 두기가 '켜는 중'에 머물거나 실패합니다.** Claude Code에서 Remote Control을 한 번 켜야 합니다. PC에서 `claude remote-control`을 실행해 `y`로 답하고 Ctrl+C로 끄세요.
-- **한 AI만 '로그인되어 있지 않다'며 답하지 않습니다.** PC에서 그 AI의 CLI가 로그인되어 있지 않거나 로그인이 끝났습니다(Claude Code의 로그인은 끝나는 날이 있습니다). PC의 터미널에서 Claude Code는 `claude auth login`, Codex는 `codex login`, OpenCode는 `opencode auth login`을 실행하세요(OpenCode는 공급자마다 로그인합니다. 모델의 공급자를 고르세요. 기본은 OpenCode Go). 데스크톱 앱(Claude, Codex)에 로그인한 것과는 따로입니다. 앱의 연결 진단과 `askorus-agent check`가 로그인 상태와 곧 끝나는 날을 알려 줍니다.
+- **한 AI만 '로그인되어 있지 않다'며 답하지 않습니다.** PC에서 그 AI의 CLI가 로그인되어 있지 않거나 로그인이 끝났습니다(Claude Code의 로그인은 끝나는 날이 있습니다). PC의 터미널에서 Claude Code는 `claude auth login`, Codex는 `codex login`, OpenCode는 `opencode auth login`(OpenCode는 공급자마다 로그인합니다. 모델의 공급자를 고르세요. 기본은 OpenCode Go), Antigravity는 `agy`(열어서 Google로 로그인)를 실행하세요. 데스크톱 앱(Claude, Codex)에 로그인한 것과는 따로입니다. 앱의 연결 진단과 `askorus-agent check`가 로그인 상태와 곧 끝나는 날을 알려 줍니다.
 - **AI가 목록에 없습니다.** PC에 설치하고 로그인한 뒤 `check`를 다시 실행하세요. `autostart on` 뒤에 설치한 프로그램은 흔한 설치 폴더에서 찾습니다. 못 찾으면 `autostart on`을 다시 실행하세요.
 
 그래도 안 되면 `askorus-agent check` 결과를 붙여 [이슈를 열어 주세요](https://github.com/heeo-dev/askorus/issues/new/choose)(계정, PC 이름, Tailscale 주소는 지우고).
@@ -274,6 +275,7 @@ go build -trimpath -tags ts_omit_peerapiserver,ts_omit_c2n,ts_omit_logtail -o as
 - 질문은 앱과 에이전트에 들어 있는 Tailscale을 거쳐 폰에서 내 PC로 갑니다. 두 기기 사이에서 암호화되고, 내 Tailscale 계정에 로그인한 기기끼리만 통합니다. PC의 공식 AI 프로그램이 각 AI 회사로 보냅니다.
 - 앱과 에이전트는 로그인하고 서로를 찾기 위해 Tailscale의 서버와 통신합니다. 두 기기가 직접 연결되지 못할 때는 Tailscale의 중계 서버가 암호화된 내용을 그대로 전달합니다. Tailscale로 진단 로그를 보내지 않습니다.
 - 사회자 AI의 회사는 질문과 모든 답을 받고, 토론하면 답한 AI들의 회사가 서로의 답을 받습니다.
+- PC에 Antigravity CLI가 있으면 질문과 답이 Google로 갑니다. agy는 이것을 PC의 자기 기록에 남기고, Askorus는 agy가 명령을 실행하거나 PC의 파일을 읽지 못하게 돌립니다(그 질문의 사진만 임시 폴더에서 읽음).
 - 질문에 붙인 사진은 줄인 사본(촬영 정보 없음)이 내 PC를 거쳐 그 질문을 받은 AI의 회사로 갑니다. PC는 쓰고 10분쯤 뒤에 지우고, 폰에는 그 대화와 함께 남습니다.
 - 앱의 대화 기록은 폰에 저장됩니다. PC의 AI 프로그램에도 자체 기록이 남을 수 있고, 에이전트는 답을 PC 메모리에 하루 둡니다.
 

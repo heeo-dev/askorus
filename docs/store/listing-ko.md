@@ -23,12 +23,12 @@ PC에 설치한 Claude Code, Codex, OpenCode에게 폰에서 한 번에 묻고, 
 
 Askorus는 질문 하나를 여러 AI에게 한 번에 묻는 앱입니다. 답이 모이면 사회자 AI가 정리하고, 의견이 다른 곳은 AI끼리 토론하게 합니다. 여러 AI의 답, 토론을 거쳐 더 나은 하나로.
 
-내 PC가 필요합니다. Askorus는 PC에 설치한 AI 프로그램(Claude Code, Codex, OpenCode)에게 폰에서 묻는 앱이고, 폰만으로는 쓸 수 없습니다. PC 없이 어떤 앱인지 보려면 첫 화면의 '예시 보기'를 누르세요.
+내 PC가 필요합니다. Askorus는 PC에 설치한 AI 프로그램(Claude Code, Codex, OpenCode, Antigravity CLI)에게 폰에서 묻는 앱이고, 폰만으로는 쓸 수 없습니다. PC 없이 어떤 앱인지 보려면 첫 화면의 '예시 보기'를 누르세요.
 
 ■ 필요한 것
 · Windows, macOS, Linux 중 하나를 쓰는 PC
 · Tailscale 계정 (개인은 무료). 따로 설치할 것은 없습니다. 앱과 PC 에이전트 안에 들어 있고 VPN을 켤 필요가 없습니다
-· PC에 설치하고 로그인해 둔 공식 AI 프로그램: Claude Code, Codex, OpenCode 중 하나 이상. 이미 쓰고 있는 구독이나 무료 계정을 그대로 씁니다.
+· PC에 설치하고 로그인해 둔 공식 AI 프로그램: Claude Code, Codex, OpenCode, Antigravity CLI 중 하나 이상. 이미 쓰고 있는 구독이나 무료 계정을 그대로 씁니다.
 · PC 에이전트 askorus-agent. 받는 곳과 설치 방법은 앱 첫 화면과 GitHub에 있습니다.
 
 ■ 시작하기
@@ -43,7 +43,7 @@ Askorus는 질문 하나를 여러 AI에게 한 번에 묻는 앱입니다. 답�
 4. 토론: 원하면 의견이 다른 곳을 놓고 AI끼리 토론합니다. 사회자가 쟁점을 고르고, AI들은 생각을 유지하거나 바꾸며, 끝나면 쟁점마다 결과를 정리합니다.
 
 ■ 주요 기능
-· 여러 AI에게 한 번에 묻기: Claude Code, Codex, OpenCode
+· 여러 AI에게 한 번에 묻기: Claude Code, Codex, OpenCode, Antigravity(Gemini)
 · 사회자 AI의 종합 답변과 같은 곳·다른 곳 표시
 · AI끼리 토론, 쟁점마다 합의인지 상황에 따라 다른지 정리
 · 이어서 묻기, 한 AI나 사회자에게만 묻기

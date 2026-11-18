@@ -40,11 +40,11 @@ The moderator is one of the AIs you asked. The debate is optional.
 
 ## Features
 
-- Ask several AIs at once, with follow-ups to everyone, to one AI or to the moderator only
+- Ask several AIs at once (Claude Code, Codex, OpenCode, Antigravity), with follow-ups to everyone, to one AI or to the moderator only
 - Photos with a question (take or pick up to 4), and pictures an AI draws as code (SVG) shown as pictures
 - A combined answer, with where the AIs agree and where they differ
 - AI debates with a result for every point (agreed, or depends on the situation)
-- Pick the model and how hard each AI thinks
+- Pick the model and how hard each AI thinks; turn AIs on or off, and see their sign-in and usage, in Manage AIs
 - Share an answer, or report it; see an example conversation before you set up a PC
 - Several PCs on one phone (Windows, macOS, Linux): the app shows which one answers and lets you switch
 - Conversation history saved on your phone
@@ -55,7 +55,7 @@ The moderator is one of the AIs you asked. The debate is optional.
 
 - A PC with Windows, macOS or Linux
 - A [Tailscale](https://tailscale.com) account (free for personal use). Nothing of Tailscale is installed: it is built into the app and the PC agent, and the phone needs no VPN turned on. You sign in once on each
-- At least one official AI program installed and signed in on the PC: Claude Code, Codex or OpenCode. With two or more you get combined answers and debates; My PCs (the Claude Code sessions) needs Claude Code. Askorus uses the subscriptions and free accounts you already have; it never reads or moves their sign-in data. The desktop apps alone are not enough; the CLI is needed ([Installing the AI programs](#installing-the-ai-programs)).
+- At least one official AI program installed and signed in on the PC: Claude Code, Codex, OpenCode or Antigravity CLI. With two or more you get combined answers and debates; My PCs (the Claude Code sessions) needs Claude Code. Askorus uses the subscriptions and free accounts you already have; it never reads or moves their sign-in data. The desktop apps alone are not enough; the CLI is needed ([Installing the AI programs](#installing-the-ai-programs)).
 - An Android phone (iOS later)
 
 ### What is Tailscale?
@@ -78,6 +78,7 @@ Askorus asks each AI through its official CLI (the terminal program) on the PC. 
 | [Claude Code](https://code.claude.com/docs/en/setup) | Windows: `irm https://claude.ai/install.ps1 \| iex`<br>macOS, Linux: `curl -fsSL https://claude.ai/install.sh \| bash` | `claude auth login` (needs a paid Claude plan) |
 | [Codex](https://developers.openai.com/codex/cli) | Windows: `powershell -ExecutionPolicy ByPass -c "irm https://chatgpt.com/codex/install.ps1 \| iex"`<br>macOS, Linux: `curl -fsSL https://chatgpt.com/codex/install.sh \| sh` | `codex login` |
 | [OpenCode](https://opencode.ai/docs) | The official docs' way for each system (on Windows, a download) | `opencode auth login`, then pick the provider of the model you use (Askorus uses OpenCode Go by default). Or run `opencode`, then `/connect` |
+| [Antigravity CLI](https://antigravity.google/docs/features?tab=cli) (`agy`) | The official docs' way (Askorus is tested with it on Windows so far) | Run `agy` once and sign in with Google. Askorus asks Gemini 3.8 Flash (low, medium, high) |
 
 After installing and signing in, run `askorus-agent check` on the PC: it shows, for each AI, whether it was found and is signed in. The app shows the same in Settings > the PC > connection check.
 
@@ -202,7 +203,7 @@ Run `askorus-agent check` on the PC first. It lists what is missing, each line w
 - **On a Mac, Claude says it is not signed in, but `claude` works in Terminal.** The agent was started over SSH (for example, the install line was run over SSH). Claude Code keeps its sign-in in the keychain, which a program started over SSH cannot read, even after SSH ends. Signing in again does not help: on the Mac itself, open Terminal and run `askorus-agent shutdown`, then `askorus-agent start`.
 - **A new Claude Code session does not start.** Claude Code asks once per folder whether you trust it: on the PC, run `claude` in that folder once and accept.
 - **Keeping a folder open stays at "starting" or fails.** Remote Control has to be turned on once in Claude Code: on the PC, run `claude remote-control`, answer `y`, then stop it with Ctrl+C.
-- **One AI does not answer and says it isn't signed in.** That AI's CLI on the PC is not signed in, or its sign-in ended (Claude Code's sign-in has an end date). In a terminal on the PC, run `claude auth login` for Claude Code, `codex login` for Codex, or `opencode auth login` for OpenCode (OpenCode signs in per provider: pick the one of its model, OpenCode Go by default). Signing in to the desktop apps (Claude, Codex) is separate. The app's connection check and `askorus-agent check` show the sign-in state and a sign-in that ends soon.
+- **One AI does not answer and says it isn't signed in.** That AI's CLI on the PC is not signed in, or its sign-in ended (Claude Code's sign-in has an end date). In a terminal on the PC, run `claude auth login` for Claude Code, `codex login` for Codex, `opencode auth login` for OpenCode (OpenCode signs in per provider: pick the one of its model, OpenCode Go by default), or `agy` for Antigravity (sign in with Google in it). Signing in to the desktop apps (Claude, Codex) is separate. The app's connection check and `askorus-agent check` show the sign-in state and a sign-in that ends soon.
 - **An AI is missing from the list.** Install it and sign in to it on the PC, then run `check` again. A program installed after `autostart on` is found in its usual folder, or run `autostart on` again.
 
 Still stuck? [Open an issue](https://github.com/heeo-dev/askorus/issues/new/choose) with the output of `askorus-agent check` (take your account, PC names and Tailscale addresses out first).
@@ -274,6 +275,7 @@ The app is React Native with Expo (`app/`); its Tailscale part is a Go library (
 - Your question goes from your phone to your PC through Tailscale, which is built into the app and the agent: encrypted between the two, and only between devices signed in to your own Tailscale account. The official AI programs on your PC send it to each AI company.
 - The app and the agent talk to Tailscale's servers to sign in and to find each other; when the two cannot connect directly, Tailscale's relay servers pass the encrypted traffic on. No diagnostic logs are sent to Tailscale.
 - The moderator AI's company gets the question and all the answers; in a debate, the companies of the AIs that answered get each other's answers.
+- With Antigravity CLI on your PC, questions and answers go to Google. agy keeps them in its own history on the PC, and Askorus runs it so that it can neither run commands nor read your PC's files (only a question's own photos, from a temporary folder).
 - Photos you add to a question go, as smaller copies without shooting data, through your PC to the companies of the AIs you asked. The PC deletes them about ten minutes after use; on the phone they stay with that conversation.
 - The app keeps your conversation history on your phone. The AI programs on your PC may keep their own history, and the agent keeps answers in the PC's memory for a day.
 

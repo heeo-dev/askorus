@@ -23,12 +23,12 @@ You ask. The AIs debate.
 
 Askorus asks one question to several AIs at once. When the answers are in, a moderator AI sums them up, and where the AIs disagree, they debate. Many AI answers, debated into a better one.
 
-You need your own PC. Askorus asks the AI programs installed on your PC (Claude Code, Codex, OpenCode) from your phone, and does not work with a phone alone. To see what it does without a PC, tap "See an example" on the first screen.
+You need your own PC. Askorus asks the AI programs installed on your PC (Claude Code, Codex, OpenCode, Antigravity CLI) from your phone, and does not work with a phone alone. To see what it does without a PC, tap "See an example" on the first screen.
 
 WHAT YOU NEED
 - A PC with Windows, macOS or Linux
 - A Tailscale account (free for personal use). Nothing of Tailscale needs installing: it is built into the app and the PC agent, with no VPN to turn on
-- At least one official AI program installed and signed in on the PC: Claude Code, Codex or OpenCode. Askorus uses the subscriptions and free accounts you already have.
+- At least one official AI program installed and signed in on the PC: Claude Code, Codex, OpenCode or Antigravity CLI. Askorus uses the subscriptions and free accounts you already have.
 - The PC agent, askorus-agent. Where to get it and how to set it up is on the app's first screen and on GitHub.
 
 GETTING STARTED
@@ -43,7 +43,7 @@ HOW IT WORKS
 4. Debate: if you like, the AIs debate the points where they differ. The moderator picks the points, each AI keeps or changes its view, and the result of every point is summed up at the end.
 
 FEATURES
-- Ask several AIs at once: Claude Code, Codex, OpenCode
+- Ask several AIs at once: Claude Code, Codex, OpenCode, Antigravity (Gemini)
 - A combined answer from the moderator AI, with what the AIs agree on and where they differ
 - AI debates, with a result for every point (agreed, or depends on the situation)
 - Follow-up questions, to everyone, to one AI, or to the moderator only
