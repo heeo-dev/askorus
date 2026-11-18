@@ -1,4 +1,4 @@
-// Package fakecli is a fake claude, codex and opencode for tests (P2-3,
+// Package fakecli is a fake claude, codex, opencode and agy for tests (P2-3,
 // docs/testing.md). A test binary that calls Main from its TestMain acts
 // as the AI programs: it picks the AI from ASKORUS_FAKECLI, and what to
 // do from the shape of its arguments, the way the adapters build them:
@@ -21,7 +21,7 @@
 //
 // Environment:
 //
-//	ASKORUS_FAKECLI          claude, codex, opencode, or auto: the AI named
+//	ASKORUS_FAKECLI          claude, codex, opencode, agy, or auto: the AI named
 //	                           by the executable (claude.exe, codex.exe, …)
 //	ASKORUS_FAKECLI_RECORD   folder; each call writes <unixnano>-<pid>.json
 //	ASKORUS_FAKECLI_STATE    folder for OpenCode's sessions.json (with a
@@ -56,6 +56,9 @@
 //	                           "claude=out"; an OpenCode that is out lists
 //	                           only free models and does not know the
 //	                           others
+//	ASKORUS_FAKE_AGY         the fake agy's own run mode (agy.go): retry,
+//	                           capacity, badtool, wrongagent, denied,
+//	                           noresume, links, noinit, always
 //	ASKORUS_FAKE_DEBATE      the debate (debate.go): "" one point, "two"
 //	                           a taste point too, "next" one more turn at
 //	                           every check that may, "none" no point
@@ -107,15 +110,16 @@ const (
 	RoleClaude   = "claude"
 	RoleCodex    = "codex"
 	RoleOpenCode = "opencode"
+	RoleAgy      = "agy"  // Antigravity CLI (#20)
 	RoleAuto     = "auto" // from the executable's name; Install uses it
 )
 
 // Roles lists the AI programs the fake plays.
-var Roles = []string{RoleClaude, RoleCodex, RoleOpenCode}
+var Roles = []string{RoleClaude, RoleCodex, RoleOpenCode, RoleAgy}
 
 // Versions are what --version prints by default: the tested minimum of
 // each AI (P2-3 version table).
-var Versions = map[string]string{RoleClaude: "2.1.314", RoleCodex: "0.164.0", RoleOpenCode: "2.2.1"}
+var Versions = map[string]string{RoleClaude: "2.1.314", RoleCodex: "0.164.0", RoleOpenCode: "2.2.1", RoleAgy: "1.5.10"}
 
 // DefaultSleep is how long mode slow waits when ASKORUS_FAKECLI_SLEEP
 // is not set.
@@ -166,6 +170,12 @@ func Main(args []string) int {
 	if role == RoleOpenCode && len(args) > 0 && args[0] == "models" {
 		return opencodeModels(args) // a check like --version: not recorded
 	}
+	if role == RoleAgy && len(args) == 1 && args[0] == "models" {
+		return agyModels() // a check like --version: not recorded
+	}
+	if role == RoleAgy && len(args) > 1 && args[0] == "-p" && args[1] == "/usage" {
+		return agyUsage(args) // the sign-in and usage check: not recorded
+	}
 	in, _ := io.ReadAll(os.Stdin)
 	c := &Call{Role: role, Args: args, Stdin: string(in), At: time.Now().UTC()}
 	c.Dir, _ = os.Getwd()
@@ -196,6 +206,8 @@ func Main(args []string) int {
 		return claudeMain(c)
 	case RoleCodex:
 		return codexMain(c, schemaErr)
+	case RoleAgy:
+		return agyMain(c)
 	default:
 		return opencodeMain(c)
 	}

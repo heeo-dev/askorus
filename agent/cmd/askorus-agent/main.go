@@ -24,6 +24,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/heeo-dev/askorus/agent/internal/adapter/agy"
 	"github.com/heeo-dev/askorus/agent/internal/adapter/claude"
 	"github.com/heeo-dev/askorus/agent/internal/adapter/codex"
 	"github.com/heeo-dev/askorus/agent/internal/adapter/opencode"
@@ -242,6 +243,7 @@ func askOnlyAdapters(cfg config.Config) []core.Adapter {
 	return []core.Adapter{
 		codex.New(codex.Options{Path: cfg.CodexPath, Tiers: cfg.Ask.Tiers[codex.Name]}),
 		opencode.New(opencode.Options{Path: cfg.OpenCodePath, Tiers: cfg.Ask.Tiers[opencode.Name]}),
+		agy.New(agy.Options{Path: cfg.AgyPath, Tiers: cfg.Ask.Tiers[agy.Name]}),
 	}
 }
 

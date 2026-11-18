@@ -32,6 +32,11 @@ func photoInput(role string, args []string, stdin string) (photos int, prompt st
 		files = flagValues(args, "-i")
 	case RoleOpenCode:
 		files = flagValues(args, "--file")
+	case RoleAgy:
+		if flagValue(args, "--input-format") == "" {
+			return 0, stdin, nil
+		}
+		return agyStream(args, stdin)
 	}
 	for _, f := range files {
 		b, err := os.ReadFile(f)

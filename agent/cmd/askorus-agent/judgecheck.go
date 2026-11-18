@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/heeo-dev/askorus/agent/internal/adapter/agy"
 	"github.com/heeo-dev/askorus/agent/internal/adapter/claude"
 	"github.com/heeo-dev/askorus/agent/internal/adapter/codex"
 	"github.com/heeo-dev/askorus/agent/internal/adapter/opencode"
@@ -26,6 +27,7 @@ var displayNames = map[string]string{
 	claude.Name:   "Claude Code",
 	codex.Name:    "Codex",
 	opencode.Name: "OpenCode",
+	agy.Name:      "Antigravity",
 }
 
 // displayName is agent's program name, or agent itself for one the agent

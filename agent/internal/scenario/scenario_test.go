@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/heeo-dev/askorus/agent/internal/adapter/agy"
 	"github.com/heeo-dev/askorus/agent/internal/adapter/claude"
 	"github.com/heeo-dev/askorus/agent/internal/adapter/codex"
 	"github.com/heeo-dev/askorus/agent/internal/adapter/opencode"
@@ -81,6 +82,9 @@ type rigOptions struct {
 	refine  bool // api.Options.Refine: off, as in the agent, unless a test turns it on
 	// offScreen: the agent runs on a Mac outside the screen's session (#62).
 	offScreen bool
+	// agy adds the Antigravity adapter (#20) after the three; the asks of
+	// rig.ask(nil, …) still go to the three only.
+	agy bool
 }
 
 type rig struct {
@@ -133,6 +137,9 @@ func newRig(t *testing.T, mutate func(*rigOptions)) *rig {
 		claude.New(claude.Options{ClaudeDir: r.claudeDir, ClaudePath: exes[fakecli.RoleClaude], OutsideScreen: func() bool { return o.offScreen }}),
 		codex.New(codex.Options{Path: exes[fakecli.RoleCodex], SchemaDir: filepath.Join(root, "agent")}),
 		opencode.New(opencode.Options{Path: exes[fakecli.RoleOpenCode]}),
+	}
+	if o.agy {
+		r.adapters = append(r.adapters, agy.New(agy.Options{Path: exes[fakecli.RoleAgy]}))
 	}
 	store, err := devices.Open(filepath.Join(root, "devices"))
 	if err != nil {

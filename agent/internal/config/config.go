@@ -43,10 +43,12 @@ type Config struct {
 	HiddenFolders []string `json:"hiddenFolders,omitempty"`
 	// ClaudePath overrides where the claude executable is looked up.
 	ClaudePath string `json:"claudePath,omitempty"`
-	// CodexPath and OpenCodePath do the same for the AIs that only answer
-	// questions (Phase 2). They must be real executables, never .cmd.
+	// CodexPath, OpenCodePath and AgyPath (Antigravity, #20) do the same
+	// for the AIs that only answer questions (Phase 2). They must be real
+	// executables, never .cmd.
 	CodexPath    string `json:"codexPath,omitempty"`
 	OpenCodePath string `json:"opencodePath,omitempty"`
+	AgyPath      string `json:"agyPath,omitempty"`
 	// Ask configures mode ask (Phase 2).
 	Ask AskConfig `json:"ask,omitzero"`
 	// Judge configures the combined answers (P2-3; the name is the judging
@@ -369,7 +371,7 @@ func (c Config) Validate() error {
 			return fmt.Errorf("hidden folder %q must be absolute", h)
 		}
 	}
-	for name, p := range map[string]string{"claudePath": c.ClaudePath, "codexPath": c.CodexPath, "opencodePath": c.OpenCodePath} {
+	for name, p := range map[string]string{"claudePath": c.ClaudePath, "codexPath": c.CodexPath, "opencodePath": c.OpenCodePath, "agyPath": c.AgyPath} {
 		if p != "" && !filepath.IsAbs(p) {
 			return fmt.Errorf("%s must be absolute", name)
 		}

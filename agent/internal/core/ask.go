@@ -172,6 +172,10 @@ const (
 	// (OpenCode without a sign-in, 2026-11-18). Detail is when they can be
 	// used again (RFC 3339, UTC), "" when the AI does not say.
 	ErrCodeFreeLimit = "ai_free_limit"
+	// ErrCodeUsageLimit: the AI's plan reached its usage limit for now
+	// (Antigravity's weekly limit, #20). Detail is when it can be used
+	// again (RFC 3339, UTC), "" when the agent does not know.
+	ErrCodeUsageLimit = "ai_usage_limit"
 )
 
 // A model name for an ask: letters, digits and . _ - / : # [ ], never

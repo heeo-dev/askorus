@@ -58,7 +58,7 @@ func run(t *testing.T, exe, dir string, args []string, stdin string, env map[str
 }
 
 func TestVersions(t *testing.T) {
-	want := map[string]string{RoleClaude: "2.1.314 (Claude Code)", RoleCodex: "codex-cli 0.164.0", RoleOpenCode: "2.2.1"}
+	want := map[string]string{RoleClaude: "2.1.314 (Claude Code)", RoleCodex: "codex-cli 0.164.0", RoleOpenCode: "2.2.1", RoleAgy: "1.5.10"}
 	for _, role := range Roles {
 		exe := Use(t, role)
 		if got := strings.TrimSpace(string(run(t, exe, t.TempDir(), []string{"--version"}, "", nil).Stdout)); got != want[role] {
@@ -438,7 +438,7 @@ func TestInstall(t *testing.T) {
 	exes := Install(t)
 	t.Setenv(EnvVersion, "codex=0.163.0")
 	dir := t.TempDir()
-	want := map[string]string{RoleClaude: "2.1.314 (Claude Code)", RoleCodex: "codex-cli 0.163.0", RoleOpenCode: "2.2.1"}
+	want := map[string]string{RoleClaude: "2.1.314 (Claude Code)", RoleCodex: "codex-cli 0.163.0", RoleOpenCode: "2.2.1", RoleAgy: "1.5.10"}
 	for role, exe := range exes {
 		if got := strings.TrimSpace(string(run(t, exe, dir, []string{"--version"}, "", nil).Stdout)); got != want[role] {
 			t.Errorf("%s --version = %q", role, got)
