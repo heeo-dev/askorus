@@ -47,4 +47,5 @@
 
 - 기준은 `docs/testing.md`(4단계)다. 고칠 때마다, main에 합치기 전, 배포 전에 `scripts\test-all.ps1`(UT·IT·화면)이 `ALL PASSED`여야 한다. 문서만 고칠 때는 돌리지 않아도 된다.
 - 에이전트가 AI CLI를 다루는 부분을 바꾸면 `scripts\test-live.ps1`(실제 AI)도 돌린다. `scripts\e2e.ps1`(에뮬레이터)은 Phase 중간에 한두 번 돌린다.
+- 무거운 작업(test-all, test-live, 앱 빌드, `codex exec`, synth-eval)은 PC에서 한 번에 하나만 돌린다. test-all과 test-live는 스스로 기다리고, 나머지는 `scripts\one-at-a-time.ps1`로 돌린다(`docs/testing.md` 2절).
 - 기능을 더하면 UT와 시나리오 테스트를 같이 더하고, 버그를 고치면 재현 테스트를 넣고 `docs/testing.md`의 회귀 표에 적는다.

@@ -10,6 +10,11 @@ $go = Join-Path $env:USERPROFILE 'sdk\go1.27.3\bin'
 if (Test-Path $go) { $env:Path = "$go;" + $env:Path }
 $failed = @()
 
+# One heavy job at a time on this PC (heavy-job.ps1): this waits while
+# another test-all, test-live or app build runs, in any checkout.
+. (Join-Path $PSScriptRoot 'heavy-job.ps1')
+$heavy = Enter-HeavyJob 'test-all'
+
 # Step runs a native command, shows the lines worth reading, and records a
 # failure from its exit code.
 function Step($name, $dir, $exe, [string[]]$cmdArgs, $show) {
@@ -98,7 +103,9 @@ if (-not $Quick) { Step 'app: expo-doctor' $app 'npx' @('expo-doctor') 'checks p
 
 if ($failed.Count) {
   Write-Output ('FAILED: ' + ($failed -join ', '))
+  Exit-HeavyJob $heavy
   exit 1
 }
 Write-Output 'ALL PASSED'
+Exit-HeavyJob $heavy
 exit 0
