@@ -1700,6 +1700,8 @@ stdin: {"event":"user","message":{"role":"user","content":[{"type":"text","text"
 - 이어서 묻기에 사진을 붙이면 agy가 '볼 수 없다'고 답함 → R-130. 사진 올리기가 500 → R-129(#14부터 있던 시험 격리 버그).
 - 작은 것: agy의 사용량은 Gemini 묶음만 보낸다(Claude·GPT 묶음은 Askorus가 쓰지 않음). `check`의 '일회성 명령을 시험한 날'을 AI마다(agy 2026-11-18). AI 관리의 PC 고르기는 PC마다 알약 대신 한 줄과 PC 고르기 시트.
 - API(더하기만): `ask.images.newOnly`, 묻기 실패의 hint `new_only`(no_image_support)·`server_busy`(ask_timeout).
+- AI 관리 시트의 '되는 기능'에서 `images.newOnly`인 AI(Antigravity)의 사진 칸은 '사진은 새 질문에서만'(Photos in new questions only)으로 쓴다.
+- 고친 뒤 S10(실제 에이전트를 `agy-fixes` 빌드로 바꾸고 APK vc12): 사진 붙인 새 질문은 Claude와 Antigravity 둘 다 사진 속 코드를 읽음(39초), 이어서 묻기에 사진을 붙이면 보내기 전에 Antigravity가 빠진다고 알리고 Claude에게만 감, 옛 앱이 보내면 에이전트가 agy를 실행하기 전에 거절, AI 관리의 PC 한 줄과 Gemini 묶음만 확인.
 
 **하지 않는 것:** 만든 사진 받기(0.5.0의 다음 일. 어댑터는 대화 id를 남겨 그때 `brain/<id>/`의 JPEG를 가져오게 한다), WSL·macOS·Linux의 agy, ACP(`agy acp`)로 바꾸기, agy 세션 목록(Phase 3), PC에서 AI CLI 설치 돕기(#59).
 

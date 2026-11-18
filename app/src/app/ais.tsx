@@ -49,8 +49,12 @@ export function statusLine(a: AdapterInfo): { text: string; bad: boolean } {
   return { text: parts.filter(Boolean).join(' · '), bad: out };
 }
 
-/** features lists what the AI does, from what /v1/info says (no field of its own, #20 S3). */
-export function featuresOf(a: AdapterInfo): { key: string; on: boolean }[] {
+/**
+ * features lists what the AI does, from what /v1/info says (no field of its
+ * own, #20 S3). newOnly: it does it only in a new question (photos of an AI
+ * whose images.newOnly is set, Antigravity, R-130).
+ */
+export function featuresOf(a: AdapterInfo): { key: string; on: boolean; newOnly?: boolean }[] {
   const ask = canAnswer(a);
   const photos = !!a.ask?.images && (a.ask.images.all || (a.ask.images.models ?? []).length > 0);
   return [
@@ -58,7 +62,7 @@ export function featuresOf(a: AdapterInfo): { key: string; on: boolean }[] {
     { key: 'follow', on: ask },
     { key: 'moderator', on: a.capabilities.includes('synthesize') },
     { key: 'debate', on: ask },
-    { key: 'photos', on: ask && photos },
+    { key: 'photos', on: ask && photos, newOnly: ask && photos && !!a.ask?.images?.newOnly },
   ];
 }
 
@@ -242,8 +246,14 @@ function Details({ a }: { a: AdapterInfo }) {
       <Text style={s.label}>{t('ais.features')}</Text>
       <View style={s.chips}>
         {featuresOf(a).map((f) => (
-          <View key={f.key} style={[s.chip, !f.on && s.chipOff]} accessibilityLabel={`${t(`ais.feature.${f.key}` as MessageKey)}: ${f.on ? t('ais.yes') : t('ais.no')}`}>
-            <Text style={[s.chipText, !f.on && s.chipTextOff]}>{f.on ? t(`ais.feature.${f.key}` as MessageKey) : t(`ais.featureNo.${f.key}` as MessageKey)}</Text>
+          <View
+            key={f.key}
+            style={[s.chip, !f.on && s.chipOff]}
+            accessibilityLabel={`${t(`ais.feature.${f.key}` as MessageKey)}: ${f.newOnly ? t('ais.newOnly') : f.on ? t('ais.yes') : t('ais.no')}`}
+          >
+            <Text style={[s.chipText, !f.on && s.chipTextOff]}>
+              {f.newOnly ? t(`ais.featureNewOnly.${f.key}` as MessageKey) : f.on ? t(`ais.feature.${f.key}` as MessageKey) : t(`ais.featureNo.${f.key}` as MessageKey)}
+            </Text>
           </View>
         ))}
       </View>

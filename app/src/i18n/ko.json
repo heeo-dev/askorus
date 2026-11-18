@@ -445,6 +445,8 @@
   "ais.featureNo.moderator": "사회자 안 됨",
   "ais.featureNo.debate": "토론 안 됨",
   "ais.featureNo.photos": "사진 못 봄",
+  "ais.featureNewOnly.photos": "사진은 새 질문에서만",
+  "ais.newOnly": "새 질문에서만",
   "ais.yes": "됨",
   "ais.no": "안 됨",
   "ais.goesTo.claude": "질문과 답이 Anthropic으로 갑니다.",

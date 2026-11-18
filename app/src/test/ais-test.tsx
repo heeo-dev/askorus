@@ -24,7 +24,7 @@ const agy: AdapterInfo = {
   capabilities: ['ask', 'synthesize'],
   ask: {
     tiers: { quick: { model: 'gemini-3.8-flash', effort: 'low' }, standard: { model: 'gemini-3.8-flash', effort: 'medium' }, deep: { model: 'gemini-3.8-flash', effort: 'high' } },
-    images: { all: true },
+    images: { all: true, newOnly: true },
   },
   usage: [
     { name: 'Gemini Models', left: 0.81, resetAt: '2026-11-25T07:21:31Z' },
@@ -87,7 +87,10 @@ test("a row's sheet: usage, tier models, what it does and where questions go", a
   expect(s.getAllByText('81% left this week').length).toBe(1);
   expect(s.getByText('gemini-3.8-flash · low')).toBeTruthy();
   expect(s.getByText('gemini-3.8-flash · high')).toBeTruthy();
-  for (const f of ['Ask', 'Follow-up', 'Moderator', 'Debate', 'Photos']) expect(s.getByText(f)).toBeTruthy();
+  for (const f of ['Ask', 'Follow-up', 'Moderator', 'Debate']) expect(s.getByText(f)).toBeTruthy();
+  // R-130: Antigravity sees photos only in a new question, and its sheet says so.
+  expect(s.getByText('Photos in new questions only')).toBeTruthy();
+  expect(s.getByLabelText('Photos: in new questions only')).toBeTruthy();
   expect(s.getByText('Questions and answers go to Google.')).toBeTruthy();
   await user.press(s.getByRole('button', { name: 'Open the AI install guide' }));
   expect(opened).toHaveBeenCalledWith('https://github.com/heeo-dev/askorus#installing-the-ai-programs');

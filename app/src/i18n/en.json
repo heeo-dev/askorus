@@ -445,6 +445,8 @@
   "ais.featureNo.moderator": "Not a moderator",
   "ais.featureNo.debate": "No debate",
   "ais.featureNo.photos": "No photos",
+  "ais.featureNewOnly.photos": "Photos in new questions only",
+  "ais.newOnly": "in new questions only",
   "ais.yes": "yes",
   "ais.no": "no",
   "ais.goesTo.claude": "Questions and answers go to Anthropic.",
