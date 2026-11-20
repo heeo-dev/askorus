@@ -27,7 +27,7 @@ Askorus(애스코러스)는 폰에서 질문 하나를 여러 AI에게 한 번�
   <img src="docs/screenshots/ko/demo.gif" width="320" alt="실제로 돌린 화면을 빠르게 감은 것: 질문 하나가 Claude, Codex, OpenCode에 가고, 사회자가 종합 답변을 쓰고, 의견이 다른 곳을 AI끼리 토론해 쟁점마다 결과가 나옵니다">
 </p>
 
-**상태:** 개발 중입니다. 안드로이드 앱과 PC 에이전트(Windows, macOS, Linux)가 처음부터 끝까지 동작합니다. 에이전트는 GitHub 배포판에 있고 [한 줄로 설치](#pc-에이전트-설치)합니다. 앱은 아직 Google Play에 없어서, 지금은 배포판의 [미리보기 APK를 설치](#안드로이드-앱-설치)하거나 [소스에서 빌드](#소스에서-빌드)합니다.
+**상태:** 개발 중입니다. 안드로이드 앱과 PC 에이전트(Windows, macOS, Linux)가 처음부터 끝까지 동작합니다. 에이전트는 GitHub 릴리스에 있고 [한 줄로 설치](#pc-에이전트-설치)합니다. 앱은 아직 Google Play에 없어서, 지금은 릴리스의 [미리보기 APK를 설치](#안드로이드-앱-설치)하거나 [소스에서 빌드](#소스에서-빌드)합니다.
 
 ## 이렇게 동작해요
 
@@ -100,7 +100,7 @@ irm https://github.com/heeo-dev/askorus/releases/latest/download/install.ps1 | i
 curl -fsSL https://github.com/heeo-dev/askorus/releases/latest/download/install.sh | sh
 ```
 
-스크립트가 GitHub 배포판에서 내 운영체제에 맞는 에이전트를 받아 SHA-256을 확인하고, `%LOCALAPPDATA%\Programs\Askorus`(Windows)나 `~/.local/bin`(macOS, Linux)에 둔 뒤 `askorus-agent setup`을 시작합니다. 업데이트할 때도 같은 줄을 다시 실행하면 됩니다. 0.5.0부터는 에이전트가 서명된 새 판으로 스스로 올라갑니다. 앱에서 [지금 업데이트]를 누르거나(내 PC, 또는 설정 > 그 PC > 에이전트 업데이트) PC에서 `askorus-agent update now`를 실행하세요. 업데이트는 기본으로 켜져 있고, 에이전트는 폰이 물을 때만 GitHub에 최신 판을 묻습니다. 끄려면 `askorus-agent update off`(폰 하나만 막으려면 `askorus-agent devices update <id> off`)입니다. 0.5.0보다 옛 에이전트는 한 번만 설치 한 줄로 올리면 됩니다.
+스크립트가 GitHub 릴리스에서 내 운영체제에 맞는 에이전트를 받아 SHA-256을 확인하고, `%LOCALAPPDATA%\Programs\Askorus`(Windows)나 `~/.local/bin`(macOS, Linux)에 둔 뒤 `askorus-agent setup`을 시작합니다. 업데이트할 때도 같은 줄을 다시 실행하면 됩니다. 0.5.0부터는 에이전트가 서명된 새 버전으로 스스로 올라갑니다. 앱에서 [지금 업데이트]를 누르거나(내 PC, 또는 설정 > 그 PC > 에이전트 업데이트) PC에서 `askorus-agent update now`를 실행하세요. 업데이트는 기본으로 켜져 있고, 에이전트는 폰이 물을 때만 GitHub에 최신 버전을 묻습니다. 끄려면 `askorus-agent update off`(폰 하나만 막으려면 `askorus-agent devices update <id> off`)입니다. 0.5.0보다 옛 에이전트는 한 번만 설치 한 줄로 업데이트하면 됩니다.
 
 setup은 차례로 안내합니다. 에이전트를 PATH에 넣고, AI 프로그램을 점검하고, 에이전트를 켜고 로그인할 때 켜지게 합니다. 그다음 이 PC를 Tailscale에 로그인할 링크를(같은 링크의 QR도) 보여 줍니다. 한 번만 하면 됩니다. 마지막으로 짝 맺기 창을 엽니다. 앱에서 같은 계정으로 Tailscale에 로그인하고 목록에 뜬 내 PC를 누르면 됩니다. QR을 찍을 필요는 없습니다(PC가 목록에 안 보이는 폰을 위해 QR도 같이 보여 줍니다). 이 창은 5분 동안 열려 있습니다. 그때까지 앱이 준비되지 않아도 괜찮습니다. 나중에 앱에서 PC를 누르고 PC 화면에 뜨는 작은 창에서 허용하거나, `askorus-agent pair`를 다시 실행하면 됩니다.
 
@@ -130,7 +130,7 @@ sh install.sh
 원본은 [scripts/install.ps1](scripts/install.ps1)과 [scripts/install.sh](scripts/install.sh)입니다.
 </details>
 
-**초기 배포판에는 게시자 서명이 아직 없습니다.** Windows가 '알 수 없는 게시자'라고 알릴 수 있고, Windows 11에서 스마트 앱 컨트롤이 켜져 있으면 에이전트가 아예 실행되지 않을 수 있습니다. macOS용 에이전트에도 Apple 개발자 서명이 없습니다. 위의 한 줄로 설치하면 실행되지만, 브라우저로 내려받은 파일은 macOS가 막을 수 있습니다. 받은 파일이 배포판의 SHA-256과 다르면 두 스크립트 모두 멈춥니다.
+**초기 릴리스에는 게시자 서명이 아직 없습니다.** Windows가 '알 수 없는 게시자'라고 알릴 수 있고, Windows 11에서 스마트 앱 컨트롤이 켜져 있으면 에이전트가 아예 실행되지 않을 수 있습니다. macOS용 에이전트에도 Apple 개발자 서명이 없습니다. 위의 한 줄로 설치하면 실행되지만, 브라우저로 내려받은 파일은 macOS가 막을 수 있습니다. 받은 파일이 릴리스의 SHA-256과 다르면 두 스크립트 모두 멈춥니다.
 
 ### AI 에이전트에게 맡기기
 
@@ -208,9 +208,9 @@ PC의 Claude Code나 Codex에 내 운영체제에 맞는 글을 붙여 넣으세
 
 그래도 안 되면 `askorus-agent check` 결과를 붙여 [이슈를 열어 주세요](https://github.com/heeo-dev/askorus/issues/new/choose)(계정, PC 이름, Tailscale 주소는 지우고).
 
-## 0.2.x에서 올리기
+## 0.2.x에서 업데이트하기
 
-0.3.0은 폰이 PC에 닿는 방식이 바뀌었습니다. Tailscale이 앱과 에이전트 안에 들어갔고, 짝 맺기는 앱에서 PC를 눌러서 합니다. 앱과 에이전트를 함께 올리고 짝을 다시 맺으세요.
+0.3.0은 폰이 PC에 닿는 방식이 바뀌었습니다. Tailscale이 앱과 에이전트 안에 들어갔고, 짝 맺기는 앱에서 PC를 눌러서 합니다. 앱과 에이전트를 함께 업데이트하고 짝을 다시 맺으세요.
 
 1. PC에서 설치 한 줄을 다시 실행합니다. 그다음 `askorus-agent login`을 한 번 실행하고 나오는 링크를 엽니다. 이 PC가 Tailscale에 로그인됩니다.
 2. 폰에 0.3.0 앱을 설치하고, 앱에서 같은 계정으로 Tailscale에 로그인한 뒤 'PC와 짝 맺기'에서 내 PC를 누릅니다. 설정에서 옛 PC 항목은 끊습니다.
@@ -226,9 +226,9 @@ askorus-agent uninstall
 
 ## 안드로이드 앱 설치
 
-앱은 아직 Google Play에 없습니다. 그때까지는 배포판마다 미리보기 APK를 같이 올립니다.
+앱은 아직 Google Play에 없습니다. 그때까지는 릴리스마다 미리보기 APK를 같이 올립니다.
 
-1. 폰에서 [최신 배포판](https://github.com/heeo-dev/askorus/releases/latest)을 열고 `askorus-android-<판>.apk`를 받습니다.
+1. 폰에서 [최신 릴리스](https://github.com/heeo-dev/askorus/releases/latest)를 열고 `askorus-android-<버전>.apk`를 받습니다.
 2. 받은 파일을 엽니다. 안드로이드가 브라우저에서 앱을 설치해도 되는지 물으면 이번 설치에 허용합니다. Play 프로텍트가 앱을 먼저 검사하겠다고 물을 수 있습니다. 스토어 밖에서 받은 앱이면 늘 묻는 것입니다.
 3. Askorus를 열고 PC와 짝을 맺습니다. 앱이 안내하면 Tailscale에 로그인하고(PC와 같은 계정), 목록에 뜬 내 PC를 누르고 '짝 맺기'를 누릅니다. 폰에 두 자리 숫자가 보입니다. PC 화면에 작은 창이 떠서 이 폰을 허용할지 한 번 묻고 같은 숫자를 보여 줍니다. 숫자가 같을 때만 허용하세요. 그다음 폰에는 '짝을 맺었습니다'와 숫자가 '확인'을 누를 때까지 보입니다. (터미널에서 `askorus-agent pair`나 `setup`이 기다리는 동안에는 묻지 않고 바로 받습니다.)
 
@@ -239,7 +239,7 @@ askorus-agent uninstall
 
 미리보기 APK에서 알아 둘 것:
 
-- **자동 업데이트가 없습니다.** 새 APK를 받아 그 위에 설치하면 업데이트됩니다. 기록과 짝 맺기는 그대로 남습니다. (0.2.x에서 올릴 때는 예외입니다. [0.2.x에서 올리기](#02x에서-올리기)를 보세요.)
+- **자동 업데이트가 없습니다.** 새 APK를 받아 그 위에 설치하면 업데이트됩니다. 기록과 짝 맺기는 그대로 남습니다. (0.2.x에서 업데이트할 때는 예외입니다. [0.2.x에서 업데이트하기](#02x에서-업데이트하기)를 보세요.)
 - **나중에 Google Play 앱으로 옮길 때는 다시 설치해야 합니다.** Google Play는 앱을 다른 키로 서명해서, 이 앱 위에 Play 앱을 덮어 설치할 수 없습니다. 이 앱을 먼저 지워야 하고(앱에 둔 기록도 같이 지워집니다) 짝 맺기를 다시 합니다.
 - **파일을 직접 확인할 수 있습니다.** 배포 글에 APK의 SHA-256이 있습니다.
 

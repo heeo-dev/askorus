@@ -178,6 +178,7 @@
   "agentUpdate.send": "Send the line",
   "agentUpdate.bodyLatest": "The agent on this PC is {have}; the new version is {want}.",
   "agentUpdate.now": "Update now",
+  "agentUpdate.band": "New PC agent {want}",
   "update.title": "Agent update",
   "update.checking": "Checking for a new version…",
   "update.upToDate": "The agent on this PC is up to date ({current}).",

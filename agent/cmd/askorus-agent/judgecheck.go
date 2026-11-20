@@ -116,7 +116,7 @@ func writerLines(st []writerStatus, off bool) []checkLine {
 			switch s.why {
 			case compares.WhyOld:
 				add("warn", m("%s %s is older than %s, the oldest version its one-off command was tested with; it does not write combined answers until it is updated",
-					"%s %s 판은 일회성 명령을 시험한 가장 오래된 판(%s)보다 오래되어 업데이트할 때까지 종합 답변을 쓰지 않습니다", s.name, orUnknown(s.version), orUnknown(s.min)))
+					"%s %s 버전은 일회성 명령을 시험한 가장 오래된 버전(%s)보다 오래되어 업데이트할 때까지 종합 답변을 쓰지 않습니다", s.name, orUnknown(s.version), orUnknown(s.min)))
 			case compares.WhyNoFamily:
 				add("warn", m("the model %[2]s of %[1]s is of a company the agent cannot tell, so it does not write combined answers",
 					"%[1]s의 모델 %[2]s의 회사를 알 수 없어 종합 답변을 쓰지 않습니다", s.name, s.model))
@@ -125,7 +125,7 @@ func writerLines(st []writerStatus, off bool) []checkLine {
 		for _, s := range st {
 			if s.why == "" && s.min != "" && !sameVersion(s.version, s.min) {
 				add("info", m("the one-off command was tested on %s with %s %s; this PC has %s",
-					"%[1]s에 %[2]s %[3]s 판으로 일회성 명령을 시험했습니다. 이 PC는 %[4]s입니다", testedDay(s.agent), s.name, s.min, s.version))
+					"%[1]s에 %[2]s %[3]s 버전으로 일회성 명령을 시험했습니다. 이 PC는 %[4]s입니다", testedDay(s.agent), s.name, s.min, s.version))
 			}
 		}
 		if len(writing) > 0 {

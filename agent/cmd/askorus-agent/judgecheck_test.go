@@ -159,13 +159,13 @@ func TestWriterLines(t *testing.T) {
 	findLine(t, lines, "ok", writeLine, writeLineKo)
 	findLine(t, lines, "warn",
 		"Codex 0.163.0 is older than 0.164.0, the oldest version its one-off command was tested with; it does not write combined answers until it is updated",
-		"Codex 0.163.0 판은 일회성 명령을 시험한 가장 오래된 판(0.164.0)보다 오래되어 업데이트할 때까지 종합 답변을 쓰지 않습니다")
+		"Codex 0.163.0 버전은 일회성 명령을 시험한 가장 오래된 버전(0.164.0)보다 오래되어 업데이트할 때까지 종합 답변을 쓰지 않습니다")
 	findLine(t, lines, "warn",
 		"the model openrouter/x-1 of zed is of a company the agent cannot tell, so it does not write combined answers",
 		"zed의 모델 openrouter/x-1의 회사를 알 수 없어 종합 답변을 쓰지 않습니다")
 	findLine(t, lines, "info",
 		"the one-off command was tested on 2026-10-31 with Claude Code 2.1.314; this PC has 2.1.317",
-		"2026-10-31에 Claude Code 2.1.314 판으로 일회성 명령을 시험했습니다. 이 PC는 2.1.317입니다")
+		"2026-10-31에 Claude Code 2.1.314 버전으로 일회성 명령을 시험했습니다. 이 PC는 2.1.317입니다")
 	findLine(t, lines, "info", company, companyKo)
 	findLine(t, lines, "ok", noOutside, noOutsideKo)
 	noLineTwice(t, lines)
@@ -223,7 +223,7 @@ func TestWriterLinesOff(t *testing.T) {
 // that could not be read shows as "?".
 func TestWriterLinesNobody(t *testing.T) {
 	lines := writerLines([]writerStatus{{agent: "codex", name: "Codex", min: "0.164.0", why: compares.WhyOld}}, false)
-	findLine(t, lines, "warn", "Codex ? is older than 0.164.0", "Codex ? 판은")
+	findLine(t, lines, "warn", "Codex ? is older than 0.164.0", "Codex ? 버전은")
 	for _, s := range lineTexts(lines) {
 		if strings.Contains(s, "combined answers:") || strings.Contains(s, company) {
 			t.Errorf("line %q although nobody writes", s)

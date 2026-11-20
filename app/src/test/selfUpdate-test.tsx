@@ -5,7 +5,7 @@
 
 import { userEvent, within } from '@testing-library/react-native';
 import Constants from 'expo-constants';
-import { renderRouter, screen } from 'expo-router/testing-library';
+import { renderRouter, screen, waitFor } from 'expo-router/testing-library';
 
 import { followTiming } from '@/api/selfUpdate';
 import { ConnectionStore } from '@/connections/store';
@@ -125,17 +125,42 @@ test('the agent up to date says so; an agent from before updates has no update p
 
 // The old-agent card (0.4.0): an agent that can update itself is updated
 // from it; the Ask screen asks GitHub nothing until the person asks.
-test('the old-agent card on the Ask screen updates an agent that can update itself', async () => {
-  if (config) config.version = '0.5.1';
+// #67: the Ask screen, where the app opens, asks for the latest release too
+// and shows the band under the top bar; it updates an agent that can.
+// R-153 (#66): once the update is done the band goes, and after the sheet
+// closes the screen asks the PC again and shows no notice for 0.5.1.
+test('the band on the Ask screen updates the agent, and goes once the update is done (R-153)', async () => {
+  if (config) config.version = '0.5.0';
   await paired();
   const user = userEvent.setup();
   await renderRouter(appDir, { initialUrl: '/' });
+  const band = within(await screen.findByTestId('agent-update-band'));
+  expect(band.getByText('New PC agent 0.5.1')).toBeTruthy();
+  expect(agent.updateCalls).toEqual(['GET']);
+  await user.press(band.getByRole('button', { name: 'Update now' }));
+  const sheet = within(await screen.findByTestId('agent-update-sheet'));
+  await user.press(await sheet.findByRole('button', { name: 'Update now' }));
+  expect(await sheet.findByText('The agent is now 0.5.1.')).toBeTruthy();
+  expect(screen.queryByTestId('agent-update-band')).toBeNull(); // gone at once, the sheet still open
+  await user.press(screen.getByRole('button', { name: 'Close' }));
+  await waitFor(() => expect(screen.queryByTestId('agent-update-sheet')).toBeNull());
+  expect(await screen.findByLabelText('Ask a question')).toBeTruthy();
+  expect(screen.queryByTestId('agent-update-band')).toBeNull();
+});
+
+// R-153 (#66): My PCs' card goes too, and coming back to My PCs asks the PC again.
+test('My PCs: the card goes once the update is done', async () => {
+  if (config) config.version = '0.5.0';
+  await paired();
+  const user = userEvent.setup();
+  await renderRouter(appDir, { initialUrl: '/pcs' });
   const card = within(await screen.findByTestId('agent-update'));
-  expect(agent.updateCalls).toEqual([]);
   await user.press(card.getByRole('button', { name: 'Update now' }));
   const sheet = within(await screen.findByTestId('agent-update-sheet'));
   await user.press(await sheet.findByRole('button', { name: 'Update now' }));
   expect(await sheet.findByText('The agent is now 0.5.1.')).toBeTruthy();
+  await user.press(screen.getByRole('button', { name: 'Close' }));
+  await waitFor(() => expect(screen.queryByTestId('agent-update')).toBeNull());
 });
 
 test('My PCs also asks for the latest release, and shows the card when the agent is behind it', async () => {
@@ -153,7 +178,7 @@ test('in Korean', async () => {
   await renderRouter(appDir, { initialUrl: '/settings' });
   await user.press(await screen.findByRole('button', { name: /^DESKTOP-TEST, / }));
   const sheet = within(await screen.findByTestId('pc-sheet'));
-  expect(await sheet.findByText('에이전트 0.5.0 판 → 새 판 0.5.1')).toBeTruthy();
+  expect(await sheet.findByText('에이전트 0.5.0 버전 → 새 버전 0.5.1')).toBeTruthy();
   await user.press(sheet.getByRole('button', { name: '지금 업데이트' }));
-  expect(await sheet.findByText('에이전트를 0.5.1 판으로 올렸습니다.')).toBeTruthy();
+  expect(await sheet.findByText('에이전트를 0.5.1 버전으로 업데이트했습니다.')).toBeTruthy();
 });

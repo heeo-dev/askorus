@@ -183,9 +183,13 @@ function Sessions({ conn, detail, onPick }: { conn: Connection; detail: string; 
     }
   }, [pc]);
 
-  useEffect(() => {
-    loadInfo();
-  }, [loadInfo]);
+  // On focus too, not only when the PC connects: an update from the ask
+  // screen or Settings changes the agent's version (#66).
+  useFocusEffect(
+    useCallback(() => {
+      loadInfo();
+    }, [loadInfo]),
+  );
 
   // Typing settles for a moment before the PC is asked.
   useEffect(() => {
@@ -319,7 +323,17 @@ function Sessions({ conn, detail, onPick }: { conn: Connection; detail: string; 
         </Text>
       ))}
       {info.state === 'ok' ? (
-        <AgentUpdate pcId={conn.id} version={info.version} os={agentOS} update={updateInfo} client={pc?.client} deviceId={conn.deviceId} checkLatest style={s.update} />
+        <AgentUpdate
+          pcId={conn.id}
+          version={info.version}
+          os={agentOS}
+          update={updateInfo}
+          client={pc?.client}
+          deviceId={conn.deviceId}
+          checkLatest
+          onUpdated={loadInfo}
+          style={s.update}
+        />
       ) : null}
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chips} keyboardShouldPersistTaps="handled">

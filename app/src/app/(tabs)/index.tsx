@@ -205,8 +205,10 @@ export default function Ask() {
     }, [queue, reloadPCs]),
   );
 
-  const loadInfo = useCallback(async (p: PC) => {
-    setLoad({ state: 'loading' });
+  // quiet: ask again without the loading state (after an agent update, #66),
+  // so the screen does not go blank while the PC answers.
+  const loadInfo = useCallback(async (p: PC, quiet = false) => {
+    if (!quiet) setLoad({ state: 'loading' });
     try {
       const info = await p.client.info();
       rememberOS(p.conn.id, info.os).catch(() => undefined);
@@ -945,6 +947,21 @@ export default function Ask() {
   const pcName = pcs.current ? pcLabel(pcs.current, pcs.list) : '';
   const pcLine =
     pcName && (pcs.list?.length ?? 0) > 1 ? <PCLine name={pcs.current?.name ?? ''} detail={pcs.current ? pcDetail(pcs.current, pcs.list) : ''} switched={pcSwitched} onPress={() => setPCPicker(true)} /> : null;
+  // A newer PC agent, under the top bar wherever the ask screen is (#67):
+  // older than the app or than the latest release; × puts it away for that version.
+  const updateBand = info ? (
+    <AgentUpdate
+      variant="band"
+      pcId={currentId}
+      version={info.version}
+      os={info.os}
+      update={info.update}
+      client={pc?.client}
+      deviceId={pc?.conn.deviceId}
+      checkLatest
+      onUpdated={() => pcRef.current && loadInfo(pcRef.current, true)}
+    />
+  ) : null;
 
   const sheets = (
     <>
@@ -1084,14 +1101,13 @@ export default function Ask() {
       <View style={s.screen}>
         {header}
         {pcLine}
+        {updateBand}
         <ScrollView
           style={s.fill}
           contentContainerStyle={[s.empty, !(info && anyAsk) && { paddingBottom: 20 + insets.bottom }]}
           keyboardShouldPersistTaps="handled"
         >
           {reach}
-          {/* Before the first question: an agent older than the app (11-18). */}
-          {info ? <AgentUpdate pcId={currentId} version={info.version} os={info.os} update={info.update} client={pc?.client} deviceId={pc?.conn.deviceId} /> : null}
           {load.state === 'loading' ? <Spinner size={24} /> : null}
           {info && !anyAsk ? <Text style={s.body}>{oldAgent(info) ? t('ask.oldAgent') : t('ask.noAI')}</Text> : null}
           {info && anyAsk ? (
@@ -1155,6 +1171,7 @@ export default function Ask() {
     <View style={s.screen}>
       {header}
       {pcLine}
+      {updateBand}
       <DebateEnd.Provider value={markDebateEnd}>
         <ScrollView
           ref={scroll}

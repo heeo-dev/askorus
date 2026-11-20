@@ -80,7 +80,7 @@ func updateCmd(dir string, args []string, out io.Writer) error {
 			return err
 		}
 		if on {
-			say(out, m("updates are on: when a phone asks, the agent asks GitHub for a newer signed release", "업데이트를 켰습니다. 폰이 물으면 에이전트가 GitHub에 서명된 새 판을 묻습니다"))
+			say(out, m("updates are on: when a phone asks, the agent asks GitHub for a newer signed release", "업데이트를 켰습니다. 폰이 물으면 에이전트가 GitHub에 서명된 새 버전을 묻습니다"))
 		} else {
 			say(out, m("updates are off: the agent asks GitHub for nothing, and phones cannot update it", "업데이트를 껐습니다. 에이전트는 GitHub에 아무것도 묻지 않고, 폰에서 업데이트할 수 없습니다"))
 		}
@@ -115,7 +115,7 @@ func selfUpdatable(cfg config.Config) (string, error) {
 		return exe, fail("updates are off (askorus-agent update on)", "업데이트가 꺼져 있습니다 (askorus-agent update on)")
 	}
 	if !update.IsRelease(version) {
-		return exe, fail("this agent is not a release build (%s), so it does not update itself", "이 에이전트는 릴리스 판이 아니라(%s) 스스로 업데이트하지 않습니다", version)
+		return exe, fail("this agent is not a release build (%s), so it does not update itself", "이 에이전트는 릴리스 버전이 아니라(%s) 스스로 업데이트하지 않습니다", version)
 	}
 	home, _ := updateHome()
 	want := update.InstallPath(runtime.GOOS, os.Getenv, home)
@@ -140,7 +140,7 @@ func updateStatus(dir string, cfg config.Config, out io.Writer) error {
 	if st, err := update.LoadState(dir); err != nil {
 		say(out, msg{en: err.Error(), ko: "업데이트 상태 파일(update.json)을 읽을 수 없습니다. 지우면 처음부터 다시 확인합니다"})
 	} else if st.Latest != "" {
-		say(out, m("latest release seen: %s (%s)", "본 최신 판: %s (%s)", st.Latest, st.Checked.Local().Format("2006-01-02 15:04")))
+		say(out, m("latest release seen: %s (%s)", "본 최신 버전: %s (%s)", st.Latest, st.Checked.Local().Format("2006-01-02 15:04")))
 	}
 	if p, ok := update.ReadProgress(dir); ok {
 		sayProgress(out, p)
@@ -150,10 +150,10 @@ func updateStatus(dir string, cfg config.Config, out io.Writer) error {
 
 func sayFound(out io.Writer, f update.Found) {
 	if f.Newer {
-		say(out, m("a newer release is there: %s (this agent: %s); take it with: askorus-agent update now", "새 판이 있습니다: %s (이 에이전트: %s). 올리려면: askorus-agent update now", f.Latest, f.Current))
+		say(out, m("a newer release is there: %s (this agent: %s); take it with: askorus-agent update now", "새 버전이 있습니다: %s (이 에이전트: %s). 업데이트하려면: askorus-agent update now", f.Latest, f.Current))
 		return
 	}
-	say(out, m("this agent (%s) is up to date; the latest release is %s", "이 에이전트(%s)가 최신입니다. 최신 판은 %s입니다", f.Current, f.Latest))
+	say(out, m("this agent (%s) is up to date; the latest release is %s", "이 에이전트(%s)가 최신입니다. 최신 버전은 %s입니다", f.Current, f.Latest))
 }
 
 func sayProgress(out io.Writer, p update.Progress) {
@@ -178,7 +178,7 @@ func updateFailed(err error) error {
 	case errors.Is(err, update.ErrNoRoot):
 		return fail("this agent was built without an update key, so it cannot check releases", "이 에이전트는 업데이트 키 없이 만들어져 릴리스를 확인할 수 없습니다")
 	case errors.Is(err, update.ErrNoReleaseInfo):
-		return fail("the latest release has no signed update information; run the install line to update", "최신 릴리스에 서명된 업데이트 정보가 없습니다. 설치 한 줄로 올리세요")
+		return fail("the latest release has no signed update information; run the install line to update", "최신 릴리스에 서명된 업데이트 정보가 없습니다. 설치 한 줄로 업데이트하세요")
 	case errors.Is(err, update.ErrExpired):
 		return fail("the release information has expired (is the PC's clock right?): %v", "릴리스 정보가 만료됐습니다(PC 시계가 맞나요?): %v", err)
 	case errors.Is(err, update.ErrBadSignature), errors.Is(err, update.ErrOldKey), errors.Is(err, update.ErrBadFiles), errors.Is(err, update.ErrWrongFile):
@@ -309,12 +309,12 @@ func updateLines(dir string, cfg config.Config) []checkLine {
 		return lines
 	}
 	add("ok", m("updates are on: when a phone asks, the agent asks GitHub (%s) for a newer signed release, sending only the address and its version; every paired phone may update it (off: askorus-agent update off, or devices update ID off)",
-		"업데이트가 켜져 있습니다. 폰이 물으면 에이전트가 GitHub(%s)에 서명된 새 판을 묻고, 주소와 에이전트 판만 보냅니다. 짝 맺은 폰은 모두 업데이트할 수 있습니다 (끄기: askorus-agent update off, 폰별로는 devices update ID off)", update.DefaultBase))
+		"업데이트가 켜져 있습니다. 폰이 물으면 에이전트가 GitHub(%s)에 서명된 새 버전을 묻고, 주소와 에이전트 버전만 보냅니다. 짝 맺은 폰은 모두 업데이트할 수 있습니다 (끄기: askorus-agent update off, 폰별로는 devices update ID off)", update.DefaultBase))
 	var why biError
 	if _, err := selfUpdatable(cfg); errors.As(err, &why) {
 		add("info", why.msg)
 	} else if roots, err := updateRoots(); err != nil || len(roots) == 0 {
-		add("info", m("this agent was built without an update key, so phones cannot update it; run the install line to update", "이 에이전트는 업데이트 키 없이 만들어져 폰에서 업데이트할 수 없습니다. 설치 한 줄로 올리세요"))
+		add("info", m("this agent was built without an update key, so phones cannot update it; run the install line to update", "이 에이전트는 업데이트 키 없이 만들어져 폰에서 업데이트할 수 없습니다. 설치 한 줄로 업데이트하세요"))
 	}
 	if p, ok := update.ReadProgress(dir); ok && (p.State == update.ProgressRolledBack || p.State == update.ProgressFailed) {
 		var b strings.Builder

@@ -117,13 +117,13 @@ Usage / 사용법:
       이 askorus-agent 프로그램이 있는 폴더를 이 사용자의 PATH에 넣습니다
   askorus-agent update status | check | now | on | off
       look for a newer signed release and take it; on by default, and asked only when a phone asks
-      서명된 새 판을 찾아 올립니다. 기본으로 켜져 있고, 폰이 물을 때만 묻습니다
+      서명된 새 버전을 찾아 올립니다. 기본으로 켜져 있고, 폰이 물을 때만 묻습니다
   askorus-agent uninstall [-yes] [-all]
       undo the setup (logon entry, PATH entry, the Tailscale sign-in, paired phones)
       설치한 것을 되돌립니다 (자동 시작, PATH, Tailscale 로그인, 짝 맺은 폰)
   askorus-agent version
       print the version
-      판 번호를 보여 줍니다
+      버전 번호를 보여 줍니다
 
 Settings live in %s (override with ASKORUS_AGENT_DIR).
 설정 폴더: %s (ASKORUS_AGENT_DIR로 바꿀 수 있습니다)

@@ -44,8 +44,9 @@ async function open(url = '/') {
 test('the Ask screen says the agent is older, and the sheet has the line to run on Windows', async () => {
   const share = jest.spyOn(Share, 'share').mockResolvedValue({ action: 'sharedAction', activityType: undefined });
   const { user } = await open();
-  expect(await screen.findByRole('header', { name: 'Update the agent on your PC' })).toBeTruthy();
-  expect(screen.getByText('The agent on this PC is 0.3.4 and the app is 0.4.0. New features need the newer agent too.')).toBeTruthy();
+  // The band under the top bar (#67), not a card in the empty screen.
+  expect(await screen.findByText('New PC agent 0.4.0')).toBeTruthy();
+  expect(screen.getByTestId('agent-update-band')).toBeTruthy();
   // The screen still asks: an older agent answers what it knows.
   expect(screen.getByLabelText('Ask a question')).toBeTruthy();
 
@@ -71,34 +72,34 @@ test('a Mac gets the terminal line', async () => {
 test('Later puts it away for these versions, also after the app opens again; a newer app shows it again', async () => {
   const { user, r } = await open();
   await user.press(await screen.findByRole('button', { name: 'Later' }));
-  await waitFor(() => expect(screen.queryByTestId('agent-update')).toBeNull());
+  await waitFor(() => expect(screen.queryByTestId('agent-update-band')).toBeNull());
   await r.unmount();
 
   // The app opens again: what was put away is read back from the phone.
   resetAgentUpdate();
   const again = await renderRouter(appDir, { initialUrl: '/' });
   expect(await screen.findByLabelText('Ask a question')).toBeTruthy();
-  expect(screen.queryByTestId('agent-update')).toBeNull();
+  expect(screen.queryByTestId('agent-update-band')).toBeNull();
   await again.unmount();
 
   // The store brought a newer app; the agent is still the same.
   if (config) config.version = '0.4.1';
   resetAgentUpdate();
   await renderRouter(appDir, { initialUrl: '/' });
-  expect(await screen.findByText('The agent on this PC is 0.3.4 and the app is 0.4.1. New features need the newer agent too.')).toBeTruthy();
+  expect(await screen.findByText('New PC agent 0.4.1')).toBeTruthy();
 });
 
 test('no notice when the agent is as new as the app, or when it is a build of the branch', async () => {
   agent.version = '0.4.0';
   const { r } = await open();
   expect(await screen.findByLabelText('Ask a question')).toBeTruthy();
-  expect(screen.queryByTestId('agent-update')).toBeNull();
+  expect(screen.queryByTestId('agent-update-band')).toBeNull();
   await r.unmount();
 
   agent.version = '0.4.0-dev+f0a576d';
   await renderRouter(appDir, { initialUrl: '/' });
   expect(await screen.findByLabelText('Ask a question')).toBeTruthy();
-  expect(screen.queryByTestId('agent-update')).toBeNull();
+  expect(screen.queryByTestId('agent-update-band')).toBeNull();
 });
 
 test('My PC shows it too, and putting it away there puts it away on the Ask screen', async () => {
@@ -108,14 +109,14 @@ test('My PC shows it too, and putting it away there puts it away on the Ask scre
   await waitFor(() => expect(screen.queryByTestId('agent-update')).toBeNull());
   await user.press(screen.getByRole('tab', { name: 'All at once' }));
   expect(await screen.findByLabelText('Ask a question')).toBeTruthy();
-  expect(screen.queryByTestId('agent-update')).toBeNull();
+  expect(screen.queryByTestId('agent-update-band')).toBeNull();
 });
 
 test('in Korean', async () => {
   setLang('ko');
   const { user } = await open();
-  expect(await screen.findByRole('header', { name: 'PC 에이전트를 새 판으로 올리세요' })).toBeTruthy();
-  expect(screen.getByText('이 PC의 에이전트는 0.3.4 판이고 앱은 0.4.0 판입니다. 새 기능은 에이전트도 올려야 쓸 수 있습니다.')).toBeTruthy();
-  await user.press(screen.getByRole('button', { name: '올리는 방법' }));
+  expect(await screen.findByText('PC 에이전트 새 버전 0.4.0')).toBeTruthy();
+  expect(screen.getByRole('button', { name: '나중에' })).toBeTruthy();
+  await user.press(screen.getByRole('button', { name: '업데이트 방법' }));
   expect(await screen.findByText(/^PC의 PowerShell\(관리자 권한이 아닌 보통 창\)에서/)).toBeTruthy();
 });

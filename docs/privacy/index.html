@@ -110,7 +110,7 @@ code { font-size: 0.92em; }
               <tr><th scope="row">이어서 묻기</th><td>이 대화의 결론 기록 (설정에서 끌 수 있음)</td><td><span class="who">이어서 받는 AI들과 사회자의 회사</span></td></tr>
               <tr><th scope="row">사회자에게 묻기</th><td>질문, 결론 기록, 앞 답들</td><td><span class="who">사회자 AI의 회사</span></td></tr>
               <tr><th scope="row">웹 검색</th><td>AI가 고른 검색어</td><td>그 AI 회사의 검색, 또는 OpenCode가 고른 검색 제공자</td></tr>
-              <tr><th scope="row">에이전트 업데이트</th><td>PC의 IP 주소, 에이전트 이름과 판 (끌 수 있음)</td><td><span class="who">GitHub</span> (릴리스를 내려받는 곳)</td></tr>
+              <tr><th scope="row">에이전트 업데이트</th><td>PC의 IP 주소, 에이전트 이름과 버전 (끌 수 있음)</td><td><span class="who">GitHub</span> (릴리스를 내려받는 곳)</td></tr>
               <tr><th scope="row">개발자</th><td class="none">없음</td><td class="none">받는 것 없음</td></tr>
             </tbody>
           </table>
@@ -146,7 +146,7 @@ code { font-size: 0.92em; }
 
       <section aria-labelledby="ko-update">
         <h2 id="ko-update">PC 에이전트 업데이트</h2>
-        <p>업데이트는 기본으로 켜져 있습니다. 폰에서 내 PC 화면이나 설정의 PC 시트를 열면 PC 에이전트가 GitHub(github.com/heeo-dev/askorus의 릴리스)에 최신 판의 서명된 정보를 묻고(6시간에 한 번까지, 묻지 못했으면 30분 뒤에 다시), 폰에서 '지금 업데이트'를 누르거나 PC에서 <code>askorus-agent update now</code>를 실행하면 한 번 더 묻고 새 판을 그곳에서 받습니다. 폰은 GitHub에 직접 접속하지 않습니다. 이때 GitHub는 PC의 IP 주소와 에이전트의 이름과 판(예: askorus-agent/0.5.0)을 받고, GitHub의 개인정보처리방침을 따릅니다. 기기 토큰, 질문, 대화, 폴더, PC 이름은 보내지 않습니다. 받은 파일은 개발자의 서명이 맞을 때만 쓰며, 서명은 PC 안에서 확인합니다. GitHub는 릴리스 파일이 받아진 횟수를 누구나 볼 수 있게 보이지만, 누가 받았는지는 개발자에게 알려 주지 않습니다. PC에서 <code>askorus-agent update off</code>로 끄면 GitHub에 아무것도 묻지 않고, <code>askorus-agent devices update &lt;id&gt; off</code>로 폰마다 업데이트를 막을 수 있습니다. 업데이트 키 없이 만든 에이전트는 GitHub에 묻지 않습니다.</p>
+        <p>업데이트는 기본으로 켜져 있습니다. 폰에서 내 PC 화면이나 설정의 PC 시트를 열면 PC 에이전트가 GitHub(github.com/heeo-dev/askorus의 릴리스)에 최신 버전의 서명된 정보를 묻고(6시간에 한 번까지, 묻지 못했으면 30분 뒤에 다시), 폰에서 '지금 업데이트'를 누르거나 PC에서 <code>askorus-agent update now</code>를 실행하면 한 번 더 묻고 새 버전을 그곳에서 받습니다. 폰은 GitHub에 직접 접속하지 않습니다. 이때 GitHub는 PC의 IP 주소와 에이전트의 이름과 버전(예: askorus-agent/0.5.0)을 받고, GitHub의 개인정보처리방침을 따릅니다. 기기 토큰, 질문, 대화, 폴더, PC 이름은 보내지 않습니다. 받은 파일은 개발자의 서명이 맞을 때만 쓰며, 서명은 PC 안에서 확인합니다. GitHub는 릴리스 파일이 받아진 횟수를 누구나 볼 수 있게 보이지만, 누가 받았는지는 개발자에게 알려 주지 않습니다. PC에서 <code>askorus-agent update off</code>로 끄면 GitHub에 아무것도 묻지 않고, <code>askorus-agent devices update &lt;id&gt; off</code>로 폰마다 업데이트를 막을 수 있습니다. 업데이트 키 없이 만든 에이전트는 GitHub에 묻지 않습니다.</p>
       </section>
 
       <section aria-labelledby="ko-delete">
@@ -194,10 +194,10 @@ code { font-size: 0.92em; }
       <section aria-labelledby="ko-other">
         <h2 id="ko-other">그 밖의 것</h2>
         <ul>
-          <li><b>카메라와 사진 고르기</b>: PC 화면의 짝 맺기 QR을 읽을 때와 질문에 붙일 사진을 찍을 때만 씁니다. QR을 읽을 때는 사진을 저장하거나 보내지 않습니다. 사진 찍기는 휴대폰의 카메라 앱이 하고, 앱은 찍은 사진의 줄인 사본만 둡니다. 사진을 고를 때는 Android의 사진 선택 화면(판이 낮은 폰에서는 파일 선택 화면)을 씁니다. 앱은 사용자가 고른 사진만 받으며, 사진첩을 볼 권한은 없습니다.</li>
+          <li><b>카메라와 사진 고르기</b>: PC 화면의 짝 맺기 QR을 읽을 때와 질문에 붙일 사진을 찍을 때만 씁니다. QR을 읽을 때는 사진을 저장하거나 보내지 않습니다. 사진 찍기는 휴대폰의 카메라 앱이 하고, 앱은 찍은 사진의 줄인 사본만 둡니다. 사진을 고를 때는 Android의 사진 선택 화면(버전이 낮은 폰에서는 파일 선택 화면)을 씁니다. 앱은 사용자가 고른 사진만 받으며, 사진첩을 볼 권한은 없습니다.</li>
           <li><b>다른 앱으로 넘기기</b>: 세션을 열면 Claude 앱이나 브라우저로 넘기며, 그다음은 그 서비스의 방침을 따릅니다. Askorus는 어떤 AI의 로그인 정보도 읽거나 옮기지 않습니다.</li>
           <li><b>질문 정제</b>: 2026년 11월 4일부터 꺼져 있고 설정에도 없습니다. 다시 켜면 답을 받기 전에 사회자가 질문과 앞 질문 3개까지를 읽고 질문의 종류, 의도, 깊이, 언어를 정하며, 사회자 AI의 회사가 질문을 한 번 더 받습니다. 정한 종류에 맞는 답 형식이 질문 뒤에 붙어 모든 AI에게 갑니다.</li>
-          <li><b>공유와 신고</b>: 답의 공유·신고에서 '공유'를 고르면 그 답의 글이 고른 앱으로 갑니다. '신고'를 고르면 문제의 종류와 답을 쓴 AI의 이름, 앱의 판이 적힌 메일이 메일 앱에 열립니다. 질문과 답은 넣기로 한 때에만 들어가고, 넣기 전에 화면에 보여 줍니다. 메일 앱에서 보내기를 눌러야 아래 문의 메일로 가며, 앱이 직접 보내는 것은 없습니다. 받은 신고는 그 문제를 살펴보는 데만 씁니다.</li>
+          <li><b>공유와 신고</b>: 답의 공유·신고에서 '공유'를 고르면 그 답의 글이 고른 앱으로 갑니다. '신고'를 고르면 문제의 종류와 답을 쓴 AI의 이름, 앱의 버전이 적힌 메일이 메일 앱에 열립니다. 질문과 답은 넣기로 한 때에만 들어가고, 넣기 전에 화면에 보여 줍니다. 메일 앱에서 보내기를 눌러야 아래 문의 메일로 가며, 앱이 직접 보내는 것은 없습니다. 받은 신고는 그 문제를 살펴보는 데만 씁니다.</li>
           <li><b>어린이</b>: 어린이를 대상으로 하지 않습니다.</li>
         </ul>
       </section>
