@@ -61,14 +61,27 @@ export function presets(t: TierModels): { pick: ModelPick; tiers: Tier[] }[] {
   return out;
 }
 
-/** pickModels: the tiers' models, once each, in tier order: the models an own pick may use. */
-export function pickModels(t: TierModels): string[] {
+/** Models outside the tiers an own pick may use (/v1/info ask.extra, #65), heavy when one uses much more of the plan. */
+export type ExtraModels = { model: string; heavy?: boolean }[];
+
+/**
+ * pickModels: the models an own pick may use: the tiers' models, once
+ * each, in tier order, then the models outside the tiers the PC offers
+ * (#65).
+ */
+export function pickModels(t: TierModels, extra?: ExtraModels): string[] {
   const out: string[] = [];
   for (const x of tiers) {
     const m = t[x]?.model;
     if (m && !out.includes(m)) out.push(m);
   }
+  for (const e of extra ?? []) if (e.model && !out.includes(e.model)) out.push(e.model);
   return out;
+}
+
+/** isHeavy: model is one the PC says uses much more of the plan (#65). */
+export function isHeavy(model: string, extra: ExtraModels | undefined): boolean {
+  return !!extra?.some((e) => e.heavy && e.model === base(model));
 }
 
 const rank: Record<string, number> = { none: 0, minimal: 1, low: 2, medium: 3, high: 4, xhigh: 5, max: 6, ultra: 7 };
@@ -89,14 +102,15 @@ export function effortChoices(t: TierModels, efforts: ModelEfforts | undefined, 
 /**
  * withModel moves a pick to another model: its effort stays when that
  * model takes it, else the effort the model's first tier runs it with,
- * else the model's first effort.
+ * else (a model outside the tiers, #65) medium when it takes it, else the
+ * model's first effort.
  */
 export function withModel(t: TierModels, efforts: ModelEfforts | undefined, cur: ModelPick | null, model: string): ModelPick {
   const choices = effortChoices(t, efforts, model);
   const keep = cur ? effortOf(cur) : '';
   if (keep && choices.includes(keep)) return { model, effort: keep };
   const tier = tiers.map((x) => t[x]).find((m) => m?.model === model);
-  const e = (tier && effortOf(tier)) || choices[0];
+  const e = (tier && effortOf(tier)) || (choices.includes('medium') ? 'medium' : choices[0]);
   return e ? { model, effort: e } : { model };
 }
 

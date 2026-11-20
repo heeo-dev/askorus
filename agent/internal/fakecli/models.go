@@ -84,6 +84,7 @@ func codexModels() int {
 		models = append(models, model(NewerCodex, "list", all...))
 	}
 	models = append(models,
+		model("gpt-6.2-astra", "list", all...), // the extra model (#65)
 		model("gpt-6.1-terra", "list", all...),
 		model("gpt-reserve", "hide", all[:5]...),
 		model("gpt-6.1-sol", "list", all...),

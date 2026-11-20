@@ -92,6 +92,12 @@ export type AdapterInfo = {
      * new and moves a pick of the shipped one to it. Left out while none.
      */
     newer?: Record<string, string>;
+    /**
+     * Models outside the tiers the person may pick (#65, newer agents:
+     * Codex's Astra, Claude's Fable), heavy when one uses much more of the
+     * plan; their efforts are in `efforts`. Left out while none.
+     */
+    extra?: { model: string; heavy?: boolean }[];
   };
 };
 

@@ -76,10 +76,21 @@ var defaultAskTiers = map[string]core.AskModel{
 // (11-06: haiku answered with xhigh and max too).
 var askEfforts = []string{"low", "medium", "high", "xhigh", "max"}
 
-// AskEfforts lists the efforts each tier model may take (core.EffortLister).
+// AskEfforts lists the efforts each tier model and extra model (#65) may
+// take (core.EffortLister).
 func (a *Adapter) AskEfforts() map[string][]string {
-	return core.TierEfforts(a.AskTiers(), func(string) []string { return askEfforts })
+	known := func(string) []string { return askEfforts }
+	return core.ExtraEfforts(core.TierEfforts(a.AskTiers(), known), a.AskExtra(), known)
 }
+
+// extraModels are the models outside the tiers the person may pick (#65):
+// Fable, by Claude Code's alias for the newest one (its --model help names
+// 'fable' beside 'opus' and 'sonnet', 2026-11-20), which uses much more of
+// the plan (2026-11-20 decision).
+var extraModels = []core.ExtraModel{{Model: "fable", Heavy: true}}
+
+// AskExtra lists them (core.ExtraLister).
+func (a *Adapter) AskExtra() []core.ExtraModel { return append([]core.ExtraModel(nil), extraModels...) }
 
 // AskTiers returns the tier models, with the settings' overrides.
 func (a *Adapter) AskTiers() map[string]core.AskModel {

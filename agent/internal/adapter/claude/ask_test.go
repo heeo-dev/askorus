@@ -109,11 +109,33 @@ func TestAskTiersAndOverrides(t *testing.T) {
 	if !slices.Contains(a.capabilities(), core.CapAsk) {
 		t.Errorf("capabilities = %v", a.capabilities())
 	}
-	// Every model, the overridden one too, takes Claude Code's five efforts (11-06).
+	// Every model, the overridden one and the extra Fable (#65) too, takes
+	// Claude Code's five efforts (11-06).
 	all := []string{"low", "medium", "high", "xhigh", "max"}
 	e := a.AskEfforts()
-	if len(e) != 3 || !slices.Equal(e["claude-haiku-5-5"], all) || !slices.Equal(e["sonnet"], all) || !slices.Equal(e["opus"], all) {
+	if len(e) != 4 || !slices.Equal(e["claude-haiku-5-5"], all) || !slices.Equal(e["sonnet"], all) || !slices.Equal(e["opus"], all) || !slices.Equal(e["fable"], all) {
 		t.Errorf("AskEfforts = %v", e)
+	}
+}
+
+// TestAskExtraFable (#65): Fable is offered outside the tiers, marked
+// heavy, and an own pick of it runs claude with --model fable.
+func TestAskExtraFable(t *testing.T) {
+	a, argsFile, folder := newAskAdapter(t, nil)
+	if x := a.AskExtra(); len(x) != 1 || x[0] != (core.ExtraModel{Model: "fable", Heavy: true}) {
+		t.Fatalf("AskExtra = %+v", x)
+	}
+	for _, m := range a.AskTiers() {
+		if m.Model == "fable" {
+			t.Errorf("fable is a tier model: %+v", a.AskTiers())
+		}
+	}
+	if _, err := a.Ask(context.Background(), core.AskRequest{Folder: folder, Prompt: "q", Tier: core.TierStandard, Model: "fable", Effort: "low"}); err != nil {
+		t.Fatal(err)
+	}
+	args := recordedCalls(t, argsFile)[0].Args
+	if i := slices.Index(args, "--model"); i < 0 || args[i+1] != "fable" || !slices.Contains(args, "low") {
+		t.Errorf("args = %q", args)
 	}
 }
 

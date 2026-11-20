@@ -80,6 +80,40 @@ type EffortLister interface {
 	AskEfforts() map[string][]string
 }
 
+// ExtraModel is a model outside the tiers that the person may pick (#65):
+// an own pick or a moderator model, never a tier's.
+type ExtraModel struct {
+	Model string `json:"model"`
+	// Heavy: the model uses much more of the plan than the tier models;
+	// the app says so when it is picked (2026-11-20 decision: Fable, Astra).
+	Heavy bool `json:"heavy,omitempty"`
+}
+
+// ExtraLister is implemented by askers that offer models outside their
+// tiers (#65). Their efforts are in AskEfforts too.
+type ExtraLister interface {
+	AskExtra() []ExtraModel
+}
+
+// ExtraEfforts adds to efforts (AskEfforts' map) the efforts of each
+// extra model, known(model) or none.
+func ExtraEfforts(efforts map[string][]string, extra []ExtraModel, known func(model string) []string) map[string][]string {
+	for _, e := range extra {
+		if _, ok := efforts[e.Model]; !ok {
+			if k := known(e.Model); len(k) > 0 {
+				efforts[e.Model] = SortEfforts(k)
+			}
+		}
+	}
+	return efforts
+}
+
+// IsExtra reports whether model is one of a's extra models.
+func IsExtra(a any, model string) bool {
+	x, ok := a.(ExtraLister)
+	return ok && slices.ContainsFunc(x.AskExtra(), func(e ExtraModel) bool { return e.Model == model })
+}
+
 // effortRank orders effort levels from least to most thinking.
 var effortRank = map[string]int{"none": 0, "minimal": 1, "low": 2, "medium": 3, "high": 4, "xhigh": 5, "max": 6, "ultra": 7}
 

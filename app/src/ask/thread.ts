@@ -111,6 +111,8 @@ export type Asker = {
   efforts: Record<string, string[]>;
   /** The newer models the tiers moved to, under the shipped ones (#64; {} while none). */
   newer: Record<string, string>;
+  /** Models outside the tiers an own pick may use (#65; [] while none). */
+  extra: { model: string; heavy?: boolean }[];
 };
 
 /** askers lists the PC's AIs in its order; those without the ask capability are shown dimmed. */
@@ -121,6 +123,7 @@ export function askers(info: Info): Asker[] {
     tiers: a.ask?.tiers ?? {},
     efforts: a.ask?.efforts ?? {},
     newer: a.ask?.newer ?? {},
+    extra: a.ask?.extra ?? [],
   }));
 }
 

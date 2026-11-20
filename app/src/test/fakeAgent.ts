@@ -278,10 +278,19 @@ export class FakeAgent {
 
   /**
    * askModels gives Codex or OpenCode these tier models and, as newer agents
-   * do, their efforts (11-06) and the newer models they moved to (#64).
+   * do, their efforts (11-06), the newer models they moved to (#64) and
+   * the models outside the tiers (#65).
    */
-  askModels(agent: string, tiers: Record<string, { model: string; effort?: string }>, efforts?: Record<string, string[]>, newer?: Record<string, string>) {
-    this.askAgents = this.askAgents.map((a) => (a.agent === agent ? { ...a, ask: { tiers, ...(efforts ? { efforts } : {}), ...(newer ? { newer } : {}) } } : a));
+  askModels(
+    agent: string,
+    tiers: Record<string, { model: string; effort?: string }>,
+    efforts?: Record<string, string[]>,
+    newer?: Record<string, string>,
+    extra?: { model: string; heavy?: boolean }[],
+  ) {
+    this.askAgents = this.askAgents.map((a) =>
+      a.agent === agent ? { ...a, ask: { tiers, ...(efforts ? { efforts } : {}), ...(newer ? { newer } : {}), ...(extra ? { extra } : {}) } } : a,
+    );
   }
 
   /**

@@ -35,9 +35,10 @@ const JudgeMinVersion = "2.1.314"
 var _ core.Judger = (*Adapter)(nil)
 
 // familyAliases are Claude Code's own model aliases; each picks an
-// Anthropic model.
+// Anthropic model. fable came with #65 (a moderator model outside the
+// tiers).
 var familyAliases = map[string]bool{
-	"haiku": true, "sonnet": true, "opus": true, "default": true, "best": true, "opusplan": true,
+	"haiku": true, "sonnet": true, "opus": true, "fable": true, "default": true, "best": true, "opusplan": true,
 }
 
 // Family returns "anthropic" for Claude Code's model aliases and for

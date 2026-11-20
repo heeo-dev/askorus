@@ -269,6 +269,7 @@ export default function Settings() {
         tierModels={moderator?.tiers ?? {}}
         efforts={moderator?.efforts ?? {}}
         newer={moderator?.newer}
+        extra={moderator?.extra}
         tier={ask.tier}
         value={moderatorPick}
         title={t('settings.moderatorModelTitle', { name: agentName(ask.synthAgent) })}

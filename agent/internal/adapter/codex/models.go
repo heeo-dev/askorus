@@ -24,12 +24,29 @@ var modelsArgs = []string{"debug", "models"}
 
 const modelsTimeout = 30 * time.Second
 
-// lines are the lines the tiers follow: quick Luna, standard Terra, deep
-// Sol, each from the model the agent ships with.
+// lines are the lines the tiers follow (quick Luna, standard Terra, deep
+// Sol) and the line of the extra model (Astra, #65), each from the model
+// the agent ships with.
 var lines = []core.Line{
 	{Base: "gpt-6-luna", Re: regexp.MustCompile(`^gpt-([0-9]+(?:\.[0-9]+)*)-luna$`)},
 	{Base: "gpt-6.1-terra", Re: regexp.MustCompile(`^gpt-([0-9]+(?:\.[0-9]+)*)-terra$`)},
 	{Base: "gpt-6.1-sol", Re: regexp.MustCompile(`^gpt-([0-9]+(?:\.[0-9]+)*)-sol$`)},
+	{Base: "gpt-6.2-astra", Re: regexp.MustCompile(`^gpt-([0-9]+(?:\.[0-9]+)*)-astra$`)},
+}
+
+// extraModels are the models outside the tiers the person may pick (#65):
+// Astra, which uses much more of the plan (2026-11-20 decision), from the
+// shipped one of its line.
+var extraModels = []core.ExtraModel{{Model: "gpt-6.2-astra", Heavy: true}}
+
+// AskExtra lists them, each the newest of its line (core.ExtraLister).
+func (a *Adapter) AskExtra() []core.ExtraModel {
+	out := make([]core.ExtraModel, len(extraModels))
+	for i, e := range extraModels {
+		e.Model = a.follow.Newest(e.Model, "")
+		out[i] = e
+	}
+	return out
 }
 
 // parseModels reads `codex debug models`: the listed models (visibility

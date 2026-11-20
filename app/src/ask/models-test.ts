@@ -5,6 +5,7 @@ import {
   effortChoices,
   effortOf,
   followNewer,
+  isHeavy,
   isNewModel,
   modelLabel,
   modelSpoken,
@@ -91,4 +92,20 @@ test('followNewer and isNewModel', () => {
   expect(isNewModel('opencode-go/deepseek-v4.2-flash#high', newer)).toBe(true);
   expect(isNewModel('gpt-6.1-sol', newer)).toBe(false);
   expect(isNewModel('gpt-6.2-sol', undefined)).toBe(false);
+});
+
+// #65: models outside the tiers come after the tiers' in an own pick; a
+// heavy one says so; picking one with no tier takes medium when it can.
+test('pickModels with extra models, isHeavy, withModel of an extra model', () => {
+  const codex = { quick: { model: 'gpt-6-luna', effort: 'medium' }, standard: { model: 'gpt-6.1-terra', effort: 'medium' }, deep: { model: 'gpt-6.2-sol', effort: 'medium' } };
+  const extra = [{ model: 'gpt-6.2-astra', heavy: true }, { model: 'gpt-6.1-terra' }];
+  expect(pickModels(codex, extra)).toEqual(['gpt-6-luna', 'gpt-6.1-terra', 'gpt-6.2-sol', 'gpt-6.2-astra']);
+  expect(pickModels(codex)).toEqual(['gpt-6-luna', 'gpt-6.1-terra', 'gpt-6.2-sol']);
+  expect(isHeavy('gpt-6.2-astra', extra)).toBe(true);
+  expect(isHeavy('gpt-6.1-terra', extra)).toBe(false);
+  expect(isHeavy('gpt-6.2-astra', undefined)).toBe(false);
+  const all = ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'];
+  expect(withModel(codex, { 'gpt-6.2-astra': all }, null, 'gpt-6.2-astra')).toEqual({ model: 'gpt-6.2-astra', effort: 'medium' });
+  expect(withModel(codex, { 'gpt-6.2-astra': all }, { model: 'gpt-6.2-sol', effort: 'xhigh' }, 'gpt-6.2-astra')).toEqual({ model: 'gpt-6.2-astra', effort: 'xhigh' });
+  expect(withModel(codex, { 'gpt-6.2-astra': ['high', 'max'] }, null, 'gpt-6.2-astra')).toEqual({ model: 'gpt-6.2-astra', effort: 'high' });
 });

@@ -78,6 +78,14 @@ func TestFollowNewest(t *testing.T) {
 	if a.Follow("gpt-6.1-sol") != fakecli.NewerCodex || a.Follow("gpt-6-sol") != fakecli.NewerCodex || a.Follow("gpt-6-luna") != "gpt-6-luna" {
 		t.Error("Follow")
 	}
+	// #65: Astra outside the tiers, heavy, with its six efforts; an old
+	// Astra pick moves to it.
+	if x := a.AskExtra(); len(x) != 1 || x[0] != (core.ExtraModel{Model: "gpt-6.2-astra", Heavy: true}) {
+		t.Errorf("AskExtra = %+v", x)
+	}
+	if es := a.AskEfforts()["gpt-6.2-astra"]; len(es) != 6 || a.Follow("gpt-6-astra") != "gpt-6.2-astra" {
+		t.Errorf("astra efforts %v, follow %q", es, a.Follow("gpt-6-astra"))
+	}
 	// An ask at deep, and one with an own pick saved before (the old Sol).
 	folder := t.TempDir()
 	for _, req := range []core.AskRequest{{Tier: core.TierDeep}, {Tier: core.TierQuick, Model: "gpt-6.1-sol"}} {

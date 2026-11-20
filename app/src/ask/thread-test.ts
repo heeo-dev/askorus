@@ -43,14 +43,14 @@ test('askers keeps the PC order and dims what cannot ask', () => {
       { agent: 'codex', available: false, capabilities: [] },
       { agent: 'opencode', available: true, capabilities: ['ask'] },
       // #64: the newer models the tiers moved to.
-      { agent: 'agy', available: true, capabilities: ['ask'], ask: { tiers: { quick: { model: 'gemini-3.9-flash' } }, newer: { 'gemini-3.8-flash': 'gemini-3.9-flash' } } },
+      { agent: 'agy', available: true, capabilities: ['ask'], ask: { tiers: { quick: { model: 'gemini-3.9-flash' } }, newer: { 'gemini-3.8-flash': 'gemini-3.9-flash' }, extra: [{ model: 'gemini-x', heavy: true }] } },
     ],
   } as unknown as Info;
   expect(askers(info)).toEqual([
-    { agent: 'claude', canAsk: true, tiers: { standard: { model: 'sonnet' } }, efforts: { sonnet: ['low', 'high'] }, newer: {} },
-    { agent: 'codex', canAsk: false, tiers: {}, efforts: {}, newer: {} },
-    { agent: 'opencode', canAsk: true, tiers: {}, efforts: {}, newer: {} },
-    { agent: 'agy', canAsk: true, tiers: { quick: { model: 'gemini-3.9-flash' } }, efforts: {}, newer: { 'gemini-3.8-flash': 'gemini-3.9-flash' } },
+    { agent: 'claude', canAsk: true, tiers: { standard: { model: 'sonnet' } }, efforts: { sonnet: ['low', 'high'] }, newer: {}, extra: [] },
+    { agent: 'codex', canAsk: false, tiers: {}, efforts: {}, newer: {}, extra: [] },
+    { agent: 'opencode', canAsk: true, tiers: {}, efforts: {}, newer: {}, extra: [] },
+    { agent: 'agy', canAsk: true, tiers: { quick: { model: 'gemini-3.9-flash' } }, efforts: {}, newer: { 'gemini-3.8-flash': 'gemini-3.9-flash' }, extra: [{ model: 'gemini-x', heavy: true }] },
   ]);
 });
 

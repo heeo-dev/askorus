@@ -17,6 +17,8 @@ import { tiers, type Tier } from '@/api/types';
 import {
   effortChoices,
   effortOf,
+  type ExtraModels,
+  isHeavy,
   isNewModel,
   type ModelEfforts,
   modelLabel,
@@ -45,6 +47,7 @@ export function ModelSheet({
   tierModels,
   efforts,
   newer,
+  extra,
   tier,
   value,
   onPick,
@@ -57,6 +60,8 @@ export function ModelSheet({
   efforts: ModelEfforts;
   /** The newer models the PC's tiers moved to (#64): marked as new. */
   newer?: NewerModels;
+  /** Models outside the tiers an own pick may use (#65); a heavy one picked says so. */
+  extra?: ExtraModels;
   /** The tier asked at now: an own pick starts from its model. */
   tier: Tier;
   /** The person's pick; null follows the tier. */
@@ -80,9 +85,10 @@ export function ModelSheet({
     .join('\n');
   const rows = presets(tierModels);
 
-  // The own pick: the tiers' models (and a picked one the PC no longer
-  // lists), and the efforts of the model picked, or of the tier's.
-  const models = pickModels(tierModels);
+  // The own pick: the tiers' models, the models outside the tiers (#65),
+  // a picked one the PC no longer lists, and the efforts of the model
+  // picked, or of the tier's.
+  const models = pickModels(tierModels, extra);
   if (value && !models.includes(value.model)) models.push(value.model);
   const effortModel = value?.model ?? runsWith(null, tierModels, tier)?.model ?? models[0] ?? '';
   const choices = effortModel ? effortChoices(tierModels, efforts, effortModel) : [];
@@ -137,6 +143,11 @@ export function ModelSheet({
             value={value?.model ?? ''}
             onChange={(m) => onPick(withModel(tierModels, efforts, value, m), false)}
           />
+          {value && isHeavy(value.model, extra) ? (
+            <Text style={s.heavy} testID="heavy-model">
+              {t('ask.heavyModel')}
+            </Text>
+          ) : null}
           {choices.length ? (
             <>
               <Text style={s.label}>{t('ask.ownEffort')}</Text>
@@ -163,6 +174,7 @@ const styles = themed((th) =>
     ownHead: { gap: 2 },
     ownTitle: { fontSize: 16, fontWeight: '500', lineHeight: 22, color: th.text },
     caption: { fontSize: 13, lineHeight: 19.5, color: th.caption },
+    heavy: { fontSize: 13, lineHeight: 19.5, color: th.textSub },
     label: { fontSize: 13, fontWeight: '500', lineHeight: 18, color: th.textSub, marginTop: 4 },
   }),
 );

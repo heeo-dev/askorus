@@ -537,9 +537,10 @@ func (m *Manager) synthInputLocked(c *comparison) synthInput {
 // that lists no AI, the first AI that writes. An AI that was not asked
 // never writes.
 // withPick gives w the moderator model the person set for agent (Settings,
-// 11-06): only when w is that AI, the model is one of its tier models and
-// the effort one that model takes (its AskEfforts list, or its tiers'
-// efforts without one; none: its first tier's), and its company is known.
+// 11-06): only when w is that AI, the model is one of its tier models or
+// extra models (#65) and the effort one that model takes (its AskEfforts
+// list, or its tiers' efforts without one; none: its first tier's, or
+// medium for an extra model), and its company is known.
 // Anything else keeps the tier's model: the phone only offers these, so
 // a pick the PC no longer has falls back rather than fails. A pick of an
 // older model of a line the tiers follow is first moved to the newest
@@ -563,15 +564,24 @@ func (m *Manager) withPick(w Writer, agent, model, effort string) Writer {
 			uses = append(uses, t.Effort)
 		}
 	}
-	if !known {
+	// A model outside the tiers the AI offers (#65, Fable, Astra) may be
+	// picked too; with no tier running it, no effort comes from a tier.
+	if !known && !core.IsExtra(m.adapter(agent), model) {
 		return w
-	}
-	if effort == "" {
-		effort = uses[0]
 	}
 	allowed := uses
 	if l, ok := m.adapter(agent).(core.EffortLister); ok && len(l.AskEfforts()[model]) > 0 {
 		allowed = l.AskEfforts()[model]
+	}
+	if effort == "" {
+		switch {
+		case len(uses) > 0:
+			effort = uses[0]
+		case slices.Contains(allowed, "medium"):
+			effort = "medium"
+		case len(allowed) > 0:
+			effort = allowed[0]
+		}
 	}
 	if effort != "" && !slices.Contains(allowed, effort) {
 		return w

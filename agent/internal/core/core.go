@@ -161,6 +161,10 @@ type AskInfo struct {
 	// and moves an own pick of the shipped one to it. Absent while every
 	// tier uses a shipped model.
 	Newer map[string]string `json:"newer,omitempty"`
+	// Extra are the models outside the tiers the person may pick (#65,
+	// Codex Astra, Claude Fable), each marked heavy when it uses much more
+	// of the plan; their efforts are in Efforts. Absent when there are none.
+	Extra []ExtraModel `json:"extra,omitempty"`
 }
 
 // ListResult is what an adapter returns for the session list.

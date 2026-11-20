@@ -978,6 +978,7 @@ export default function Ask() {
         tierModels={sheet?.kind === 'model' ? (asker(sheet.agent)?.tiers ?? {}) : {}}
         efforts={sheet?.kind === 'model' ? (asker(sheet.agent)?.efforts ?? {}) : {}}
         newer={sheet?.kind === 'model' ? asker(sheet.agent)?.newer : undefined}
+        extra={sheet?.kind === 'model' ? asker(sheet.agent)?.extra : undefined}
         tier={prefs.tier}
         value={sheet?.kind === 'model' ? ownPick(sheet.agent) : null}
         onClose={() => setSheet({ kind: sheet?.kind === 'model' && sheet.back ? sheet.back : 'pick' })}

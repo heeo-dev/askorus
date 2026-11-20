@@ -86,7 +86,7 @@ func TestParseJudgeOutput(t *testing.T) {
 func TestFamily(t *testing.T) {
 	a := New(Options{ClaudeDir: t.TempDir(), ClaudePath: "claude.cmd"}) // Family needs no claude
 	for model, want := range map[string]string{
-		"haiku": "anthropic", "sonnet": "anthropic", "opus": "anthropic", "default": "anthropic",
+		"haiku": "anthropic", "sonnet": "anthropic", "opus": "anthropic", "fable": "anthropic", "Fable": "anthropic", "default": "anthropic",
 		"best": "anthropic", "opusplan": "anthropic", "Sonnet": "anthropic", "OPUS": "anthropic",
 		"sonnet[1m]": "anthropic", "opus[1M]": "anthropic", "claude-sonnet-5-5": "anthropic",
 		"claude-sonnet-5-5[1m]": "anthropic", "Claude-Haiku-4-5-20251001": "anthropic", "claude-opus-4-7": "anthropic",

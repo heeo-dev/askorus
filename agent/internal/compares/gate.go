@@ -158,6 +158,11 @@ func Announce(ctx context.Context, adapters []core.Adapter, g Gate) ([]core.Adap
 					info.Ask.Newer = n
 				}
 			}
+			if x, ok := a.(core.ExtraLister); ok {
+				if e := x.AskExtra(); len(e) > 0 {
+					info.Ask.Extra = e
+				}
+			}
 		}
 		caps := slices.DeleteFunc(slices.Clone(info.Capabilities), func(c core.Capability) bool {
 			return c == core.CapSynthesize

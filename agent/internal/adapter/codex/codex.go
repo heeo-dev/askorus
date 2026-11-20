@@ -67,17 +67,19 @@ var modelEfforts = map[string][]string{
 	"gpt-6-astra":   {"low", "medium", "high", "xhigh", "max", "ultra"},
 	"gpt-6.1-terra": {"low", "medium", "high", "xhigh", "max", "ultra"},
 	"gpt-6.1-sol":   {"low", "medium", "high", "xhigh", "max", "ultra"},
+	"gpt-6.2-astra": {"low", "medium", "high", "xhigh", "max", "ultra"}, // #65, 11-20
 }
 
-// AskEfforts lists the efforts each tier model may take (core.EffortLister):
-// the model list's, else the table's.
+// AskEfforts lists the efforts each tier model and extra model (#65) may
+// take (core.EffortLister): the model list's, else the table's.
 func (a *Adapter) AskEfforts() map[string][]string {
-	return core.TierEfforts(a.AskTiers(), func(m string) []string {
+	known := func(m string) []string {
 		if es := a.follow.Efforts(m); len(es) > 0 {
 			return es
 		}
 		return modelEfforts[m]
-	})
+	}
+	return core.ExtraEfforts(core.TierEfforts(a.AskTiers(), known), a.AskExtra(), known)
 }
 
 var threadRe = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)

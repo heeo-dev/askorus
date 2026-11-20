@@ -266,6 +266,44 @@ test('a newer model the PC moved to is marked new, and an own pick of the old on
   expect(await screen.findByText(/Codex gpt-6\.2-sol · medium \(new model\)/)).toBeTruthy();
 });
 
+// #65: a model outside the tiers (Codex's Astra) is offered in the own
+// pick, after the tiers' models, with all its efforts; picking it says it
+// uses a lot more of the plan, takes medium, and goes with the question.
+test('an own pick offers a model outside the tiers, says when it is heavy, and sends it', async () => {
+  const all = ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'];
+  agent.askModels(
+    'codex',
+    { quick: { model: 'gpt-6-luna', effort: 'medium' }, standard: { model: 'gpt-6.1-terra', effort: 'medium' }, deep: { model: 'gpt-6.2-sol', effort: 'medium' } },
+    { 'gpt-6-luna': all.slice(0, 5), 'gpt-6.1-terra': all, 'gpt-6.2-sol': all, 'gpt-6.2-astra': all },
+    undefined,
+    [{ model: 'gpt-6.2-astra', heavy: true }],
+  );
+  const { user } = await open();
+  await user.press(await screen.findByRole('button', { name: 'AIs to answer: 3 (Claude, Codex, OpenCode). Pick' }));
+  await user.press(await screen.findByRole('button', { name: 'Codex model' }));
+  const models = await screen.findByLabelText('Pick your own: Model');
+  expect(within(models).getAllByRole('radio').map((x) => x.props.accessibilityLabel)).toEqual(['gpt-6-luna', 'gpt-6.1-terra', 'gpt-6.2-sol', 'gpt-6.2-astra']);
+  // Not a tier's model: no row of its own, and no word on usage until it is picked.
+  expect(screen.queryByRole('radio', { name: 'gpt-6.2-astra, medium' })).toBeNull();
+  expect(screen.queryByTestId('heavy-model')).toBeNull();
+  await user.press(within(models).getByRole('radio', { name: 'gpt-6.2-astra' }));
+  expect(await screen.findByText("This model uses a lot more of your plan's usage.")).toBeTruthy();
+  const efforts = screen.getByLabelText('Pick your own: Effort');
+  expect(within(efforts).getAllByRole('radio').map((x) => x.props.accessibilityLabel)).toEqual(all);
+  expect(within(efforts).getByRole('radio', { name: 'medium' })).toBeChecked();
+  // Back to a tier's model: the word goes.
+  await user.press(within(models).getByRole('radio', { name: 'gpt-6.2-sol' }));
+  await waitFor(() => expect(screen.queryByTestId('heavy-model')).toBeNull());
+  await user.press(within(models).getByRole('radio', { name: 'gpt-6.2-astra' }));
+  await user.press(close());
+  expect(await screen.findByRole('switch', { name: 'Codex, gpt-6.2-astra · medium' })).toBeChecked();
+  await user.press(close());
+  await waitFor(() => expect(screen.queryByTestId('ai-sheet')).toBeNull());
+  await ask(user, 'q1');
+  expect(await screen.findByText('codex says: q1')).toBeTruthy();
+  expect(agent.runRequests()[0].agents).toContainEqual({ agent: 'codex', model: 'gpt-6.2-astra', effort: 'medium' });
+});
+
 test('with every AI turned off (kept from before), the picker says so and turning one on is enough (UX-10)', async () => {
   const { user } = await open({ off: ['claude', 'codex', 'opencode'] });
   await user.type(await screen.findByLabelText('Ask a question'), 'q');

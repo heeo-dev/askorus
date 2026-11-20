@@ -408,6 +408,7 @@
   "ask.ownPickHint": "Answers with this model and effort at every tier.",
   "ask.ownModel": "Model",
   "ask.newModel": "new model",
+  "ask.heavyModel": "This model uses a lot more of your plan's usage.",
   "ask.ownEffort": "Effort",
   "ask.onPC": "My PC: {name}",
   "ask.pcSwitched": "Switched to the PC this conversation was asked on: {name}",
