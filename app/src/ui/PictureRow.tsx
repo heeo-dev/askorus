@@ -50,8 +50,14 @@ export function rowPictures(answers: readonly PictureSource[]): RowPicture[] {
 const everyOrigin = ['*'];
 const noDetectors: ['none'] = ['none'];
 
-/** PictureRow shows the drawings of a question's answers under the combined answer; nothing when there is none. */
-export function PictureRow({ answers }: { answers: readonly PictureSource[] }) {
+/**
+ * PictureRow shows the drawings of a question's answers under the combined
+ * answer; nothing when there is none. live is false for the older questions
+ * of a long conversation: their small pictures are not drawn (a web view
+ * each would stay for as long as the conversation is open, R-158), and a
+ * press still opens the picture large.
+ */
+export function PictureRow({ answers, live = true }: { answers: readonly PictureSource[]; live?: boolean }) {
   const th = useTheme();
   const s = styles(th);
   // The polls redraw a turn every second or so: the answers are read again only when one changed.
@@ -78,8 +84,8 @@ export function PictureRow({ answers }: { answers: readonly PictureSource[] }) {
             style={({ pressed }) => [s.tile, pressed && s.pressed]}
             testID={`picture-tile-${p.key}`}
           >
-            <View style={s.frame} pointerEvents="none">
-              <Tile svg={p.svg} />
+            <View style={[s.frame, !live && s.rest]} pointerEvents="none">
+              {live ? <Tile svg={p.svg} /> : <Text style={s.restText}>{t('pictures.show')}</Text>}
             </View>
             <View style={s.by}>
               <Avatar agent={p.agent} />
@@ -109,8 +115,15 @@ export function PictureRow({ answers }: { answers: readonly PictureSource[] }) {
 /** One small picture: a page without script, in a web view that takes no touch. */
 function Tile({ svg }: { svg: string }) {
   const [failed, setFailed] = useState(false);
-  const page = useMemo(() => svgTilePage(svg), [svg]);
-  if (failed) return null;
+  // A drawing the page will not take leaves its tile empty; it never takes the screen down (R-156).
+  const page = useMemo(() => {
+    try {
+      return svgTilePage(svg);
+    } catch {
+      return null;
+    }
+  }, [svg]);
+  if (failed || page === null) return null;
   const fail = (): void => setFailed(true);
   return (
     <WebView
@@ -210,6 +223,8 @@ const styles = themed((th) =>
     frame: { width: 148, height: 118, borderRadius: 12, overflow: 'hidden', backgroundColor: '#ffffff', borderWidth: StyleSheet.hairlineWidth, borderColor: th.border },
     by: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     name: { flexShrink: 1, fontSize: 13, fontWeight: '600', lineHeight: 18, color: th.text },
+    rest: { alignItems: 'center', justifyContent: 'center', backgroundColor: th.surface },
+    restText: { fontSize: 13, fontWeight: '600', lineHeight: 18, color: th.accent },
     moreTile: { height: 118, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: th.surface },
     more: { fontSize: 15, fontWeight: '600', lineHeight: 20, color: th.textSub },
     screen: { flex: 1, backgroundColor: th.bg },

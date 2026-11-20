@@ -117,6 +117,17 @@ export function defaultSleep(ms: number, signal?: AbortSignal): Promise<void> {
 
 const slowActionMs = 45000;
 
+/**
+ * withPictureRow marks a combined-answer request as coming from an app that
+ * shows every AI's pictures in a row under the combined answer (#14, R-154).
+ * The PC's moderator then leaves pictures out of the combined answer and
+ * points at the row; without the mark (an app from before) it writes as it
+ * did. A PC from before ignores the field.
+ */
+export function withPictureRow<T extends object>(synthesis: T): T & { pictureRow: true } {
+  return { ...synthesis, pictureRow: true };
+}
+
 export class AgentClient {
   private readonly token?: string;
   private readonly fetchFn: typeof fetch;
@@ -267,9 +278,10 @@ export class AgentClient {
    * again with the same clientRunId, so the PC does not ask twice.
    */
   async startRun(req: RunRequest, signal?: AbortSignal): Promise<Run> {
+    const sent = req.compare?.synthesis ? { ...req, compare: { ...req.compare, synthesis: withPictureRow(req.compare.synthesis) } } : req;
     for (let tries = 0; ; tries++) {
       try {
-        return await this.request<Run>('POST', 'runs', req, signal);
+        return await this.request<Run>('POST', 'runs', sent, signal);
       } catch (e) {
         if (!(e instanceof NetworkError) || !req.clientRunId || tries >= 2) throw e;
         await this.sleep(1000, signal);
@@ -339,9 +351,10 @@ export class AgentClient {
    * PC makes one comparison.
    */
   async startComparison(req: ComparisonRequest, signal?: AbortSignal): Promise<Comparison> {
+    const sent = req.synthesis ? { ...req, synthesis: withPictureRow(req.synthesis) } : req;
     for (let tries = 0; ; tries++) {
       try {
-        return await this.request<Comparison>('POST', 'comparisons', req, signal);
+        return await this.request<Comparison>('POST', 'comparisons', sent, signal);
       } catch (e) {
         if (!(e instanceof NetworkError) || !req.clientComparisonId || tries >= 2) throw e;
         await this.sleep(1000, signal);
@@ -361,7 +374,7 @@ export class AgentClient {
    * comparison_running while the comparison or the writing still runs.
    */
   writeSynthesis(id: string, agent?: string, signal?: AbortSignal) {
-    return this.request<Comparison>('POST', `comparisons/${encodeURIComponent(id)}/synthesis`, agent ? { agent } : {}, signal);
+    return this.request<Comparison>('POST', `comparisons/${encodeURIComponent(id)}/synthesis`, withPictureRow(agent ? { agent } : {}), signal);
   }
 
   /** One debate (P2-5). 404 debate_not_found: gone from the PC (a day, restart). */

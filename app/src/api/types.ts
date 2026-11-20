@@ -357,9 +357,12 @@ export type RunCompare = { earlier?: string[]; judges?: string[]; synthesis?: Sy
  * left out, the PC picks), or off. The tier is the run's. model and effort
  * (11-06) are the moderator model set for agent in Settings; the PC uses
  * them when that AI writes and they are one of its tier models, else the
- * tier's.
+ * tier's. pictureRow (#14, 0.5.3) tells the PC that this app shows every
+ * AI's pictures in a row under the combined answer: the moderator then
+ * leaves pictures out of it and points at the row. The client adds it to
+ * every request (withPictureRow); a PC from before ignores it.
  */
-export type SynthesisRequest = { agent?: string; off?: boolean; model?: string; effort?: string };
+export type SynthesisRequest = { agent?: string; off?: boolean; model?: string; effort?: string; pictureRow?: boolean };
 
 /** One AI's share of a run; it shows as soon as that AI is done. */
 export type RunPart = {

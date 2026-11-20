@@ -254,7 +254,7 @@ test('a run with a comparison is followed until its combined answer is written',
   const h = harness(ask());
   await followRun(pc.client, h.now(), h.deps);
   expect(said(pc.calls)).toEqual(['POST runs', 'GET runs/r1', 'GET runs/r1', 'GET comparisons/c1', 'GET comparisons/c1', 'GET comparisons/c1']);
-  expect(pc.calls[0].body?.compare).toEqual({ earlier: [], judges: all, synthesis: { agent: 'claude' } });
+  expect(pc.calls[0].body?.compare).toEqual({ earlier: [], judges: all, synthesis: { agent: 'claude', pictureRow: true } });
   expect(h.now().run?.status).toBe('done');
   expect(h.now().compare?.id).toBe('c1');
   const kinds = h.seen.filter((x) => x.compare?.snap).map((x) => `${compareState(x)?.kind}/${synthState(x, info3)?.kind}`);
@@ -485,7 +485,7 @@ test("'synth' asks the PC to write the combined answer and follows it; 409 is ju
   expect(synthState(h.now(), info3)).toEqual({ kind: 'off', cost: 1 });
   await followCompare(pc.client, h.now(), 'synth', h.deps, { agent: 'codex' });
   expect(said(pc.calls)).toEqual(['POST comparisons/c1/synthesis', 'GET comparisons/c1', 'GET comparisons/c1']);
-  expect(pc.calls[0].body).toEqual({ agent: 'codex' });
+  expect(pc.calls[0].body).toEqual({ agent: 'codex', pictureRow: true });
   expect(h.seen.map((x) => synthState(x, info3)?.kind)).toEqual(['off', 'waiting', 'writing', 'done']);
   // While it was written the comparison stayed done.
   expect(h.seen.every((x) => JSON.stringify(compareState(x)) === JSON.stringify({ kind: 'done' }))).toBe(true);
@@ -495,7 +495,7 @@ test("'synth' asks the PC to write the combined answer and follows it; 409 is ju
   pc.routes['GET comparisons/c1'] = [[200, snap('c1', 'done', { synthesis: written })]];
   await followCompare(pc.client, h.now(), 'synth', h.deps);
   expect(said(pc.calls).slice(3)).toEqual(['POST comparisons/c1/synthesis', 'GET comparisons/c1']);
-  expect(pc.calls[3].body).toEqual({});
+  expect(pc.calls[3].body).toEqual({ pictureRow: true });
   expect(h.now().compare?.error).toBeUndefined();
 
   // Any other refusal is kept as a code on the turn.

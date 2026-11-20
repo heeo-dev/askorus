@@ -95,7 +95,7 @@ test('while the moderator writes: its one step over grey lines; then the answer,
   expect(skeleton()).toBeNull();
   expect(screen.getByText(mayErr)).toBeTruthy();
   expect(screen.getByText('answers 1 s · combined in 15 s')).toBeTruthy();
-  expect(agent.runRequests()[0].compare).toEqual({ earlier: [], judges: ['claude', 'codex', 'opencode'], synthesis: { agent: 'claude' } });
+  expect(agent.runRequests()[0].compare).toEqual({ earlier: [], judges: ['claude', 'codex', 'opencode'], synthesis: { agent: 'claude', pictureRow: true } });
   expect(agent.synthCalls).toBe(1);
 
   // Done: the polling stops.
@@ -117,7 +117,7 @@ test('the writing AI picked in Settings is asked for and writes', async () => {
   const user = await open({ synthAgent: 'codex' });
   await ask(user, 'q');
   await written();
-  expect(agent.runRequests()[0].compare.synthesis).toEqual({ agent: 'codex' });
+  expect(agent.runRequests()[0].compare.synthesis).toEqual({ agent: 'codex', pictureRow: true });
   expect(agent.synthCalls).toBe(1);
 });
 
@@ -126,7 +126,7 @@ test('the moderator model set for the writing AI goes with the question', async 
   const user = await open({ synthAgent: 'codex', synthModels: { codex: { model: 'codex-deep', effort: 'high' }, claude: { model: 'opus' } } });
   await ask(user, 'q');
   await written();
-  expect(agent.runRequests()[0].compare.synthesis).toEqual({ agent: 'codex', model: 'codex-deep', effort: 'high' });
+  expect(agent.runRequests()[0].compare.synthesis).toEqual({ agent: 'codex', model: 'codex-deep', effort: 'high', pictureRow: true });
 });
 
 test('with the combined answer off: no request for one, and Write one sends it', async () => {
@@ -137,14 +137,14 @@ test('with the combined answer off: no request for one, and Write one sends it',
   await ask(user, 'q');
   expect(await screen.findByRole('button', { name: 'Write a combined answer' }, { timeout: 5000 })).toBeTruthy();
   expect(screen.queryByText(/^Once every answer is in/)).toBeNull();
-  expect(agent.runRequests()[0].compare.synthesis).toEqual({ off: true });
+  expect(agent.runRequests()[0].compare.synthesis).toEqual({ off: true, pictureRow: true });
   expect(agent.synthCalls).toBe(0);
   expect(screen.getByText("This uses one of the PC's AIs 1 more time.")).toBeTruthy();
   expect(screen.getByRole('header', { name: 'Comparison' })).toBeTruthy();
 
   await user.press(screen.getByRole('button', { name: 'Write a combined answer' }));
   expect(await written()).toBeTruthy();
-  expect(agent.synthRequests()).toEqual([{ agent: 'opencode' }]);
+  expect(agent.synthRequests()).toEqual([{ agent: 'opencode', pictureRow: true }]);
   expect(agent.synthCalls).toBe(1);
   expect(screen.queryByRole('button', { name: 'Write a combined answer' })).toBeNull();
   expect(screen.getByRole('header', { name: 'Combined answer' })).toBeTruthy();
@@ -162,7 +162,7 @@ test('a writer that fails says why in its words; Write again writes it', async (
   agent.synthReply = 'ok';
   await user.press(screen.getByRole('button', { name: 'Write again' }));
   expect(await written()).toBeTruthy();
-  expect(agent.synthRequests()).toEqual([{ agent: 'claude' }]);
+  expect(agent.synthRequests()).toEqual([{ agent: 'claude', pictureRow: true }]);
   expect(agent.synthCalls).toBe(2);
   expect(screen.queryByText(/^The writing AI reported an error/)).toBeNull();
   expect(screen.queryByRole('button', { name: 'Write again' })).toBeNull();

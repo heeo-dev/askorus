@@ -21,7 +21,7 @@ import (
 // compare the combined answer alone, without the answers' luck.
 
 // synthVariants are the combined-answer prompts resynth writes with, by
-// name: product is the agent's own (synth-v5.2). A draft to try goes here,
+// name: product is the agent's own (synth-v5.1). A draft to try goes here,
 // its text in variants.go.
 var synthVariants = map[string]func(judge.SynthTask, string) string{
 	"product": judge.SynthPrompt,
@@ -33,6 +33,12 @@ var synthVariants = map[string]func(judge.SynthTask, string) string{
 	"c5-sfd":  c5SoloWith("c5-sfd", "sel", "few", "nodup"),
 	"c5-si":   c5SoloWith("c5-si", "sel", "inline"),
 	"c5-sq":   c5SoloWith("c5-sq", "sel", "quiet"),
+	// pic is the product's prompt for a phone that shows the picture row
+	// (synth-v5.2, #14).
+	"pic": func(task judge.SynthTask, nonce string) string {
+		task.PictureRow = true
+		return judge.SynthPrompt(task, nonce)
+	},
 }
 
 func variantNames() []string {

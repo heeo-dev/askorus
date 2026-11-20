@@ -14,10 +14,10 @@ import (
 	"github.com/heeo-dev/askorus/agent/internal/core"
 )
 
-var synthUpdate = flag.Bool("synth.update", false, "rewrite testdata/synth-v5.2.golden")
+var synthUpdate = flag.Bool("synth.update", false, "rewrite testdata/synth-v5.1.golden")
 
 const (
-	synthGoldenFile  = "testdata/synth-v5.2.golden"
+	synthGoldenFile  = "testdata/synth-v5.1.golden"
 	synthGoldenNonce = "3b9e1f0c7a5d2468"
 )
 
@@ -63,7 +63,7 @@ func synthParse(t *testing.T, prompt, nonce string) synthRead {
 	if !ok {
 		t.Fatalf("no end marker:\n%s", prompt)
 	}
-	if after != synthTail {
+	if after != synthTailV51 {
 		t.Fatalf("the text after the block is not the TASK:\n%s", after)
 	}
 	strict := func(line string, v any) {
@@ -133,7 +133,7 @@ func TestSynthPromptGolden(t *testing.T) {
 	}
 	synthGolden(t, synthGoldenFile, got)
 	synthCheckRead(t, task, got, synthGoldenNonce)
-	if !strings.HasPrefix(got, "[Askorus synthesis v5.2] ") || strings.Contains(got, "COMPARED") || strings.Contains(got, "DIFFER") ||
+	if !strings.HasPrefix(got, "[Askorus synthesis v5.1] ") || strings.Contains(got, "COMPARED") || strings.Contains(got, "DIFFER") ||
 		strings.Contains(got, "CHECK") || strings.Contains(got, `"ais"`) || strings.Contains(got, "EARLIER") {
 		t.Errorf("not synth-v5:\n%s", got)
 	}
@@ -393,18 +393,20 @@ func TestHandoffName(t *testing.T) {
 			t.Errorf("no name for %s", app)
 		}
 	}
-	if SynthRules != "synth-v5.2" {
+	if SynthRules != "synth-v5.1" {
 		t.Errorf("SynthRules = %q", SynthRules)
 	}
 }
 
-// synth-v5.2 (#14 decision 11): rule 9 keeps pictures out of the combined
-// answer, once, between rule 8 and OUTPUT; the answer after a debate, which
-// is text only, keeps the TASK without it.
+// synth-v5.2 (#14 decision 11, R-154): for a phone that shows the AIs'
+// pictures in a row, rule 9 keeps pictures out of the combined answer, once,
+// between rule 8 and OUTPUT. A phone that does not say so gets synth-v5.1 as
+// it was (it has no row to point at), and so does the answer after a
+// debate, which is text only.
 func TestSynthRule9OnPictures(t *testing.T) {
-	i, j, k := strings.Index(synthTail, "\n8. "), strings.Index(synthTail, "\n9. Pictures. "), strings.Index(synthTail, "\n"+synthOutput)
-	if i < 0 || j < i || k < j || strings.Count(synthTail, "9. Pictures.") != 1 || synthTail != strings.Replace(synthTailV51, synthOutput, synthPictures+synthOutput, 1) {
-		t.Errorf("rule 9 is not once between rule 8 and OUTPUT:\n%s", synthTail)
+	i, j, k := strings.Index(synthTailPictures, "\n8. "), strings.Index(synthTailPictures, "\n9. Pictures. "), strings.Index(synthTailPictures, "\n"+synthOutput)
+	if i < 0 || j < i || k < j || strings.Count(synthTailPictures, "9. Pictures.") != 1 || synthTailPictures != strings.Replace(synthTailV51, synthOutput, synthPictures+synthOutput, 1) {
+		t.Errorf("rule 9 is not once between rule 8 and OUTPUT:\n%s", synthTailPictures)
 	}
 	for _, want := range []string{"Never copy SVG code from an answer into yours", "never draw a picture of your own", "When no answer holds SVG code, do not say that pictures are below"} {
 		if !strings.Contains(synthPictures, want) {
@@ -412,12 +414,44 @@ func TestSynthRule9OnPictures(t *testing.T) {
 		}
 	}
 	task := SynthTask{Question: "고양이를 그려줘", Answers: []SynthAnswer{{AI: "Claude", Text: "<svg/>"}, {AI: "Codex", Text: "<svg/>"}}}
-	if p := SynthPrompt(task, synthGoldenNonce); !strings.Contains(p, synthPictures+synthOutput) {
-		t.Errorf("the combined answer's prompt has no rule 9:\n%s", p)
+	plain := SynthPrompt(task, synthGoldenNonce)
+	if !strings.HasPrefix(plain, "[Askorus synthesis v5.1] ") || strings.Contains(plain, "9. Pictures.") || SynthRulesFor(task) != "synth-v5.1" {
+		t.Errorf("a phone without the picture row does not get synth-v5.1:\n%s", plain)
 	}
-	if strings.Contains(debateAfterTail, "9. Pictures.") || !strings.HasSuffix(debateAfterTail, synthTailV51[strings.Index(synthTailV51, "\n6. "):]) {
-		t.Errorf("the answer after a debate changed:\n%s", debateAfterTail)
+	task.PictureRow = true
+	shown := SynthPrompt(task, synthGoldenNonce)
+	want := strings.Replace(strings.Replace(plain, "[Askorus synthesis v5.1] ", "[Askorus synthesis v5.2] ", 1), synthOutput, synthPictures+synthOutput, 1)
+	if shown != want || SynthRulesFor(task) != "synth-v5.2" || SynthRulesPictures != "synth-v5.2" {
+		t.Errorf("a phone with the picture row does not get synth-v5.1 plus rule 9 as synth-v5.2:\n%s", shown)
 	}
+	// With a conversation record: synth-v6, and synth-v6.1 with rule 9.
+	task.Conversation = conversationFixture()
+	rec := SynthPrompt(task, synthGoldenNonce)
+	task.PictureRow = false
+	recPlain := SynthPrompt(task, synthGoldenNonce)
+	if !strings.HasPrefix(rec, "[Askorus synthesis v6.1] ") || !strings.Contains(rec, synthPictures+synthOutput) || !strings.HasPrefix(recPlain, "[Askorus synthesis v6] ") || strings.Contains(recPlain, "9. Pictures.") ||
+		rec != strings.Replace(strings.Replace(recPlain, "[Askorus synthesis v6] ", "[Askorus synthesis v6.1] ", 1), synthOutput, synthPictures+synthOutput, 1) {
+		t.Errorf("with a record:\n%s", rec)
+	}
+	task.PictureRow = true
+	if SynthRulesFor(task) != "synth-v6.1" {
+		t.Errorf("rules with a record and the row = %q", SynthRulesFor(task))
+	}
+	// The answer after a debate keeps its TASK, whatever the phone shows.
+	task.Conversation = nil
+	point := debatePointFixture(NatureFact)
+	after := AfterDebatePrompt(task, []DebatePoint{point}, synthGoldenNonce)
+	task.PictureRow = false
+	if after == "" || after != AfterDebatePrompt(task, []DebatePoint{point}, synthGoldenNonce) || strings.Contains(after, "9. Pictures.") || strings.Contains(debateAfterTail, "9. Pictures.") {
+		t.Errorf("the answer after a debate changed:\n%s", after)
+	}
+}
+
+// The whole synth-v5.2 prompt, pinned.
+func TestSynthPicturesPromptGolden(t *testing.T) {
+	task := BuildSynthTask(synthSpec(), func(id string) string { return synthNames[id] })
+	task.PictureRow = true
+	synthGolden(t, "testdata/synth-v5.2.golden", SynthPrompt(task, synthGoldenNonce))
 }
 
 // R-61 (#4): an answer's trailing extras do not reach the combined answer.

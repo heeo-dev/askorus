@@ -531,13 +531,20 @@ export type Drawing = { svg: string; source: string };
 export function drawingsIn(text: string): Drawing[] {
   const out: Drawing[] = [];
   if (!/<svg[\s>]/i.test(text)) return out;
-  each(lex(text), (t) => {
-    if (t.type !== 'code' || out.length >= maxPictures) return true;
-    const code = t as Tokens.Code;
-    const svg = svgOf(code.lang, code.text);
-    if (svg !== null) out.push({ svg, source: code.text });
-    return true;
-  });
+  // Only the part Markdown itself draws is read (split: its length and its
+  // emphasis marks are bounded, R-157), and an answer that cannot be read
+  // has no drawings.
+  try {
+    each(lex(split(text)[0]), (t) => {
+      if (t.type !== 'code' || out.length >= maxPictures) return true;
+      const code = t as Tokens.Code;
+      const svg = svgOf(code.lang, code.text);
+      if (svg !== null) out.push({ svg, source: code.text });
+      return true;
+    });
+  } catch {
+    return [];
+  }
   return out;
 }
 

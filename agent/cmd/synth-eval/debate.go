@@ -883,7 +883,7 @@ func afterDebatePromptFor(task judge.SynthTask, points []DebatePoint, nonce, ver
 	p := judge.SynthPrompt(task, nonce)
 	end := "</data-" + nonce + ">\n"
 	i := strings.LastIndex(p, end)
-	if p == "" || i < 0 || !strings.HasPrefix(p, "[Askorus synthesis v5.2] ") {
+	if p == "" || i < 0 || !strings.HasPrefix(p, "[Askorus synthesis v5.1] ") {
 		return ""
 	}
 	var b strings.Builder
@@ -909,7 +909,7 @@ func afterDebatePromptFor(task judge.SynthTask, points []DebatePoint, nonce, ver
 	if before != "" {
 		jsonLine(&b, "COMBINED BEFORE", before)
 	}
-	head := strings.Replace(p[:i], "[Askorus synthesis v5.2] Several AIs answered the same question.", "[Askorus synthesis "+version+"] Several AIs answered the same question, then debated the points where they differed.", 1)
+	head := strings.Replace(p[:i], "[Askorus synthesis v5.1] Several AIs answered the same question.", "[Askorus synthesis "+version+"] Several AIs answered the same question, then debated the points where they differed.", 1)
 	tail := p[i+len(end):]
 	start := strings.Index(tail, "\n5. ")
 	stop := strings.Index(tail, "\n6. ")

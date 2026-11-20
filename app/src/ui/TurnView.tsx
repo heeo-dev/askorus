@@ -64,6 +64,7 @@ export function TurnView({
   only,
   notes,
   act,
+  recent = true,
 }: {
   turn: Turn;
   info: Info | null;
@@ -73,6 +74,8 @@ export function TurnView({
   only: string | null;
   notes: Record<string, Note>;
   act: TurnActions;
+  /** One of the newest questions of the conversation: its picture row draws its small pictures (R-158). */
+  recent?: boolean;
 }) {
   const s = styles(useTheme());
   // Waiting for the conversation left running before it (#23): not sent yet.
@@ -141,7 +144,7 @@ export function TurnView({
       <ThreadBubble text={turn.question} photos={turn.photos} onOpenPhoto={(i) => act.openPhoto?.(turn.photos ?? [], i)} />
       <RecordLine context={turn.req.context} onOpen={act.openRecord} />
       <RefineLine refine={turn.run?.refine} onOpen={act.openRefine} />
-      <Result turn={turn} info={info} views={views} only={only} notes={notes} act={act} />
+      <Result turn={turn} info={info} views={views} only={only} notes={notes} act={act} recent={recent} />
       {lost}
     </View>
   );
@@ -154,6 +157,7 @@ function Result({
   only,
   notes,
   act,
+  recent,
 }: {
   turn: Turn;
   info: Info | null;
@@ -161,6 +165,7 @@ function Result({
   only: string | null;
   notes: Record<string, Note>;
   act: TurnActions;
+  recent: boolean;
 }) {
   const s = styles(useTheme());
   const st = compareState(turn);
@@ -263,7 +268,7 @@ function Result({
       </CombinedAnswerCard>
 
       {/* Every AI's drawings, side by side: the combined answer holds none of its own (#14). */}
-      <PictureRow answers={views.filter((p) => p.state === 'done').map((p) => ({ agent: p.agent, name: p.name, text: p.part.answer ?? '' }))} />
+      <PictureRow live={recent} answers={views.filter((p) => p.state === 'done').map((p) => ({ agent: p.agent, name: p.name, text: p.part.answer ?? '' }))} />
 
       {/* The debate on the combined answer, and the answer after it (P2-5). */}
       <DebateSection turn={turn} info={info} note={notes[`${turn.id}/debate`]} act={act.debate} />

@@ -435,7 +435,7 @@ func TestIT11Ask(t *testing.T) {
 	}
 	calls := askCalls(t, p.env.argsFile)
 	last := calls[len(calls)-1]
-	if !sameFolder(last.Cwd, p.ask) || streamText(last.Args, last.Stdin) != core.AskPrompt("대한민국의 수도는?") || slices.Contains(last.Args, "대한민국의 수도는?") {
+	if !sameFolder(last.Cwd, p.ask) || streamText(last.Args, last.Stdin) != core.AskPromptGuided("Korean", "대한민국의 수도는?", core.GuideDraw) || slices.Contains(last.Args, "대한민국의 수도는?") {
 		t.Errorf("ask call = %+v", last)
 	}
 

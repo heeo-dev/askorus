@@ -117,12 +117,12 @@ func TestIT20ConversationRecord(t *testing.T) {
 	c2, b := r.waitComparison(st.ComparisonID)
 	s2 := synthOf(t, c2)
 	writes := calls(t, from, kindSynth, "")
-	if s2.Status != compares.SynthDone || len(writes) != 1 || !strings.HasPrefix(writes[0].Prompt, "[Askorus synthesis v6.1]") {
+	if s2.Status != compares.SynthDone || len(writes) != 1 || !strings.HasPrefix(writes[0].Prompt, "[Askorus synthesis v6]") {
 		t.Fatalf("turn 2's combined answer: %s", b)
 	}
 	data := recordLines(t, "writer", writes[0].Prompt)
 	if len(linesWith(data, "SETTLED: ")) != 1 || len(linesWith(data, "PREVIOUS ANSWER: ")) != 1 || len(linesWith(data, "EARLIER QUESTIONS")) != 1 || len(linesWith(data, "ANSWER: ")) != 3 {
-		t.Errorf("synth-v6.1 data: %q", data)
+		t.Errorf("synth-v6 data: %q", data)
 	}
 
 	// Turn 2's debate with the record: debate-plan v3 (the settled point,
@@ -161,7 +161,7 @@ func TestIT20ConversationRecord(t *testing.T) {
 			t.Errorf("the agent log holds %q", secret)
 		}
 	}
-	for _, line := range []string{`"rules":"synth-v6.1"`, `"rules":"debate-v7"`, `"settled":1`, `"lastBytes":`} {
+	for _, line := range []string{`"rules":"synth-v6"`, `"rules":"debate-v7"`, `"settled":1`, `"lastBytes":`} {
 		if !strings.Contains(logs, line) {
 			t.Errorf("the agent log lacks %s", line)
 		}

@@ -21,7 +21,7 @@ import (
 // Claude Code and Codex on the quick tier: Claude answers a first
 // question, then the follow-up goes to Claude in its session and to Codex
 // new to the conversation, with a record of a settled point and the last
-// answer, and Claude writes the combined answer (synth-v6.1). Each answer
+// answer, and Claude writes the combined answer (synth-v6). Each answer
 // and the combined answer must take the follow-up's new condition (3,000
 // m, so below 100 °C). 4 AI calls, 1 of them Codex.
 func TestLT12FollowUpWithRecord(t *testing.T) {

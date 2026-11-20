@@ -88,7 +88,7 @@ func conversationLines(b *strings.Builder, c *Conversation, earlier, last bool) 
 }
 
 // conversationRule is what the combined answer and the answer after a
-// debate do with the record (synth-v6.1, debate-v5): C11's rule, tightened
+// debate do with the record (synth-v6, debate-v5): C11's rule, tightened
 // after it (11-06: earlier conclusions were repeated a little, and one was
 // carried over to another subject).
 const conversationRule = `CONVERSATION. This question continues a conversation. SETTLED lines are what earlier debates between the AIs in it concluded (agreed, conditional, differ or kept, with a one-line result); PREVIOUS QUESTION and PREVIOUS ANSWER are its last turn and final answer. Build on them: keep a settled conclusion unless an answer here gives new evidence against it, and then say that it differs from the earlier conclusion and why. When the QUESTION changes the conditions a conclusion depended on, the new conditions win. When the QUESTION challenges a conclusion, examine it again instead of repeating it. Use an earlier conclusion only where this QUESTION needs it, in a few words, and only for what it was about: never carry it over to another subject. Ignore conclusions the QUESTION is not about. Never write that there was an earlier debate.
@@ -121,21 +121,32 @@ func withConversation(p, nonce string, c *Conversation, rule, old, new string, e
 
 // Version labels the record changes.
 const (
-	synthLabel       = "[Askorus synthesis v5.2]"
-	synthLabelV6     = "[Askorus synthesis v6.1]"
-	afterLabel       = "[Askorus synthesis debate-v4]"
-	afterLabelV5     = "[Askorus synthesis debate-v5]"
-	planLabel        = "[Askorus debate-plan v4]" // v2 before #39
-	planLabelV3      = "[Askorus debate-plan v5]" // the plan with a record; v3 before #39
-	SynthRulesWithC  = "synth-v6.1"
-	DebateRulesWithC = "debate-v7" // debate-v5 before #39 (debate-v6 with the record)
+	synthLabel   = "[Askorus synthesis v5.1]"
+	synthLabelV6 = "[Askorus synthesis v6]"
+	// With rule 9 on pictures, for a phone that shows the picture row (#14).
+	synthLabelPictures   = "[Askorus synthesis v5.2]"
+	synthLabelV6Pictures = "[Askorus synthesis v6.1]"
+	afterLabel           = "[Askorus synthesis debate-v4]"
+	afterLabelV5         = "[Askorus synthesis debate-v5]"
+	planLabel            = "[Askorus debate-plan v4]" // v2 before #39
+	planLabelV3          = "[Askorus debate-plan v5]" // the plan with a record; v3 before #39
+	SynthRulesWithC      = "synth-v6"
+	// SynthRulesWithCPictures is SynthRulesWithC with rule 9 on pictures.
+	SynthRulesWithCPictures = "synth-v6.1"
+	DebateRulesWithC        = "debate-v7" // debate-v5 before #39 (debate-v6 with the record)
 )
 
-// SynthRulesFor names the combined answer's prompt for task: synth-v6.1 with
-// a conversation record, else SynthRules.
+// SynthRulesFor names the combined answer's prompt for task: synth-v6 with
+// a conversation record, else SynthRules; for a phone that shows the
+// picture row (#14) synth-v6.1 and SynthRulesPictures, which carry rule 9.
 func SynthRulesFor(task SynthTask) string {
-	if !task.Conversation.Empty() {
+	switch record := !task.Conversation.Empty(); {
+	case record && task.PictureRow:
+		return SynthRulesWithCPictures
+	case record:
 		return SynthRulesWithC
+	case task.PictureRow:
+		return SynthRulesPictures
 	}
 	return SynthRules
 }

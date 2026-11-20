@@ -749,6 +749,7 @@
   "pictures.title": "AI별 그림",
   "pictures.nth": "{name} {n}",
   "pictures.open": "{name}의 그림, {total}개 중 {n}번째. 크게 봅니다.",
+  "pictures.show": "눌러서 보기",
   "pictures.more": "+{n}",
   "pictures.moreLabel": "그림 {n}개 더",
   "pictures.prev": "이전 그림",

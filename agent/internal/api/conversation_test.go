@@ -62,7 +62,7 @@ func TestRunContext(t *testing.T) {
 		t.Errorf("earlier questions: claude (a session) %v, codex (none) %v", strings.Contains(known[0].Prompt, "EARLIER"), strings.Contains(fresh[0].Prompt, "EARLIER"))
 	}
 	synths := cl.synthCalls()
-	if len(synths) != 1 || !strings.HasPrefix(synths[0].Prompt, "[Askorus synthesis v6.1]") || !strings.Contains(synths[0].Prompt, "LAST-SECRET") {
+	if len(synths) != 1 || !strings.HasPrefix(synths[0].Prompt, "[Askorus synthesis v6]") || !strings.Contains(synths[0].Prompt, "LAST-SECRET") {
 		t.Fatalf("synthesis: %+v", synths)
 	}
 	e.idle(t, st.ComparisonID)
@@ -72,7 +72,7 @@ func TestRunContext(t *testing.T) {
 			t.Errorf("log has %q: %s", leak, logs)
 		}
 	}
-	for _, line := range []string{`"settled":1`, `"lastBytes":`, `"rules":"synth-v6.1"`} {
+	for _, line := range []string{`"settled":1`, `"lastBytes":`, `"rules":"synth-v6"`} {
 		if !strings.Contains(logs, line) {
 			t.Errorf("log lacks %s: %s", line, logs)
 		}
@@ -161,7 +161,7 @@ func TestContextRefused(t *testing.T) {
 	}
 }
 
-// A comparison made again and a debate take the record: synth-v6.1, and
+// A comparison made again and a debate take the record: synth-v6, and
 // debate-plan v5 with debate-v7.
 func TestComparisonAndDebateContext(t *testing.T) {
 	cl, cx := debateAdapters()
@@ -179,7 +179,7 @@ func TestComparisonAndDebateContext(t *testing.T) {
 		t.Fatalf("comparison = %+v", got.Comparison)
 	}
 	e.idle(t, c.ID)
-	if s := cx.synthCalls(); len(s) != 1 || !strings.HasPrefix(s[0].Prompt, "[Askorus synthesis v6.1]") {
+	if s := cx.synthCalls(); len(s) != 1 || !strings.HasPrefix(s[0].Prompt, "[Askorus synthesis v6]") {
 		t.Errorf("combined answer: %+v", s)
 	}
 	body := debateBody("d1")

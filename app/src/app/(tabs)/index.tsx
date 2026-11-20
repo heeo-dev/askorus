@@ -111,6 +111,10 @@ function oldAgent(info: Info): boolean {
 // A drag that ends with the debate's end mark at most this many points below
 // the screen follows the debate again; when following, the mark sits this
 // many points above the screen's bottom.
+// The newest questions of a conversation draw the small pictures of their
+// picture rows; the older ones show a word to press instead, so a long
+// conversation does not keep a web view for every drawing in it (R-158).
+const recentTurns = 2;
 const followGap = 400;
 const endRoom = 24;
 
@@ -1210,6 +1214,7 @@ export default function Ask() {
               info={away ? null : info}
               now={now}
               only={!away && i === turns.length - 1 ? one : null}
+              recent={i >= turns.length - recentTurns}
               notes={notes}
               act={away ? readOnly(turn) : actsFor(turn)}
             />

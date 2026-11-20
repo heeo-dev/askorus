@@ -749,6 +749,7 @@
   "pictures.title": "Pictures by AI",
   "pictures.nth": "{name} {n}",
   "pictures.open": "Picture by {name}, {n} of {total}. Opens it large.",
+  "pictures.show": "Tap to see",
   "pictures.more": "+{n}",
   "pictures.moreLabel": "{n} more pictures",
   "pictures.prev": "Previous picture",

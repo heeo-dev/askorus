@@ -28,7 +28,7 @@ import (
 // Golden files pin the four prompts.
 
 // DebateRules names the debate's prompts: plan v4, check v2, turn v2 and
-// the answer after the debate 'synthesis debate-v4' (synth-v5.2's TASK with
+// the answer after the debate 'synthesis debate-v4' (synth-v5.1's TASK with
 // rule 5 for debated points, kept short, with C9's two rules as C10b
 // narrowed them). Plan v2 (11-06): haiku moderating a quick-tier debate
 // asked its questions in English on a Korean question, carried over from
@@ -470,7 +470,7 @@ func StanceOf(reply string) (text, stance string) {
 
 // ---- The answer after the debate ----
 
-// debateRule5 is synth-v5.2's rule 5 for an answer after a debate
+// debateRule5 is synth-v5.1's rule 5 for an answer after a debate
 // (debate-v4: C8's refine rule, C9's short answer and its two rules).
 const debateRule5 = `5. The AIs debated the POINT entries. Use what the debate reached: where an AI changed its position for a reason, write the result plainly, as the answer; where a point depends on the person's situation, say which option fits which situation; for a taste point, keep the strongest options and say what each is good for, and put a better or new option from the debate in place of a weaker one; where the AIs still differ on something the person would care about, say that the AIs differ (in Korean with 다르다 in the speech level of the rest of the answer, such as 다릅니다, never 갈리다), name the AIs of each side exactly as written in "ai" and each side's reason, and do not decide which side is right. Where what an AI said in the debate differs from its answer or from a point's sides, follow the debate, also on points that were not debated. Keep the number of items and the form the person asked for. Treat differences that were not debated as the answers show them, by the same rule. Keep it short, about as long as a combined answer without a debate: the items the person asked for, in the number and form asked, each with a short reason. A better or new option from the debate takes the place of a weaker one, never an extra. Write no extra section of combinations, alternatives, tips or how to choose unless the person asked for it; at most one line may name other strong options. Where the right option depends on the person's situation, say so in one line.` + debateRule5Two + ` Never write about the debate itself: not that the AIs debated, discussed or changed their minds, and not the moderator.`
 
@@ -486,9 +486,8 @@ const debateRule5Two = ` When the debate settled on a combination or a single pi
 
 const debateAfterHead = "[Askorus synthesis debate-v4] Several AIs answered the same question, then debated the points where they differed."
 
-// debateAfterTail is the combined answer's TASK up to rule 8 (synth-v5.1's,
-// without synth-v5.2's rule 9 on pictures: a debate is text only) with
-// rule 5 replaced.
+// debateAfterTail is synth-v5.1's TASK (without synth-v5.2's rule 9 on
+// pictures: a debate is text only) with rule 5 replaced.
 var debateAfterTail = func() string {
 	start := strings.Index(synthTailV51, "\n5. ")
 	stop := strings.Index(synthTailV51, "\n6. ")
@@ -499,7 +498,7 @@ var debateAfterTail = func() string {
 }()
 
 // AfterDebatePrompt renders the answer after the debate with nonce:
-// synth-v5.2 with the points (their sides, turns and outcome) in the data
+// synth-v5.1 with the points (their sides, turns and outcome) in the data
 // block and rule 5 for debated points. "" when SynthPrompt would give ""
 // or the nonce occurs in a point.
 func AfterDebatePrompt(t SynthTask, points []DebatePoint, nonce string) string {
@@ -510,21 +509,22 @@ func AfterDebatePrompt(t SynthTask, points []DebatePoint, nonce string) string {
 	if promptOccurs(lowered(content), nonce) {
 		return ""
 	}
-	// The record (#29) is added last, as debate-v5, to the synth-v5.2 form.
+	// The record (#29) is added last, as debate-v5, to the synth-v5.1 form.
 	conv := t.Conversation
 	t.Conversation = nil
+	t.PictureRow = false // the answer after a debate builds on synth-v5.1
 	if promptOccurs(lowered(conv.content()), nonce) {
 		return ""
 	}
 	p := SynthPrompt(t, nonce)
 	end := "</data-" + nonce + ">\n"
 	i := strings.LastIndex(p, end)
-	if p == "" || i < 0 || !strings.HasPrefix(p, "[Askorus synthesis v5.2] Several AIs answered the same question.") {
+	if p == "" || i < 0 || !strings.HasPrefix(p, "[Askorus synthesis v5.1] Several AIs answered the same question.") {
 		return ""
 	}
 	var b strings.Builder
 	b.WriteString(debateAfterHead)
-	b.WriteString(p[len("[Askorus synthesis v5.2] Several AIs answered the same question."):i])
+	b.WriteString(p[len("[Askorus synthesis v5.1] Several AIs answered the same question."):i])
 	for _, pt := range points {
 		x := map[string]any{"id": pt.ID, "topic": pt.Topic, "nature": pt.Nature, "debated": pt.Debate, "sides": pt.Sides}
 		var turns []map[string]string

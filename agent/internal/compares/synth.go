@@ -45,6 +45,10 @@ type SynthSpec struct {
 	// (Settings, 11-06): used when Agent writes and the model is one of its
 	// tier models with an effort it takes (withPick), else the tier's.
 	Model, Effort string
+	// PictureRow: the phone shows every AI's pictures in a row under the
+	// combined answer (#14); the moderator then leaves pictures out
+	// (judge.SynthTask.PictureRow, synth-v5.2).
+	PictureRow bool
 }
 
 // Synthesis is a comparison's combined answer as the snapshot shows it.
@@ -274,6 +278,13 @@ func (m *Manager) cancelSynthLocked(c *comparison) {
 // ErrNotFound, or ErrRunning while the comparison or its combined answer
 // waits or runs.
 func (m *Manager) Synthesize(owner, id, agent string) (Comparison, error) {
+	return m.SynthesizeWith(owner, id, agent, false)
+}
+
+// SynthesizeWith is Synthesize from a phone that says whether it shows the
+// picture row (#14): true holds for this writing even when the comparison
+// was made without saying so.
+func (m *Manager) SynthesizeWith(owner, id, agent string, pictureRow bool) (Comparison, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.pruneLocked()
@@ -288,6 +299,7 @@ func (m *Manager) Synthesize(owner, id, agent string) (Comparison, error) {
 	}
 	spec := c.synth.spec
 	spec.Off = false
+	spec.PictureRow = spec.PictureRow || pictureRow
 	if agent != "" && agent != spec.Agent {
 		// The moderator model was set for the AI asked for before.
 		spec.Agent, spec.Model, spec.Effort = agent, "", ""
@@ -404,6 +416,7 @@ func (m *Manager) synthRun(c *comparison) (string, *judge.Error) {
 	names := m.answerNames(in.task.Answers)
 	task := judge.BuildSynthTask(in.task, func(id string) string { return names[id] })
 	task.Spec = in.qspec
+	task.PictureRow = in.spec.PictureRow
 	images := writerImages(w, in.images)
 	task.Photos = len(images)
 	m.locked(func() {

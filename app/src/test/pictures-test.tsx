@@ -13,7 +13,7 @@ import { FakeAgent, HOST, PORT, TOKEN } from '@/test/fakeAgent';
 import { mockPhotoSave } from '@/test/photos';
 import { drawingsIn } from '@/ui/Markdown';
 import { maxPerAI, maxTiles, PictureRow, rowPictures } from '@/ui/PictureRow';
-import { svgTilePage } from '@/ui/svg';
+import { cleanSvg, maxSvg, svgTilePage } from '@/ui/svg';
 
 const svg = (colour: string) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" width="10" height="10"><circle cx="5" cy="5" r="4" fill="${colour}"/></svg>`;
 const drawn = (colour: string) => `<svg viewBox="0 0 10 10" width="10" height="10"><circle cx="5" cy="5" r="4" fill="${colour}"/></svg>`;
@@ -157,6 +157,55 @@ test('the words are Korean in Korean', async () => {
   await user.press(tiles[0]);
   expect(screen.getByRole('button', { name: '다음 그림' })).toBeTruthy();
   expect(screen.getByRole('button', { name: '이전 그림' })).toBeTruthy();
+});
+
+// R-156 (found by 2ho before 0.5.3): a quote in a value is six characters once
+// the drawing is written again, so an SVG under the limit could come out over
+// it; the row then drew it in a page that refused it, outside any error
+// boundary. Such an SVG is no drawing anywhere now.
+test('a drawing that grows past the limit when it is written again is no drawing (R-156)', async () => {
+  const quotes = (n: number) => `<svg viewBox="0 0 10 10" font-family='${'"'.repeat(n)}'><rect width="4" height="4"/></svg>`;
+  const big = quotes(34000);
+  expect(big.length).toBeLessThan(maxSvg);
+  expect(cleanSvg(big)).toBeNull();
+  expect(drawingsIn('```svg\n' + big + '\n```')).toEqual([]);
+  expect(rowPictures([{ agent: 'claude', name: 'Claude', text: '```svg\n' + big + '\n```' }])).toEqual([]);
+  await render(<PictureRow answers={[{ agent: 'claude', name: 'Claude', text: '```svg\n' + big + '\n```' }]} />);
+  expect(screen.queryByTestId('picture-row')).toBeNull();
+  // One that stays under the limit is drawn, and what was written again passes again.
+  const small = cleanSvg(quotes(1000));
+  expect(small).not.toBeNull();
+  expect(small!.length).toBeLessThanOrEqual(maxSvg);
+  expect(cleanSvg(small!)).toBe(small);
+  expect(() => svgTilePage(small!)).not.toThrow();
+});
+
+// R-157 (2ho): the row read the whole answer, past the limits Markdown draws
+// an answer under (its length and its emphasis marks), and a few thousand
+// stray marks held the screen for seconds.
+test('the row reads an answer under the limits Markdown draws it under (R-157)', () => {
+  const began = Date.now();
+  // The drawing lies past the part that is drawn: it is no picture in the answer either.
+  expect(drawingsIn('*a '.repeat(8000) + '\n\n' + block('red'))).toEqual([]);
+  expect(drawingsIn('x'.repeat(60000) + '\n\n' + block('red'))).toEqual([]);
+  expect(Date.now() - began).toBeLessThan(3000);
+  // Within the limits, text and marks before a drawing do not hide it.
+  expect(drawingsIn('*a* '.repeat(100) + '\n\n' + block('red')).length).toBe(1);
+});
+
+// R-158 (2ho): every question of a long conversation kept a web view for each
+// small picture. Only the newest questions draw them; an older one shows a
+// word to press, which still opens the picture large.
+test('an older question keeps no web views: its pictures are a word to press (R-158)', async () => {
+  const user = userEvent.setup();
+  await render(<PictureRow answers={answers} live={false} />);
+  expect(screen.getByRole('header', { name: 'Pictures by AI (3)' })).toBeTruthy();
+  expect(screen.queryAllByTestId('picture-tile-webview').length).toBe(0);
+  expect(screen.getAllByText('Tap to see').length).toBe(3);
+  await user.press(screen.getAllByRole('imagebutton')[2]);
+  const viewer = screen.getByTestId('picture-viewer');
+  expect(within(viewer).getByRole('header', { name: 'Codex 2' })).toBeTruthy();
+  expect(within(viewer).getByTestId('svg-webview').props.source.html).toContain(drawn('blue'));
 });
 
 // On the Ask screen: the row sits between the combined answer and the AIs' cards.

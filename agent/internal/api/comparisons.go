@@ -72,6 +72,8 @@ type ComparisonSynthesis struct {
 	// Model and effort: the moderator model set for agent (11-06), as RunSynthesis's.
 	Model  string `json:"model,omitempty"`
 	Effort string `json:"effort,omitempty"`
+	// PictureRow as RunSynthesis's (#14).
+	PictureRow bool `json:"pictureRow,omitempty"`
 }
 
 // SynthesisRequest is the optional body of POST
@@ -79,6 +81,8 @@ type ComparisonSynthesis struct {
 // the one asked for before. Unknown fields are ignored.
 type SynthesisRequest struct {
 	Agent string `json:"agent,omitempty"`
+	// PictureRow as RunSynthesis's (#14).
+	PictureRow bool `json:"pictureRow,omitempty"`
 }
 
 // maxSynthesisBody bounds POST /v1/comparisons/{id}/synthesis.
@@ -153,7 +157,7 @@ func (s *Server) startComparison(w http.ResponseWriter, r *http.Request) {
 		spec.Answers = append(spec.Answers, compares.DirectAnswer{ID: a.ID, Agent: a.Agent, Via: a.Via, Model: a.Model, Text: a.Text})
 	}
 	if sy := req.Synthesis; sy != nil {
-		spec.Synth = &compares.SynthSpec{Off: sy.Off, Agent: sy.Agent, Tier: sy.Tier, Model: sy.Model, Effort: sy.Effort}
+		spec.Synth = &compares.SynthSpec{Off: sy.Off, Agent: sy.Agent, Tier: sy.Tier, Model: sy.Model, Effort: sy.Effort, PictureRow: sy.PictureRow}
 	}
 	c, err := s.compares.Start(spec)
 	var bad *compares.SpecError
@@ -232,7 +236,7 @@ func (s *Server) writeSynthesis(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, CodeBadRequest, msgBadSynthesisBody)
 		return
 	}
-	c, err := s.compares.Synthesize(deviceOf(r), r.PathValue("id"), req.Agent)
+	c, err := s.compares.SynthesizeWith(deviceOf(r), r.PathValue("id"), req.Agent, req.PictureRow)
 	switch {
 	case err == nil:
 		writeJSON(w, http.StatusAccepted, comparisonStatus(c))

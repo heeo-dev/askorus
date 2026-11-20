@@ -66,10 +66,12 @@ func TestC5SoloWith(t *testing.T) {
 	}
 }
 
-// TestProductIsC5SQ: synth-v5.2, the product's prompt (synth-v5 since C6,
+// TestProductIsC5SQ: synth-v5.1, the product's prompt (synth-v5 since C6,
 // 2026-11-05; v5.1 since #27, 2026-11-06), is the night's c5-sq word for
-// word but for its version tag, the firm language line and, since v5.2
-// (#14, 2026-11-21), rule 9 on pictures, with earlier questions and without.
+// word but for its version tag and the firm language line, with earlier
+// questions and without. For a phone that shows the picture row (#14,
+// 2026-11-21) the product is synth-v5.2: the same with the draft pic's rule
+// 9 before OUTPUT.
 func TestProductIsC5SQ(t *testing.T) {
 	const n = "0123456789abcdef"
 	answers := []judge.SynthAnswer{{AI: "Claude", Text: "첫 배는 7시"}, {AI: "Codex", Text: "8 a.m."}, {AI: "OpenCode", Text: "8시"}}
@@ -78,10 +80,13 @@ func TestProductIsC5SQ(t *testing.T) {
 		product := judge.SynthPrompt(task, n)
 		draft := c5SoloWith("c5-sq", "sel", "quiet")(task, n)
 		want := strings.Replace(strings.Replace(draft, "[Askorus synthesis c5-sq-draft]", c5ProductHead, 1), v5LangLine, v5LangFirm, 1)
-		// synth-v5.2: rule 9 on pictures before OUTPUT (picRule).
-		want = strings.Replace(want, picOutput, picRule+picOutput, 1)
-		if product == "" || judge.SynthRules != "synth-v5.2" || !strings.Contains(draft, v5LangLine) || want != product {
+		if product == "" || judge.SynthRules != "synth-v5.1" || !strings.Contains(draft, v5LangLine) || want != product {
 			t.Errorf("earlier %v: the product prompt is not c5-sq:\n%s\n---\n%s", earlier, product, draft)
+		}
+		task.PictureRow = true
+		withRow := strings.Replace(strings.Replace(want, c5ProductHead, "[Askorus synthesis v5.2]", 1), picOutput, picRule+picOutput, 1)
+		if got := judge.SynthPrompt(task, n); got != withRow || judge.SynthRulesPictures != "synth-v5.2" || strings.Count(got, "9. Pictures.") != 1 {
+			t.Errorf("earlier %v: with the picture row the product is not c5-sq plus the draft pic's rule 9:\n%s", earlier, got)
 		}
 	}
 }

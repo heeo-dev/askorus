@@ -216,7 +216,7 @@ test('a follow-up sends the earlier questions every writer answered, not one sen
   await user.press(screen.getByRole('button', { name: 'Stop asking only Codex' }));
   await follow(user, 'all again');
   await waitFor(() => expect(agent.runRequests()).toHaveLength(3));
-  expect(agent.runRequests()[2].compare).toEqual({ earlier: ['first'], judges: all, synthesis: { agent: 'claude' } });
+  expect(agent.runRequests()[2].compare).toEqual({ earlier: ['first'], judges: all, synthesis: { agent: 'claude', pictureRow: true } });
   await waitFor(() => expect(screen.getAllByText('Fake combined answer.')).toHaveLength(2), { timeout: 5000 });
 });
 
@@ -253,7 +253,7 @@ test('a comparison the PC lost (404) is made again from the answers, with the co
     earlier: [],
     judges: all,
     answers: all.map((a) => ({ id: a, agent: a, via: 'pc', model: `${a}-quick`, text: answers[a as keyof typeof answers] })),
-    synthesis: { agent: 'claude', tier: 'quick' },
+    synthesis: { agent: 'claude', tier: 'quick', pictureRow: true },
   });
   const [first, second] = agent.comparisonIds();
   expect(second).not.toBe(first);

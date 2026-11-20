@@ -266,6 +266,33 @@ test('an ask carries its compare, and the run comparison comes back', async () =
   expect(r.compareError).toEqual({ code: 'too_many_comparisons', message: 'busy' });
 });
 
+// #14 (R-154): the app shows every AI's pictures in a row under the combined
+// answer, and says so wherever it asks for one, so the PC's moderator leaves
+// pictures out and points at the row. A request without a combined answer
+// carries nothing new, and the request handed in is not changed.
+test('every request for a combined answer says the app shows the picture row', async () => {
+  const cmp = { id: 'c1', status: 'done', items: [], requests: [] };
+  const f = fakeFetch([json(202, run('running', [])), json(202, run('running', [])), json(202, cmp), json(202, cmp), json(202, cmp), json(202, cmp)]);
+  const c = new AgentClient(base, { token: 'tok', fetch: f.fn, sleep: noSleep });
+  const asked = { mode: 'ask' as const, prompt: 'q', compare: { judges: ['claude', 'codex'], synthesis: { agent: 'claude', model: 'opus' } } };
+  await c.startRun(asked);
+  await c.startRun({ mode: 'ask', prompt: 'q', compare: { synthesis: { off: true } } });
+  const direct = { question: 'q', earlier: [], judges: [], answers: [], synthesis: { agent: 'codex', tier: 'deep' as const } };
+  await c.startComparison(direct);
+  await c.startComparison({ question: 'q', earlier: [], judges: [], answers: [] });
+  await c.writeSynthesis('c1', 'codex');
+  await c.writeSynthesis('c1');
+  const bodies = f.calls.map((x) => x.body as { compare?: { synthesis?: unknown }; synthesis?: unknown });
+  expect(bodies[0].compare?.synthesis).toEqual({ agent: 'claude', model: 'opus', pictureRow: true });
+  expect(bodies[1].compare?.synthesis).toEqual({ off: true, pictureRow: true });
+  expect(bodies[2].synthesis).toEqual({ agent: 'codex', tier: 'deep', pictureRow: true });
+  expect(bodies[3].synthesis).toBeUndefined();
+  expect(bodies[4]).toEqual({ agent: 'codex', pictureRow: true });
+  expect(bodies[5]).toEqual({ pictureRow: true });
+  expect(asked.compare.synthesis).toEqual({ agent: 'claude', model: 'opus' });
+  expect(direct.synthesis).toEqual({ agent: 'codex', tier: 'deep' });
+});
+
 test('a comparison is asked for at once, then as often as the PC says, until it is final', async () => {
   const f = fakeFetch([
     json(200, cmp('waiting', { pollAfterMs: 250 })),
@@ -412,7 +439,8 @@ test('writeSynthesis posts the writer, or an empty body, to the encoded id', asy
     'POST /v1/comparisons/c1/synthesis',
     'POST /v1/comparisons/c1/synthesis',
   ]);
-  expect(f.calls.map((x) => x.body)).toEqual([{ agent: 'codex' }, {}, {}, {}]);
+  // Each says the app shows the picture row (#14); the writer only when one is named.
+  expect(f.calls.map((x) => x.body)).toEqual([{ agent: 'codex', pictureRow: true }, { pictureRow: true }, { pictureRow: true }, { pictureRow: true }]);
   expect(f.calls[0].headers['Content-Type']).toBe('application/json');
 });
 

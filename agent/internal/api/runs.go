@@ -121,6 +121,11 @@ type RunSynthesis struct {
 	Off    bool   `json:"off,omitempty"`
 	Model  string `json:"model,omitempty"`
 	Effort string `json:"effort,omitempty"`
+	// PictureRow: the app shows every AI's pictures in a row under the
+	// combined answer (#14, apps from 0.5.3). The moderator then leaves
+	// pictures out and points at the row; an app that does not say so gets
+	// the combined answer as before.
+	PictureRow bool `json:"pictureRow,omitempty"`
 }
 
 // badSynthModel: a moderator model or effort that is not a model name or
@@ -217,7 +222,7 @@ func (s *Server) attachCompare(owner, question string, run runs.Run, targets []R
 		spec.HoldImages = s.imageHolder(owner, images)
 	}
 	if sy := c.Synthesis; sy != nil {
-		spec.Synth = &compares.SynthSpec{Off: sy.Off, Agent: sy.Agent, Tier: run.Tier, Model: sy.Model, Effort: sy.Effort}
+		spec.Synth = &compares.SynthSpec{Off: sy.Off, Agent: sy.Agent, Tier: run.Tier, Model: sy.Model, Effort: sy.Effort, PictureRow: sy.PictureRow}
 	}
 	_, err := s.compares.Attach(spec)
 	switch {

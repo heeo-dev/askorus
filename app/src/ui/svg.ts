@@ -256,7 +256,11 @@ export function cleanSvg(svg: string): string | null {
     open.push(name);
   }
   if (!closed || open.length > 0) return null;
-  return out.join('');
+  // Written again it can be longer than it came (a quote in a value becomes
+  // six characters): the limit holds for what goes into the page too, so a
+  // drawing that passed here passes again wherever it is drawn (R-156).
+  const drawing = out.join('');
+  return drawing.length > maxSvg ? null : drawing;
 }
 
 /**

@@ -80,7 +80,7 @@ test('three AIs: the moderator writes the combined answer, with no cards or judg
   noJudgingOnScreen();
   // The AIs' own answers are there as cards.
   for (const name of ['Claude', 'Codex', 'OpenCode']) expect(screen.getAllByLabelText(new RegExp(`^${name}'s answer`)).length).toBeGreaterThan(0);
-  expect(agent.runRequests()[0].compare).toEqual({ earlier: [], judges: ['claude', 'codex', 'opencode'], synthesis: { agent: 'claude' } });
+  expect(agent.runRequests()[0].compare).toEqual({ earlier: [], judges: ['claude', 'codex', 'opencode'], synthesis: { agent: 'claude', pictureRow: true } });
   expect(agent.synthCalls).toBe(1);
 
   // Done: the polling stops.
@@ -95,7 +95,7 @@ test('two AIs: a combined answer too (#19), where there was no comparison before
   expect(await written()).toBeTruthy();
   expect(screen.queryByText(/^Only two AIs were asked/)).toBeNull();
   noJudgingOnScreen();
-  expect(agent.runRequests()[0].compare).toEqual({ earlier: [], judges: ['claude', 'codex'], synthesis: { agent: 'claude' } });
+  expect(agent.runRequests()[0].compare).toEqual({ earlier: [], judges: ['claude', 'codex'], synthesis: { agent: 'claude', pictureRow: true } });
   expect(agent.comparisonCount()).toBe(1);
   expect(agent.synthCalls).toBe(1);
 });
@@ -112,7 +112,7 @@ test('the combined answer switched off: compared as the answers come, written on
   const user = await open({ synth: false });
   await ask(user, 'Tell me about Seoul');
   const write = await screen.findByRole('button', { name: 'Write a combined answer' }, { timeout: 5000 });
-  expect(agent.runRequests()[0].compare).toEqual({ earlier: [], judges: ['claude', 'codex', 'opencode'], synthesis: { off: true } });
+  expect(agent.runRequests()[0].compare).toEqual({ earlier: [], judges: ['claude', 'codex', 'opencode'], synthesis: { off: true, pictureRow: true } });
   expect(agent.synthCalls).toBe(0);
   noJudgingOnScreen();
   await user.press(write);
