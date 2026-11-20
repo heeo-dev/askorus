@@ -66,12 +66,13 @@ var newPipeline = func(ctx context.Context) (pipeline, func(), error) {
 const usage = `synth-eval measures the combined answer (milestone C). A run uses AI subscriptions.
   questions -q FILE[,FILE] [-only ID,ID]
   run       -q FILE[,FILE] [-only ID,ID] -run NAME [-tier quick|standard|deep] [-writer claude|codex|opencode]
-            [-refine off|on|light|live] [-mod-tier quick|standard|deep] [-synth product|off] [-resume] -expect N
+            [-refine off|on|light|live] [-mod-tier quick|standard|deep] [-synth product|off] [-guide off|svg] [-resume] -expect N
+            -guide svg puts the picture guide for an AI that draws with code after the ask preamble (#14);
             refine on is the agent's; light and live (C4 E3) refine first with the writer at -mod-tier;
             -synth off writes no combined answer (resynth writes it later)
   report    -run NAME[,NAME] [-json] [-texts]
   resynth   -from RUN -run NAME [-only ID,ID] [-tier quick|standard|deep] [-writer claude|codex|opencode]
-            [-synth product|c5-solo|c5-sel|c5-nat|c5-sn|c5-sf|c5-sfd|c5-si|c5-sq] [-resume] -expect N
+            [-synth product|c5-solo|c5-sel|c5-nat|c5-sn|c5-sf|c5-sfd|c5-si|c5-sq|pic] [-resume] -expect N
             writes RUN's combined answers again from the same answers (up to 2 calls each)
   refine    -q FILE[,FILE] [-only ID,ID] -run NAME [-tier quick|standard|deep] [-writer claude|codex|opencode]
             [-form fixed|live] [-resume] -expect N
@@ -196,9 +197,19 @@ func runCmd(ctx context.Context, args []string, out, errOut io.Writer) int {
 	refine := fs.String("refine", "off", "off; on: the writer refines each question first (C2); light or live: C4 E3's formats")
 	modTier := fs.String("mod-tier", core.TierStandard, "the moderator's tier for refine light or live")
 	synth := fs.String("synth", "product", "product, or off: no combined answer")
+	guide := fs.String("guide", "off", "off, or svg: the asks carry the picture guide for an AI that draws with code")
 	resume := fs.Bool("resume", false, "skip the questions the run already has")
 	expect := fs.Int("expect", -1, "the number of questions this run will ask")
 	if err := fs.Parse(args); err != nil {
+		return exitFlags
+	}
+	switch *guide {
+	case "off":
+		askGuide = ""
+	case "svg":
+		askGuide = core.GuideDraw
+	default:
+		fmt.Fprintln(errOut, "-guide must be off or svg")
 		return exitFlags
 	}
 	switch {

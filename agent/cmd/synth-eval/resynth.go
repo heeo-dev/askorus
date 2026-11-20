@@ -33,6 +33,7 @@ var synthVariants = map[string]func(judge.SynthTask, string) string{
 	"c5-sfd":  c5SoloWith("c5-sfd", "sel", "few", "nodup"),
 	"c5-si":   c5SoloWith("c5-si", "sel", "inline"),
 	"c5-sq":   c5SoloWith("c5-sq", "sel", "quiet"),
+	"pic":     synthPic,
 }
 
 func variantNames() []string {

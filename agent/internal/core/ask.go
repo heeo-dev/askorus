@@ -54,11 +54,37 @@ func AskPrompt(question string) string { return AskPromptIn(QuestionLanguage(que
 // With a name the preamble says it and a line after body says it again
 // (#39: Claude now and then answered an English question in Korean); with
 // "" it is AskPreamble and body.
-func AskPromptIn(lang, body string) string {
-	if lang == "" {
-		return AskPreamble + "\n\n" + body
+func AskPromptIn(lang, body string) string { return AskPromptGuided(lang, body, "") }
+
+// Picture guides (#14, decision 13 of 2026-11-21). The preamble says "not
+// a coding task" and nothing of pictures, so asked to draw, the AIs
+// answered with text art, an emoji or "I cannot draw": 2 of 15 answers
+// were SVG when the question did not name it (11-21, quick tier). The app
+// shows an SVG block as a picture, so a question's own ask (never a debate
+// turn, a combined answer or a question to the moderator) gains one line
+// after the preamble, by what the AI can do: GuideDraw for an AI that
+// draws with code only, GuideMake for one that also makes pictures with a
+// tool of its own.
+const (
+	GuideDraw = "If the person asks for a picture, a drawing, a logo, an icon, a diagram or a chart, draw it as one SVG code block (```svg): the app shows it as a picture. " +
+		"Do not answer with a drawing made of text characters or with an emoji, and do not say that you cannot draw. When the question does not ask for a picture, draw none."
+	GuideMake = "If the person asks for a picture, make it: a photo, an illustration or any picture that is not plain shapes with your image tool, and a logo, an icon, a diagram or a chart, whose shapes and text must be exact, as one SVG code block (```svg). The app shows both as pictures. " +
+		"Do not answer with a drawing made of text characters or with an emoji. When the question does not ask for a picture, make none."
+)
+
+// AskPromptGuided is AskPromptIn with guide, a picture guide or "", put
+// after the preamble.
+func AskPromptGuided(lang, body, guide string) string {
+	pre := AskPreamble
+	if lang != "" {
+		pre = strings.Replace(pre, "in the same language as the question below", "in "+lang+", the language of the question below", 1)
 	}
-	pre := strings.Replace(AskPreamble, "in the same language as the question below", "in "+lang+", the language of the question below", 1)
+	if guide != "" {
+		pre += " " + guide
+	}
+	if lang == "" {
+		return pre + "\n\n" + body
+	}
 	return pre + "\n\n" + body + "\n\n(Write the answer in " + lang + ".)"
 }
 

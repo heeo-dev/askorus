@@ -83,3 +83,18 @@ func TestProductIsC5SQ(t *testing.T) {
 		}
 	}
 }
+
+// The picture draft (#14, decision 11) is the product prompt with its tag
+// swapped and rule 9 put before OUTPUT, nothing else.
+func TestPicDraftAddsOneRule(t *testing.T) {
+	const n = "0123456789abcdef"
+	task := judge.SynthTask{Question: "고양이를 그려줘", Answers: []judge.SynthAnswer{{AI: "Claude", Text: "<svg></svg>"}, {AI: "Codex", Text: "<svg/>"}}}
+	product, draft := judge.SynthPrompt(task, n), synthPic(task, n)
+	back := strings.Replace(strings.Replace(draft, "[Askorus synthesis pic-draft]", c5ProductHead, 1), picRule, "", 1)
+	if product == "" || back != product || !strings.Contains(draft, picRule+picOutput) || strings.Count(draft, "9. Pictures.") != 1 {
+		t.Errorf("the picture draft is not the product prompt plus rule 9:\n%s", draft)
+	}
+	if synthVariants["pic"] == nil || synthPic(judge.SynthTask{Question: "q"}, n) != "" {
+		t.Error("pic is not a resynth variant, or it renders a task the product refuses")
+	}
+}

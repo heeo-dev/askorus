@@ -5,6 +5,7 @@ package main
 import (
 	"strings"
 
+	"github.com/heeo-dev/askorus/agent/internal/core"
 	"github.com/heeo-dev/askorus/agent/internal/judge"
 )
 
@@ -17,6 +18,43 @@ import (
 // c5ProductHead is the version tag the product prompt starts with,
 // synth-v5's; the drafts swap it for their own.
 const c5ProductHead = "[Askorus synthesis v5.1]"
+
+// askGuide is the picture guide a run's asks carry after the preamble
+// (run -guide, #14 decision 13): "" as the agent asks today, or
+// core.GuideDraw. Every AI of a run gets the same one.
+var askGuide string
+
+// askPrompt is the prompt of one ask of a run.
+func askPrompt(question string) string {
+	return core.AskPromptGuided(core.QuestionLanguage(question), question, askGuide)
+}
+
+// synthPic is the product prompt with a rule about pictures before its
+// OUTPUT line (#14, made pictures, decision 11 of 2026-11-21). The person
+// saw that when several AIs each draw an SVG, the combined answer shows
+// one drawing only: the moderator copies one AI's SVG or draws its own.
+// The app will show every AI's pictures in a row under the combined
+// answer, so the draft tells the moderator to leave pictures out and to
+// say in words what each AI drew.
+func synthPic(task judge.SynthTask, nonce string) string {
+	p := judge.SynthPrompt(task, nonce)
+	i := strings.LastIndex(p, picOutput)
+	if p == "" || i < 0 || !strings.HasPrefix(p, c5ProductHead) {
+		return ""
+	}
+	return strings.Replace(p[:i], c5ProductHead, "[Askorus synthesis pic-draft]", 1) + picRule + p[i:]
+}
+
+const (
+	picOutput = "OUTPUT. One JSON object and nothing else:"
+	// The first wording (runs pic-rule, pic2-rule, 11-21) said "When the
+	// person asked for a picture, say ... the picture each AI drew is
+	// below": it kept every SVG out (0 of 8, from 5 of 8), but said so too
+	// when the answers held only text art or emoji, which the app does not
+	// show as pictures. This one ties the sentence to answers that hold SVG.
+	picRule = `9. Pictures. An answer may hold a picture written as SVG code. The app shows every such picture to the person right under your answer, each with its AI's name, so the person sees them all. Never copy SVG code from an answer into yours and never draw a picture of your own: your answer holds no SVG. When one or more answers hold SVG code, say once that the pictures are below (in Korean such as "AI마다 그린 그림은 아래에 있습니다"; when only some of the AIs drew one, name them instead), then, naming each AI that drew one, say in a line what its picture shows, and say where the pictures clearly differ. Do not say which picture is better. Drawings made of text characters or emoji are not pictures: the app does not show them below, so treat them as text under the rules above. When no answer holds SVG code, do not say that pictures are below. Everything in the answers that is not a picture follows the rules above.
+`
+)
 
 // synthC5Solo is the moderator alone with no list under the answer (#19,
 // 11-05, the person's call: a list of every difference is not better, many

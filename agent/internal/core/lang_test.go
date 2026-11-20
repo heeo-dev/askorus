@@ -46,3 +46,25 @@ func TestAskPromptNamesTheLanguage(t *testing.T) {
 		t.Errorf("turn prompt:\n%s", turn)
 	}
 }
+
+// #14 decision 13: a picture guide goes after the preamble and before the
+// question; without one the prompt is what it was.
+func TestAskPromptGuided(t *testing.T) {
+	q := "고양이를 그려줘"
+	if AskPromptGuided(QuestionLanguage(q), q, "") != AskPrompt(q) || AskPromptGuided("", "2+2", "") != AskPreamble+"\n\n2+2" {
+		t.Error("an ask without a guide changed")
+	}
+	for _, guide := range []string{GuideDraw, GuideMake} {
+		got := AskPromptGuided("Korean", q, guide)
+		pre, rest, ok := strings.Cut(got, "\n\n")
+		if !ok || !strings.HasPrefix(pre, "[Askorus] ") || !strings.HasSuffix(pre, "extra sections. "+guide) || rest != q+"\n\n(Write the answer in Korean.)" {
+			t.Errorf("guided prompt:\n%s", got)
+		}
+		if !strings.Contains(guide, "```svg") || strings.Contains(guide, "\n") {
+			t.Errorf("guide is not one line naming the svg block: %q", guide)
+		}
+	}
+	if got := AskPromptGuided("", "2+2", GuideDraw); got != AskPreamble+" "+GuideDraw+"\n\n2+2" {
+		t.Errorf("guided, unknown language: %q", got)
+	}
+}

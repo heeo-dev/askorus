@@ -160,14 +160,14 @@ func (p *agentPipeline) Ask(ctx context.Context, q Question, run RunInfo) (Recor
 	var tasks []runs.Task
 	for _, name := range p.order {
 		asker := p.askers[name]
-		req := core.AskRequest{Folder: p.folder, Prompt: core.AskPrompt(asked), Tier: run.Tier}
+		req := core.AskRequest{Folder: p.folder, Prompt: askPrompt(asked), Tier: run.Tier}
 		tasks = append(tasks, runs.Task{Agent: name, Ask: func(ctx context.Context) (core.AskResult, error) {
 			if refiner != nil {
 				text, err := refiner.Question(ctx)
 				if err != nil {
 					return core.AskResult{}, err
 				}
-				req.Prompt = core.AskPrompt(text)
+				req.Prompt = askPrompt(text)
 			}
 			return asker.Ask(ctx, req)
 		}})
