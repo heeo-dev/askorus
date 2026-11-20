@@ -17,7 +17,7 @@ import (
 
 // c5ProductHead is the version tag the product prompt starts with,
 // synth-v5's; the drafts swap it for their own.
-const c5ProductHead = "[Askorus synthesis v5.1]"
+const c5ProductHead = "[Askorus synthesis v5.2]"
 
 // askGuide is the picture guide a run's asks carry after the preamble
 // (run -guide, #14 decision 13): "" as the agent asks today, or
@@ -29,22 +29,13 @@ func askPrompt(question string) string {
 	return core.AskPromptGuided(core.QuestionLanguage(question), question, askGuide)
 }
 
-// synthPic is the product prompt with a rule about pictures before its
-// OUTPUT line (#14, made pictures, decision 11 of 2026-11-21). The person
-// saw that when several AIs each draw an SVG, the combined answer shows
-// one drawing only: the moderator copies one AI's SVG or draws its own.
-// The app will show every AI's pictures in a row under the combined
-// answer, so the draft tells the moderator to leave pictures out and to
-// say in words what each AI drew.
-func synthPic(task judge.SynthTask, nonce string) string {
-	p := judge.SynthPrompt(task, nonce)
-	i := strings.LastIndex(p, picOutput)
-	if p == "" || i < 0 || !strings.HasPrefix(p, c5ProductHead) {
-		return ""
-	}
-	return strings.Replace(p[:i], c5ProductHead, "[Askorus synthesis pic-draft]", 1) + picRule + p[i:]
-}
-
+// picRule is rule 9 of the combined answer (#14, made pictures, decision 11
+// of 2026-11-21) as the draft "pic" tried it before OUTPUT: the person saw
+// that when several AIs each draw an SVG, the combined answer shows one
+// drawing only (the moderator copies one AI's SVG or draws its own), and the
+// app now shows every AI's pictures in a row under the combined answer. It
+// went into internal/judge as synth-v5.2 the same day, word for word
+// (TestProductIsC5SQ), so resynth -synth product writes with it.
 const (
 	picOutput = "OUTPUT. One JSON object and nothing else:"
 	// The first wording (runs pic-rule, pic2-rule, 11-21) said "When the
@@ -202,7 +193,7 @@ func lightTemplate(spec judge.QuestionSpec) string {
 	return liveTemplate(lang, append(append([]string{}, lines...), lightKeep[lang]))
 }
 
-// The language line synth-v5.1 took (#27, 2026-11-06), made firm after
+// The language line synth-v5.2 took (#27, 2026-11-06), made firm after
 // the S10 once wrote an English question's answer in Korean: the draft
 // v5-lang (synth-v5 with this line alone changed) wrote the ant question
 // in English 10 of 10 times, as synth-v5 did, and Korean questions as

@@ -363,6 +363,34 @@ export function svgPage(svg: string, nonce: string): string {
   ].join('\n');
 }
 
+/**
+ * svgTilePage builds the page of one small picture in the row under a
+ * combined answer (#14): the drawing fitted whole into the tile, on white.
+ * It carries no script at all (the policy allows none), so it sends nothing
+ * back; like svgPage it takes the SVG through cleanSvg itself.
+ */
+export function svgTilePage(svg: string): string {
+  const drawing = cleanSvg(svg);
+  if (drawing === null) throw new Error('svgTilePage: not a drawing');
+  const page = [
+    'html,body{margin:0;padding:0;width:100%;height:100%;background:#ffffff;overflow:hidden}',
+    'body{-webkit-text-size-adjust:100%;-webkit-tap-highlight-color:transparent}',
+    '#m{width:100%;height:100%;display:flex;align-items:center;justify-content:center;padding:6px;box-sizing:border-box;overflow:hidden}',
+    '#m>svg{display:block!important;position:static!important;max-width:100%!important;max-height:100%!important;width:auto;height:auto;flex:none}',
+  ].join('\n');
+  const policy = ["default-src 'none'", "style-src 'unsafe-inline'", 'img-src data:', "script-src 'none'", "base-uri 'none'", "form-action 'none'"].join('; ');
+  return [
+    '<!DOCTYPE html>',
+    '<html><head><meta charset="utf-8">',
+    `<meta http-equiv="Content-Security-Policy" content="${policy}">`,
+    '<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">',
+    `<style>\n${page}\n</style>`,
+    '</head><body>',
+    `<div id="m">${drawing}</div>`,
+    '</body></html>',
+  ].join('\n');
+}
+
 /** What the page says: its height, a PNG of the picture, or that it could not make one. */
 export type SvgMessage = { height: number } | { png: string; width: number; height: number } | { pngError: true };
 

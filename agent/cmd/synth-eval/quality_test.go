@@ -126,7 +126,7 @@ func TestResynthWritesFromTheSameAnswersAsksAgainOnceAndStopsOnALimit(t *testing
 		t.Fatalf("out %s", out.String())
 	}
 	for _, c := range f.calls {
-		if c.Agent != "claude" || c.Tier != core.TierStandard || c.Refine || !strings.HasPrefix(c.Prompt, "[Askorus synthesis v5.1]") {
+		if c.Agent != "claude" || c.Tier != core.TierStandard || c.Refine || !strings.HasPrefix(c.Prompt, "[Askorus synthesis v5.2]") {
 			t.Fatalf("call %+v", c)
 		}
 	}

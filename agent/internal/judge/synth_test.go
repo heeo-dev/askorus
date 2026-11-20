@@ -14,10 +14,10 @@ import (
 	"github.com/heeo-dev/askorus/agent/internal/core"
 )
 
-var synthUpdate = flag.Bool("synth.update", false, "rewrite testdata/synth-v5.1.golden")
+var synthUpdate = flag.Bool("synth.update", false, "rewrite testdata/synth-v5.2.golden")
 
 const (
-	synthGoldenFile  = "testdata/synth-v5.1.golden"
+	synthGoldenFile  = "testdata/synth-v5.2.golden"
 	synthGoldenNonce = "3b9e1f0c7a5d2468"
 )
 
@@ -133,7 +133,7 @@ func TestSynthPromptGolden(t *testing.T) {
 	}
 	synthGolden(t, synthGoldenFile, got)
 	synthCheckRead(t, task, got, synthGoldenNonce)
-	if !strings.HasPrefix(got, "[Askorus synthesis v5.1] ") || strings.Contains(got, "COMPARED") || strings.Contains(got, "DIFFER") ||
+	if !strings.HasPrefix(got, "[Askorus synthesis v5.2] ") || strings.Contains(got, "COMPARED") || strings.Contains(got, "DIFFER") ||
 		strings.Contains(got, "CHECK") || strings.Contains(got, `"ais"`) || strings.Contains(got, "EARLIER") {
 		t.Errorf("not synth-v5:\n%s", got)
 	}
@@ -393,8 +393,30 @@ func TestHandoffName(t *testing.T) {
 			t.Errorf("no name for %s", app)
 		}
 	}
-	if SynthRules != "synth-v5.1" {
+	if SynthRules != "synth-v5.2" {
 		t.Errorf("SynthRules = %q", SynthRules)
+	}
+}
+
+// synth-v5.2 (#14 decision 11): rule 9 keeps pictures out of the combined
+// answer, once, between rule 8 and OUTPUT; the answer after a debate, which
+// is text only, keeps the TASK without it.
+func TestSynthRule9OnPictures(t *testing.T) {
+	i, j, k := strings.Index(synthTail, "\n8. "), strings.Index(synthTail, "\n9. Pictures. "), strings.Index(synthTail, "\n"+synthOutput)
+	if i < 0 || j < i || k < j || strings.Count(synthTail, "9. Pictures.") != 1 || synthTail != strings.Replace(synthTailV51, synthOutput, synthPictures+synthOutput, 1) {
+		t.Errorf("rule 9 is not once between rule 8 and OUTPUT:\n%s", synthTail)
+	}
+	for _, want := range []string{"Never copy SVG code from an answer into yours", "never draw a picture of your own", "When no answer holds SVG code, do not say that pictures are below"} {
+		if !strings.Contains(synthPictures, want) {
+			t.Errorf("rule 9 lacks %q", want)
+		}
+	}
+	task := SynthTask{Question: "고양이를 그려줘", Answers: []SynthAnswer{{AI: "Claude", Text: "<svg/>"}, {AI: "Codex", Text: "<svg/>"}}}
+	if p := SynthPrompt(task, synthGoldenNonce); !strings.Contains(p, synthPictures+synthOutput) {
+		t.Errorf("the combined answer's prompt has no rule 9:\n%s", p)
+	}
+	if strings.Contains(debateAfterTail, "9. Pictures.") || !strings.HasSuffix(debateAfterTail, synthTailV51[strings.Index(synthTailV51, "\n6. "):]) {
+		t.Errorf("the answer after a debate changed:\n%s", debateAfterTail)
 	}
 }
 

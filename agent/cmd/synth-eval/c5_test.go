@@ -66,10 +66,10 @@ func TestC5SoloWith(t *testing.T) {
 	}
 }
 
-// TestProductIsC5SQ: synth-v5.1, the product's prompt (synth-v5 since C6,
+// TestProductIsC5SQ: synth-v5.2, the product's prompt (synth-v5 since C6,
 // 2026-11-05; v5.1 since #27, 2026-11-06), is the night's c5-sq word for
-// word but for its version tag and the firm language line, with earlier
-// questions and without.
+// word but for its version tag, the firm language line and, since v5.2
+// (#14, 2026-11-21), rule 9 on pictures, with earlier questions and without.
 func TestProductIsC5SQ(t *testing.T) {
 	const n = "0123456789abcdef"
 	answers := []judge.SynthAnswer{{AI: "Claude", Text: "첫 배는 7시"}, {AI: "Codex", Text: "8 a.m."}, {AI: "OpenCode", Text: "8시"}}
@@ -78,23 +78,10 @@ func TestProductIsC5SQ(t *testing.T) {
 		product := judge.SynthPrompt(task, n)
 		draft := c5SoloWith("c5-sq", "sel", "quiet")(task, n)
 		want := strings.Replace(strings.Replace(draft, "[Askorus synthesis c5-sq-draft]", c5ProductHead, 1), v5LangLine, v5LangFirm, 1)
-		if product == "" || judge.SynthRules != "synth-v5.1" || !strings.Contains(draft, v5LangLine) || want != product {
+		// synth-v5.2: rule 9 on pictures before OUTPUT (picRule).
+		want = strings.Replace(want, picOutput, picRule+picOutput, 1)
+		if product == "" || judge.SynthRules != "synth-v5.2" || !strings.Contains(draft, v5LangLine) || want != product {
 			t.Errorf("earlier %v: the product prompt is not c5-sq:\n%s\n---\n%s", earlier, product, draft)
 		}
-	}
-}
-
-// The picture draft (#14, decision 11) is the product prompt with its tag
-// swapped and rule 9 put before OUTPUT, nothing else.
-func TestPicDraftAddsOneRule(t *testing.T) {
-	const n = "0123456789abcdef"
-	task := judge.SynthTask{Question: "고양이를 그려줘", Answers: []judge.SynthAnswer{{AI: "Claude", Text: "<svg></svg>"}, {AI: "Codex", Text: "<svg/>"}}}
-	product, draft := judge.SynthPrompt(task, n), synthPic(task, n)
-	back := strings.Replace(strings.Replace(draft, "[Askorus synthesis pic-draft]", c5ProductHead, 1), picRule, "", 1)
-	if product == "" || back != product || !strings.Contains(draft, picRule+picOutput) || strings.Count(draft, "9. Pictures.") != 1 {
-		t.Errorf("the picture draft is not the product prompt plus rule 9:\n%s", draft)
-	}
-	if synthVariants["pic"] == nil || synthPic(judge.SynthTask{Question: "q"}, n) != "" {
-		t.Error("pic is not a resynth variant, or it renders a task the product refuses")
 	}
 }

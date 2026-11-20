@@ -520,6 +520,27 @@ const mathBudget = { count: 40, chars: 12_000 };
 // SVG blocks after them are shown as code (R-123).
 const maxPictures = 6;
 
+/** A drawing in an answer: the SVG written again as a drawing only (cleanSvg), and the code as the AI wrote it. */
+export type Drawing = { svg: string; source: string };
+
+/**
+ * drawingsIn gives the drawings an answer's text holds, the ones Markdown
+ * shows as pictures: its SVG code blocks, in order, at most maxPictures.
+ * The row under a combined answer shows them by AI (#14).
+ */
+export function drawingsIn(text: string): Drawing[] {
+  const out: Drawing[] = [];
+  if (!/<svg[\s>]/i.test(text)) return out;
+  each(lex(text), (t) => {
+    if (t.type !== 'code' || out.length >= maxPictures) return true;
+    const code = t as Tokens.Code;
+    const svg = svgOf(code.lang, code.text);
+    if (svg !== null) out.push({ svg, source: code.text });
+    return true;
+  });
+  return out;
+}
+
 type Ctx = {
   s: ReturnType<typeof styles>;
   notes: Map<string, number>;

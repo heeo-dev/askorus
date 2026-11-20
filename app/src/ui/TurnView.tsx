@@ -28,6 +28,7 @@ import { Button } from './Button';
 import { CombinedAnswerCard } from './CombinedAnswer';
 import { type DebateActions, DebateSection } from './Debate';
 import { Markdown } from './Markdown';
+import { PictureRow } from './PictureRow';
 import { themed, useTheme } from './theme';
 import { RecordLine } from './Record';
 import { RefineLine } from './Refine';
@@ -260,6 +261,9 @@ function Result({
         {status}
         {body}
       </CombinedAnswerCard>
+
+      {/* Every AI's drawings, side by side: the combined answer holds none of its own (#14). */}
+      <PictureRow answers={views.filter((p) => p.state === 'done').map((p) => ({ agent: p.agent, name: p.name, text: p.part.answer ?? '' }))} />
 
       {/* The debate on the combined answer, and the answer after it (P2-5). */}
       <DebateSection turn={turn} info={info} note={notes[`${turn.id}/debate`]} act={act.debate} />

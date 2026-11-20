@@ -745,5 +745,12 @@
   "picture.save": "저장",
   "picture.saved": "휴대폰의 사진에 저장했습니다.",
   "picture.saveFailed": "저장하지 못했습니다.",
-  "picture.saveUnsupported": "이 휴대폰에서는 저장할 수 없습니다. Android 10부터 됩니다."
+  "picture.saveUnsupported": "이 휴대폰에서는 저장할 수 없습니다. Android 10부터 됩니다.",
+  "pictures.title": "AI별 그림",
+  "pictures.nth": "{name} {n}",
+  "pictures.open": "{name}의 그림, {total}개 중 {n}번째. 크게 봅니다.",
+  "pictures.more": "+{n}",
+  "pictures.moreLabel": "그림 {n}개 더",
+  "pictures.prev": "이전 그림",
+  "pictures.next": "다음 그림"
 }

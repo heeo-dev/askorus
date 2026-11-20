@@ -34,7 +34,7 @@ func TestConversationPromptsGolden(t *testing.T) {
 	closed.Result, closed.Line = OutcomeAgreed, "마지막 배는 6시입니다."
 	var b bytes.Buffer
 	for _, part := range []struct{ name, text string }{
-		{"synth-v6", SynthPrompt(task.SynthTask, debateNonceA)},
+		{"synth-v6.1", SynthPrompt(task.SynthTask, debateNonceA)},
 		{"debate-plan v3", DebatePlanPrompt(task, debateNonceA)},
 		{"debate-v5", AfterDebatePrompt(task.SynthTask, []DebatePoint{closed}, debateNonceA)},
 	} {
@@ -72,10 +72,10 @@ func TestConversationPrompts(t *testing.T) {
 	case !strings.HasPrefix(plain, synthLabel) || !strings.HasPrefix(synth, synthLabelV6):
 		t.Errorf("labels: %.40q / %.40q", plain, synth)
 	case strings.Index(synth, "PREVIOUS ANSWER: ") > strings.Index(synth, end) || !strings.Contains(synth, end+"CONVERSATION. "):
-		t.Errorf("synth-v6 layout:\n%s", synth)
+		t.Errorf("synth-v6.1 layout:\n%s", synth)
 	case strings.Count(synth, "EARLIER QUESTIONS") != 1:
 		t.Error("a writer without earlier questions of its own did not get the record's")
-	case SynthRulesFor(task.SynthTask) != "synth-v6" || SynthRulesFor(SynthTask{}) != SynthRules:
+	case SynthRulesFor(task.SynthTask) != "synth-v6.1" || SynthRulesFor(SynthTask{}) != SynthRules:
 		t.Error("SynthRulesFor")
 	}
 	// A writer with earlier questions of its own gets no others.
@@ -104,12 +104,12 @@ func TestConversationPrompts(t *testing.T) {
 var koPreamble = strings.Replace(core.AskPreamble, "in the same language as the question below", "in Korean, the language of the question below", 1)
 
 func TestAskWithConversation(t *testing.T) {
-	if got := AskWithConversation("q", nil, true); got != core.AskPrompt("q") {
+	if got := AskWithConversation("q", nil, true, ""); got != core.AskPrompt("q") {
 		t.Errorf("no record: %q", got)
 	}
 	c := conversationFixture()
-	known := AskWithConversation("그럼 마지막 배는?", c, false)
-	fresh := AskWithConversation("그럼 마지막 배는?", c, true)
+	known := AskWithConversation("그럼 마지막 배는?", c, false, "")
+	fresh := AskWithConversation("그럼 마지막 배는?", c, true, "")
 	for _, p := range []string{known, fresh} {
 		if !strings.HasPrefix(p, koPreamble) || !strings.HasSuffix(p, "The new question:\n그럼 마지막 배는?\n\n(Write the answer in Korean.)") ||
 			!strings.Contains(p, `SETTLED: {"topic":"첫 배 시간","result":"agreed","line":"첫 배는 8시입니다."}`) || !strings.Contains(p, `PREVIOUS ANSWER: "첫 배는 8시입니다. 표는 터미널에서 삽니다."`) {

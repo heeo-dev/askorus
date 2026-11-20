@@ -73,7 +73,7 @@ func TestDebatePromptsGolden(t *testing.T) {
 	}
 }
 
-// The answer after the debate is synth-v5.1 with the points in the data
+// The answer after the debate is synth-v5.2 with the points in the data
 // block and rule 5 replaced; rules 1-4 and 6-8 stay as they are.
 func TestAfterDebatePromptKeepsSynthRules(t *testing.T) {
 	task := debateTaskFixture().SynthTask

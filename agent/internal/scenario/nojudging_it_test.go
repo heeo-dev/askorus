@@ -30,7 +30,7 @@ func TestIT18NoJudging(t *testing.T) {
 			t.Fatalf("%d synth calls", len(synths))
 		}
 		_, data := synthData(t, synths[0].Prompt)
-		if !strings.HasPrefix(synths[0].Prompt, "[Askorus synthesis v5.1] ") || strings.Contains(synths[0].Prompt, "COMPARED") ||
+		if !strings.HasPrefix(synths[0].Prompt, "[Askorus synthesis v5.2] ") || strings.Contains(synths[0].Prompt, "COMPARED") ||
 			len(linesWith(data, "ANSWER: ")) != 3 || len(linesWith(data, "DIFFER: "))+len(linesWith(data, "CHECK: ")) != 0 {
 			t.Errorf("writer stdin is not synth-v5 with three answers:\n%s", synths[0].Prompt)
 		}

@@ -423,7 +423,12 @@ func (s *Server) startRun(w http.ResponseWriter, r *http.Request) {
 		// A follow-up's record goes before the question (#29), with the
 		// earlier questions for an AI new to the conversation.
 		fresh := t.Session == ""
-		areq := core.AskRequest{Folder: folder, Prompt: judge.AskWithConversation(prompt, conv, fresh), Tier: tier, Model: t.Model, Effort: t.Effort, Images: images}
+		// The picture guide (#14 decision 13): asked for a picture, the AI
+		// draws an SVG, which the app shows as one. Every AI draws with code
+		// only until an adapter makes pictures (core.GuideMake then). A
+		// question to the moderator, below, has none.
+		guide := core.GuideDraw
+		areq := core.AskRequest{Folder: folder, Prompt: judge.AskWithConversation(prompt, conv, fresh, guide), Tier: tier, Model: t.Model, Effort: t.Effort, Images: images}
 		if mod != nil {
 			// The moderator answers alone, from the record and the answers, as
 			// a one-off in the judge folder: no session is kept or listed.
@@ -449,7 +454,7 @@ func (s *Server) startRun(w http.ResponseWriter, r *http.Request) {
 				if err != nil {
 					return core.AskResult{}, err
 				}
-				areq.Prompt = judge.AskWithConversation(q, conv, fresh)
+				areq.Prompt = judge.AskWithConversation(q, conv, fresh, guide)
 			}
 			return asker.Ask(ctx, areq)
 		}}

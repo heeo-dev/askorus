@@ -135,7 +135,8 @@ func TestRunAsksEveryNamedAI(t *testing.T) {
 	if x.Resume != "t-1" || x.Effort != "high" {
 		t.Errorf("codex request = %+v", x)
 	}
-	if c.Prompt != core.AskPrompt("대한민국의 수도는?") {
+	// The picture guide follows the preamble (#14 decision 13).
+	if c.Prompt != askPrompt("대한민국의 수도는?") || !strings.Contains(c.Prompt, "extra sections. "+core.GuideDraw+"\n\n대한민국의 수도는?") {
 		t.Errorf("prompt = %q", c.Prompt)
 	}
 	// Neither the question nor the answers reach the log.

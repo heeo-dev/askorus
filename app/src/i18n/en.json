@@ -745,5 +745,12 @@
   "picture.save": "Save",
   "picture.saved": "Saved to your phone's photos.",
   "picture.saveFailed": "Couldn't save it.",
-  "picture.saveUnsupported": "This phone can't save it. Android 10 and later can."
+  "picture.saveUnsupported": "This phone can't save it. Android 10 and later can.",
+  "pictures.title": "Pictures by AI",
+  "pictures.nth": "{name} {n}",
+  "pictures.open": "Picture by {name}, {n} of {total}. Opens it large.",
+  "pictures.more": "+{n}",
+  "pictures.moreLabel": "{n} more pictures",
+  "pictures.prev": "Previous picture",
+  "pictures.next": "Next picture"
 }

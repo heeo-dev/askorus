@@ -157,7 +157,7 @@ func TestIT15Synthesis(t *testing.T) {
 
 	// The prompt: synth-v5, the question and every answer with its AI's
 	// name in one nonce block, and nothing of judging.
-	if !strings.HasPrefix(sc.Prompt, "[Askorus synthesis v5.1] ") {
+	if !strings.HasPrefix(sc.Prompt, "[Askorus synthesis v5.2] ") {
 		t.Errorf("writer stdin is not synth-v5: %q", sc.Prompt[:min(len(sc.Prompt), 80)])
 	}
 	nonce, data := synthData(t, sc.Prompt)

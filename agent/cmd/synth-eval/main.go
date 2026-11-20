@@ -72,7 +72,7 @@ const usage = `synth-eval measures the combined answer (milestone C). A run uses
             -synth off writes no combined answer (resynth writes it later)
   report    -run NAME[,NAME] [-json] [-texts]
   resynth   -from RUN -run NAME [-only ID,ID] [-tier quick|standard|deep] [-writer claude|codex|opencode]
-            [-synth product|c5-solo|c5-sel|c5-nat|c5-sn|c5-sf|c5-sfd|c5-si|c5-sq|pic] [-resume] -expect N
+            [-synth product|c5-solo|c5-sel|c5-nat|c5-sn|c5-sf|c5-sfd|c5-si|c5-sq] [-resume] -expect N
             writes RUN's combined answers again from the same answers (up to 2 calls each)
   refine    -q FILE[,FILE] [-only ID,ID] -run NAME [-tier quick|standard|deep] [-writer claude|codex|opencode]
             [-form fixed|live] [-resume] -expect N

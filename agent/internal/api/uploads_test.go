@@ -202,7 +202,7 @@ func TestRunGivesThePhotosToEveryAIThatSees(t *testing.T) {
 			}
 		}
 		// The prompt is the question as it always was: no path in it.
-		if reqs[0].Prompt != core.AskPrompt("이 사진에 뭐가 있어?") {
+		if reqs[0].Prompt != askPrompt("이 사진에 뭐가 있어?") {
 			t.Errorf("%s prompt = %q", ad.name, reqs[0].Prompt)
 		}
 	}
