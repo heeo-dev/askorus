@@ -85,6 +85,9 @@ type rigOptions struct {
 	// agy adds the Antigravity adapter (#20) after the three; the asks of
 	// rig.ask(nil, …) still go to the three only.
 	agy bool
+	// follow lets the tier models follow the newest of their lines (#64),
+	// as in the agent; the rig reads the lists before it returns.
+	follow bool
 }
 
 type rig struct {
@@ -135,11 +138,21 @@ func newRig(t *testing.T, mutate func(*rigOptions)) *rig {
 	}
 	r.adapters = []core.Adapter{
 		claude.New(claude.Options{ClaudeDir: r.claudeDir, ClaudePath: exes[fakecli.RoleClaude], OutsideScreen: func() bool { return o.offScreen }}),
-		codex.New(codex.Options{Path: exes[fakecli.RoleCodex], SchemaDir: filepath.Join(root, "agent")}),
-		opencode.New(opencode.Options{Path: exes[fakecli.RoleOpenCode]}),
+		codex.New(codex.Options{Path: exes[fakecli.RoleCodex], SchemaDir: filepath.Join(root, "agent"), Follow: o.follow}),
+		opencode.New(opencode.Options{Path: exes[fakecli.RoleOpenCode], Follow: o.follow}),
 	}
 	if o.agy {
-		r.adapters = append(r.adapters, agy.New(agy.Options{Path: exes[fakecli.RoleAgy], ConfigDir: filepath.Join(root, "agy-config")}))
+		r.adapters = append(r.adapters, agy.New(agy.Options{Path: exes[fakecli.RoleAgy], ConfigDir: filepath.Join(root, "agy-config"), Follow: o.follow}))
+	}
+	if o.follow {
+		// The agent reads the lists behind its first /v1/info; the rig waits
+		// for them, so a test sees the followed models from the start.
+		for _, a := range r.adapters {
+			if w, ok := a.(interface{ WaitModels(context.Context) }); ok {
+				a.Info(context.Background())
+				w.WaitModels(context.Background())
+			}
+		}
 	}
 	store, err := devices.Open(filepath.Join(root, "devices"))
 	if err != nil {

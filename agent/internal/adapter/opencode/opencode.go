@@ -97,6 +97,9 @@ var (
 type Options struct {
 	Path  string                   // empty: opencode.exe on PATH, or the exe an npm opencode.cmd starts
 	Tiers map[string]core.AskModel // settings ask.tiers.opencode
+	// Follow lets the tier models follow the newest model of their lines
+	// (models.go, #64), as codex.Options.Follow.
+	Follow bool
 }
 
 // Adapter implements core.Adapter and core.Asker for OpenCode.
@@ -121,6 +124,9 @@ type Adapter struct {
 	// usage is what is left of the OpenCode Go plan (#20, usage.go), read
 	// in the background and kept usageTTL.
 	usage *core.UsageCache
+
+	// follow keeps opencode's model list (models.go, #64).
+	follow *core.Follower
 }
 
 // New finds opencode. A missing opencode is not an error: /v1/info says so.
@@ -128,6 +134,10 @@ func New(o Options) *Adapter {
 	a := &Adapter{tiers: o.Tiers}
 	a.exe, a.exeErr = findExe(o.Path)
 	a.usage = &core.UsageCache{TTL: usageTTL, Read: a.readUsage}
+	a.follow = &core.Follower{Lines: lines}
+	if o.Follow {
+		a.follow.List = a.listModels
+	}
 	return a
 }
 
@@ -177,6 +187,7 @@ func (a *Adapter) Info(ctx context.Context) core.AdapterInfo {
 		} else {
 			info.Version, info.Available = v, true
 			info.Capabilities = append(info.Capabilities, core.CapAsk)
+			a.follow.Check(v)
 			a.loginNotices(ctx, &info)
 			info.Usage = a.usage.Get()
 		}
@@ -215,17 +226,22 @@ func (a *Adapter) ListSessions(context.Context) (core.ListResult, error) {
 	return core.ListResult{Sessions: []core.Session{}}, nil
 }
 
-// AskTiers returns the tier models, with the settings' overrides.
+// AskTiers returns the tier models, with the settings' overrides: a model
+// of the settings stays as written, any other follows its line (#64).
 func (a *Adapter) AskTiers() map[string]core.AskModel {
 	out := make(map[string]core.AskModel, len(defaultTiers))
 	for t, m := range defaultTiers {
+		own := false
 		if o, ok := a.tiers[t]; ok {
 			if o.Model != "" {
-				m.Model, m.Effort = o.Model, "" // a variant belongs to its model
+				m.Model, m.Effort, own = o.Model, "", true // a variant belongs to its model
 			}
 			if o.Effort != "" {
 				m.Effort = o.Effort
 			}
+		}
+		if !own {
+			m.Model = a.follow.Newest(m.Model, m.Effort)
 		}
 		out[t] = m
 	}
@@ -322,16 +338,21 @@ func imagePaths(images []core.Image) ([]string, error) {
 // model that cannot see, so a model not listed here takes no photos.
 var imageModels = []string{"opencode-go/deepseek-v4.1-flash"}
 
-// SeesImages reports whether model (with or without "#variant") is one of
-// imageModels (core.ImageSeer).
-func (a *Adapter) SeesImages(model string) bool {
-	base, _, _ := strings.Cut(model, "#")
-	return slices.Contains(imageModels, base)
-}
+// SeesImages reports whether a run of model (with or without "#variant")
+// takes photos (core.ImageSeer): model is one of imageModels, or a newer
+// model of the line of one, which then runs that one (photoModel, #64).
+func (a *Adapter) SeesImages(model string) bool { return a.photoModel(model) != "" }
 
-// ImageModels lists them for the app.
+// ImageModels lists them for the app: imageModels and the tier models
+// that run one of them for photos.
 func (a *Adapter) ImageModels() core.ImageInfo {
-	return core.ImageInfo{Models: slices.Clone(imageModels)}
+	ms := slices.Clone(imageModels)
+	for _, t := range core.Tiers {
+		if m := a.AskTiers()[t].Model; !slices.Contains(ms, m) && a.SeesImages(m) {
+			ms = append(ms, m)
+		}
+	}
+	return core.ImageInfo{Models: ms}
 }
 
 // env is what every run gets. OpenCode takes its folder from PWD, not
@@ -351,11 +372,24 @@ func (a *Adapter) Ask(ctx context.Context, req core.AskRequest) (core.AskResult,
 	}
 	model, effort := tier.Model, tier.Effort
 	if req.Model != "" {
-		model, effort = req.Model, ""
+		model, effort = a.Follow(req.Model), ""
 	}
 	if req.Effort != "" {
 		effort = req.Effort
 	}
+	out, err := a.ask(ctx, req, model, effort)
+	if refused(err) && a.follow.Refuse(model) {
+		// A newer model, or its variant, that OpenCode did not take: once
+		// more with the shipped one, and the newer one is left out until
+		// the next list (#64).
+		out, err = a.ask(ctx, req, a.follow.Base(model), effort)
+	}
+	return out, err
+}
+
+// ask runs one ask with model (without its variant, or with one when
+// effort is "") and effort.
+func (a *Adapter) ask(ctx context.Context, req core.AskRequest, model, effort string) (core.AskResult, error) {
 	switch {
 	case effort != "" && !variantRe.MatchString(effort):
 		return core.AskResult{}, core.Fail(core.ErrCodeBadModel, "variant "+effort)
@@ -380,9 +414,13 @@ func (a *Adapter) Ask(ctx context.Context, req core.AskRequest) (core.AskResult,
 	if err != nil {
 		return core.AskResult{}, core.Fail(core.ErrCodeInternal, "opencode ask: a photo was refused")
 	}
-	if len(images) > 0 && !a.SeesImages(model) {
-		// OpenCode would answer without seeing them, and say so to nobody.
-		return core.AskResult{}, core.Fail(core.ErrCodeNoImages, model)
+	if len(images) > 0 {
+		pm := a.photoModel(model)
+		if pm == "" {
+			// OpenCode would answer without seeing them, and say so to nobody.
+			return core.AskResult{}, core.Fail(core.ErrCodeNoImages, model)
+		}
+		model = pm
 	}
 	args := askImageArgs(model, req.Resume, images)
 	if err := checkArgs(args); err != nil {

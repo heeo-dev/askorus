@@ -261,7 +261,7 @@ func checkCmd(dir string, out io.Writer) error {
 	// The AIs that only answer questions are optional: a missing one is
 	// left out of asks. Claude Code is optional too (2026-11-10): without it
 	// asks go to the others, but My PCs (its sessions) does not work.
-	askOnly := askOnlyAdapters(cfg)
+	askOnly := askOnlyAdapters(cfg, true)
 	others := 0
 	for _, a := range askOnly {
 		if a.Info(ctx).Available {
@@ -302,6 +302,9 @@ func checkCmd(dir string, out io.Writer) error {
 			c.line("warn", m("%[1]s not found or not working (%[2]s); asks leave it out. To use it, install its CLI and sign in: %[3]s",
 				"%[1]s를 찾지 못했거나 동작하지 않습니다 (%[2]s). 묻기에서 빠집니다. 쓰려면 CLI를 설치하고 로그인하세요: %[4]s", a.Agent(), strings.Join(ai.Notices, ", "), aiGuide(true), aiGuide(false)))
 		}
+	}
+	for _, l := range modelLines(ctx, askOnly, cfg.Ask.NoFollow) {
+		c.line(l.level, l.text)
 	}
 	if folder, err := cfg.AskFolder(); err == nil {
 		c.line("ok", m("asks run in %s", "묻기는 %s에서 돕니다", folder))

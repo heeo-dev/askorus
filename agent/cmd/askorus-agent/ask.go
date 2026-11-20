@@ -49,7 +49,9 @@ func askCmd(dir string, args []string, out io.Writer) error {
 	ctx := context.Background()
 	askers := map[string]core.Asker{}
 	var order []string
-	for _, a := range append([]core.Adapter{ca}, askOnlyAdapters(cfg)...) {
+	adapters := append([]core.Adapter{ca}, askOnlyAdapters(cfg, true)...)
+	waitModels(ctx, adapters, modelsWait) // the same models as the agent's asks (#64)
+	for _, a := range adapters {
 		info := a.Info(ctx)
 		if asker, ok := a.(core.Asker); ok && info.Available && slices.Contains(info.Capabilities, core.CapAsk) {
 			askers[a.Agent()] = asker

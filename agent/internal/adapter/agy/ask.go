@@ -204,7 +204,20 @@ func (a *Adapter) Ask(ctx context.Context, req core.AskRequest) (core.AskResult,
 		if req.Effort != "" {
 			effort = req.Effort
 		}
+	} else {
+		model = a.Follow(model)
 	}
+	out, err := a.ask(ctx, req, model, effort)
+	if core.ErrorCode(err) == core.ErrCodeBadModel && a.follow.Refuse(model) {
+		// A newer model agy did not take: once more with the shipped one,
+		// and the newer one is left out until the next list (#64).
+		out, err = a.ask(ctx, req, a.follow.Base(model), effort)
+	}
+	return out, err
+}
+
+// ask runs one ask with model and effort.
+func (a *Adapter) ask(ctx context.Context, req core.AskRequest, model, effort string) (core.AskResult, error) {
 	switch {
 	case !modelRe.MatchString(model):
 		return core.AskResult{}, core.Fail(core.ErrCodeBadModel, model)

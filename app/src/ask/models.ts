@@ -119,3 +119,24 @@ export function runsWith(pick: ModelPick | null, t: TierModels, tier: Tier): Mod
   const m = t[tier];
   return m?.model ? m : null;
 }
+
+/** The newer model the PC's tiers moved to, under each model the agent ships with (/v1/info ask.newer, #64). */
+export type NewerModels = Record<string, string>;
+
+/**
+ * followNewer: a pick of a model the PC's tiers moved past is shown and
+ * sent as the newer one (a pick saved before the new model came, #64; the
+ * PC moves it too). Its effort and any '#variant' stay.
+ */
+export function followNewer(p: ModelPick | null, newer: NewerModels | undefined): ModelPick | null {
+  if (!p) return p;
+  const [model, variant] = p.model.split('#');
+  const to = newer?.[model];
+  if (!to) return p;
+  return { ...p, model: variant !== undefined ? `${to}#${variant}` : to };
+}
+
+/** isNewModel: the PC's tiers moved to model on their own, a newer model of its line (#64). */
+export function isNewModel(model: string, newer: NewerModels | undefined): boolean {
+  return !!newer && Object.values(newer).includes(base(model));
+}

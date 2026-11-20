@@ -42,12 +42,15 @@ test('askers keeps the PC order and dims what cannot ask', () => {
       { agent: 'claude', available: true, capabilities: ['list', 'ask'], ask: { tiers: { standard: { model: 'sonnet' } }, efforts: { sonnet: ['low', 'high'] } } },
       { agent: 'codex', available: false, capabilities: [] },
       { agent: 'opencode', available: true, capabilities: ['ask'] },
+      // #64: the newer models the tiers moved to.
+      { agent: 'agy', available: true, capabilities: ['ask'], ask: { tiers: { quick: { model: 'gemini-3.9-flash' } }, newer: { 'gemini-3.8-flash': 'gemini-3.9-flash' } } },
     ],
   } as unknown as Info;
   expect(askers(info)).toEqual([
-    { agent: 'claude', canAsk: true, tiers: { standard: { model: 'sonnet' } }, efforts: { sonnet: ['low', 'high'] } },
-    { agent: 'codex', canAsk: false, tiers: {}, efforts: {} },
-    { agent: 'opencode', canAsk: true, tiers: {}, efforts: {} },
+    { agent: 'claude', canAsk: true, tiers: { standard: { model: 'sonnet' } }, efforts: { sonnet: ['low', 'high'] }, newer: {} },
+    { agent: 'codex', canAsk: false, tiers: {}, efforts: {}, newer: {} },
+    { agent: 'opencode', canAsk: true, tiers: {}, efforts: {}, newer: {} },
+    { agent: 'agy', canAsk: true, tiers: { quick: { model: 'gemini-3.9-flash' } }, efforts: {}, newer: { 'gemini-3.8-flash': 'gemini-3.9-flash' } },
   ]);
 });
 

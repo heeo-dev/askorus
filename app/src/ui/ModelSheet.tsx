@@ -17,10 +17,12 @@ import { tiers, type Tier } from '@/api/types';
 import {
   effortChoices,
   effortOf,
+  isNewModel,
   type ModelEfforts,
   modelLabel,
   type ModelPick,
   modelSpoken,
+  type NewerModels,
   pickModels,
   presets,
   runsWith,
@@ -42,6 +44,7 @@ export function ModelSheet({
   agent,
   tierModels,
   efforts,
+  newer,
   tier,
   value,
   onPick,
@@ -52,6 +55,8 @@ export function ModelSheet({
   agent: string | null;
   tierModels: TierModels;
   efforts: ModelEfforts;
+  /** The newer models the PC's tiers moved to (#64): marked as new. */
+  newer?: NewerModels;
   /** The tier asked at now: an own pick starts from its model. */
   tier: Tier;
   /** The person's pick; null follows the tier. */
@@ -68,9 +73,10 @@ export function ModelSheet({
   const s = styles(th);
   if (!agent) return null;
 
+  const isNew = (m: ModelPick) => isNewModel(m.model, newer);
   const byTier = tiers
     .filter((x) => tierModels[x]?.model)
-    .map((x) => `${t(`ask.tier.${x}`)} ${modelLabel(tierModels[x])}`)
+    .map((x) => `${t(`ask.tier.${x}`)} ${modelLabel(tierModels[x])}${isNew(tierModels[x]) ? ` (${t('ask.newModel')})` : ''}`)
     .join('\n');
   const rows = presets(tierModels);
 
@@ -112,8 +118,8 @@ export function ModelSheet({
               `${r.pick.model}#${effortOf(r.pick)}`,
               r.pick,
               modelLabel(r.pick),
-              r.tiers.map((x) => t(`ask.tier.${x}`)).join(' · '),
-              modelSpoken(r.pick),
+              [...r.tiers.map((x) => t(`ask.tier.${x}`)), ...(isNew(r.pick) ? [t('ask.newModel')] : [])].join(' · '),
+              isNew(r.pick) ? `${modelSpoken(r.pick)}, ${t('ask.newModel')}` : modelSpoken(r.pick),
             ),
           )}
         </Group>

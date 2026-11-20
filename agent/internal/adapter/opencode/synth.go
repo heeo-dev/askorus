@@ -119,8 +119,22 @@ func synthEnv(folder string) map[string]string {
 // when set, replaces the model's variant; without one OpenCode runs the
 // model as named. Cleanup is the conversation's id on every path once
 // opencode ran, and the output is dropped with any error; the caller
-// deletes the conversation with CleanupJudge.
+// deletes the conversation with CleanupJudge. A newer model of a line
+// that OpenCode refuses is asked again with the shipped one (#64); the
+// first run's conversation is deleted here, the second's by the caller.
 func (a *Adapter) Synthesize(ctx context.Context, req core.SynthRequest) (core.SynthResult, error) {
+	res, err := a.synthesize(ctx, req)
+	if refused(err) && a.follow.Refuse(req.Model) {
+		if res.Cleanup != "" {
+			_ = a.CleanupJudge(ctx, req.Folder, []string{res.Cleanup})
+		}
+		req.Model = a.follow.Base(req.Model)
+		res, err = a.synthesize(ctx, req)
+	}
+	return res, err
+}
+
+func (a *Adapter) synthesize(ctx context.Context, req core.SynthRequest) (core.SynthResult, error) {
 	if a.exeErr != nil {
 		return core.SynthResult{}, core.Fail(core.ErrCodeAgentUnavailable, "opencode was not found")
 	}
@@ -140,6 +154,9 @@ func (a *Adapter) Synthesize(ctx context.Context, req core.SynthRequest) (core.S
 	images, ierr := imagePaths(req.Images)
 	if ierr != nil || (len(images) > 0 && (req.Refine || !a.SeesImages(model))) {
 		return core.SynthResult{}, core.Fail(core.ErrCodeInternal, "the combined-answer photos were refused")
+	}
+	if len(images) > 0 {
+		model = a.photoModel(model) // the model of the line known to see them (#64)
 	}
 	args := synthImageArgs(model, images)
 	if req.Refine {

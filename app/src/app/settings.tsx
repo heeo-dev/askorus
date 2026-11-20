@@ -19,7 +19,7 @@ import { agentName } from '@/api/agents';
 import { tiers } from '@/api/types';
 import { conversations, useConversations } from '@/ask/conversations';
 import { features } from '@/ask/features';
-import { modelLabel } from '@/ask/models';
+import { followNewer, modelLabel } from '@/ask/models';
 import { type AskPrefs, defaultAskPrefs, loadAskPrefs, moderatorOf, saveAskPrefs, synthWriters } from '@/ask/prefs';
 import { type Asker, askers } from '@/ask/thread';
 import { loadPrefs, type Prefs, savePrefs } from '@/connections/prefs';
@@ -104,7 +104,8 @@ export default function Settings() {
   const defaults = settingsLine(prefs.model, prefs.effort);
   // The moderator model (11-06): set per AI; the list is the moderator AI's on the current PC.
   const moderator = pcAIs?.find((a) => a.agent === ask.synthAgent && a.canAsk) ?? null;
-  const moderatorPick = ask.synthModels[ask.synthAgent] ?? null;
+  // A pick saved before the PC moved to a newer model of its line shows as the newer one (#64).
+  const moderatorPick = followNewer(ask.synthModels[ask.synthAgent] ?? null, moderator?.newer);
   const moderatorValue = moderatorPick ? modelLabel(moderatorPick) : t('ask.byTier');
   const version = Constants.expoConfig?.version ?? '';
 
@@ -267,6 +268,7 @@ export default function Settings() {
         agent={modelOpen && moderator ? moderator.agent : null}
         tierModels={moderator?.tiers ?? {}}
         efforts={moderator?.efforts ?? {}}
+        newer={moderator?.newer}
         tier={ask.tier}
         value={moderatorPick}
         title={t('settings.moderatorModelTitle', { name: agentName(ask.synthAgent) })}

@@ -156,6 +156,11 @@ type AskInfo struct {
 	// Images says which of the AI's models see photos sent with a question
 	// (#14). Absent when the AI takes no photos.
 	Images *ImageInfo `json:"images,omitempty"`
+	// Newer maps each model the agent ships with to the newer model of its
+	// line that a tier of Tiers uses now (#64): the app marks those as new
+	// and moves an own pick of the shipped one to it. Absent while every
+	// tier uses a shipped model.
+	Newer map[string]string `json:"newer,omitempty"`
 }
 
 // ListResult is what an adapter returns for the session list.

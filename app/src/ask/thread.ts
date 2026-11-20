@@ -109,6 +109,8 @@ export type Asker = {
   tiers: Record<string, { model: string; effort?: string }>;
   /** The efforts each tier model may take ({} from an older agent). */
   efforts: Record<string, string[]>;
+  /** The newer models the tiers moved to, under the shipped ones (#64; {} while none). */
+  newer: Record<string, string>;
 };
 
 /** askers lists the PC's AIs in its order; those without the ask capability are shown dimmed. */
@@ -118,6 +120,7 @@ export function askers(info: Info): Asker[] {
     canAsk: a.available && a.capabilities.includes('ask'),
     tiers: a.ask?.tiers ?? {},
     efforts: a.ask?.efforts ?? {},
+    newer: a.ask?.newer ?? {},
   }));
 }
 

@@ -234,6 +234,38 @@ test("the model sheet lists each tier's model with its effort, and an own model 
   expect(await loadAskPrefs()).toMatchObject({ models: { opencode: pro }, efforts: { opencode: 'max' } });
 });
 
+// #64: the PC's tiers moved to a newer model of a line on their own. The
+// picker, the model sheet and the tier sheet say it is new; an own pick
+// saved before it came (the old Sol) shows as the newer one.
+test('a newer model the PC moved to is marked new, and an own pick of the old one shows as it', async () => {
+  const sol = 'gpt-6.2-sol';
+  agent.askModels(
+    'codex',
+    { quick: { model: 'gpt-6-luna', effort: 'medium' }, standard: { model: 'gpt-6.1-terra', effort: 'medium' }, deep: { model: sol, effort: 'medium' } },
+    { 'gpt-6-luna': ['low', 'medium'], 'gpt-6.1-terra': ['low', 'medium'], [sol]: ['low', 'medium', 'high'] },
+    { 'gpt-6.1-sol': sol },
+  );
+  const { user } = await open({ models: { codex: 'gpt-6.1-sol' }, efforts: { codex: 'high' } });
+  await user.press(await screen.findByRole('button', { name: 'AIs to answer: 3 (Claude, Codex, OpenCode). Pick' }));
+  expect(await screen.findByRole('switch', { name: 'Codex, gpt-6.2-sol · high (new model)' })).toBeChecked();
+  await user.press(screen.getByRole('button', { name: 'Codex model' }));
+  expect(await screen.findByRole('header', { name: 'Codex model' })).toBeTruthy();
+  expect(screen.getByText('Quick gpt-6-luna · medium\nStandard gpt-6.1-terra · medium\nDeep gpt-6.2-sol · medium (new model)')).toBeTruthy();
+  expect(screen.getByRole('radio', { name: 'gpt-6.2-sol, medium, new model' })).toBeTruthy();
+  expect(screen.getByText('Deep · new model')).toBeTruthy();
+  // The own pick is the newer Sol at high: no old Sol to pick.
+  const models = screen.getByLabelText('Pick your own: Model');
+  expect(within(models).getByRole('radio', { name: 'gpt-6.2-sol' })).toBeChecked();
+  expect(within(models).queryByRole('radio', { name: 'gpt-6.1-sol' })).toBeNull();
+  // By tier: the tier sheet says it too.
+  await user.press(screen.getByRole('radio', { name: 'By tier' }));
+  expect(await screen.findByRole('switch', { name: 'Codex, gpt-6.1-terra · medium' })).toBeTruthy();
+  await user.press(close());
+  await waitFor(() => expect(screen.queryByTestId('ai-sheet')).toBeNull());
+  await user.press(screen.getByRole('button', { name: 'Tier: Standard. Pick' }));
+  expect(await screen.findByText(/Codex gpt-6\.2-sol · medium \(new model\)/)).toBeTruthy();
+});
+
 test('with every AI turned off (kept from before), the picker says so and turning one on is enough (UX-10)', async () => {
   const { user } = await open({ off: ['claude', 'codex', 'opencode'] });
   await user.type(await screen.findByLabelText('Ask a question'), 'q');

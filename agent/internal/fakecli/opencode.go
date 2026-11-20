@@ -26,6 +26,8 @@ const ProjectID = "fakeproject0000000000000000000000000000"
 func opencodeMain(c *Call) int {
 	a := c.Args
 	switch {
+	case len(a) > 0 && a[0] == "run" && refusesNewer(RoleOpenCode, flagValue(a, "-m")):
+		return opencodeError("", "unknown", "Variant unavailable")
 	case len(a) > 0 && a[0] == "run" && (flagValue(a, "--agent") == SynthAgent || flagValue(a, "--agent") == RefineAgent):
 		return opencodeSynth(c)
 	case len(a) > 0 && a[0] == "run":

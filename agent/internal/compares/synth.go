@@ -541,7 +541,9 @@ func (m *Manager) synthInputLocked(c *comparison) synthInput {
 // the effort one that model takes (its AskEfforts list, or its tiers'
 // efforts without one; none: its first tier's), and its company is known.
 // Anything else keeps the tier's model: the phone only offers these, so
-// a pick the PC no longer has falls back rather than fails.
+// a pick the PC no longer has falls back rather than fails. A pick of an
+// older model of a line the tiers follow is first moved to the newest
+// one (#64), so a pick saved before a new model came keeps working.
 func (m *Manager) withPick(w Writer, agent, model, effort string) Writer {
 	if model == "" || w.Agent != agent || w.Judger == nil {
 		return w
@@ -549,6 +551,9 @@ func (m *Manager) withPick(w Writer, agent, model, effort string) Writer {
 	asker, ok := m.adapter(agent).(core.Asker)
 	if !ok {
 		return w
+	}
+	if f, ok := m.adapter(agent).(core.Following); ok {
+		model = f.Follow(model)
 	}
 	var uses []string
 	known := false

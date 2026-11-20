@@ -59,6 +59,10 @@
 //	ASKORUS_FAKE_AGY         the fake agy's own run mode (agy.go): retry,
 //	                           capacity, badtool, wrongagent, denied,
 //	                           noresume, links, noinit, always
+//	ASKORUS_FAKECLI_NEWER    the model lists (models.go, #64): "none"
+//	                           (default), "list" a newer model of a line
+//	                           is listed and answers, "refuse" it is
+//	                           listed and refused; for every AI or per AI
 //	ASKORUS_FAKE_DEBATE      the debate (debate.go): "" one point, "two"
 //	                           a taste point too, "next" one more turn at
 //	                           every check that may, "none" no point
@@ -175,6 +179,9 @@ func Main(args []string) int {
 	}
 	if role == RoleAgy && len(args) > 1 && args[0] == "-p" && args[1] == "/usage" {
 		return agyUsage(args) // the sign-in and usage check: not recorded
+	}
+	if role == RoleCodex && slices.Equal(args, []string{"debug", "models"}) {
+		return codexModels() // the model list (#64): not recorded
 	}
 	if role == RoleCodex && len(args) > 0 && args[0] == "app-server" {
 		return codexAppServer(args) // the usage read (#20): not recorded, stdin read line by line
@@ -540,7 +547,7 @@ func setEnv(t testing.TB, role string) {
 	t.Setenv(EnvRole, role)
 	t.Setenv(EnvRecord, t.TempDir())
 	t.Setenv(EnvState, t.TempDir())
-	for _, k := range []string{EnvSynth, EnvSleep, EnvVersion, EnvFail, EnvAnswers, EnvAsk, EnvDebate, EnvUsage} {
+	for _, k := range []string{EnvSynth, EnvSleep, EnvVersion, EnvFail, EnvAnswers, EnvAsk, EnvDebate, EnvUsage, EnvNewer} {
 		t.Setenv(k, "")
 	}
 }

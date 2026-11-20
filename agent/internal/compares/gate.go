@@ -153,6 +153,11 @@ func Announce(ctx context.Context, adapters []core.Adapter, g Gate) ([]core.Adap
 				im := seer.ImageModels()
 				info.Ask.Images = &im
 			}
+			if f, ok := a.(core.Following); ok {
+				if n := f.Newer(); len(n) > 0 {
+					info.Ask.Newer = n
+				}
+			}
 		}
 		caps := slices.DeleteFunc(slices.Clone(info.Capabilities), func(c core.Capability) bool {
 			return c == core.CapSynthesize

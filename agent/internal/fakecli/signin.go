@@ -91,6 +91,9 @@ func opencodeModels(args []string) int {
 	list := OpenCodeFreeModels
 	if mode != SignedOut {
 		list = append(slices.Clone(openCodeModels), OpenCodeFreeModels...)
+		if newer, _ := newerMode(RoleOpenCode); newer != NewerNone {
+			list = append([]string{NewerOpenCode}, list...)
+		}
 	}
 	for _, m := range list {
 		fmt.Print(m + "\r\n")

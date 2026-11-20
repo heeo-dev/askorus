@@ -86,9 +86,15 @@ func cliModel(model, effort string) string {
 	return model + "-" + effort
 }
 
-// AskEfforts lists the levels each tier model may take (core.EffortLister).
+// AskEfforts lists the levels each tier model may take (core.EffortLister):
+// the model list's, else the table's.
 func (a *Adapter) AskEfforts() map[string][]string {
-	return core.TierEfforts(a.AskTiers(), func(m string) []string { return modelEfforts[m] })
+	return core.TierEfforts(a.AskTiers(), func(m string) []string {
+		if es := a.follow.Efforts(m); len(es) > 0 {
+			return es
+		}
+		return modelEfforts[m]
+	})
 }
 
 // Options configures the adapter.
@@ -98,6 +104,9 @@ type Options struct {
 	// ConfigDir is agy's config folder, where it keeps hooks, plugins and
 	// agents of the person's own; empty: ~/.gemini/config. Tests give one.
 	ConfigDir string
+	// Follow lets the tier models follow the newest model of their line
+	// (models.go, #64), as codex.Options.Follow.
+	Follow bool
 }
 
 // Adapter implements core.Adapter and core.Asker for Antigravity CLI.
@@ -130,6 +139,9 @@ type Adapter struct {
 	fileMu sync.Mutex
 	ready  map[string]bool
 	writes int
+
+	// follow keeps agy's model list (models.go, #64).
+	follow *core.Follower
 }
 
 // New finds agy. A missing agy is not an error: /v1/info reports it.
@@ -141,6 +153,10 @@ func New(o Options) *Adapter {
 		}
 	}
 	a.exe, a.exeErr = findExe(o.Path)
+	a.follow = &core.Follower{Lines: lines}
+	if o.Follow {
+		a.follow.List = a.listModels
+	}
 	return a
 }
 
@@ -182,6 +198,7 @@ func (a *Adapter) Info(ctx context.Context) core.AdapterInfo {
 		} else {
 			info.Version, info.Available = v, true
 			info.Capabilities = append(info.Capabilities, core.CapAsk)
+			a.follow.Check(v)
 			a.loginNotices(ctx, &info)
 		}
 	}
@@ -216,18 +233,23 @@ func (a *Adapter) ListSessions(context.Context) (core.ListResult, error) {
 	return core.ListResult{Sessions: []core.Session{}}, nil
 }
 
-// AskTiers returns the tier models, with the settings' overrides.
+// AskTiers returns the tier models, with the settings' overrides: a model
+// of the settings stays as written, any other follows its line (#64).
 func (a *Adapter) AskTiers() map[string]core.AskModel {
 	out := make(map[string]core.AskModel, len(defaultTiers))
 	for t, m := range defaultTiers {
+		own := false
 		if o, ok := a.tiers[t]; ok {
 			if o.Model != "" {
-				m.Model = o.Model
+				m.Model, own = o.Model, true
 				m.Effort = o.Effort // a model of its own brings its own level, or none
 			}
 			if o.Effort != "" {
 				m.Effort = o.Effort
 			}
+		}
+		if !own {
+			m.Model = a.follow.Newest(m.Model, m.Effort)
 		}
 		out[t] = m
 	}

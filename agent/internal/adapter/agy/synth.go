@@ -137,8 +137,18 @@ func hasLevel(model string) bool {
 }
 
 // Synthesize writes one combined answer, or the moderator's question spec
-// (core.Synthesizer). The output is returned unchecked.
+// (core.Synthesizer). The output is returned unchecked. A newer model of
+// a line that agy refuses is asked again with the shipped one (#64).
 func (a *Adapter) Synthesize(ctx context.Context, req core.SynthRequest) (core.SynthResult, error) {
+	res, err := a.synthesize(ctx, req)
+	if core.ErrorCode(err) == core.ErrCodeBadModel && a.follow.Refuse(req.Model) {
+		req.Model = a.follow.Base(req.Model)
+		res, err = a.synthesize(ctx, req)
+	}
+	return res, err
+}
+
+func (a *Adapter) synthesize(ctx context.Context, req core.SynthRequest) (core.SynthResult, error) {
 	if a.exeErr != nil {
 		return core.SynthResult{}, core.Fail(core.ErrCodeAgentUnavailable, "agy was not found")
 	}

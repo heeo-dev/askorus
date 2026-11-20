@@ -86,6 +86,12 @@ export type AdapterInfo = {
      * the AI takes no photos.
      */
     images?: { all?: boolean; models?: string[]; newOnly?: boolean };
+    /**
+     * The newer model of its line a tier uses now, under each model the
+     * agent ships with (#64, newer agents): the app marks those models as
+     * new and moves a pick of the shipped one to it. Left out while none.
+     */
+    newer?: Record<string, string>;
   };
 };
 

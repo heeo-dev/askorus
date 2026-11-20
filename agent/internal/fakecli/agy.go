@@ -88,7 +88,7 @@ func agyMain(c *Call) int {
 // agyModels prints `agy models`; not recorded.
 func agyModels() int {
 	fmt.Println("Fetching available models...")
-	for _, m := range AgyModels {
+	for _, m := range agyModelLines() {
 		fmt.Println(m)
 	}
 	return 0
@@ -233,7 +233,7 @@ func agyRun(c *Call) int {
 		fmt.Fprintln(os.Stderr, "error: "+msg)
 		return 1
 	}
-	if m := flagValue(c.Args, "--model"); !slices.ContainsFunc(AgyModels, func(l string) bool { return strings.HasPrefix(l, m+"\t") }) {
+	if m := flagValue(c.Args, "--model"); refusesNewer(RoleAgy, m) || !slices.ContainsFunc(agyModelLines(), func(l string) bool { return strings.HasPrefix(l, m+"\t") }) {
 		msg := fmt.Sprintf("invalid model selection (--model %q --effort \"\"): model %s is not recognized as a known model or custom model in settings", m, m)
 		agyResult("", "ERROR", "", msg, nil)
 		fmt.Fprintln(os.Stderr, "error: "+msg)

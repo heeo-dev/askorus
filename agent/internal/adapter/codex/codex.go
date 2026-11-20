@@ -45,8 +45,10 @@ const (
 
 const versionTTL = 5 * time.Minute
 
-// defaultTiers are the 2026-10-29 tier models (phase2-plan 4). Luna has no
-// 6.1, so quick uses gpt-6-luna.
+// defaultTiers are the 2026-10-29 tier models (phase2-plan 4), the models
+// the agent ships with. Luna has no 6.1, so quick uses gpt-6-luna. Each
+// follows the newest model of its line (models.go, #64) unless agent.json
+// names a model.
 var defaultTiers = map[string]core.AskModel{
 	core.TierQuick:    {Model: "gpt-6-luna", Effort: "medium"},
 	core.TierStandard: {Model: "gpt-6.1-terra", Effort: "medium"},
@@ -67,9 +69,15 @@ var modelEfforts = map[string][]string{
 	"gpt-6.1-sol":   {"low", "medium", "high", "xhigh", "max", "ultra"},
 }
 
-// AskEfforts lists the efforts each tier model may take (core.EffortLister).
+// AskEfforts lists the efforts each tier model may take (core.EffortLister):
+// the model list's, else the table's.
 func (a *Adapter) AskEfforts() map[string][]string {
-	return core.TierEfforts(a.AskTiers(), func(m string) []string { return modelEfforts[m] })
+	return core.TierEfforts(a.AskTiers(), func(m string) []string {
+		if es := a.follow.Efforts(m); len(es) > 0 {
+			return es
+		}
+		return modelEfforts[m]
+	})
 }
 
 var threadRe = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
@@ -83,6 +91,10 @@ type Options struct {
 	// for --output-schema. Empty: the agent folder,
 	// config.Dir() (%APPDATA%\Askorus). Tests give a temporary folder.
 	SchemaDir string
+	// Follow lets the tier models follow the newest model of their lines
+	// (#64): the agent sets it unless agent.json ask.noFollow; tests that
+	// do not test it leave it off, so no list runs behind them.
+	Follow bool
 }
 
 // Adapter implements core.Adapter, core.Asker, core.Judger and
@@ -107,6 +119,9 @@ type Adapter struct {
 	// background and kept usageTTL.
 	usage *core.UsageCache
 
+	// follow keeps codex's model list (models.go, #64).
+	follow *core.Follower
+
 	// schemaDir holds the schema files: absolute, or "" when there is no
 	// agent folder.
 	schemaDir string
@@ -128,6 +143,10 @@ func New(o Options) *Adapter {
 	a := &Adapter{tiers: o.Tiers, schemaDir: o.SchemaDir}
 	a.exe, a.exeErr = findExe(o.Path)
 	a.usage = &core.UsageCache{TTL: usageTTL, Read: a.readUsage}
+	a.follow = &core.Follower{Lines: lines}
+	if o.Follow {
+		a.follow.List = a.listModels
+	}
 	if a.schemaDir == "" {
 		a.schemaDir, _ = config.Dir() // none: a combined answer fails as internal
 	}
@@ -190,6 +209,7 @@ func (a *Adapter) Info(ctx context.Context) core.AdapterInfo {
 		} else {
 			info.Version, info.Available = v, true
 			info.Capabilities = append(info.Capabilities, core.CapAsk)
+			a.follow.Check(v)
 			a.loginNotices(ctx, &info)
 			if a.cachedLogin(ctx).signedIn {
 				info.Usage = a.usage.Get()
@@ -230,17 +250,22 @@ func (a *Adapter) ListSessions(context.Context) (core.ListResult, error) {
 	return core.ListResult{Sessions: []core.Session{}}, nil
 }
 
-// AskTiers returns the tier models, with the settings' overrides.
+// AskTiers returns the tier models, with the settings' overrides: a model
+// of the settings stays as written, any other follows its line (#64).
 func (a *Adapter) AskTiers() map[string]core.AskModel {
 	out := make(map[string]core.AskModel, len(defaultTiers))
 	for t, m := range defaultTiers {
+		own := false
 		if o, ok := a.tiers[t]; ok {
 			if o.Model != "" {
-				m.Model = o.Model
+				m.Model, own = o.Model, true
 			}
 			if o.Effort != "" {
 				m.Effort = o.Effort
 			}
+		}
+		if !own {
+			m.Model = a.follow.Newest(m.Model, m.Effort)
 		}
 		out[t] = m
 	}
@@ -387,10 +412,23 @@ func (a *Adapter) Ask(ctx context.Context, req core.AskRequest) (core.AskResult,
 	model, effort := req.Model, req.Effort
 	if model == "" {
 		model = tier.Model
+	} else {
+		model = a.Follow(model)
 	}
 	if effort == "" {
 		effort = tier.Effort
 	}
+	out, err := a.ask(ctx, req, model, effort)
+	if refused(err) && a.follow.Refuse(model) {
+		// A newer model codex did not take: once more with the shipped one,
+		// and the newer one is left out until the next list (#64).
+		out, err = a.ask(ctx, req, a.follow.Base(model), effort)
+	}
+	return out, err
+}
+
+// ask runs one ask with model and effort.
+func (a *Adapter) ask(ctx context.Context, req core.AskRequest, model, effort string) (core.AskResult, error) {
 	switch {
 	case !config.ValidModel(model):
 		return core.AskResult{}, core.Fail(core.ErrCodeBadModel, model)

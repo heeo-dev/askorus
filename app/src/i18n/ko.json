@@ -407,6 +407,7 @@
   "ask.ownPick": "직접 고르기",
   "ask.ownPickHint": "단계와 상관없이 이 모델과 노력 수준으로 답합니다.",
   "ask.ownModel": "모델",
+  "ask.newModel": "새 모델",
   "ask.ownEffort": "노력 수준",
   "ask.onPC": "내 PC: {name}",
   "ask.pcSwitched": "이 대화를 물은 PC로 바꿨습니다: {name}",

@@ -75,6 +75,10 @@ type AskConfig struct {
 	// Tiers overrides the model of a tier for one AI, e.g.
 	// {"codex": {"deep": {"model": "gpt-6.1-sol", "effort": "high"}}}.
 	Tiers map[string]map[string]core.AskModel `json:"tiers,omitempty"`
+	// NoFollow keeps the tier models the agent ships with: they no longer
+	// follow the newest model of their line (#64). A model set in Tiers
+	// never follows.
+	NoFollow bool `json:"noFollow,omitempty"`
 }
 
 // DefaultJudgePerAI is how many one-off processes (combined answers,

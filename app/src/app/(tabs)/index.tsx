@@ -39,7 +39,7 @@ import { type Info, type RunPart, type Tier, tiers } from '@/api/types';
 import { canSynthesize, polling, writerFor } from '@/ask/compare';
 import { conversations, recentQuestions, useConversations } from '@/ask/conversations';
 import { features } from '@/ask/features';
-import { modelLabel, pickOf, runsWith } from '@/ask/models';
+import { followNewer, isNewModel, modelLabel, pickOf, runsWith } from '@/ask/models';
 import { dropPending, dropPhotos, keepPhotos } from '@/ask/photoFiles';
 import { PhotoError, photosAvailable, pickPhotos, takePhoto } from '@/ask/photoPick';
 import { byPhotos, photoLimit, type TurnPhoto } from '@/ask/photos';
@@ -817,9 +817,14 @@ export default function Ask() {
   const sheetTurn = sheet && 'turn' in sheet ? (turns.find((x) => x.id === sheet.turn) ?? null) : null;
   // What an AI answers with now: its own pick, else the tier's model and effort.
   const asker = (agent: string) => list.find((a) => a.agent === agent);
+  // A pick saved before the PC moved to a newer model of its line shows as the newer one (#64).
+  const ownPick = (agent: string) => followNewer(pickOf(prefs, agent), asker(agent)?.newer);
+  // A model the PC moved to on its own says so (#64).
+  const labelOf = (agent: string, m: { model: string; effort?: string }) =>
+    isNewModel(m.model, asker(agent)?.newer) ? `${modelLabel(m)} (${t('ask.newModel')})` : modelLabel(m);
   const modelOf = (agent: string, tier: Tier = prefs.tier) => {
-    const m = runsWith(pickOf(prefs, agent), asker(agent)?.tiers ?? {}, tier);
-    return m ? modelLabel(m) : '';
+    const m = runsWith(ownPick(agent), asker(agent)?.tiers ?? {}, tier);
+    return m ? labelOf(agent, m) : '';
   };
   // Per tier, the models and efforts of the AIs that are on (or picked for the follow-up) and follow the tier (#16).
   const tierModelsOf = (agents: string[]) => Object.fromEntries(
@@ -828,7 +833,7 @@ export default function Ask() {
         .filter((a) => !prefs.models[a])
         .map((a) => {
           const m = asker(a)?.tiers[x];
-          return m?.model ? `${agentName(a)} ${modelLabel(m)}` : '';
+          return m?.model ? `${agentName(a)} ${labelOf(a, m)}` : '';
         })
         .filter(Boolean)
         .join(', ');
@@ -972,8 +977,9 @@ export default function Ask() {
         agent={sheet?.kind === 'model' ? sheet.agent : null}
         tierModels={sheet?.kind === 'model' ? (asker(sheet.agent)?.tiers ?? {}) : {}}
         efforts={sheet?.kind === 'model' ? (asker(sheet.agent)?.efforts ?? {}) : {}}
+        newer={sheet?.kind === 'model' ? asker(sheet.agent)?.newer : undefined}
         tier={prefs.tier}
-        value={sheet?.kind === 'model' ? pickOf(prefs, sheet.agent) : null}
+        value={sheet?.kind === 'model' ? ownPick(sheet.agent) : null}
         onClose={() => setSheet({ kind: sheet?.kind === 'model' && sheet.back ? sheet.back : 'pick' })}
         onPick={(pick, close) => {
           if (sheet?.kind !== 'model') return;

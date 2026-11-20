@@ -276,9 +276,12 @@ export class FakeAgent {
     return this.callsTo('POST', '/v1/uploads').map((c) => c.body?.file);
   }
 
-  /** askModels gives Codex or OpenCode these tier models and, as newer agents do, their efforts (11-06). */
-  askModels(agent: string, tiers: Record<string, { model: string; effort?: string }>, efforts?: Record<string, string[]>) {
-    this.askAgents = this.askAgents.map((a) => (a.agent === agent ? { ...a, ask: { tiers, ...(efforts ? { efforts } : {}) } } : a));
+  /**
+   * askModels gives Codex or OpenCode these tier models and, as newer agents
+   * do, their efforts (11-06) and the newer models they moved to (#64).
+   */
+  askModels(agent: string, tiers: Record<string, { model: string; effort?: string }>, efforts?: Record<string, string[]>, newer?: Record<string, string>) {
+    this.askAgents = this.askAgents.map((a) => (a.agent === agent ? { ...a, ask: { tiers, ...(efforts ? { efforts } : {}), ...(newer ? { newer } : {}) } } : a));
   }
 
   /**

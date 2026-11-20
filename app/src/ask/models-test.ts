@@ -4,6 +4,8 @@
 import {
   effortChoices,
   effortOf,
+  followNewer,
+  isNewModel,
   modelLabel,
   modelSpoken,
   pickModels,
@@ -74,4 +76,19 @@ test("the person's pick, else the tier's", () => {
   expect(runsWith(null, opencode, 'standard')).toEqual({ model: flash, effort: 'high' });
   expect(runsWith({ model: pro, effort: 'max' }, opencode, 'quick')).toEqual({ model: pro, effort: 'max' });
   expect(runsWith(null, {}, 'quick')).toBeNull();
+});
+
+// #64: a pick of a model the PC moved past runs the newer one, its effort
+// and variant kept; a model the PC moved to is new.
+test('followNewer and isNewModel', () => {
+  const newer = { 'gpt-6.1-sol': 'gpt-6.2-sol', [flash]: 'opencode-go/deepseek-v4.2-flash' };
+  expect(followNewer({ model: 'gpt-6.1-sol', effort: 'high' }, newer)).toEqual({ model: 'gpt-6.2-sol', effort: 'high' });
+  expect(followNewer({ model: flash + '#max' }, newer)).toEqual({ model: 'opencode-go/deepseek-v4.2-flash#max' });
+  expect(followNewer({ model: pro }, newer)).toEqual({ model: pro });
+  expect(followNewer(null, newer)).toBeNull();
+  expect(followNewer({ model: 'gpt-6.1-sol' }, undefined)).toEqual({ model: 'gpt-6.1-sol' });
+  expect(isNewModel('gpt-6.2-sol', newer)).toBe(true);
+  expect(isNewModel('opencode-go/deepseek-v4.2-flash#high', newer)).toBe(true);
+  expect(isNewModel('gpt-6.1-sol', newer)).toBe(false);
+  expect(isNewModel('gpt-6.2-sol', undefined)).toBe(false);
 });

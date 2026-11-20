@@ -407,6 +407,7 @@
   "ask.ownPick": "Pick your own",
   "ask.ownPickHint": "Answers with this model and effort at every tier.",
   "ask.ownModel": "Model",
+  "ask.newModel": "new model",
   "ask.ownEffort": "Effort",
   "ask.onPC": "My PC: {name}",
   "ask.pcSwitched": "Switched to the PC this conversation was asked on: {name}",

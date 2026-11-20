@@ -42,7 +42,7 @@ func setupCmd(dir string, args []string, in io.Reader, out io.Writer) error {
 		claude:   adapter.Info,
 		others: func(ctx context.Context) []namedInfo {
 			var out []namedInfo
-			for _, a := range askOnlyAdapters(cfg) {
+			for _, a := range askOnlyAdapters(cfg, false) { // found and signed in only: no model list
 				out = append(out, namedInfo{name: displayName(a.Agent()), info: a.Info(ctx)})
 			}
 			return out

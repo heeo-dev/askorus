@@ -101,3 +101,12 @@ func ErrorCode(err error) string {
 	}
 	return ""
 }
+
+// ErrorDetail returns the ActionError detail of err, or "".
+func ErrorDetail(err error) string {
+	var ae *ActionError
+	if errors.As(err, &ae) {
+		return ae.Detail
+	}
+	return ""
+}

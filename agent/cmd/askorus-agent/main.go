@@ -250,13 +250,43 @@ func judgeGate(cfg config.Config) compares.Gate {
 
 // askOnlyAdapters are the AIs that only answer questions for now (Phase 2;
 // their sessions come in Phase 3). A missing one is reported, not an error.
-func askOnlyAdapters(cfg config.Config) []core.Adapter {
+// With follow their tier models follow the newest model of their lines
+// (#64) unless agent.json ask.noFollow; a command that shows or uses them
+// once waits for the lists first (waitModels).
+func askOnlyAdapters(cfg config.Config, follow bool) []core.Adapter {
+	follow = follow && !cfg.Ask.NoFollow
 	return []core.Adapter{
-		codex.New(codex.Options{Path: cfg.CodexPath, Tiers: cfg.Ask.Tiers[codex.Name]}),
-		opencode.New(opencode.Options{Path: cfg.OpenCodePath, Tiers: cfg.Ask.Tiers[opencode.Name]}),
-		agy.New(agy.Options{Path: cfg.AgyPath, Tiers: cfg.Ask.Tiers[agy.Name]}),
+		codex.New(codex.Options{Path: cfg.CodexPath, Tiers: cfg.Ask.Tiers[codex.Name], Follow: follow}),
+		opencode.New(opencode.Options{Path: cfg.OpenCodePath, Tiers: cfg.Ask.Tiers[opencode.Name], Follow: follow}),
+		agy.New(agy.Options{Path: cfg.AgyPath, Tiers: cfg.Ask.Tiers[agy.Name], Follow: follow}),
 	}
 }
+
+// modelWaiter is an adapter whose model list can be waited for (#64).
+type modelWaiter interface {
+	WaitModels(ctx context.Context)
+}
+
+// waitModels starts the model lists of the adapters (their Info does) and
+// waits for them at most wait, for a command that runs once: serve's
+// lists run behind the requests instead.
+func waitModels(ctx context.Context, adapters []core.Adapter, wait time.Duration) {
+	ctx, cancel := context.WithTimeout(ctx, wait)
+	defer cancel()
+	for _, a := range adapters {
+		if _, ok := a.(modelWaiter); ok {
+			a.Info(ctx) // starts the list, which runs beside the others
+		}
+	}
+	for _, a := range adapters {
+		if w, ok := a.(modelWaiter); ok {
+			w.WaitModels(ctx)
+		}
+	}
+}
+
+// modelsWait bounds waitModels: a list takes a few seconds.
+const modelsWait = 40 * time.Second
 
 // foldersFrom rereads the allowed folders from the settings file, so
 // `folders add` applies to a running server. A broken file keeps the last
@@ -355,7 +385,7 @@ func serve(dir string, args []string) error {
 		logger.Error("no ask folder; asks are off", "err", err.Error())
 		askFolder = ""
 	}
-	askOnly := askOnlyAdapters(cfg)
+	askOnly := askOnlyAdapters(cfg, true)
 	// Photos sent with a question (#14) are kept in their own folder for a
 	// few minutes. Without it questions still work, without photos.
 	var photos *uploads.Store
@@ -813,7 +843,9 @@ func info(dir string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	return printInfo(context.Background(), append([]core.Adapter{adapter}, askOnlyAdapters(cfg)...), judgeGate(cfg), out)
+	adapters := append([]core.Adapter{adapter}, askOnlyAdapters(cfg, true)...)
+	waitModels(context.Background(), adapters, modelsWait)
+	return printInfo(context.Background(), adapters, judgeGate(cfg), out)
 }
 
 // printInfo prints every AI's Info as GET /v1/info's agents shows it:

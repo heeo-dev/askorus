@@ -16,6 +16,8 @@ func codexMain(c *Call, schemaErr error) int {
 	exec := len(c.Args) > 0 && c.Args[0] == "exec" ||
 		len(c.Args) > 1 && c.Args[0] == "--search" && c.Args[1] == "exec"
 	switch {
+	case exec && refusesNewer(RoleCodex, flagValue(c.Args, "-m")):
+		return codexRefused(flagValue(c.Args, "-m"))
 	case exec && slices.Contains(c.Args, "--output-schema") && schemaErr != nil:
 		fmt.Fprintf(os.Stderr, "Error: failed to read output schema file %s: %v\n", flagValue(c.Args, "--output-schema"), schemaErr)
 		return 1
