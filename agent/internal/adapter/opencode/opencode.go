@@ -377,12 +377,15 @@ func (a *Adapter) Ask(ctx context.Context, req core.AskRequest) (core.AskResult,
 	if req.Effort != "" {
 		effort = req.Effort
 	}
+	if err := askCheck(model, effort); err != nil {
+		return core.AskResult{}, err // the agent's own check: no model is left out for it
+	}
 	out, err := a.ask(ctx, req, model, effort)
-	if refused(err) && a.follow.Refuse(model) {
+	if base, variant := splitVariant(model); refused(err) && a.follow.Refuse(base) {
 		// A newer model, or its variant, that OpenCode did not take: once
-		// more with the shipped one, and the newer one is left out until
-		// the next list (#64).
-		out, err = a.ask(ctx, req, a.follow.Base(model), effort)
+		// more with the shipped one (a variant named in the model kept), and
+		// the newer one is left out until the next list (#64).
+		out, err = a.ask(ctx, req, a.follow.Base(base)+variant, effort)
 	}
 	return out, err
 }

@@ -117,4 +117,59 @@ func TestFollowRefused(t *testing.T) {
 	if err != nil || sr.Model != "opencode-go/deepseek-v4.1-flash#max" {
 		t.Errorf("synth: %+v %v", sr, err)
 	}
+	// The refused run's conversation was deleted before the second run.
+	for _, s := range fakecli.Sessions(t) {
+		if s.ID != sr.Cleanup {
+			t.Errorf("the refused run's conversation %s is left", s.ID)
+		}
+	}
+}
+
+// R-148 (2ho's 0.5.1 review): a request the agent itself refuses (a
+// variant that is not one) runs nothing and leaves no model out.
+func TestOwnCheckKeepsTheNewerModel(t *testing.T) {
+	a, ask, _ := followSetup(t, fakecli.NewerRefuse, Options{Follow: true})
+	_, err := a.Ask(context.Background(), core.AskRequest{Folder: ask, Prompt: "hi", Tier: core.TierQuick, Model: fakecli.NewerOpenCode, Effort: "MAX"})
+	if core.ErrorCode(err) != core.ErrCodeBadModel || len(runModels(t)) != 0 {
+		t.Fatalf("err %v, ran %q", err, runModels(t))
+	}
+	if m := a.AskTiers()[core.TierQuick].Model; m != fakecli.NewerOpenCode {
+		t.Errorf("quick = %q: the newer model was left out", m)
+	}
+}
+
+// R-150 (2ho's 0.5.1 review): a model named with its variant follows its
+// line and falls back with the variant kept.
+func TestFollowWithVariant(t *testing.T) {
+	a, ask, _ := followSetup(t, fakecli.NewerList, Options{Follow: true})
+	if got := a.Follow("opencode-go/deepseek-v4.1-flash#max"); got != fakecli.NewerOpenCode+"#max" {
+		t.Errorf("Follow = %q", got)
+	}
+	b, _, _ := followSetup(t, fakecli.NewerRefuse, Options{Follow: true})
+	if _, err := b.Ask(context.Background(), core.AskRequest{Folder: ask, Prompt: "hi", Tier: core.TierQuick, Model: fakecli.NewerOpenCode + "#max"}); err != nil {
+		t.Fatal(err)
+	}
+	if ms := runModels(t); !slices.Equal(ms, []string{fakecli.NewerOpenCode + "#max", "opencode-go/deepseek-v4.1-flash#max"}) {
+		t.Errorf("ran %q", ms)
+	}
+}
+
+// R-151 (2ho's 0.5.1 review): when the refused combined answer's
+// conversation cannot be deleted, there is no second run and its
+// reference goes back to the caller, who cleans it.
+func TestRefusedSynthKeepsItsCleanup(t *testing.T) {
+	a, _, jf := followSetup(t, fakecli.NewerRefuse, Options{Follow: true})
+	t.Setenv(fakecli.EnvFail, "delete")
+	req := synthRequest(t, jf)
+	req.Model = fakecli.NewerOpenCode
+	sr, err := a.Synthesize(context.Background(), req)
+	if err == nil || sr.Cleanup == "" {
+		t.Fatalf("synth: %+v %v", sr, err)
+	}
+	if ms := runModels(t); len(ms) != 1 {
+		t.Errorf("ran %q: a second run after a failed delete", ms)
+	}
+	if ss := fakecli.Sessions(t); len(ss) != 1 || ss[0].ID != sr.Cleanup {
+		t.Errorf("sessions %+v, cleanup %q", ss, sr.Cleanup)
+	}
 }

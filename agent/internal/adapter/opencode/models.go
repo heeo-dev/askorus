@@ -60,8 +60,34 @@ func (a *Adapter) listModels(ctx context.Context) ([]core.ListedModel, error) {
 }
 
 // Follow returns the model to run for a model the phone picked
-// (core.Following).
-func (a *Adapter) Follow(model string) string { return core.FollowPick(a.AskTiers(), a.follow, model) }
+// (core.Following). A variant named in the model ("…#high") stays on the
+// newer one.
+func (a *Adapter) Follow(model string) string {
+	base, variant := splitVariant(model)
+	return core.FollowPick(a.AskTiers(), a.follow, base) + variant
+}
+
+// splitVariant parts "provider/model#variant" into the model and
+// "#variant" ("" when there is none).
+func splitVariant(model string) (string, string) {
+	if base, v, ok := strings.Cut(model, "#"); ok {
+		return base, "#" + v
+	}
+	return model, ""
+}
+
+// askCheck is the agent's own check of a model and variant, before
+// OpenCode runs. A request it refuses never leaves a newer model out
+// (2ho's 0.5.1 review); only OpenCode's own refusal does.
+func askCheck(model, effort string) error {
+	switch {
+	case effort != "" && !variantRe.MatchString(effort):
+		return core.Fail(core.ErrCodeBadModel, "variant "+effort)
+	case !modelRe.MatchString(modelArg(model, effort)):
+		return core.Fail(core.ErrCodeBadModel, model)
+	}
+	return nil
+}
 
 // Newer maps each shipped tier model to the newer one a tier uses now
 // (core.Following).

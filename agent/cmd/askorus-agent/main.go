@@ -41,7 +41,7 @@ import (
 )
 
 // version is set at release time with -ldflags "-X main.version=...".
-var version = "0.5.0-dev"
+var version = "0.5.1-dev"
 
 const usage = `Askorus PC agent (not an official Anthropic product)
 Askorus PC 에이전트 (Anthropic의 공식 제품이 아닙니다)
@@ -270,20 +270,37 @@ type modelWaiter interface {
 // waitModels starts the model lists of the adapters (their Info does) and
 // waits for them at most wait, for a command that runs once: serve's
 // lists run behind the requests instead.
+//
+// The AIs are asked side by side and waitModels returns at wait whatever
+// is still running (an Info bounds its own calls, which may outlast ctx;
+// 2ho's 0.5.1 review). A command that calls it also calls stopReads when
+// it returns, so no list outlives it.
 func waitModels(ctx context.Context, adapters []core.Adapter, wait time.Duration) {
 	ctx, cancel := context.WithTimeout(ctx, wait)
 	defer cancel()
-	for _, a := range adapters {
-		if _, ok := a.(modelWaiter); ok {
-			a.Info(ctx) // starts the list, which runs beside the others
-		}
-	}
+	var wg sync.WaitGroup
 	for _, a := range adapters {
 		if w, ok := a.(modelWaiter); ok {
-			w.WaitModels(ctx)
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				a.Info(ctx) // starts the list
+				w.WaitModels(ctx)
+			}()
 		}
 	}
+	done := make(chan struct{})
+	go func() { wg.Wait(); close(done) }()
+	select {
+	case <-done:
+	case <-ctx.Done():
+	}
 }
+
+// stopReads ends the model lists and usage reads a one-shot command
+// started in the background, and waits for them a moment (later commands
+// in the same process, the tests', may start new ones).
+func stopReads() { core.EndUsageReads(3 * time.Second) }
 
 // modelsWait bounds waitModels: a list takes a few seconds.
 const modelsWait = 40 * time.Second
@@ -844,6 +861,7 @@ func info(dir string, out io.Writer) error {
 		return err
 	}
 	adapters := append([]core.Adapter{adapter}, askOnlyAdapters(cfg, true)...)
+	defer stopReads()
 	waitModels(context.Background(), adapters, modelsWait)
 	return printInfo(context.Background(), adapters, judgeGate(cfg), out)
 }

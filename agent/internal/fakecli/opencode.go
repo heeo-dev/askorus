@@ -27,7 +27,17 @@ func opencodeMain(c *Call) int {
 	a := c.Args
 	switch {
 	case len(a) > 0 && a[0] == "run" && refusesNewer(RoleOpenCode, flagValue(a, "-m")):
-		return opencodeError("", "unknown", "Variant unavailable")
+		// A combined-answer writer's run has made its conversation before
+		// the model refuses, so the adapter has one to delete (R-151).
+		id := ""
+		if flagValue(a, "--agent") == SynthAgent || flagValue(a, "--agent") == RefineAgent {
+			id = newSessionID()
+			if err := saveSession(c, id, flagValue(a, "--title")); err != nil {
+				fmt.Fprintln(os.Stderr, "fakecli:", err)
+				return 2
+			}
+		}
+		return opencodeError(id, "unknown", "Variant unavailable")
 	case len(a) > 0 && a[0] == "run" && (flagValue(a, "--agent") == SynthAgent || flagValue(a, "--agent") == RefineAgent):
 		return opencodeSynth(c)
 	case len(a) > 0 && a[0] == "run":

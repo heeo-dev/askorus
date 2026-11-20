@@ -207,6 +207,9 @@ func (a *Adapter) Ask(ctx context.Context, req core.AskRequest) (core.AskResult,
 	} else {
 		model = a.Follow(model)
 	}
+	if err := askCheck(model, effort); err != nil {
+		return core.AskResult{}, err // the agent's own check: no model is left out for it
+	}
 	out, err := a.ask(ctx, req, model, effort)
 	if core.ErrorCode(err) == core.ErrCodeBadModel && a.follow.Refuse(model) {
 		// A newer model agy did not take: once more with the shipped one,

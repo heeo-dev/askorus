@@ -109,6 +109,26 @@ func TestFollowNewest(t *testing.T) {
 	}
 }
 
+// R-148 (2ho's 0.5.1 review): a request the agent itself refuses (an
+// effort codex does not have, from a paired phone) runs nothing and leaves
+// no model out for the other phones.
+func TestOwnCheckKeepsTheNewerModel(t *testing.T) {
+	a := followAdapter(t, fakecli.NewerRefuse, Options{Follow: true})
+	_, err := a.Ask(context.Background(), core.AskRequest{Folder: t.TempDir(), Prompt: core.AskPrompt("hi"), Tier: core.TierDeep, Effort: "turbo"})
+	if core.ErrorCode(err) != core.ErrCodeBadModel || len(execModels(t)) != 0 {
+		t.Fatalf("err %v, ran %v", err, execModels(t))
+	}
+	if m := a.AskTiers()[core.TierDeep].Model; m != fakecli.NewerCodex {
+		t.Errorf("deep = %q: the newer model was left out", m)
+	}
+	if _, err := a.Synthesize(context.Background(), core.SynthRequest{Folder: t.TempDir(), Prompt: synthPrompt(t), Model: fakecli.NewerCodex, Effort: "turbo"}); core.ErrorCode(err) != core.ErrCodeBadModel {
+		t.Errorf("synth err %v", err)
+	}
+	if m := a.AskTiers()[core.TierDeep].Model; m != fakecli.NewerCodex {
+		t.Errorf("deep after the synth = %q", m)
+	}
+}
+
 // TestFollowRefused (#64): a newer model codex refuses is asked again with
 // the shipped one, and left out until the next list.
 func TestFollowRefused(t *testing.T) {
@@ -125,6 +145,16 @@ func TestFollowRefused(t *testing.T) {
 	}
 	if m := a.AskTiers()[core.TierDeep].Model; m != "gpt-6.1-sol" || len(a.Newer()) != 0 {
 		t.Errorf("deep after the refusal = %q", m)
+	}
+
+	// R-149 (2ho's 0.5.1 review): the refused model named again (a pick
+	// saved while it was deep's) goes to the shipped one without running it.
+	from := len(execModels(t))
+	if res, err := a.Ask(context.Background(), core.AskRequest{Folder: t.TempDir(), Prompt: core.AskPrompt("hi"), Tier: core.TierQuick, Model: fakecli.NewerCodex}); err != nil || res.Model != "gpt-6.1-sol" {
+		t.Fatalf("pick of the refused model: %+v %v", res, err)
+	}
+	if ms := execModels(t)[from:]; !slices.Equal(ms, []string{"gpt-6.1-sol"}) {
+		t.Errorf("pick of the refused model ran %v", ms)
 	}
 
 	// The combined answer too.

@@ -94,14 +94,15 @@ func (f *Follower) Check(version string) {
 	if ttl == 0 {
 		ttl = FollowTTL
 	}
-	if f.done != nil || (!f.at.IsZero() && !f.stale && time.Since(f.at) < ttl) || !usageReads.begin() {
+	r := usageReads.Load()
+	if f.done != nil || (!f.at.IsZero() && !f.stale && time.Since(f.at) < ttl) || !r.begin() {
 		return
 	}
 	done := make(chan struct{})
 	f.done = done
 	go func() {
-		defer usageReads.wg.Done()
-		list, err := f.List(usageReads.ctx)
+		defer r.wg.Done()
+		list, err := f.List(r.ctx)
 		f.mu.Lock()
 		if err == nil && len(list) > 0 {
 			f.listed = map[string]ListedModel{}
@@ -174,6 +175,14 @@ func (f *Follower) Newest(model, effort string) string {
 		return model
 	}
 	best, bestV := model, have
+	if f.refused[model] {
+		// A refused model named again (a pick saved while it was the
+		// tier's) goes to the shipped one or a newer one not refused, not
+		// to the AI again on every question (2ho's 0.5.1 review).
+		if _, bv := f.line(ln.Base); bv != nil {
+			best, bestV = ln.Base, bv
+		}
+	}
 	for name, m := range f.listed {
 		if f.refused[name] || !ln.Re.MatchString(name) {
 			continue

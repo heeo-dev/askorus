@@ -54,7 +54,7 @@ func TestUsageCacheNeverWaits(t *testing.T) {
 // R-147 (2ho's release review, 0.5.0): stopping ends a read that runs,
 // waits for it, and no read starts afterwards.
 func TestStopUsageReads(t *testing.T) {
-	defer func() { usageReads = newReads() }()
+	defer func() { usageReads.Store(newReads()) }()
 	started, ended := make(chan struct{}), make(chan struct{})
 	var n atomic.Int32
 	c := &UsageCache{TTL: time.Hour, Read: func(ctx context.Context) []UsageGroup {

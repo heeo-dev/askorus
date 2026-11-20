@@ -73,6 +73,18 @@ func TestFollowNewest(t *testing.T) {
 	}
 }
 
+// R-148 (2ho's 0.5.1 review): a request the agent itself refuses runs
+// nothing and leaves no model out.
+func TestOwnCheckKeepsTheNewerModel(t *testing.T) {
+	a, folder := followAgy(t, fakecli.NewerRefuse, Options{Follow: true})
+	if _, err := ask(t, a, core.AskRequest{Folder: folder, Tier: core.TierQuick, Effort: "turbo"}); core.ErrorCode(err) != core.ErrCodeBadModel || len(runModels(t)) != 0 {
+		t.Fatalf("err %v, ran %q", err, runModels(t))
+	}
+	if m := a.AskTiers()[core.TierQuick].Model; m != fakecli.NewerAgy {
+		t.Errorf("quick = %q: the newer model was left out", m)
+	}
+}
+
 // TestFollowRefused (#64): a newer model agy does not take is asked again
 // with the shipped one, ask and combined answer alike.
 func TestFollowRefused(t *testing.T) {

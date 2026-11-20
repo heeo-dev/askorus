@@ -122,13 +122,19 @@ func synthEnv(folder string) map[string]string {
 // deletes the conversation with CleanupJudge. A newer model of a line
 // that OpenCode refuses is asked again with the shipped one (#64); the
 // first run's conversation is deleted here, the second's by the caller.
+// When the first cannot be deleted, there is no second run: the first
+// result goes back with its reference, so the caller still cleans it
+// (2ho's 0.5.1 review).
 func (a *Adapter) Synthesize(ctx context.Context, req core.SynthRequest) (core.SynthResult, error) {
 	res, err := a.synthesize(ctx, req)
-	if refused(err) && a.follow.Refuse(req.Model) {
+	base, variant := splitVariant(req.Model)
+	if askCheck(req.Model, req.Effort) == nil && refused(err) && a.follow.Refuse(base) {
 		if res.Cleanup != "" {
-			_ = a.CleanupJudge(ctx, req.Folder, []string{res.Cleanup})
+			if cerr := a.CleanupJudge(ctx, req.Folder, []string{res.Cleanup}); cerr != nil {
+				return res, err
+			}
 		}
-		req.Model = a.follow.Base(req.Model)
+		req.Model = a.follow.Base(base) + variant
 		res, err = a.synthesize(ctx, req)
 	}
 	return res, err

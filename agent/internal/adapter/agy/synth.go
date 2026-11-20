@@ -141,7 +141,7 @@ func hasLevel(model string) bool {
 // a line that agy refuses is asked again with the shipped one (#64).
 func (a *Adapter) Synthesize(ctx context.Context, req core.SynthRequest) (core.SynthResult, error) {
 	res, err := a.synthesize(ctx, req)
-	if core.ErrorCode(err) == core.ErrCodeBadModel && a.follow.Refuse(req.Model) {
+	if askCheck(req.Model, req.Effort) == nil && core.ErrorCode(err) == core.ErrCodeBadModel && a.follow.Refuse(req.Model) {
 		req.Model = a.follow.Base(req.Model)
 		res, err = a.synthesize(ctx, req)
 	}

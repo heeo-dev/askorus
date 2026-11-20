@@ -50,6 +50,7 @@ func askCmd(dir string, args []string, out io.Writer) error {
 	askers := map[string]core.Asker{}
 	var order []string
 	adapters := append([]core.Adapter{ca}, askOnlyAdapters(cfg, true)...)
+	defer stopReads()
 	waitModels(ctx, adapters, modelsWait) // the same models as the agent's asks (#64)
 	for _, a := range adapters {
 		info := a.Info(ctx)

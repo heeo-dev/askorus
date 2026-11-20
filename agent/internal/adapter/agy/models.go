@@ -73,6 +73,19 @@ func (a *Adapter) listModels(ctx context.Context) ([]core.ListedModel, error) {
 	return listedModels(res.Stdout), nil
 }
 
+// askCheck is the agent's own check of a model and effort, before agy
+// runs. A request it refuses never leaves a newer model out (2ho's 0.5.1
+// review); only agy's own refusal does.
+func askCheck(model, effort string) error {
+	switch {
+	case !modelRe.MatchString(model):
+		return core.Fail(core.ErrCodeBadModel, model)
+	case effort != "" && !efforts[effort]:
+		return core.Fail(core.ErrCodeBadModel, "effort "+effort)
+	}
+	return nil
+}
+
 // Follow returns the model to run for a model the phone picked
 // (core.Following).
 func (a *Adapter) Follow(model string) string { return core.FollowPick(a.AskTiers(), a.follow, model) }

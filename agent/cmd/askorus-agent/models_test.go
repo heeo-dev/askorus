@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/heeo-dev/askorus/agent/internal/core"
 )
@@ -25,6 +26,32 @@ func (f followingAI) ListSessions(context.Context) (core.ListResult, error) {
 func (f followingAI) Follow(m string) string     { return m }
 func (f followingAI) Newer() map[string]string   { return f.newer }
 func (f followingAI) WaitModels(context.Context) { *f.waited++ }
+
+// slowAI is an AI whose Info takes long, as a CLI that hangs.
+type slowAI struct{ followingAI }
+
+func (s slowAI) Info(context.Context) core.AdapterInfo {
+	time.Sleep(2 * time.Second)
+	return core.AdapterInfo{Agent: s.name, Available: true}
+}
+
+// R-152 (2ho's 0.5.1 review): waitModels returns at its deadline even when
+// an AI's Info outlasts it, and asks the AIs side by side.
+func TestWaitModelsDeadline(t *testing.T) {
+	waited := 0
+	ais := []core.Adapter{
+		slowAI{followingAI{name: "codex", waited: new(int)}},
+		followingAI{name: "opencode", waited: &waited},
+	}
+	start := time.Now()
+	waitModels(context.Background(), ais, 300*time.Millisecond)
+	if d := time.Since(start); d > 1500*time.Millisecond {
+		t.Errorf("waitModels took %v with a 300 ms deadline", d)
+	}
+	if waited != 1 {
+		t.Errorf("the quick AI was not waited for beside the slow one: %d", waited)
+	}
+}
 
 // TestModelLines (#64): check waits for the lists and names each AI that
 // uses newer models; agent.json ask.noFollow says the models stay.

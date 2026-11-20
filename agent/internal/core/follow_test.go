@@ -71,6 +71,11 @@ func TestNewest(t *testing.T) {
 	if f.Refuse("gpt-6.1-sol") || f.Refuse("gpt-6.1-terra") {
 		t.Error("Refuse took a shipped model or one of no line")
 	}
+	// R-149 (2ho's 0.5.1 review): the refused model named again goes to
+	// the shipped one, or a newer one not refused, not back to the AI.
+	if got := f.Newest("gpt-6.2-sol", ""); got != "gpt-6.1-sol" {
+		t.Errorf("Newest(refused) = %q", got)
+	}
 	if f.Base("gpt-6.2-sol") != "gpt-6.1-sol" || f.Base("opus") != "" {
 		t.Error("Base")
 	}
@@ -146,6 +151,37 @@ func TestCheck(t *testing.T) {
 	f.Wait(context.Background())
 	if runs.Load() != 3 || f.Newest("gpt-6.1-sol", "") != "gpt-6.2-sol" {
 		t.Errorf("after the TTL: runs %d, newest %q", runs.Load(), f.Newest("gpt-6.1-sol", ""))
+	}
+}
+
+// R-152 (2ho's 0.5.1 review): EndUsageReads ends a list that runs and
+// waits for it, and a later list (another command in the same process)
+// starts again.
+func TestEndUsageReads(t *testing.T) {
+	started, ended := make(chan struct{}), make(chan struct{})
+	var runs atomic.Int32
+	f := &Follower{Lines: testLines, List: func(ctx context.Context) ([]ListedModel, error) {
+		if runs.Add(1) == 1 {
+			close(started)
+			<-ctx.Done()
+			close(ended)
+			return nil, ctx.Err()
+		}
+		return []ListedModel{{Name: "gpt-6.2-sol"}}, nil
+	}}
+	f.Check("1")
+	<-started
+	EndUsageReads(5 * time.Second)
+	select {
+	case <-ended:
+	default:
+		t.Fatal("EndUsageReads returned before the list ended")
+	}
+	g := &Follower{Lines: testLines, List: f.List}
+	g.Check("1")
+	g.Wait(context.Background())
+	if runs.Load() != 2 || g.Newest("gpt-6.1-sol", "") != "gpt-6.2-sol" {
+		t.Errorf("a later list: runs %d, newest %q", runs.Load(), g.Newest("gpt-6.1-sol", ""))
 	}
 }
 

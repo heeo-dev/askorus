@@ -147,7 +147,7 @@ func (a *Adapter) schemaFile(p, schema string, ready *bool, writes *int) (string
 // shipped one (#64).
 func (a *Adapter) Synthesize(ctx context.Context, req core.SynthRequest) (core.SynthResult, error) {
 	res, err := a.synthesize(ctx, req)
-	if refused(err) && a.follow.Refuse(req.Model) {
+	if askCheck(req.Model, req.Effort) == nil && refused(err) && a.follow.Refuse(req.Model) {
 		req.Model = a.follow.Base(req.Model)
 		res, err = a.synthesize(ctx, req)
 	}

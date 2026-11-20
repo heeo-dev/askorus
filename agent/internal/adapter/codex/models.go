@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/heeo-dev/askorus/agent/internal/config"
 	"github.com/heeo-dev/askorus/agent/internal/core"
 	"github.com/heeo-dev/askorus/agent/internal/proc"
 )
@@ -113,6 +114,20 @@ func (a *Adapter) Newer() map[string]string { return core.NewerTiers(a.AskTiers(
 // WaitModels waits for a model list that runs (Info starts one), or until
 // ctx ends: for a command that runs once, and for tests.
 func (a *Adapter) WaitModels(ctx context.Context) { a.follow.Wait(ctx) }
+
+// askCheck is the agent's own check of a model and effort, before codex
+// runs. A request it refuses never leaves a newer model out: a paired
+// phone sending an effort codex does not have must not cost every phone
+// the newer model (2ho's 0.5.1 review). Only codex's own refusal does.
+func askCheck(model, effort string) error {
+	switch {
+	case !config.ValidModel(model):
+		return core.Fail(core.ErrCodeBadModel, model)
+	case effort != "" && !efforts[effort]:
+		return core.Fail(core.ErrCodeBadModel, "effort "+effort)
+	}
+	return nil
+}
 
 // refused reports whether codex refused the model itself: it does not
 // know it, or the person's plan does not offer it.

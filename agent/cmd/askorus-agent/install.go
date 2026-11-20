@@ -262,6 +262,7 @@ func checkCmd(dir string, out io.Writer) error {
 	// left out of asks. Claude Code is optional too (2026-11-10): without it
 	// asks go to the others, but My PCs (its sessions) does not work.
 	askOnly := askOnlyAdapters(cfg, true)
+	defer stopReads()
 	others := 0
 	for _, a := range askOnly {
 		if a.Info(ctx).Available {
