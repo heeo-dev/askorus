@@ -8,8 +8,8 @@
 | --- | --- | --- |
 | 패키지 이름 | `app.askorus` (2026-11-08 이름을 Askorus로 바꾸며 `app.asksemble`에서 바꿈, #31. Play에 처음 올리면 바꿀 수 없다) | `app/app.json` `android.package` |
 | Expo 프로젝트 | `@heeodev/askorus`(개인 계정 owner, 2026-11-08 `eas init`으로 만듦, #31). 옛 `@heeodev/asksemble`은 Expo에 그대로 남아 있다. 서명 키는 로컬 빌드와 같은 것(옛 프로젝트에서 EAS가 만든 키, SHA-256 7E:98…)을 같은 날 새 프로젝트의 app.askorus에 올렸다(`.local\eas-upload-key.cmd`, 사용자가 실행). 그래서 클라우드 빌드도 폰의 로컬 빌드 위에 덮어 깔린다 | `app/app.json` `owner`, `extra.eas.projectId` |
-| 보이는 버전 | `version` (지금 0.5.2, 2026-11-21) | `app/app.json` |
-| 빌드 번호(versionCode) | EAS가 보관하고 store 빌드마다 1씩 올린다. 로컬 빌드는 빌드할 때 번호를 준다(안 주면 1). Play는 앞에 올린 것보다 큰 번호만 받으므로, 로컬에서 만든 AAB를 올린 뒤 EAS로 넘어갈 때는 EAS의 번호를 그 위로 맞춘다. 2026-11-18 기준 0.2.2가 5, 0.3.0이 6, 0.3.1이 7, 0.3.2가 8, 0.3.3이 9, 0.3.4가 10, 0.4.0이 11, 0.5.0이 13, 0.5.1이 14, 0.5.2가 15다(12는 0.5.0을 만들며 시험 폰에 깐 시험 APK가 써서 건너뜀. 0.3.4는 GitHub의 APK만 내고 Play에는 올리지 않았다. 0.4.0은 APK에서 덮어 깔 수 있게 11). Play의 App Bundle 라이브러리에는 2~9가 모두 올라가 있다(2·3·4·6·7은 2026-11-15에 함께 올라갔지만 어느 출시에도 넣지 않음) | `app/eas.json` `cli.appVersionSource: remote` |
+| 보이는 버전 | `version` (지금 0.5.3, 2026-11-21) | `app/app.json` |
+| 빌드 번호(versionCode) | EAS가 보관하고 store 빌드마다 1씩 올린다. 로컬 빌드는 빌드할 때 번호를 준다(안 주면 1). Play는 앞에 올린 것보다 큰 번호만 받으므로, 로컬에서 만든 AAB를 올린 뒤 EAS로 넘어갈 때는 EAS의 번호를 그 위로 맞춘다. 2026-11-18 기준 0.2.2가 5, 0.3.0이 6, 0.3.1이 7, 0.3.2가 8, 0.3.3이 9, 0.3.4가 10, 0.4.0이 11, 0.5.0이 13, 0.5.1이 14, 0.5.2가 15, 0.5.3이 16이다(12는 0.5.0을 만들며 시험 폰에 깐 시험 APK가 써서 건너뜀. 0.3.4는 GitHub의 APK만 내고 Play에는 올리지 않았다. 0.4.0은 APK에서 덮어 깔 수 있게 11). Play의 App Bundle 라이브러리에는 2~9가 모두 올라가 있다(2·3·4·6·7은 2026-11-15에 함께 올라갔지만 어느 출시에도 넣지 않음) | `app/eas.json` `cli.appVersionSource: remote` |
 | 시험용 빌드 | `preview`: APK, 링크·QR로 폰에 바로 설치 (#57부터 EAS 클라우드 빌드에는 Tailscale 다리가 없어 Gradle이 `checkTsbridge`에서 멈춘다. 지금은 1.1절대로 다리를 만든 뒤 로컬에서 빌드한다) | `npm run build:apk` |
 | 스토어 빌드 | `production`: AAB, Play 내부 테스트에 초안으로 올림 (#57부터 EAS 클라우드 빌드에는 Tailscale 다리가 없어 Gradle이 `checkTsbridge`에서 멈춘다. 지금은 1.1절대로 다리를 만든 뒤 로컬에서 빌드한다) | `npm run build:aab`, `npm run eas -- submit -p android` |
 | 서명 키 | EAS가 처음 빌드 때 만들고 보관한다. Play에는 업로드 키로 쓰이고, Play가 배포용 키로 다시 서명한다 | EAS 계정 |

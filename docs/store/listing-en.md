@@ -48,7 +48,7 @@ FEATURES
 - AI debates, with a result for every point (agreed, or depends on the situation)
 - Follow-up questions, to everyone, to one AI, or to the moderator only
 - Photos with a question: take or pick up to 4
-- Pictures an AI draws as code (SVG), shown as pictures you can save
+- Ask for a picture: every AI's drawing (drawn as code, SVG) side by side under the combined answer, to open large and save
 - Pick the model and how hard each AI thinks
 - See how much of each AI's plan is left, from any screen
 - Update the PC agent from the app
