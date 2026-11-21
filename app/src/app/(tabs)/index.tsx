@@ -35,10 +35,11 @@ import { AppState, Keyboard, Pressable, ScrollView, type ScrollViewInstance, Sty
 import { agentName, signInNote } from '@/api/agents';
 import type { AgentClient } from '@/api/client';
 import { openRemoteUrl } from '@/api/remoteUrl';
-import { type Info, type RunPart, type Tier, tiers } from '@/api/types';
+import { type Info, type Run, type RunPart, type Tier, tiers } from '@/api/types';
 import { canSynthesize, polling, writerFor } from '@/ask/compare';
 import { conversations, recentQuestions, useConversations } from '@/ask/conversations';
 import { features } from '@/ask/features';
+import { type MadeShown, madeWanted, takeMade } from '@/ask/made';
 import { followNewer, isNewModel, modelLabel, pickOf, runsWith } from '@/ask/models';
 import { dropPending, dropPhotos, keepPhotos } from '@/ask/photoFiles';
 import { PhotoError, photosAvailable, pickPhotos, takePhoto } from '@/ask/photoPick';
@@ -64,6 +65,7 @@ import { DebateDock, DebateEnd } from '@/ui/Debate';
 import { Header } from '@/ui/Header';
 import { Icon, IconButton } from '@/ui/Icon';
 import { useSafeInsets } from '@/ui/keyboard';
+import { MadeRetry } from '@/ui/MadePictures';
 import { ModelSheet } from '@/ui/ModelSheet';
 import { PCLine } from '@/ui/PCLine';
 import { PCPickerSheet } from '@/ui/PCPickerSheet';
@@ -271,6 +273,52 @@ export default function Ask() {
     }, 1000);
   }, []);
 
+  // The pictures the AIs made (#14): each is taken once into its
+  // conversation's folder, one after another, as soon as the run names it.
+  // A ref, so the follows always reach the turns as they are now.
+  const taking = useRef(new Set<string>());
+  const takeMadeRef = useRef<(client: AgentClient, id: string, run: Run, again?: boolean) => void>(() => undefined);
+  takeMadeRef.current = (client, id, run, again = false) => {
+    let conversation: string | undefined;
+    let turn: Turn | undefined;
+    for (const b of bgs.current.values()) {
+      const x = b.turns.find((y) => y.id === id);
+      if (x) [conversation, turn] = [b.head.id, x];
+    }
+    if (!turn) {
+      turn = turnsRef.current.find((y) => y.id === id);
+      conversation = head.current?.id;
+    }
+    if (!turn || !conversation) return;
+    // Taken again ('Try again'): one that failed before is wanted too.
+    const wanted = madeWanted(run, again ? { made: turn.made } : turn).filter((im) => !taking.current.has(im.id));
+    if (!wanted.length) return;
+    for (const im of wanted) taking.current.add(im.id);
+    const conv = conversation;
+    void (async () => {
+      for (const im of wanted) {
+        const uri = await takeMade(client, conv, run.runId, im);
+        taking.current.delete(im.id);
+        deps.update(id, (t) =>
+          uri ? { made: { ...t.made, [im.id]: uri }, madeFailed: t.madeFailed?.filter((x) => x !== im.id) } : { madeFailed: [...(t.madeFailed ?? []).filter((x) => x !== im.id), im.id] },
+        );
+      }
+    })();
+  };
+  // 'Try again' on a picture that could not be taken: from the PC of this conversation only.
+  const retryMade = useCallback(
+    (m: MadeShown) => {
+      const p = pcRef.current;
+      if (!p || (head.current?.pcId && head.current.pcId !== p.conn.id)) return;
+      const x = turnsRef.current.find((y) => y.id === m.turnId);
+      if (!x?.run || x.run.runId !== m.runId) return;
+      deps.update(m.turnId, (t) => ({ madeFailed: t.madeFailed?.filter((id) => id !== m.image.id) }));
+      takeMadeRef.current(p.client, m.turnId, { ...x.run, parts: x.run.parts.map((q) => ({ ...q, images: q.images?.filter((im) => im.id === m.image.id) })) }, true);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
   // What following a run or a comparison needs; thread.ts does the following.
   const deps: FollowDeps = useMemo(
     () => ({
@@ -286,6 +334,7 @@ export default function Ask() {
       },
       newId: () => Crypto.randomUUID(),
       errorText: askErrorText,
+      takeMade: (client, id, run) => takeMadeRef.current(client, id, run),
     }),
     [keepBgs],
   );
@@ -634,6 +683,8 @@ export default function Ask() {
           ? { agent: modAgent, ...(modPick ? { model: modPick.model, ...(modPick.effort ? { effort: modPick.effort } : {}) } : {}), answers: moderatorAnswers(turns) }
           : undefined,
       photos: kept,
+      // Made pictures (#14): only to a PC that says an AI of it makes them.
+      pictures: info.agents.some((a) => a.ask?.makes) ? { noPictures: prefs.noPictures } : undefined,
       at: Date.now(),
     });
     if (!turn.agents.length) return;
@@ -968,7 +1019,7 @@ export default function Ask() {
   ) : null;
 
   const sheets = (
-    <>
+    <MadeRetry.Provider value={retryMade}>
       <PhotoSheet open={sheet?.kind === 'photo'} onClose={() => setSheet(null)} onTake={() => void getPhotos('take')} onPick={() => void getPhotos('pick')} />
       <PhotoViewer photos={viewer?.photos ?? []} index={viewer ? viewer.index : null} onClose={() => setViewer(null)} />
       <PCPickerSheet
@@ -1055,14 +1106,14 @@ export default function Ask() {
         p={answerView}
         onClose={() => setSheet(null)}
         onCopy={answerView ? () => copy(answerKey, answerView.part.answer ?? '') : undefined}
-        more={answerView ? { ai: answerBy(answerView), text: answerView.part.answer ?? '', question: sheetTurn?.question } : undefined}
+        more={answerView ? { ai: answerBy(answerView), text: answerView.part.answer ?? '', question: sheetTurn?.question, pictures: answerView.made?.length } : undefined}
         onOnly={answerView ? onlyOf(answerView.agent, () => setSheet(null)) : undefined}
         onContinue={answerView ? carryOn(answerKey, answerView.part) : undefined}
         note={answerKey ? notes[answerKey] : undefined}
       />
       <RefineSheet refine={sheet?.kind === 'refine' ? (sheetTurn?.run?.refine ?? null) : null} onClose={() => setSheet(null)} />
       <RecordSheet context={sheet?.kind === 'record' ? (sheetTurn?.req.context ?? null) : null} onClose={() => setSheet(null)} />
-    </>
+    </MadeRetry.Provider>
   );
 
   const header = <Header entrance="ask" right={turns.length ? <IconButton name="compose" label={t('ask.new')} onPress={() => fresh()} /> : undefined} />;
@@ -1176,6 +1227,7 @@ export default function Ask() {
       {header}
       {pcLine}
       {updateBand}
+      <MadeRetry.Provider value={retryMade}>
       <DebateEnd.Provider value={markDebateEnd}>
         <ScrollView
           ref={scroll}
@@ -1221,6 +1273,7 @@ export default function Ask() {
           ))}
         </ScrollView>
       </DebateEnd.Provider>
+      </MadeRetry.Provider>
       {away ? (
         <View style={[s.orphan, { paddingBottom: 12 + insets.bottom }]} accessibilityRole="alert">
           <Text style={s.orphanText}>{orphan ? t('ask.orphan') : t('ask.away', { name: awayPC ? pcLabel(awayPC, pcs.list) : '' })}</Text>

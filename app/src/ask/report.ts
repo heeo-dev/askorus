@@ -22,6 +22,8 @@ export type ReportSubject = {
   text: string;
   /** The question it answers. */
   question?: string;
+  /** How many pictures the AI made in the answer (#14); the pictures themselves are not sent. */
+  pictures?: number;
 };
 
 export type ReportMail = { to: string; subject: string; body: string };
@@ -53,6 +55,7 @@ export function reportMail(subject: ReportSubject, o: { category: ReportCategory
   const lines = [
     t('report.mail.kind', { category: kind }),
     t('report.mail.ai', { ai: subject.ai }),
+    ...(subject.pictures ? [t('report.mail.pictures', { n: subject.pictures })] : []),
     t('report.mail.app', { version: o.version || '?', os: o.os }),
     '',
     t('report.mail.describe'),

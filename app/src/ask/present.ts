@@ -14,6 +14,7 @@ import { agentName } from '@/api/agents';
 import { AgentError } from '@/api/client';
 import type { Comparison, Info, RunPart } from '@/api/types';
 import { compareState, synthState } from '@/ask/compare';
+import { madeOf, type MadeShown } from '@/ask/made';
 import { parts, type Target, type Turn } from '@/ask/thread';
 import { errorText, has, type MessageKey, t } from '@/i18n';
 import type { StepView } from '@/ui/CombinedAnswer';
@@ -106,6 +107,8 @@ export type PartView = {
   s: number;
   part: RunPart;
   error?: string;
+  /** The pictures the AI made in this answer (#14), with where each is kept; left out when none. */
+  made?: MadeShown[];
 };
 
 /**
@@ -140,6 +143,8 @@ export function partViews(turn: Turn, now: number, info?: Info | null): PartView
     };
     // No answer and no reason from the PC (the run could not be followed): the turn's error says why.
     if (state === 'failed') v.error = p.error ? partError(p.error) : t('compare.tab.failed');
+    const made = madeOf(turn, p.agent);
+    if (made.length) v.made = made;
     return v;
   });
 }

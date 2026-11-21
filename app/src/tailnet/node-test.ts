@@ -221,3 +221,37 @@ test('no file is sent before the person signed in, or by a build from before pho
   expect(mockTailnet.calls).toEqual([]);
   expect(agent.calls).toHaveLength(0);
 });
+
+// #14: a picture an AI made comes through the node into a new file of the
+// app's own. The same checks as a request, and a PC's refusal is an error
+// of the agent's, not a file.
+test("a made picture comes through the node into the app's file, and the PC's refusal is its error", async () => {
+  const { tailnetFetchFile } = jest.requireActual('./node') as typeof import('./node');
+  agent.enableAsk();
+  const fetchFile = jest.spyOn(native(), 'fetchFile');
+  const client = new AgentClient(baseUrl(HOST, PORT), { token: TOKEN });
+  const file = 'file:///data/user/0/app.askorus/files/photos/c1/made-img_aa.png';
+  const e = await client.runImage('run-1', `img_${'a'.repeat(32)}`, file).catch((x) => x);
+  expect(fetchFile).toHaveBeenCalledWith(
+    'GET',
+    `http://${HOST}:${PORT}/v1/runs/run-1/images/img_${'a'.repeat(32)}`,
+    JSON.stringify({ Accept: 'application/json', Authorization: `Bearer ${TOKEN}` }),
+    file,
+    expect.any(Number),
+  );
+  // The pretend PC has no such picture.
+  expect(e).toMatchObject({ code: 'image_not_found', status: 404 });
+  // An id that names no picture never reaches the node.
+  fetchFile.mockClear();
+  await expect(client.runImage('run-1', '../../x', file)).rejects.toMatchObject({ code: 'image_not_found' });
+  expect(fetchFile).not.toHaveBeenCalled();
+
+  fetchFile.mockRejectedValueOnce(Object.assign(new Error('refused'), { code: 'tailnet_bad_request' }));
+  await expect(tailnetFetchFile(`http://${HOST}:${PORT}/v1/runs/r/images/i`, { file })).rejects.toMatchObject({ code: 'tailnet_bad_request' });
+
+  const mod = native();
+  const keep = mod.fetchFile;
+  delete mod.fetchFile;
+  await expect(tailnetFetchFile(`http://${HOST}:${PORT}/v1/runs/r/images/i`, { file })).rejects.toMatchObject({ code: 'tailnet_off' });
+  mod.fetchFile = keep;
+});

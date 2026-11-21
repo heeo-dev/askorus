@@ -89,6 +89,12 @@ jest.mock('@/tailnet/native', () => {
       const res = await globalThis.fetch(url, { method, headers: JSON.parse(headers), body: JSON.stringify({ file: path }) });
       return { status: res.status, headers: '{}', body: await res.text() };
     },
+    // A made picture (#14): the pretend PC's answer, and the address it went to.
+    fetchFile: async (method: string, url: string, headers: string, path: string) => {
+      state.calls.push(`fetchFile ${path}`);
+      const res = await globalThis.fetch(url, { method, headers: JSON.parse(headers) });
+      return { status: res.status, headers: '{}', body: res.ok ? '' : await res.text() };
+    },
     recentLog: async () => '',
   };
   return { __esModule: true, nativeTailnet: () => (state.available ? mod : null), mockTailnetState: state };
@@ -154,6 +160,25 @@ jest.mock('@/ask/photoFiles', () => {
   };
 });
 
+// The pictures AIs make (#14): kept in the conversation's folder by name; a
+// test lists which were taken and makes the next check fail.
+jest.mock('@/ask/madeFiles', () => {
+  const state = { targets: [] as string[], bad: [] as string[] };
+  return {
+    __esModule: true,
+    madeExt: { 'image/png': '.png', 'image/jpeg': '.jpg', 'image/webp': '.webp' },
+    madeTarget: (conversationId: string, image: { id: string; type: string }) => {
+      const ext = ({ 'image/png': '.png', 'image/jpeg': '.jpg', 'image/webp': '.webp' } as Record<string, string>)[image.type];
+      if (!ext || !/^img_[0-9a-f]{32}$/.test(image.id) || !/^[0-9a-zA-Z-]{8,64}$/.test(conversationId)) return null;
+      const uri = `file:///data/user/0/app.askorus/files/photos/${conversationId}/made-${image.id}${ext}`;
+      state.targets.push(uri);
+      return uri;
+    },
+    checkMade: (uri: string) => !state.bad.includes(uri),
+    mockMadeFiles: state,
+  };
+});
+
 // Saving a picture into the phone's pictures (#14): a test reads what was saved, or makes it fail.
 jest.mock('@/ask/photoSave', () => {
   const state = { available: true, saved: [] as string[], fail: null as string | null };
@@ -163,6 +188,11 @@ jest.mock('@/ask/photoSave', () => {
     savePicture: async (png: string) => {
       if (state.fail) throw Object.assign(new Error(state.fail), { code: state.fail });
       state.saved.push(png);
+    },
+    // A made picture (#14) is saved by its address.
+    saveMadePicture: async (uri: string) => {
+      if (state.fail) throw Object.assign(new Error(state.fail), { code: state.fail });
+      state.saved.push(uri);
     },
     mockPhotoSave: state,
   };

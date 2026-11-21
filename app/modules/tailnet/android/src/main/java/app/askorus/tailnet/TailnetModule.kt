@@ -75,6 +75,31 @@ private fun ownFile(context: Context, path: String): File? {
   return if (inside(context.cacheDir) || inside(context.filesDir)) file else null
 }
 
+// newOwnFile is the place fetchFile may write (#14): a path in the app's
+// cache or files folder, never the node's own folder, whose folder exists
+// and where nothing is yet.
+private fun newOwnFile(context: Context, path: String): File? {
+  val plain = if (path.startsWith("file://")) android.net.Uri.parse(path).path ?: return null else path
+  val given = File(plain)
+  if (!given.isAbsolute || given.exists()) return null
+  val parent = try {
+    given.parentFile?.canonicalFile ?: return null
+  } catch (e: Throwable) {
+    return null
+  }
+  if (!parent.isDirectory) return null
+  fun inside(dir: File?): Boolean {
+    val root = try {
+      dir?.canonicalPath ?: return false
+    } catch (e: Throwable) {
+      return false
+    }
+    return parent.path == root || parent.path.startsWith(root + File.separator)
+  }
+  if (inside(File(context.filesDir, "tailnet"))) return null
+  return if (inside(context.cacheDir) || inside(context.filesDir)) File(parent, given.name) else null
+}
+
 class TailnetModule : Module() {
   private val watching = AtomicBoolean(false)
 
@@ -127,6 +152,23 @@ class TailnetModule : Module() {
         val file = ownFile(context, path)
           ?: throw TailnetException("tailnet_bad_request", "not a file of the app's own", null)
         val r = Tsbridge.sendFile(method, url, headers, file.path, timeoutMs.toLong())
+        mapOf("status" to r.status.toInt(), "headers" to r.headers, "body" to r.body)
+      }
+    }
+
+    // fetch whose answer, when it is 2xx, goes into a new file of the app's
+    // own (#14: a picture an AI made); body is then empty. Only a path in
+    // the app's cache or files folder where nothing is yet, never the
+    // node's own folder; the library checks that again, writes over
+    // nothing, keeps at most 16 MiB, and fetches only from a device of the
+    // person's own Tailscale account.
+    AsyncFunction("fetchFile") Coroutine { method: String, url: String, headers: String, path: String, timeoutMs: Int ->
+      val context = appContext.reactContext?.applicationContext
+        ?: throw TailnetException("tailnet_off", "the app is not ready", null)
+      call {
+        val file = newOwnFile(context, path)
+          ?: throw TailnetException("tailnet_bad_request", "not a new file of the app's own", null)
+        val r = Tsbridge.fetchFile(method, url, headers, file.path, timeoutMs.toLong())
         mapOf("status" to r.status.toInt(), "headers" to r.headers, "body" to r.body)
       }
     }

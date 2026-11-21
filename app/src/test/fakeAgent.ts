@@ -23,7 +23,7 @@ export type Call = { method: string; path: string; query: URLSearchParams; body?
 /** What the writing AI does (S5b): write, fail (usage limit), or keep writing. */
 export type SynthReply = 'ok' | 'fail' | 'hold';
 
-type FakeRun = { id: string; tier: string; prompt: string; parts: any[]; key?: string; comparisonId?: string; refine?: any };
+type FakeRun = { id: string; tier: string; prompt: string; parts: any[]; key?: string; comparisonId?: string; refine?: any; pictures?: boolean; noPictures?: string[] };
 type Source = { id: string; agent: string; via: string; model?: string; text?: string };
 
 // An answer of a comparison: ready when it has text.
@@ -173,6 +173,16 @@ export class FakeAgent {
   uploads = new Map<string, string>();
   /** POST /v1/uploads answers this error instead (for example 429 upload_limit). */
   uploadError: { status: number; code: string } | null = null;
+  /**
+   * Made pictures (#14): off until enableMaking(). made holds, by AI, the
+   * pictures its answer to a run with pictures brings (ids made per run);
+   * madeLimit the picture limit its answer reports; imageFails how many
+   * picture requests fail first; images the pictures the phone took.
+   */
+  makingOn = false;
+  made: Record<string, { type: string; bytes: number; width?: number; height?: number }[]> = {};
+  madeLimit: Record<string, { until?: string }> = {};
+  imageFails = 0;
   /** The PC lets go of every photo before the next this many runs with photos arrive. */
   forgetUploads = 0;
   private runs = new Map<string, FakeRun>();
@@ -269,6 +279,24 @@ export class FakeAgent {
         ? { ...a, ask: { ...a.ask, images: a.agent === 'opencode' ? { models: ['opencode-quick', 'opencode-std'] } : { all: true } } }
         : a,
     );
+  }
+
+  /**
+   * enableMaking makes Codex make pictures (#14); call it after enableAsk.
+   * limitedUntil marks its picture limit as reached.
+   */
+  enableMaking(limitedUntil?: string) {
+    this.makingOn = true;
+    this.askAgents = this.askAgents.map((a) =>
+      a.agent === 'codex' && a.ask
+        ? { ...a, ask: { ...a.ask, makes: { maxCount: 4, types: ['image/png', 'image/jpeg', 'image/webp'], ...(limitedUntil ? { limitedUntil } : {}) } } }
+        : a,
+    );
+  }
+
+  /** The picture requests the phone made, as run/id, in order. */
+  get imageRequests(): string[] {
+    return this.calls.filter((c) => c.method === 'GET' && c.path.includes('/images/')).map((c) => c.path.replace('/v1/runs/', ''));
   }
 
   /** The files the phone sent as photos, in order. */
@@ -724,6 +752,12 @@ export class FakeAgent {
     if (next && done < this.runLimit) {
       const reply = this.askReplies[next.agent];
       Object.assign(next, typeof reply === 'object' ? { status: 'failed', error: reply } : { status: 'done', answer: reply ?? `${next.agent} says: ${next.prompt}` });
+      // Made pictures (#14): an AI that makes them, asked with pictures and not turned off.
+      const makes = this.makingOn && r.pictures && next.status === 'done' && !(r.noPictures ?? []).includes(next.agent);
+      if (makes && this.made[next.agent]?.length) {
+        next.images = this.made[next.agent].map((im, i) => ({ id: `img_${String(this.n).padStart(16, '0')}${String(i).padStart(16, '0')}`, ...im }));
+      }
+      if (makes && this.madeLimit[next.agent]) next.pictureLimit = this.madeLimit[next.agent];
     }
     const left = r.parts.some((p) => p.status === 'running');
     const parts = r.parts.map(({ prompt: _p, ...p }) => p);
@@ -959,7 +993,7 @@ export class FakeAgent {
         }
         return { agent: t.agent, status: 'running', session: sessionId, model: t.model ?? `${t.agent}-${c.body.tier}`, ms: 1234, prompt: c.body.prompt };
       });
-      const r: FakeRun = { id, tier: c.body.tier ?? 'standard', prompt: c.body.prompt, parts, key: c.body.clientRunId };
+      const r: FakeRun = { id, tier: c.body.tier ?? 'standard', prompt: c.body.prompt, parts, key: c.body.clientRunId, pictures: c.body.pictures === true, noPictures: c.body.noPictures };
       if (c.body.refine && !c.body.refine.off) r.refine = { status: 'running', agent: c.body.refine.agent ?? parts[0]?.agent };
       this.runs.set(id, r);
       const compared = this.runCompare(r, c.body.compare);
@@ -976,6 +1010,16 @@ export class FakeAgent {
         ...(r.refine ? { refine: r.refine } : {}),
         ...compared,
       });
+    }
+    const ri = c.path.match(/^\/v1\/runs\/([^/]+)\/images\/([^/]+)$/);
+    if (ri && c.method === 'GET') {
+      const r = this.runs.get(ri[1]);
+      const known = r?.parts.some((p) => (p.images ?? []).some((im: { id: string }) => im.id === ri[2]));
+      if (this.imageFails > 0) {
+        this.imageFails--;
+        return err(503, 'internal');
+      }
+      return known ? new Response('', { status: 200 }) : err(404, 'image_not_found');
     }
     const rn = c.path.match(/^\/v1\/runs\/(.+)$/);
     if (rn && c.method === 'GET') {

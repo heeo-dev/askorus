@@ -61,6 +61,8 @@ export type AskPrefs = {
   carryRecord: boolean;
   /** The person has seen, once, where the record goes (#29). */
   recordNoticed: boolean;
+  /** The AIs the person turned making pictures off for in Manage AIs (#14); every AI that can makes them by default. */
+  noPictures: string[];
 };
 
 const key = 'ask.v1';
@@ -77,6 +79,7 @@ export const defaultAskPrefs: AskPrefs = {
   debateNoticed: false,
   carryRecord: true,
   recordNoticed: false,
+  noPictures: [],
 };
 
 /** picks keeps the saved model picks that have a model. */
@@ -118,6 +121,7 @@ export async function loadAskPrefs(kv: KeyValue = secureKeyValue): Promise<AskPr
       debateNoticed: v.debateNoticed === true,
       carryRecord: typeof v.carryRecord === 'boolean' ? v.carryRecord : true,
       recordNoticed: v.recordNoticed === true,
+      noPictures: Array.isArray(v.noPictures) ? v.noPictures.filter((x: unknown) => typeof x === 'string') : [],
     };
   } catch {
     return defaultAskPrefs;

@@ -151,8 +151,8 @@ class PhotoPickerModule : Module() {
       }
     }
 
-    // savePicture(path, name): puts a picture of the app's own (a PNG or
-    // JPEG in its cache or files) into the phone's pictures, in
+    // savePicture(path, name): puts a picture of the app's own (a PNG,
+    // JPEG or WebP in its cache or files) into the phone's pictures, in
     // Pictures/Askorus, under name. Android 10 and later, where MediaStore
     // takes a new picture without any permission; before that the app
     // would need the storage permission, which it does not ask for.
@@ -179,7 +179,7 @@ private fun ownPicture(context: Context, path: String): File? {
     return null
   }
   val name = file.name.lowercase()
-  if (!file.isFile || !(name.endsWith(".png") || name.endsWith(".jpg"))) return null
+  if (!file.isFile || !(name.endsWith(".png") || name.endsWith(".jpg") || name.endsWith(".webp"))) return null
   for (root in listOf(context.cacheDir, context.filesDir)) {
     val base = try {
       root.canonicalPath
@@ -196,13 +196,15 @@ private fun savePicture(context: Context, path: String, name: String) {
     throw PhotoException("photo_save_unsupported", "saving a picture needs Android 10 or later")
   }
   val file = ownPicture(context, path) ?: throw PhotoException("photo_save_failed", "not a picture of the app's own")
-  val png = file.name.lowercase().endsWith(".png")
+  val lower = file.name.lowercase()
+  val png = lower.endsWith(".png")
+  val webp = lower.endsWith(".webp")
   // The name is the app's own; anything else in it becomes an underscore.
-  val safe = name.replace(Regex("[^A-Za-z0-9._-]"), "_").take(80).ifEmpty { if (png) "askorus.png" else "askorus.jpg" }
+  val safe = name.replace(Regex("[^A-Za-z0-9._-]"), "_").take(80).ifEmpty { if (png) "askorus.png" else if (webp) "askorus.webp" else "askorus.jpg" }
   val resolver = context.contentResolver
   val values = ContentValues().apply {
     put(MediaStore.Images.Media.DISPLAY_NAME, safe)
-    put(MediaStore.Images.Media.MIME_TYPE, if (png) "image/png" else "image/jpeg")
+    put(MediaStore.Images.Media.MIME_TYPE, if (png) "image/png" else if (webp) "image/webp" else "image/jpeg")
     put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/Askorus")
     put(MediaStore.Images.Media.IS_PENDING, 1)
   }

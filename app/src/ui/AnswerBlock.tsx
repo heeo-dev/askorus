@@ -21,6 +21,7 @@ import { Avatar } from './Avatar';
 import { Button } from './Button';
 import { Spinner } from './controls';
 import { IconButton } from './Icon';
+import { MadePictures } from './MadePictures';
 import { Markdown } from './Markdown';
 import { SheetEnd } from './Sheet';
 import { themed, useTheme } from './theme';
@@ -65,6 +66,7 @@ export function AnswerBody({ p }: { p: PartView }) {
   return (
     <>
       <Markdown text={main} />
+      <MadePictures made={p.made} leftOut={p.part.imagesLeftOut} limit={p.part.pictureLimit} name={p.name} />
       {extras ? (
         <View style={s.extras}>
           <Button

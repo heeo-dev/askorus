@@ -10,16 +10,23 @@
 // with no script (svgTilePage) in a web view with MathBlock's locks, and
 // nothing in it takes a touch: the press is the tile's. The large one is
 // the SvgBlock an answer shows, with its 'Show code' and 'Save'.
+//
+// A picture an AI made with a tool of its own (#14, made pictures: Codex,
+// Antigravity) comes first among that AI's, as the photo it is: an image,
+// no web view, so it does not count towards maxTiles.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { Image, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 
+import type { MadeShown } from '@/ask/made';
 import { t } from '@/i18n';
 
 import { Avatar } from './Avatar';
+import { Spinner } from './controls';
 import { IconButton } from './Icon';
 import { useSafeInsets } from './keyboard';
+import { MadeRetry, MadeSave } from './MadePictures';
 import { drawingsIn } from './Markdown';
 import { allowLoad } from './MathBlock';
 import { modalBars } from './modalBars';
@@ -27,24 +34,45 @@ import { SvgBlock } from './SvgBlock';
 import { svgTilePage } from './svg';
 import { themed, useTheme } from './theme';
 
-/** One AI's answer, as the row needs it. */
-export type PictureSource = { agent: string; name: string; text: string };
+/** One AI's answer, as the row needs it: its text, and the pictures it made (#14). */
+export type PictureSource = { agent: string; name: string; text: string; made?: readonly MadeShown[] };
 
-/** One picture of the row: the AI that drew it and which of its drawings it is, from 1. */
-export type RowPicture = { key: string; agent: string; name: string; n: number; of: number; svg: string; source: string };
+/**
+ * One picture of the row: the AI that drew it and which of its pictures it
+ * is, from 1; a drawing's SVG, or a made picture (made).
+ */
+export type RowPicture = { key: string; agent: string; name: string; n: number; of: number; svg: string; source: string; made?: MadeShown };
 
 /** A row holds this many pictures of one AI, and this many small pictures in all (each is a web view, as in an answer: R-123). */
 export const maxPerAI = 4;
 export const maxTiles = 6;
 
-/** rowPictures gathers the drawings of the answers, AI by AI in the order given, at most maxPerAI of each. */
+/**
+ * rowPictures gathers the pictures of the answers, AI by AI in the order
+ * given: the pictures it made, then its drawings, at most maxPerAI of each.
+ */
 export function rowPictures(answers: readonly PictureSource[]): RowPicture[] {
   const out: RowPicture[] = [];
   for (const a of answers) {
+    const made = (a.made ?? []).slice(0, maxPerAI);
     const drawn = drawingsIn(a.text).slice(0, maxPerAI);
-    drawn.forEach((d, i) => out.push({ key: `${a.agent}/${i}`, agent: a.agent, name: a.name, n: i + 1, of: drawn.length, svg: d.svg, source: d.source }));
+    const of = made.length + drawn.length;
+    made.forEach((m, i) => out.push({ key: `${a.agent}/m/${m.image.id}`, agent: a.agent, name: a.name, n: i + 1, of, svg: '', source: '', made: m }));
+    drawn.forEach((d, i) =>
+      out.push({ key: `${a.agent}/${i}`, agent: a.agent, name: a.name, n: made.length + i + 1, of, svg: d.svg, source: d.source }),
+    );
   }
   return out;
+}
+
+/** shownTiles is how many of the row's pictures lie in it as small pictures: no more than maxTiles drawings (made pictures are no web views). */
+export function shownTiles(pictures: readonly RowPicture[]): number {
+  let drawings = 0;
+  for (let i = 0; i < pictures.length; i++) {
+    if (pictures[i].made) continue;
+    if (++drawings > maxTiles) return i;
+  }
+  return pictures.length;
 }
 
 const everyOrigin = ['*'];
@@ -61,12 +89,14 @@ export function PictureRow({ answers, live = true }: { answers: readonly Picture
   const th = useTheme();
   const s = styles(th);
   // The polls redraw a turn every second or so: the answers are read again only when one changed.
-  const stamp = answers.map((a) => `${a.agent}\u0000${a.name}\u0000${a.text}`).join('\u0001');
+  const stamp = answers
+    .map((a) => `${a.agent}\u0000${a.name}\u0000${a.text}\u0000${(a.made ?? []).map((m) => `${m.image.id}:${m.uri ?? ''}:${m.failed ? 1 : 0}`).join(',')}`)
+    .join('\u0001');
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const pictures = useMemo(() => rowPictures(answers), [stamp]);
   const [open, setOpen] = useState<number | null>(null);
   if (!pictures.length) return null;
-  const shown = pictures.slice(0, maxTiles);
+  const shown = pictures.slice(0, shownTiles(pictures));
   const more = pictures.length - shown.length;
   return (
     <View style={s.box} testID="picture-row">
@@ -84,8 +114,8 @@ export function PictureRow({ answers, live = true }: { answers: readonly Picture
             style={({ pressed }) => [s.tile, pressed && s.pressed]}
             testID={`picture-tile-${p.key}`}
           >
-            <View style={[s.frame, !live && s.rest]} pointerEvents="none">
-              {live ? <Tile svg={p.svg} /> : <Text style={s.restText}>{t('pictures.show')}</Text>}
+            <View style={[s.frame, !live && !p.made && s.rest]} pointerEvents="none">
+              {p.made ? <MadeTile m={p.made} /> : live ? <Tile svg={p.svg} /> : <Text style={s.restText}>{t('pictures.show')}</Text>}
             </View>
             <View style={s.by}>
               <Avatar agent={p.agent} />
@@ -97,7 +127,7 @@ export function PictureRow({ answers, live = true }: { answers: readonly Picture
         ))}
         {more > 0 ? (
           <Pressable
-            onPress={() => setOpen(maxTiles)}
+            onPress={() => setOpen(shown.length)}
             accessibilityRole="button"
             accessibilityLabel={t('pictures.moreLabel', { n: more })}
             style={({ pressed }) => [s.tile, s.moreTile, pressed && s.pressed]}
@@ -110,6 +140,13 @@ export function PictureRow({ answers, live = true }: { answers: readonly Picture
       <PictureViewer pictures={pictures} index={open} onClose={() => setOpen(null)} />
     </View>
   );
+}
+
+/** A made picture, small: the image once it is on the phone, else a spinner or 'Try again'. */
+function MadeTile({ m }: { m: MadeShown }) {
+  const s = styles(useTheme());
+  if (m.uri) return <Image source={{ uri: m.uri }} style={styles0.photo} resizeMode="cover" accessibilityIgnoresInvertColors />;
+  return <View style={[styles0.photo, s.rest]}>{m.failed ? <Text style={s.restText}>{t('made.retry')}</Text> : <Spinner size={18} />}</View>;
 }
 
 /** One small picture: a page without script, in a web view that takes no touch. */
@@ -187,7 +224,7 @@ function OpenViewer({ pictures, index, onClose }: { pictures: RowPicture[]; inde
         </View>
         <ScrollView style={s.body} contentContainerStyle={s.bodyIn}>
           {/* A key per picture: each is a page, and its Save, of its own. */}
-          <SvgBlock key={p.key} svg={p.svg} source={p.source} />
+          {p.made ? <MadeLarge key={p.key} m={p.made} /> : <SvgBlock key={p.key} svg={p.svg} source={p.source} />}
         </ScrollView>
         {many ? (
           <View style={s.nav}>
@@ -200,7 +237,42 @@ function OpenViewer({ pictures, index, onClose }: { pictures: RowPicture[]; inde
   );
 }
 
+/** A made picture, large, with its Save; one not on the phone yet says why. */
+function MadeLarge({ m }: { m: MadeShown }) {
+  const s = styles(useTheme());
+  const retry = useContext(MadeRetry);
+  if (!m.uri) {
+    return (
+      <View style={[s.largeRest]}>
+        {m.failed ? (
+          <Pressable onPress={() => retry?.(m)} disabled={!retry} accessibilityRole="button" hitSlop={8}>
+            <Text style={s.restText}>{retry ? t('made.retry') : t('made.gone')}</Text>
+          </Pressable>
+        ) : (
+          <Spinner size={20} />
+        )}
+      </View>
+    );
+  }
+  const ratio = m.image.width && m.image.height ? m.image.width / m.image.height : 1;
+  return (
+    <View style={s.large}>
+      <Image
+        source={{ uri: m.uri }}
+        style={[styles0.largePhoto, { aspectRatio: Math.min(Math.max(ratio, 0.4), 2.5) }]}
+        resizeMode="contain"
+        accessibilityRole="image"
+        accessibilityLabel={t('made.label')}
+        accessibilityIgnoresInvertColors
+      />
+      <MadeSave m={m} />
+    </View>
+  );
+}
+
 const styles0 = StyleSheet.create({
+  photo: { width: '100%', height: '100%' },
+  largePhoto: { width: '100%', borderRadius: 12 },
   web: {
     flex: 1,
     backgroundColor: '#ffffff',
@@ -234,5 +306,7 @@ const styles = themed((th) =>
     body: { flex: 1 },
     bodyIn: { paddingHorizontal: 16, paddingVertical: 12 },
     nav: { flexDirection: 'row', justifyContent: 'center', gap: 32 },
+    large: { gap: 8 },
+    largeRest: { minHeight: 200, alignItems: 'center', justifyContent: 'center' },
   }),
 );

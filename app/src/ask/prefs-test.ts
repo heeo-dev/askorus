@@ -11,8 +11,8 @@ const defaults = { tier: 'standard', off: [], models: {}, efforts: {}, pc: '', s
 test('ask prefs survive a round trip, the combined answer off included', async () => {
   const { kv } = memory();
   expect(await loadAskPrefs(kv)).toEqual(defaults);
-  const saved = { tier: 'deep', off: ['codex'], models: { claude: 'opus' }, efforts: { claude: 'high' }, pc: 'pc-1', synth: false, synthAgent: 'codex', synthModels: { codex: { model: 'gpt-6.1-sol', effort: 'high' } }, refine: true, debateNoticed: true, carryRecord: false, recordNoticed: true } as const;
-  await saveAskPrefs({ ...saved, off: [...saved.off], models: { ...saved.models }, efforts: { ...saved.efforts }, synthModels: { codex: { ...saved.synthModels.codex } } }, kv);
+  const saved = { tier: 'deep', off: ['codex'], models: { claude: 'opus' }, efforts: { claude: 'high' }, pc: 'pc-1', synth: false, synthAgent: 'codex', synthModels: { codex: { model: 'gpt-6.1-sol', effort: 'high' } }, refine: true, debateNoticed: true, carryRecord: false, recordNoticed: true, noPictures: ['agy'] } as const;
+  await saveAskPrefs({ ...saved, off: [...saved.off], models: { ...saved.models }, efforts: { ...saved.efforts }, synthModels: { codex: { ...saved.synthModels.codex } }, noPictures: [...saved.noPictures] }, kv);
   expect(await loadAskPrefs(kv)).toEqual(saved);
   for (const synthAgent of synthWriters) {
     await saveAskPrefs({ ...defaultAskPrefs, synthAgent }, kv);

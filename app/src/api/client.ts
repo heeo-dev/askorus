@@ -3,7 +3,7 @@
 // app's own Tailscale node (tailnet/node, #57), never the phone's ordinary
 // network.
 
-import { tailnetFetch, tailnetSendFile } from '@/tailnet/node';
+import { tailnetFetch, tailnetFetchFile, tailnetSendFile } from '@/tailnet/node';
 
 import { agentBase, markRefused, tokenRefused } from './refused';
 
@@ -75,10 +75,14 @@ export type SendFile = (
   init: { method?: string; headers?: Record<string, string>; file: string; signal?: AbortSignal },
 ) => Promise<Response>;
 
+/** Takes a request's answer into a new file of the app's own (tailnetFetchFile; tests pass their own). */
+export type FetchFile = (url: string, init: { headers?: Record<string, string>; file: string; signal?: AbortSignal }) => Promise<Response>;
+
 export type ClientOptions = {
   token?: string;
   fetch?: typeof fetch;
   sendFile?: SendFile;
+  fetchFile?: FetchFile;
   sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
   timeoutMs?: number;
 };
@@ -132,6 +136,7 @@ export class AgentClient {
   private readonly token?: string;
   private readonly fetchFn: typeof fetch;
   private readonly sendFileFn: SendFile;
+  private readonly fetchFileFn: FetchFile;
   private readonly sleep: (ms: number, signal?: AbortSignal) => Promise<void>;
   private readonly timeoutMs: number;
 
@@ -142,13 +147,14 @@ export class AgentClient {
     this.token = opts.token;
     this.fetchFn = opts.fetch ?? tailnetFetch;
     this.sendFileFn = opts.sendFile ?? tailnetSendFile;
+    this.fetchFileFn = opts.fetchFile ?? tailnetFetchFile;
     this.sleep = opts.sleep ?? defaultSleep;
     this.timeoutMs = opts.timeoutMs ?? 15000;
   }
 
   /** A client for the same agent with a device token. */
   withToken(token: string): AgentClient {
-    return new AgentClient(this.base, { token, fetch: this.fetchFn, sendFile: this.sendFileFn, sleep: this.sleep, timeoutMs: this.timeoutMs });
+    return new AgentClient(this.base, { token, fetch: this.fetchFn, sendFile: this.sendFileFn, fetchFile: this.fetchFileFn, sleep: this.sleep, timeoutMs: this.timeoutMs });
   }
 
   async request<T>(method: string, path: string, body?: unknown, signal?: AbortSignal, timeoutMs = this.timeoutMs): Promise<T> {
@@ -214,6 +220,27 @@ export class AgentClient {
       throw new NetworkError(e);
     }
     return this.read<Upload>(res);
+  }
+
+  /**
+   * runImage takes a picture an AI made in a run (#14, GET
+   * /v1/runs/{run}/images/{id}) into file, a new file of the app's own (a
+   * file:// address where nothing is yet). Only the phone that started the
+   * run gets it; the PC keeps it a day.
+   */
+  async runImage(runId: string, imageId: string, file: string, signal?: AbortSignal): Promise<void> {
+    if (!/^[0-9A-Za-z_-]{1,64}$/.test(runId) || !/^img_[0-9a-f]{32}$/.test(imageId)) throw new AgentError('image_not_found', 404);
+    if (this.token && tokenRefused(this.base, this.token)) throw new AgentError('unauthorized', 401);
+    const headers: Record<string, string> = { Accept: 'application/json' };
+    if (this.token) headers.Authorization = `Bearer ${this.token}`;
+    let res: Response;
+    try {
+      res = await this.fetchFileFn(`${this.base}/v1/runs/${runId}/images/${imageId}`, { headers, file, signal });
+    } catch (e) {
+      if (signal?.aborted) throw new CancelledError();
+      throw new NetworkError(e);
+    }
+    if (!res.ok) await this.read<null>(res);
   }
 
   /** deleteUpload takes a photo off the PC again (the person took it off the question). */

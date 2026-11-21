@@ -77,6 +77,11 @@ export type Turn = {
   // copies, kept with the conversation. They are uploaded when the run is
   // sent (sendRun); the PC's ids for them are not kept.
   photos?: TurnPhoto[];
+  // The pictures the AIs made in their answers (#14), taken into the
+  // conversation's folder: the address of each by the PC's id, and the ids
+  // that could not be taken (made.ts).
+  made?: Record<string, string>;
+  madeFailed?: string[];
 };
 
 /**
@@ -192,6 +197,12 @@ export function newTurn(o: {
   moderator?: RunModerator;
   /** The photos that go with the question (#14); the caller has left out the AIs that do not see photos. */
   photos?: TurnPhoto[];
+  /**
+   * Made pictures (#14): this app shows them, and the AIs the person turned
+   * them off for. Left out, the request says nothing of them (a question to
+   * the moderator never makes pictures).
+   */
+  pictures?: { noPictures: string[] };
   at: number;
 }): Turn {
   const photos = o.photos?.length ? { photos: o.photos } : {};
@@ -207,6 +218,10 @@ export function newTurn(o: {
     return { id: o.id, question: o.question, req, agents: [m.agent], at: o.at, moderator: true, ...photos };
   }
   const req = request({ question: o.question, tier: o.tier, to: o.to, on: o.on, turns: o.turns, models: o.models, efforts: o.efforts, id: o.id });
+  if (o.pictures) {
+    req.pictures = true;
+    if (o.pictures.noPictures.length) req.noPictures = [...o.pictures.noPictures];
+  }
   const asked = (req.agents ?? []).map((a) => a.agent);
   const turn: Turn = { id: o.id, question: o.question, req, agents: asked, at: o.at, ...photos };
   if (compares({ info: o.info, asked, to: o.to })) {
@@ -257,6 +272,11 @@ export type FollowDeps = {
   update: (id: string, patch: (t: Turn) => Partial<Turn>) => void;
   newId: () => string;
   errorText: (e: unknown) => string;
+  /**
+   * Takes the pictures the AIs made (#14), each time the run names some;
+   * client is the PC the run is on. Left out, no picture is taken.
+   */
+  takeMade?: (client: AgentClient, turnId: string, run: Run) => void;
 };
 
 /**
@@ -308,7 +328,9 @@ export async function followRun(client: AgentClient, turn: Turn, deps: FollowDep
   let last = turn.run;
   const put = (run: Run) => {
     last = run;
-    if (!ctl.signal.aborted) deps.update(turn.id, (t) => ({ run, compare: withRun(t.compare, run) }));
+    if (ctl.signal.aborted) return;
+    deps.update(turn.id, (t) => ({ run, compare: withRun(t.compare, run) }));
+    if (run.parts.some((p) => p.images?.length)) deps.takeMade?.(client, turn.id, run);
   };
   deps.update(turn.id, () => ({ error: undefined }));
   let run: Run;

@@ -87,6 +87,13 @@ export type AdapterInfo = {
      */
     images?: { all?: boolean; models?: string[]; newOnly?: boolean };
     /**
+     * The AI makes pictures when a question asks for one (#14, 0.6.0
+     * agents: Codex, Antigravity): at most maxCount an answer. limitedUntil
+     * is set while the agent knows its picture limit is reached (RFC 3339).
+     * Left out, the AI makes none.
+     */
+    makes?: MakesInfo;
+    /**
      * The newer model of its line a tier uses now, under each model the
      * agent ships with (#64, newer agents): the app marks those models as
      * new and moves a pick of the shipped one to it. Left out while none.
@@ -100,6 +107,15 @@ export type AdapterInfo = {
     extra?: { model: string; heavy?: boolean }[];
   };
 };
+
+/** What an AI's pictures are (#14): ask.makes. */
+export type MakesInfo = { maxCount: number; types: string[]; limitedUntil?: string };
+
+/**
+ * A picture an AI made in an answer (#14, made pictures): the PC's id for its
+ * copy (GET /v1/runs/{run}/images/{id}), its type, size and pixels.
+ */
+export type MadeImage = { id: string; type: string; bytes: number; width?: number; height?: number };
 
 /** A stable error code from the agent; message is English detail (or an AI's own words). */
 export type CodeError = { code: string; message?: string };
@@ -314,6 +330,13 @@ export type RunRequest = {
    * deletes a photo ten minutes after its last use.
    */
   attachments?: string[];
+  /**
+   * This app shows the pictures AIs make (#14, 0.6.0): an AI that can make
+   * pictures gets its picture tool, unless noPictures names it (turned off
+   * in Manage AIs). A PC from before ignores both.
+   */
+  pictures?: boolean;
+  noPictures?: string[];
 };
 
 /**
@@ -376,6 +399,14 @@ export type RunPart = {
   outputTokens?: number;
   /** hint: more about the failure, 'mac_keychain' with ai_signed_out (#62). */
   error?: { code: string; message?: string; hint?: string };
+  /**
+   * The pictures the AI made in this answer (#14, 0.6.0 agents), at most 4;
+   * imagesLeftOut how many more it made. pictureLimit: the AI's picture tool
+   * reached its limit in this answer, until when it refreshes.
+   */
+  images?: MadeImage[];
+  imagesLeftOut?: number;
+  pictureLimit?: { until?: string };
 };
 
 export type Run = {

@@ -268,7 +268,10 @@ function Result({
       </CombinedAnswerCard>
 
       {/* Every AI's drawings, side by side: the combined answer holds none of its own (#14). */}
-      <PictureRow live={recent} answers={views.filter((p) => p.state === 'done').map((p) => ({ agent: p.agent, name: p.name, text: p.part.answer ?? '' }))} />
+      <PictureRow
+        live={recent}
+        answers={views.filter((p) => p.state === 'done').map((p) => ({ agent: p.agent, name: p.name, text: p.part.answer ?? '', made: p.made }))}
+      />
 
       {/* The debate on the combined answer, and the answer after it (P2-5). */}
       <DebateSection turn={turn} info={info} note={notes[`${turn.id}/debate`]} act={act.debate} />

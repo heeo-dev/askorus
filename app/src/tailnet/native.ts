@@ -25,6 +25,11 @@ export type NativeTailnet = {
    * A build from before it has none.
    */
   sendFile?(method: string, url: string, headers: string, path: string, timeoutMs: number): Promise<NativeFetchResult>;
+  /**
+   * fetch whose 2xx answer goes into path, a new file of the app's own (#14:
+   * a picture an AI made); body is then empty. A build from before has none.
+   */
+  fetchFile?(method: string, url: string, headers: string, path: string, timeoutMs: number): Promise<NativeFetchResult>;
   recentLog(): Promise<string>;
 };
 

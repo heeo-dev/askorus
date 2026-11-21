@@ -17,8 +17,10 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log"
 	"net"
 	"net/http"
@@ -666,16 +668,8 @@ func openOwnFile(path string) (*os.File, int64, error) {
 	if err != nil {
 		return nil, 0, coded(CodeBadRequest, "no such file")
 	}
-	mu.Lock()
-	dir := stateDir
-	mu.Unlock()
-	if dir != "" {
-		if realDir, err := filepath.EvalSymlinks(dir); err == nil {
-			dir = realDir
-		}
-		if rel, err := filepath.Rel(dir, real); err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && !filepath.IsAbs(rel) {
-			return nil, 0, coded(CodeBadRequest, "that file is the node's own")
-		}
+	if inNodeFolder(real) {
+		return nil, 0, coded(CodeBadRequest, "that file is the node's own")
 	}
 	f, err := os.Open(real)
 	if err != nil {
@@ -693,9 +687,96 @@ func openOwnFile(path string) (*os.File, int64, error) {
 	return f, fi.Size(), nil
 }
 
+// inNodeFolder reports whether real, a real path, is the node's folder or
+// inside it: the node's key lives there.
+func inNodeFolder(real string) bool {
+	mu.Lock()
+	dir := stateDir
+	mu.Unlock()
+	if dir == "" {
+		return false
+	}
+	if realDir, err := filepath.EvalSymlinks(dir); err == nil {
+		dir = realDir
+	}
+	rel, err := filepath.Rel(dir, real)
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && !filepath.IsAbs(rel)
+}
+
+// maxSaveFile bounds the answer FetchFile writes to a file: a picture an AI
+// made, which the PC sends up to 8 MiB of.
+const maxSaveFile = 16 << 20
+
+// FetchFile is Fetch whose answer, when its status is 2xx, goes into a new
+// file of the app's own instead of Body (#14: a picture an AI made). path
+// is absolute and clean, its folder exists and is not the node's own, and
+// nothing is there yet: a file is never written over. An answer larger than
+// maxSaveFile is not kept (what was written is deleted). Any other status
+// writes no file, and Body holds the answer as Fetch's does. Everything
+// Fetch checks about the address holds here too.
+func FetchFile(method, rawURL, headers, path string, timeoutMs int) (*Response, error) {
+	if err := checkNewFile(path); err != nil {
+		return nil, err
+	}
+	return sendTo(method, rawURL, headers, nil, -1, timeoutMs, path)
+}
+
+// checkNewFile accepts the path FetchFile may write: absolute and clean, no
+// file (or link) there, in a folder that exists outside the node's own.
+func checkNewFile(path string) error {
+	if !filepath.IsAbs(path) || filepath.Clean(path) != path {
+		return coded(CodeBadRequest, "the file's path must be absolute and clean")
+	}
+	if _, err := os.Lstat(path); !errors.Is(err, fs.ErrNotExist) {
+		return coded(CodeBadRequest, "a file is there already")
+	}
+	parent, err := filepath.EvalSymlinks(filepath.Dir(path))
+	if err != nil {
+		return coded(CodeBadRequest, "the file's folder does not exist")
+	}
+	if info, err := os.Stat(parent); err != nil || !info.IsDir() {
+		return coded(CodeBadRequest, "the file's folder is not a folder")
+	}
+	if inNodeFolder(parent) {
+		return coded(CodeBadRequest, "that folder is the node's own")
+	}
+	return nil
+}
+
+// saveBody writes body into the new file path, at most maxSaveFile bytes;
+// on any failure nothing is left there.
+func saveBody(body io.Reader, path string) error {
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	if err != nil {
+		return coded(CodeBadRequest, "the file cannot be made")
+	}
+	n, err := io.Copy(f, io.LimitReader(body, maxSaveFile+1))
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	switch {
+	case err != nil:
+		os.Remove(path)
+		return err
+	case n > maxSaveFile:
+		os.Remove(path)
+		return coded(CodeTooLarge, "the answer is too large to keep")
+	case n == 0:
+		os.Remove(path)
+		return coded(CodeBadRequest, "the answer is empty")
+	}
+	return nil
+}
+
 // send is one request through the node: Fetch's and SendFile's. size is the
 // body's length when it is known (a file), else -1.
 func send(method, rawURL, headers string, body io.Reader, size int64, timeoutMs int) (*Response, error) {
+	return sendTo(method, rawURL, headers, body, size, timeoutMs, "")
+}
+
+// sendTo is send, and with save a 2xx answer goes into that new file
+// (FetchFile).
+func sendTo(method, rawURL, headers string, body io.Reader, size int64, timeoutMs int, save string) (*Response, error) {
 	mu.Lock()
 	c, hc, since := lc, httpc, started
 	mu.Unlock()
@@ -759,6 +840,12 @@ func send(method, rawURL, headers string, body io.Reader, size int64, timeoutMs 
 		return nil, err
 	}
 	defer res.Body.Close()
+	if save != "" && res.StatusCode >= 200 && res.StatusCode < 300 {
+		if err := saveBody(res.Body, save); err != nil {
+			return nil, err
+		}
+		return &Response{Status: res.StatusCode, Headers: headersOf(res), Ms: time.Since(t0).Milliseconds()}, nil
+	}
 	b, err := io.ReadAll(io.LimitReader(res.Body, maxBody+1))
 	if err != nil {
 		return nil, err
@@ -766,14 +853,17 @@ func send(method, rawURL, headers string, body io.Reader, size int64, timeoutMs 
 	if len(b) > maxBody {
 		return nil, coded(CodeTooLarge, "answer too large")
 	}
-	out := &Response{Status: res.StatusCode, Body: string(b), Ms: time.Since(t0).Milliseconds()}
+	return &Response{Status: res.StatusCode, Body: string(b), Headers: headersOf(res), Ms: time.Since(t0).Milliseconds()}, nil
+}
+
+// headersOf is a JSON object of the answer's headers (first value of each).
+func headersOf(res *http.Response) string {
 	hm := map[string]string{}
 	for k := range res.Header {
 		hm[k] = res.Header.Get(k)
 	}
 	hb, _ := json.Marshal(hm)
-	out.Headers = string(hb)
-	return out, nil
+	return string(hb)
 }
 
 // errorCode is the code at the start of one of this package's errors, or

@@ -24,9 +24,25 @@ export function savingAvailable(): boolean {
 
 const two = (n: number) => String(n).padStart(2, '0');
 
-/** pictureName is the saved file's name: askorus-YYYYMMDD-HHMMSS.png, by the phone's clock. */
-export function pictureName(now = new Date()): string {
-  return `askorus-${now.getFullYear()}${two(now.getMonth() + 1)}${two(now.getDate())}-${two(now.getHours())}${two(now.getMinutes())}${two(now.getSeconds())}.png`;
+/** pictureName is the saved file's name: askorus-YYYYMMDD-HHMMSS.png (or ext), by the phone's clock. */
+export function pictureName(now = new Date(), ext = '.png'): string {
+  return `askorus-${now.getFullYear()}${two(now.getMonth() + 1)}${two(now.getDate())}-${two(now.getHours())}${two(now.getMinutes())}${two(now.getSeconds())}${ext}`;
+}
+
+/**
+ * saveMadePicture puts a picture an AI made (#14), kept in the app's files
+ * (madeFiles.ts), into the phone's pictures as it is: its bytes are not
+ * encoded again.
+ */
+export async function saveMadePicture(uri: string, type: string): Promise<void> {
+  const native = nativePhotoPicker();
+  if (!native || typeof native.savePicture !== 'function') throw new SaveError('unsupported');
+  const ext = type === 'image/png' ? '.png' : type === 'image/webp' ? '.webp' : '.jpg';
+  try {
+    await native.savePicture(uri, pictureName(new Date(), ext));
+  } catch (e) {
+    throw new SaveError((e as { code?: string } | null)?.code === 'photo_save_unsupported' ? 'unsupported' : 'failed');
+  }
 }
 
 /** savePicture puts a PNG (its bytes as base64) into the phone's pictures. */

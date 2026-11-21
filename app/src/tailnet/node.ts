@@ -367,6 +367,46 @@ export async function tailnetSendFile(
   }
 }
 
+// A picture an AI made is up to 8 MiB.
+const fetchFileTimeoutMs = 120000;
+
+/**
+ * tailnetFetchFile is tailnetFetch whose answer, when it is 2xx, goes into
+ * file, a new file of the app's own (#14: a picture an AI made); the
+ * answer's text is then empty. The native side writes only a new file in the
+ * app's cache or files folder, never over one, never the node's own, at most
+ * 16 MiB, and fetches only from a device of the person's own Tailscale
+ * account. Any other status writes nothing and its text is the PC's error.
+ */
+export async function tailnetFetchFile(
+  url: string,
+  init: { headers?: Record<string, string>; file: string; signal?: AbortSignal },
+): Promise<Response> {
+  const native = nativeTailnet();
+  if (!native || typeof native.fetchFile !== 'function') throw new TailnetError('tailnet_off');
+  if (!started && !(await enabled())) throw new TailnetError('tailnet_login');
+  const signal = init.signal;
+  if (signal?.aborted) throw aborted();
+  const headers: Record<string, string> = {};
+  for (const [key, value] of Object.entries(init.headers ?? {})) if (typeof value === 'string') headers[key] = value;
+
+  let onAbort: (() => void) | undefined;
+  const gaveUp = new Promise<never>((_, reject) => {
+    onAbort = () => reject(aborted());
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
+  try {
+    await Promise.race([start(native), gaveUp]);
+    const res = await Promise.race([native.fetchFile('GET', url, JSON.stringify(headers), init.file, fetchFileTimeoutMs), gaveUp]);
+    return answer(res.status, res.body, res.headers);
+  } catch (e) {
+    if ((e as Error)?.name === 'AbortError') throw e;
+    throw coded(e);
+  } finally {
+    if (onAbort) signal?.removeEventListener('abort', onAbort);
+  }
+}
+
 function answer(status: number, body: string, headersJSON: string): Response {
   let headers: Record<string, string> = {};
   try {

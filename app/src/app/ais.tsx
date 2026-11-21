@@ -62,7 +62,14 @@ export function featuresOf(a: AdapterInfo): { key: string; on: boolean; newOnly?
     { key: 'moderator', on: a.capabilities.includes('synthesize') },
     { key: 'debate', on: ask },
     { key: 'photos', on: ask && photos, newOnly: ask && photos && !!a.ask?.images?.newOnly },
+    { key: 'make', on: ask && !!a.ask?.makes },
   ];
+}
+
+/** togglePictures turns making pictures on or off for agent (#14); on is the default. */
+export function togglePictures(p: AskPrefs, agent: string): AskPrefs {
+  const off = p.noPictures.includes(agent);
+  return { ...p, noPictures: off ? p.noPictures.filter((x) => x !== agent) : [...p.noPictures, agent] };
 }
 
 export default function ManageAIs() {
@@ -201,7 +208,17 @@ export default function ManageAIs() {
         }}
       />
       <Sheet open={!!open} onClose={() => setOpen(null)} title={open ? agentName(open.agent) : ''} testID="ai-sheet">
-        {open ? <Details a={open} /> : null}
+        {open ? (
+          <Details
+            a={open}
+            pictures={!ask.noPictures.includes(open.agent)}
+            onPictures={() => {
+              const next = togglePictures(ask, open.agent);
+              setAsk(next);
+              saveAskPrefs(next);
+            }}
+          />
+        ) : null}
       </Sheet>
     </View>
   );
@@ -224,8 +241,8 @@ function MiniSwitch({ on, label, onChange, th }: { on: boolean; label: string; o
   );
 }
 
-/** Details is the sheet of one AI. */
-function Details({ a }: { a: AdapterInfo }) {
+/** Details is the sheet of one AI; pictures and onPictures are its picture switch (#14). */
+function Details({ a, pictures, onPictures }: { a: AdapterInfo; pictures: boolean; onPictures: () => void }) {
   const th = useTheme();
   const s = styles(th);
   const out = signedOut(a);
@@ -266,6 +283,20 @@ function Details({ a }: { a: AdapterInfo }) {
           </View>
         ))}
       </View>
+      {a.ask?.makes ? (
+        <View style={s.section}>
+          <Group>
+            <Row
+              title={t('ais.makePictures')}
+              subtitle={a.ask.makes.limitedUntil ? t('ais.pictureLimit', { time: whenAgain(a.ask.makes.limitedUntil) }) : undefined}
+              subtitleTone={a.ask.makes.limitedUntil ? 'danger' : 'sub'}
+              right={<MiniSwitch on={pictures} label={t('ais.makePicturesFor', { name: agentName(a.agent) })} onChange={onPictures} th={th} />}
+              onPress={onPictures}
+            />
+          </Group>
+          <Text style={s.caption}>{t('ais.makeNote')}</Text>
+        </View>
+      ) : null}
       {has(goes) ? <Text style={s.caption}>{t(goes as MessageKey)}</Text> : null}
       <Pressable accessibilityRole="button" onPress={() => void Linking.openURL(aiGuideUrl())} style={({ pressed }) => [s.button, pressed && s.pressed]}>
         <Text style={s.buttonText}>{t('ais.openGuide')}</Text>
