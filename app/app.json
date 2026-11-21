@@ -54,7 +54,8 @@
           }
         }
       ],
-      "expo-sqlite"
+      "expo-sqlite",
+      "./plugins/withSourcePathMap"
     ],
     "extra": {
       "router": {
