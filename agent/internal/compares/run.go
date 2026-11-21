@@ -147,7 +147,8 @@ func (m *Manager) answers(c *comparison) (judge.Spec, *judge.Error) {
 	case rs != nil && run != nil:
 		spec = judge.Spec{Question: rs.Question, Earlier: slices.Clone(rs.Earlier), Conversation: rs.Conversation}
 		for _, part := range run.Parts {
-			ready := part.Status == runs.Done && strings.TrimSpace(part.Answer) != ""
+			// An answer of pictures only counts too (R-166): the writer gets their number.
+			ready := part.Status == runs.Done && (strings.TrimSpace(part.Answer) != "" || len(part.Images) > 0)
 			a := answer(part.Agent, part.Agent, judge.ViaPC, part.Model, m.family(part.Agent, part.Model), part.Answer, ready)
 			if ready {
 				a.Pictures = len(part.Images) + part.ImagesLeftOut // #14: the number only

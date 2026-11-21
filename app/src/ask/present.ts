@@ -145,6 +145,8 @@ export function partViews(turn: Turn, now: number, info?: Info | null): PartView
     if (state === 'failed') v.error = p.error ? partError(p.error) : t('compare.tab.failed');
     const made = madeOf(turn, p.agent);
     if (made.length) v.made = made;
+    // An answer of pictures only (R-166) says so where its text would be.
+    if (state === 'done' && made.length && !(p.answer ?? '').trim()) v.part = { ...p, answer: t('made.onlyPictures') };
     return v;
   });
 }

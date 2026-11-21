@@ -183,3 +183,16 @@ func TestAnAskWithPicturesOffStillTakesThePlaceOut(t *testing.T) {
 		t.Errorf("answer = %q, made %+v", res.Answer, res.Made)
 	}
 }
+
+// R-166 (S10, 11-21): asked for a photo, the real codex made one and wrote
+// nothing; the ask came back empty and the picture was thrown away. Now an
+// ask of pictures only brings them, with no text.
+func TestAnAnswerOfPicturesOnly(t *testing.T) {
+	pictureHome(t, "1")
+	a, _, folder := judgeAdapter(t)
+	t.Setenv(fakecli.EnvAsk, fakecli.AskEmpty)
+	res, err := a.Ask(context.Background(), core.AskRequest{Folder: folder, Prompt: "사과 사진", Tier: core.TierQuick, Pictures: true})
+	if err != nil || res.Answer != "" || len(res.Made) != 1 || res.SessionID == "" {
+		t.Fatalf("pictures only = %+v, %v", res, err)
+	}
+}

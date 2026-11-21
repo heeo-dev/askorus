@@ -241,3 +241,26 @@ func TestInfoSaysWhichAIsMakePictures(t *testing.T) {
 		t.Errorf("makes = %+v", got)
 	}
 }
+
+// R-166: a part whose AI answered with pictures only is done, with them.
+func TestAPartOfPicturesOnlyIsDone(t *testing.T) {
+	cx := &onlyPictures{newMaker(t, "codex", 1)}
+	cl := &askAdapter{name: "claude", available: true}
+	e, _ := madeEnv(t, cx, cl)
+	w := e.post("/v1/runs", map[string]any{"mode": "ask", "prompt": "사과 사진", "pictures": true})
+	var st RunStatus
+	json.Unmarshal(w.Body.Bytes(), &st)
+	st = e.waitRun(t, st.ID)
+	if p := st.Parts[0]; p.Status != "done" || p.Answer != "" || len(p.Images) != 1 || p.Error != nil {
+		t.Errorf("codex part = %+v", p)
+	}
+}
+
+// onlyPictures answers with its pictures and no text.
+type onlyPictures struct{ *makerAdapter }
+
+func (a *onlyPictures) Ask(ctx context.Context, req core.AskRequest) (core.AskResult, error) {
+	res, err := a.makerAdapter.Ask(ctx, req)
+	res.Answer = ""
+	return res, err
+}

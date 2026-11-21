@@ -765,6 +765,7 @@
   "made.coming": "사진을 받는 중",
   "made.viewer": "사진 {n}/{total}",
   "made.label": "AI가 만든 사진",
+  "made.onlyPictures": "사진으로만 답했습니다.",
   "ais.feature.make": "사진 만들기",
   "ais.featureNo.make": "사진 만들기 안 됨",
   "ais.makePictures": "사진 만들기",

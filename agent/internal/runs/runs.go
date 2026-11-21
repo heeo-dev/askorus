@@ -244,7 +244,9 @@ func (m *Manager) runPart(r *Run, i int, t Task) {
 	res, err := safeAsk(ctx, t.Ask)
 	p := Part{Agent: t.Agent, Ms: m.now().Sub(start).Milliseconds()}
 	switch {
-	case err == nil && res.Answer == "":
+	// An answer of pictures only is an answer (R-166: Codex made a picture
+	// and wrote nothing, and the picture was thrown away as ask_empty).
+	case err == nil && res.Answer == "" && len(res.Pictures) == 0:
 		p.Status, p.Error = Failed, &Error{Code: core.ErrCodeAskEmpty}
 	case err == nil:
 		p.Status, p.Answer, p.Model = Done, res.Answer, res.Model

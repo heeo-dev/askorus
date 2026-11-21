@@ -765,6 +765,7 @@
   "made.coming": "Picture on its way",
   "made.viewer": "Picture {n} of {total}",
   "made.label": "Picture the AI made",
+  "made.onlyPictures": "It answered with pictures only.",
   "ais.feature.make": "Makes pictures",
   "ais.featureNo.make": "Makes no pictures",
   "ais.makePictures": "Make pictures",

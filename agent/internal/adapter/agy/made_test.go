@@ -237,3 +237,18 @@ func TestAgyTakesThePlaceOutWithPicturesOff(t *testing.T) {
 		t.Errorf("answer = %q", r.Answer)
 	}
 }
+
+// R-166: the same for agy, whose empty answer was ask_empty before its
+// pictures were looked for.
+func TestAgyAnswerOfPicturesOnly(t *testing.T) {
+	a, _, folder := drawAgy(t, "1")
+	t.Setenv(fakecli.EnvAsk, fakecli.AskEmpty)
+	r, err := ask(t, a, core.AskRequest{Folder: folder, Pictures: true})
+	if err != nil || r.Answer != "" || len(r.Made) != 1 || !a.MakesIn(r.SessionID) {
+		t.Fatalf("pictures only = %+v, %v", r, err)
+	}
+	// Without pictures an empty answer is still ask_empty.
+	if _, err := ask(t, a, core.AskRequest{Folder: folder}); core.ErrorCode(err) != core.ErrCodeAskEmpty {
+		t.Errorf("empty without pictures = %v", err)
+	}
+}

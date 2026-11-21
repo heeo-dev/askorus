@@ -507,3 +507,13 @@ func TestSynthMadePictures(t *testing.T) {
 		t.Errorf("built = %+v", built.Answers)
 	}
 }
+
+// R-166: an answer of pictures only goes to the writer with its number.
+func TestSynthTaskTakesAnAnswerOfPicturesOnly(t *testing.T) {
+	built := BuildSynthTask(Spec{Question: "q", Answers: []Answer{
+		{ID: "claude", Status: AnswerReady, Text: "a"}, {ID: "codex", Status: AnswerReady, Text: "", Pictures: 1}, {ID: "agy", Status: AnswerReady, Text: ""},
+	}}, func(id string) string { return id })
+	if len(built.Answers) != 2 || built.Answers[1].AI != "codex" || built.Answers[1].Pictures != 1 {
+		t.Errorf("built = %+v", built.Answers)
+	}
+}

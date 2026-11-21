@@ -179,7 +179,7 @@ func BuildSynthTask(s Spec, name func(answerID string) string) SynthTask {
 	}
 	var ready []Answer
 	for _, a := range s.Answers {
-		if a.Status == AnswerReady && strings.TrimSpace(a.Text) != "" {
+		if a.Status == AnswerReady && (strings.TrimSpace(a.Text) != "" || a.Pictures > 0) {
 			ready = append(ready, a)
 		}
 	}

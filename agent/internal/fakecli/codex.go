@@ -89,8 +89,10 @@ func codexAsk(c *Call) int {
 		codexEvent(map[string]any{"type": "item.completed", "item": codexItem("agent_message", "item_0", map[string]any{"text": "확인하겠습니다."})})
 	}
 	codexEvent(map[string]any{"type": "item.completed", "item": codexItem("web_search", "item_1", map[string]any{"query": "q"})})
+	// Pictures are made whatever the text (R-166: a real codex answered with a picture only).
+	saved := codexPictures(c, thread)
 	if mode != AskEmpty {
-		text += codexPictures(c, thread)
+		text += saved
 		codexEvent(map[string]any{"type": "item.completed", "item": codexItem("agent_message", "item_2", map[string]any{"text": text})})
 	}
 	codexEvent(map[string]any{"type": "turn.completed", "usage": map[string]int{"input_tokens": 100, "cached_input_tokens": 80, "output_tokens": 9}})

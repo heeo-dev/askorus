@@ -276,3 +276,13 @@ test('opening a conversation takes the pictures it has not taken yet', async () 
   // The pretend PC no longer has it (a day old): it says so, with Try again.
   expect(await screen.findByRole('button', { name: 'Picture 1 of 1 did not arrive. Try again' })).toBeTruthy();
 });
+
+// R-166 (S10, 11-21): Codex answered with a picture only; the app shows it
+// with a line where the text would be.
+test('an answer of pictures only shows them, and says so where its text would be', async () => {
+  agent.askReplies = { codex: '' };
+  const { user } = await open();
+  await ask(user, 'Make a photo of a cat');
+  expect(await screen.findByText('It answered with pictures only.')).toBeTruthy();
+  expect(await screen.findByRole('imagebutton', { name: 'Picture the AI made, 1 of 1. Opens it large.' })).toBeTruthy();
+});

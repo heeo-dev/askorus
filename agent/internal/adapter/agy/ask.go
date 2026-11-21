@@ -312,6 +312,16 @@ func (a *Adapter) ask(ctx context.Context, req core.AskRequest, model, effort st
 	if req.OneOff {
 		out.SessionID = "" // agy keeps the conversation, but nothing carries it on
 	}
+	if core.ErrorCode(err) == core.ErrCodeAskEmpty && pics.collect {
+		// An answer of pictures only is an answer (R-166).
+		if r := readRun(res.Stdout, tools); r.result != nil && conversationRe.MatchString(r.result.ConversationID) && (req.Resume == "" || r.result.ConversationID == req.Resume) {
+			only := core.AskResult{Model: m, SessionID: r.result.ConversationID}
+			a.collectInto(pics, &only)
+			if len(only.Made) > 0 {
+				out, err = only, nil
+			}
+		}
+	}
 	if err == nil {
 		if draw && req.Resume == "" {
 			a.noteDraw(out.SessionID)
