@@ -136,13 +136,19 @@ func newRig(t *testing.T, mutate func(*rigOptions)) *rig {
 			t.Fatal(err)
 		}
 	}
+	// The folders where codex and agy save the pictures they make (#14): the
+	// rig's own, for the adapters and the pretend programs alike, so no test
+	// reads the person's.
+	codexHome, agyBrain := filepath.Join(root, "codex-home"), filepath.Join(root, "agy-brain")
+	t.Setenv("CODEX_HOME", codexHome)
+	t.Setenv(fakecli.EnvAgyBrain, agyBrain)
 	r.adapters = []core.Adapter{
 		claude.New(claude.Options{ClaudeDir: r.claudeDir, ClaudePath: exes[fakecli.RoleClaude], OutsideScreen: func() bool { return o.offScreen }}),
-		codex.New(codex.Options{Path: exes[fakecli.RoleCodex], SchemaDir: filepath.Join(root, "agent"), Follow: o.follow}),
+		codex.New(codex.Options{Path: exes[fakecli.RoleCodex], SchemaDir: filepath.Join(root, "agent"), Home: codexHome, Follow: o.follow}),
 		opencode.New(opencode.Options{Path: exes[fakecli.RoleOpenCode], Follow: o.follow}),
 	}
 	if o.agy {
-		r.adapters = append(r.adapters, agy.New(agy.Options{Path: exes[fakecli.RoleAgy], ConfigDir: filepath.Join(root, "agy-config"), Follow: o.follow}))
+		r.adapters = append(r.adapters, agy.New(agy.Options{Path: exes[fakecli.RoleAgy], ConfigDir: filepath.Join(root, "agy-config"), BrainDir: agyBrain, Follow: o.follow}))
 	}
 	if o.follow {
 		// The agent reads the lists behind its first /v1/info; the rig waits

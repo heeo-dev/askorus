@@ -69,3 +69,52 @@ func codexPictures(c *Call, thread string) string {
 	}
 	return " [saved: " + first + "]"
 }
+
+// EnvAgyBrain is the folder the fake agy keeps its conversations' files in
+// (agy's own is ~/.gemini/antigravity-cli/brain); the fake makes no picture
+// without it. The adapter's tests give the same folder as Options.BrainDir.
+const EnvAgyBrain = "ASKORUS_FAKE_AGY_BRAIN"
+
+// PicturesLimit as ASKORUS_FAKE_PICTURES: agy's picture tool is at its
+// limit; the step fails with Google's 429 and the time it refreshes.
+const PicturesLimit = "limit"
+
+// AgyPictureReset is when the fake agy's picture limit refreshes, and
+// AgyPictureLimitError the tool's error as agy 1.5.10 printed it on
+// 2026-11-20 (shortened).
+const (
+	AgyPictureReset      = "2026-11-24T16:26:01Z"
+	AgyPictureLimitError = "image failed to generate: failed to generate content: 429 Too Many Requests, body: {\n  \"error\": {\n    \"code\": 429,\n    \"message\": \"You have exhausted your capacity on this model.\",\n    \"status\": \"RESOURCE_EXHAUSTED\",\n    \"details\": [\n      {\n        \"@type\": \"type.googleapis.com/google.rpc.ErrorInfo\",\n        \"reason\": \"QUOTA_EXHAUSTED\",\n        \"metadata\": {\n          \"model\": \"gemini-3.1-flash-image\",\n          \"quotaResetDelay\": \"99h12m42s\",\n          \"quotaResetTimeStamp\": \"" + AgyPictureReset + "\"\n        }\n      }\n    ]\n  }\n}"
+)
+
+// agyPictures plays agy's generate_image in a run whose agent has it, from
+// step i on, and returns the next step's place and what the answer says.
+func agyPictures(c *Call, agent, conv string, i int) (int, string) {
+	if !agyAgentHasTool(c.Dir, agent, "generate_image") {
+		return i, ""
+	}
+	if os.Getenv(EnvPictures) == PicturesLimit {
+		agyStep(conv, i, "tool", "ACTIVE", map[string]any{"tool_name": "generate_image"})
+		agyStep(conv, i, "tool", "ERROR", map[string]any{"tool_name": "generate_image",
+			"tool_info": map[string]any{"name": "generate_image", "error": map[string]any{"message": AgyPictureLimitError}}})
+		return i + 1, " (the picture could not be made)"
+	}
+	brain := os.Getenv(EnvAgyBrain)
+	n := picturesWanted()
+	if brain == "" || !filepath.IsAbs(brain) || n == 0 {
+		return i, ""
+	}
+	ms := time.Now().UnixMilli()
+	first := writePictures(filepath.Join(brain, conv), n, func(k int) string {
+		return "icons_cat_" + strconv.Itoa(k+1) + "_" + strconv.FormatInt(ms+int64(k), 10) + ".jpg"
+	}, FakeJPEG)
+	for range n {
+		agyStep(conv, i, "tool", "ACTIVE", map[string]any{"tool_name": "generate_image"})
+		agyStep(conv, i, "tool", "DONE", map[string]any{"tool_name": "generate_image"})
+		i++
+	}
+	if first == "" {
+		return i, ""
+	}
+	return i, " [saved: " + first + "]"
+}

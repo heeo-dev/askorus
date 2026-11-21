@@ -240,7 +240,7 @@ func fakeAgy(t *testing.T) (*Adapter, string) {
 	t.Helper()
 	exe := fakecli.Use(t, fakecli.RoleAgy)
 	// agy's own config folder: empty (no hooks, plugins or agents of the person's).
-	return New(Options{Path: exe, ConfigDir: t.TempDir()}), t.TempDir()
+	return New(Options{Path: exe, ConfigDir: t.TempDir(), BrainDir: t.TempDir()}), t.TempDir()
 }
 
 func ask(t *testing.T, a *Adapter, req core.AskRequest) (core.AskResult, error) {

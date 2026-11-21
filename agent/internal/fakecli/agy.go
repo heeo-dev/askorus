@@ -168,9 +168,9 @@ func agyStream(args []string, stdin string) (int, string, error) {
 		return 0, "", errors.New("stream-json message: want one user message with one text block")
 	}
 	photos := 0
-	if agent := flagValue(args, "--agent"); strings.HasSuffix(agent, "-photo") {
+	dir, _ := os.Getwd()
+	if agent := flagValue(args, "--agent"); agyAgentHasTool(dir, agent, "view_file") {
 		// The photo agents look at photo-<n>.<ext> in the folder they run in.
-		dir, _ := os.Getwd()
 		entries, err := os.ReadDir(dir)
 		if err != nil {
 			return 0, "", err
@@ -321,6 +321,9 @@ func agyRun(c *Call) int {
 		agyStep(conv, i, "tool", "DONE", map[string]any{"tool_name": "search_web"})
 		i++
 	}
+	var said string
+	i, said = agyPictures(c, agent, conv, i)
+	text += said
 	if ask == AskEmpty {
 		text = ""
 	}

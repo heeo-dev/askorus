@@ -104,6 +104,10 @@ type Options struct {
 	// ConfigDir is agy's config folder, where it keeps hooks, plugins and
 	// agents of the person's own; empty: ~/.gemini/config. Tests give one.
 	ConfigDir string
+	// BrainDir is where agy keeps each conversation's files, among them the
+	// pictures it makes (#14); empty: ~/.gemini/antigravity-cli/brain.
+	// Tests give one.
+	BrainDir string
 	// Follow lets the tier models follow the newest model of their line
 	// (models.go, #64), as codex.Options.Follow.
 	Follow bool
@@ -142,11 +146,21 @@ type Adapter struct {
 
 	// follow keeps agy's model list (models.go, #64).
 	follow *core.Follower
+
+	// Made pictures (made.go, #14): brainDir is agy's conversation folder
+	// ("" when unknown: no pictures); drawConvs the conversations started
+	// with a draw agent and picLimit when the picture limit refreshes, both
+	// under drawMu. clock is nil outside tests.
+	brainDir  string
+	drawMu    sync.Mutex
+	drawConvs map[string]bool
+	picLimit  time.Time
+	clock     func() time.Time
 }
 
 // New finds agy. A missing agy is not an error: /v1/info reports it.
 func New(o Options) *Adapter {
-	a := &Adapter{tiers: o.Tiers, ready: map[string]bool{}, configDir: o.ConfigDir}
+	a := &Adapter{tiers: o.Tiers, ready: map[string]bool{}, configDir: o.ConfigDir, brainDir: brainFolder(o.BrainDir)}
 	if a.configDir == "" {
 		if home, err := os.UserHomeDir(); err == nil {
 			a.configDir = filepath.Join(home, ".gemini", "config")

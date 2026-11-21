@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/heeo-dev/askorus/agent/internal/config"
 	"github.com/heeo-dev/askorus/agent/internal/core"
@@ -110,7 +111,8 @@ func runArgs(agent, settings, model, conversation string) []string {
 }
 
 // askAgentSettings pairs each ask agent with its deny rules.
-var askAgentSettings = map[string]string{askAgent: askSettings, photoAgent: photoSettings}
+var askAgentSettings = map[string]string{askAgent: askSettings, photoAgent: photoSettings,
+	drawAgent: askSettings, photoDrawAgent: photoSettings}
 
 // checkArgs accepts exactly what runArgs makes for one of the ask agents
 // with its own deny rules, a valid model and conversation: no other option
@@ -235,24 +237,56 @@ func (a *Adapter) ask(ctx context.Context, req core.AskRequest, model, effort st
 	case len(req.Images) > 0 && req.Resume != "":
 		// R-130: the conversation keeps its first agent's tools; it would say it sees no photo.
 		return core.AskResult{}, &core.ActionError{Code: core.ErrCodeNoImages, Hint: core.HintNewOnly}
+	case req.OneOff && req.Pictures:
+		return core.AskResult{}, core.Fail(core.ErrCodeInternal, "a one-off ask makes no pictures")
 	}
 	m := cliModel(model, effort)
+	// Made pictures (#14, made.go): a new conversation that may make
+	// pictures runs with a draw agent; a follow-up with the draw agent
+	// exactly when its conversation was started with one (R-130). Pictures
+	// are taken only when this ask may make them.
+	draw := req.Pictures && a.brainDir != ""
+	if req.Resume != "" {
+		draw = a.brainDir != "" && a.MakesIn(req.Resume)
+	}
+	pics := pictureAsk{collect: draw && req.Pictures}
+	if pics.collect && req.Resume != "" {
+		pics.dir = filepath.Join(a.brainDir, req.Resume)
+		pics.before = core.MadeSnapshot(pics.dir)
+	}
 	agent, settings, tools, prompt := askAgent, askSettings, askTools, req.Prompt
+	if draw {
+		agent, tools = drawAgent, drawTools
+	}
+	if req.Resume != "" {
+		// A conversation this agent no longer remembers may have the tool:
+		// using it is no reason to throw the answer away.
+		tools = withPictures(tools)
+	}
 	var dir string
 	if len(req.Images) > 0 {
-		if a.shadowed(photoAgent) {
+		name, content, ptools := photoAgent, photoAgentFile, photoTools
+		if draw {
+			name, content, ptools = photoDrawAgent, photoDrawAgentFile, photoDrawTools
+		}
+		if a.shadowed(name) {
 			return core.AskResult{}, core.Fail(core.ErrCodeInternal, "agy: an agent of the same name is in agy's own config folder")
 		}
-		d, names, cleanup, err := photoFolder(req.Folder, photoAgent, photoAgentFile, req.Images)
+		d, names, cleanup, err := photoFolder(req.Folder, name, content, req.Images)
 		if err != nil {
 			return core.AskResult{}, err
 		}
 		defer cleanup()
-		dir, agent, settings, tools, prompt = d, photoAgent, photoSettings, photoTools, photoLine(names)+req.Prompt
+		dir, agent, settings, tools, prompt = d, name, photoSettings, ptools, photoLine(names)+req.Prompt
 	} else {
 		d, err := a.askFolder(req.Folder)
 		if err != nil {
 			return core.AskResult{}, err
+		}
+		if draw {
+			if d, err = a.agentFile(filepath.Join(req.Folder, FolderName), drawAgent, drawAgentFile); err != nil {
+				return core.AskResult{}, err
+			}
 		}
 		dir = d
 	}
@@ -278,6 +312,21 @@ func (a *Adapter) ask(ctx context.Context, req core.AskRequest, model, effort st
 	if req.OneOff {
 		out.SessionID = "" // agy keeps the conversation, but nothing carries it on
 	}
+	if err == nil {
+		if draw && req.Resume == "" {
+			a.noteDraw(out.SessionID)
+		}
+		a.collectInto(pics, &out)
+		if msg := readRun(res.Stdout, tools).pictureErr; draw && msg != "" {
+			if limited, until := pictureLimitOf(msg, a.now()); limited {
+				out.PictureLimit = &core.PictureLimit{}
+				if !until.IsZero() {
+					out.PictureLimit.Until = until.UTC().Format(time.RFC3339)
+					a.noteLimit(until)
+				}
+			}
+		}
+	}
 	return out, a.afterAsk(ctx, err)
 }
 
@@ -292,6 +341,11 @@ type event struct {
 		StepType string `json:"step_type"`
 		State    string `json:"state"`
 		ToolName string `json:"tool_name"`
+		ToolInfo *struct {
+			Error *struct {
+				Message string `json:"message"`
+			} `json:"error"`
+		} `json:"tool_info"`
 	} `json:"step_update"`
 	Result *result `json:"result"`
 }
@@ -318,6 +372,9 @@ type run struct {
 	lastErr  int    // the place of the last error_message step, -1 if none
 	lastDone int    // the place of the last finished answer step, -1 if none
 	result   *result
+	// pictureErr is the error of the last generate_image step that failed
+	// (#14): Google's 429 when the picture limit is reached.
+	pictureErr string
 }
 
 // readRun reads the stream-json lines. Places count the step events in
@@ -338,6 +395,9 @@ func readRun(stdout []byte, tools map[string]bool) run {
 			n++
 			switch e.Step.StepType {
 			case "tool":
+				if e.Step.ToolName == pictureTool && e.Step.State == "ERROR" && e.Step.ToolInfo != nil && e.Step.ToolInfo.Error != nil {
+					r.pictureErr = e.Step.ToolInfo.Error.Message
+				}
 				if !tools[e.Step.ToolName] && r.badTool == "" {
 					r.badTool = e.Step.ToolName
 					if r.badTool == "" {
