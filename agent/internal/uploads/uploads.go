@@ -12,7 +12,6 @@
 package uploads
 
 import (
-	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
@@ -129,17 +128,7 @@ func typeOfExt(ext string) string {
 }
 
 // Sniff names the image type of data by its first bytes, or "".
-func Sniff(data []byte) string {
-	switch {
-	case len(data) >= 3 && data[0] == 0xFF && data[1] == 0xD8 && data[2] == 0xFF:
-		return core.ImageJPEG
-	case len(data) >= 8 && bytes.Equal(data[:8], []byte{0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A}):
-		return core.ImagePNG
-	case len(data) >= 12 && string(data[:4]) == "RIFF" && string(data[8:12]) == "WEBP":
-		return core.ImageWebP
-	}
-	return ""
-}
+func Sniff(data []byte) string { return core.SniffImage(data) }
 
 // Put keeps one photo of owner read from r. It reads at most
 // core.MaxImageBytes and one byte more.

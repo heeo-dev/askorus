@@ -36,6 +36,7 @@ import (
 	"github.com/heeo-dev/askorus/agent/internal/dialog"
 	"github.com/heeo-dev/askorus/agent/internal/hidden"
 	"github.com/heeo-dev/askorus/agent/internal/logx"
+	"github.com/heeo-dev/askorus/agent/internal/made"
 	"github.com/heeo-dev/askorus/agent/internal/pairing"
 	"github.com/heeo-dev/askorus/agent/internal/uploads"
 )
@@ -418,6 +419,19 @@ func serve(dir string, args []string) error {
 			defer photos.Close()
 		}
 	}
+	// Copies of the pictures AIs make (#14) wait in their own folder until
+	// the phone has taken them. Without it the AIs make none.
+	var madeStore *made.Store
+	if askFolder != "" {
+		if folder, err := config.MadeFolder(dir); err != nil {
+			logger.Error("no made pictures folder; made pictures are off")
+		} else if madeStore, err = made.Open(folder); err != nil {
+			logger.Error("the made pictures folder cannot be used; made pictures are off")
+			madeStore = nil
+		} else {
+			defer madeStore.Close()
+		}
+	}
 	apiSrv := api.New(api.Options{
 		Version:         version,
 		Hostname:        host,
@@ -442,6 +456,7 @@ func serve(dir string, args []string) error {
 		JudgeMinVersions: judgeMinVersions(),
 		Refine:           refineOn,
 		Uploads:          photos,
+		Made:             madeStore,
 		Updater:          newPhoneUpdater(dir, store, func() { handOverOnce.Do(func() { close(handedOver) }) }),
 	})
 	// The API listens inside the tailnet only: no port is opened on the

@@ -148,6 +148,20 @@ func UploadsFolder(dir string) (string, error) {
 	return realPath(filepath.Join(base, "uploads")), nil
 }
 
+// MadeFolder is where the agent keeps copies of the pictures AIs make
+// (#14, made pictures): next to the uploads folder, never inside the ask
+// folder or a project.
+func MadeFolder(dir string) (string, error) {
+	if os.Getenv("ASKORUS_AGENT_DIR") != "" && filepath.IsAbs(dir) {
+		return realPath(filepath.Join(dir, "made")), nil
+	}
+	base, err := CacheBase()
+	if err != nil {
+		return "", err
+	}
+	return realPath(filepath.Join(base, "made")), nil
+}
+
 // realPath returns path with its symbolic links resolved, as far as the
 // path exists yet. The AI programs record the folder they ran in by its
 // real path and the agent compares folders as text, so a link on the way

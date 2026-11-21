@@ -200,6 +200,11 @@ type AskRequest struct {
 	// each one CheckImage accepts. An asker whose model does not see photos
 	// answers no_image_support without asking.
 	Images []Image
+	// Pictures lets the AI make pictures in this ask (#14, made pictures):
+	// a PictureMaker then runs with its picture tool and finds what it
+	// made (AskResult.Made). Never with OneOff: a debate turn and a
+	// question to the moderator make none.
+	Pictures bool
 }
 
 // AskModel is the model and effort of one tier.
@@ -216,6 +221,15 @@ type AskResult struct {
 	// Tokens the AI reports, for counting use; zero when it reports none.
 	InputTokens  int
 	OutputTokens int
+	// Made are the pictures the AI made in this ask (#14), in its own
+	// folder, checked by FindMade; MadeLeftOut how many more it made than
+	// MaxMade. PictureLimit is set when its picture tool reached its limit.
+	// The API keeps copies and the run's part names them (Pictures).
+	Made         []MadeFile
+	MadeLeftOut  int
+	PictureLimit *PictureLimit
+	// Pictures are the copies the API kept of Made, as the part shows them.
+	Pictures []MadePicture
 }
 
 // Ask error codes, beside the action codes in launch.go.

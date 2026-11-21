@@ -21,6 +21,7 @@ import (
 	"github.com/heeo-dev/askorus/agent/internal/core"
 	"github.com/heeo-dev/askorus/agent/internal/devices"
 	"github.com/heeo-dev/askorus/agent/internal/dialog"
+	"github.com/heeo-dev/askorus/agent/internal/made"
 	"github.com/heeo-dev/askorus/agent/internal/proc"
 	"github.com/heeo-dev/askorus/agent/internal/tsnode"
 	"github.com/heeo-dev/askorus/agent/internal/uploads"
@@ -484,6 +485,10 @@ func uninstallCmd(dir string, args []string, in io.Reader, out io.Writer) error 
 	if uploadsFolder != "" {
 		plan = append(plan, m("delete the photos left in %s", "%s에 남은 사진 삭제", uploadsFolder))
 	}
+	madeFolder, _ := config.MadeFolder(dir)
+	if madeFolder != "" {
+		plan = append(plan, m("delete the made pictures left in %s", "%s에 남은 만든 사진 삭제", madeFolder))
+	}
 	if *all {
 		plan = append(plan, m("delete %s", "%s 삭제", dir))
 	}
@@ -555,6 +560,12 @@ func uninstallCmd(dir string, args []string, in io.Reader, out io.Writer) error 
 		if photos, err := uploads.Open(uploadsFolder); err == nil {
 			photos.Close()
 			os.Remove(uploadsFolder)
+		}
+	}
+	if madeFolder != "" {
+		if copies, err := made.Open(madeFolder); err == nil {
+			copies.Close()
+			os.Remove(madeFolder)
 		}
 	}
 	if *all {

@@ -153,6 +153,9 @@ func Announce(ctx context.Context, adapters []core.Adapter, g Gate) ([]core.Adap
 				im := seer.ImageModels()
 				info.Ask.Images = &im
 			}
+			if pm, ok := a.(core.PictureMaker); ok {
+				info.Ask.Makes = pm.Makes()
+			}
 			if f, ok := a.(core.Following); ok {
 				if n := f.Newer(); len(n) > 0 {
 					info.Ask.Newer = n

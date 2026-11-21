@@ -31,6 +31,9 @@ func (s *Server) forgetSelf(w http.ResponseWriter, r *http.Request) {
 	if s.o.Uploads != nil {
 		s.o.Uploads.DropOwner(id) // its photos go with it (#14)
 	}
+	if s.o.Made != nil {
+		s.o.Made.DropOwner(id) // and the pictures the AIs made for it
+	}
 	if s.o.Logger != nil {
 		s.o.Logger.Info("device unpaired itself", "device", id)
 	}

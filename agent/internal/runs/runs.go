@@ -74,6 +74,24 @@ type Part struct {
 	InputTokens  int    `json:"inputTokens,omitempty"`
 	OutputTokens int    `json:"outputTokens,omitempty"`
 	Error        *Error `json:"error,omitempty"`
+	// Images are the pictures the AI made in this answer (#14, made
+	// pictures), which the phone that started the run takes with GET
+	// /v1/runs/{run}/images/{id}; ImagesLeftOut how many more it made than
+	// it brings. PictureLimit is there when the AI's picture tool reached its
+	// limit in this answer. Older apps leave all three out.
+	Images        []core.MadePicture `json:"images,omitempty"`
+	ImagesLeftOut int                `json:"imagesLeftOut,omitempty"`
+	PictureLimit  *core.PictureLimit `json:"pictureLimit,omitempty"`
+}
+
+type runKey struct{}
+
+// RunID is the id of the run an ask belongs to, from the context its Task's
+// Ask gets; "" outside a run. The made pictures of an answer are kept under
+// it (#14).
+func RunID(ctx context.Context) string {
+	id, _ := ctx.Value(runKey{}).(string)
+	return id
 }
 
 // Run is a snapshot of one run.
@@ -220,7 +238,7 @@ func (m *Manager) runPart(r *Run, i int, t Task) {
 	if limit == 0 {
 		limit = PartLimit
 	}
-	ctx, cancel := context.WithTimeout(m.base, limit)
+	ctx, cancel := context.WithTimeout(context.WithValue(m.base, runKey{}, r.ID), limit)
 	defer cancel()
 	start := m.now()
 	res, err := safeAsk(ctx, t.Ask)
@@ -243,6 +261,7 @@ func (m *Manager) runPart(r *Run, i int, t Task) {
 	if p.Model == "" {
 		p.Model = res.Model
 	}
+	p.Images, p.ImagesLeftOut, p.PictureLimit = res.Pictures, res.MadeLeftOut, res.PictureLimit
 	m.mu.Lock()
 	if t.Session != "" {
 		delete(m.inUse, t.Session)

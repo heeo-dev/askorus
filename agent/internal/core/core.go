@@ -156,6 +156,10 @@ type AskInfo struct {
 	// Images says which of the AI's models see photos sent with a question
 	// (#14). Absent when the AI takes no photos.
 	Images *ImageInfo `json:"images,omitempty"`
+	// Makes is there when the AI makes pictures in an ask (#14, made
+	// pictures): the phone then shows the picture switch in Manage AIs and
+	// asks with pictures. Absent while the AI cannot.
+	Makes *MakesInfo `json:"makes,omitempty"`
 	// Newer maps each model the agent ships with to the newer model of its
 	// line that a tier of Tiers uses now (#64): the app marks those as new
 	// and moves an own pick of the shipped one to it. Absent while every

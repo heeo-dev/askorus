@@ -21,6 +21,7 @@ import (
 	"github.com/heeo-dev/askorus/agent/internal/core"
 	"github.com/heeo-dev/askorus/agent/internal/devices"
 	"github.com/heeo-dev/askorus/agent/internal/jobs"
+	"github.com/heeo-dev/askorus/agent/internal/made"
 	"github.com/heeo-dev/askorus/agent/internal/pairing"
 	"github.com/heeo-dev/askorus/agent/internal/runs"
 	"github.com/heeo-dev/askorus/agent/internal/uploads"
@@ -127,6 +128,10 @@ type Options struct {
 	// turns photos off: /v1/info then has no attachments, POST /v1/uploads
 	// is refused and a run that names photos is too.
 	Uploads *uploads.Store
+	// Made keeps copies of the pictures AIs make in an ask (#14, made
+	// pictures). Nil turns making pictures off: no AI gets its picture
+	// tool and GET /v1/runs/{run}/images/{id} finds nothing.
+	Made *made.Store
 	// Updater takes agent updates from phones (#35, update.go). Nil: no
 	// update field in /v1/info and no /v1/update.
 	Updater Updater
@@ -230,6 +235,7 @@ func (s *Server) Handler() http.Handler {
 	route("GET", "/v1/jobs/{jobId}", s.jobStatus)
 	route("POST", "/v1/runs", s.startRun)
 	route("GET", "/v1/runs/{runId}", s.getRun)
+	route("GET", "/v1/runs/{runId}/images/{imageId}", s.runImage)
 	route("POST", "/v1/uploads", s.upload)
 	route("DELETE", "/v1/uploads/{id}", s.deleteUpload)
 	route("POST", "/v1/comparisons", s.startComparison)

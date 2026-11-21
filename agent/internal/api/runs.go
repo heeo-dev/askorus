@@ -90,6 +90,13 @@ type RunRequest struct {
 	// refuses the run with upload_gone: the phone uploads again and sends
 	// the same run again.
 	Attachments []string `json:"attachments,omitempty"`
+	// Pictures: the phone shows the pictures AIs make (#14, made pictures,
+	// 0.6.0 apps). An AI that can make pictures then gets its picture tool
+	// in the question's own asks, unless NoPictures names it (the person
+	// turned it off in Manage AIs). Older apps send neither: every AI then
+	// runs as before, without the tool.
+	Pictures   bool     `json:"pictures,omitempty"`
+	NoPictures []string `json:"noPictures,omitempty"`
 }
 
 // RunRefine is RunRequest.refine.
@@ -429,11 +436,18 @@ func (s *Server) startRun(w http.ResponseWriter, r *http.Request) {
 		// earlier questions for an AI new to the conversation.
 		fresh := t.Session == ""
 		// The picture guide (#14 decision 13): asked for a picture, the AI
-		// draws an SVG, which the app shows as one. Every AI draws with code
-		// only until an adapter makes pictures (core.GuideMake then). A
-		// question to the moderator, below, has none.
-		guide := core.GuideDraw
-		areq := core.AskRequest{Folder: folder, Prompt: judge.AskWithConversation(prompt, conv, fresh, guide), Tier: tier, Model: t.Model, Effort: t.Effort, Images: images}
+		// draws an SVG, which the app shows as one; an AI that makes pictures
+		// with a tool of its own, and has it in this ask, is guided to make
+		// photos and illustrations with it (core.PicturePlan). A question to
+		// the moderator, below, has neither.
+		asker := askers[i]
+		resume := ""
+		if t.Session != "" {
+			_, resume, _ = core.ParseID(t.Session)
+		}
+		wantPictures := req.Pictures && mod == nil && s.o.Made != nil && !slices.Contains(req.NoPictures, t.Agent)
+		pictures, guide := core.PicturePlan(asker, wantPictures, resume)
+		areq := core.AskRequest{Folder: folder, Prompt: judge.AskWithConversation(prompt, conv, fresh, guide), Tier: tier, Model: t.Model, Effort: t.Effort, Images: images, Pictures: pictures}
 		if mod != nil {
 			// The moderator answers alone, from the record and the answers, as
 			// a one-off in the judge folder: no session is kept or listed.
@@ -443,9 +457,8 @@ func (s *Server) startRun(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		} else if t.Session != "" {
-			_, areq.Resume, _ = core.ParseID(t.Session)
+			areq.Resume = resume
 		}
-		asker := askers[i]
 		session := t.Session
 		if mod != nil {
 			session = ""
@@ -461,7 +474,12 @@ func (s *Server) startRun(w http.ResponseWriter, r *http.Request) {
 				}
 				areq.Prompt = judge.AskWithConversation(q, conv, fresh, guide)
 			}
-			return asker.Ask(ctx, areq)
+			res, err := asker.Ask(ctx, areq)
+			if len(res.Made) > 0 {
+				res.Pictures = s.keepMade(owner, runs.RunID(ctx), res.Made)
+				res.MadeLeftOut += len(res.Made) - len(res.Pictures)
+			}
+			return res, err
 		}}
 	}
 	run, err := s.runs.Start(runs.Spec{Owner: owner, Key: req.ClientRunID, Mode: req.Mode, Tier: tier, Tasks: tasks})
@@ -503,7 +521,7 @@ func (s *Server) startRun(w http.ResponseWriter, r *http.Request) {
 		synth := cmp != nil && cmpErr == nil && cmp.Synthesis != nil && !cmp.Synthesis.Off
 		s.o.Logger.Info("run started", append([]any{"mode", req.Mode, "tier", tier, "agents", strings.Join(names, ","), "followUp", followUp,
 			"compare", cmp != nil || cmpErr != nil, "compareCode", compareCode, "synthesis", synth, "refine", refiner != nil,
-			"moderator", mod != nil, "modItems", len(modAnswers), "photos", len(images)}, conv.Log()...)...)
+			"moderator", mod != nil, "modItems", len(modAnswers), "photos", len(images), "pictures", req.Pictures && mod == nil}, conv.Log()...)...)
 	}
 	st := s.runStatus(owner, run)
 	st.CompareError = cmpErr
