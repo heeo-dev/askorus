@@ -128,9 +128,10 @@ func MadeSnapshot(dir string) map[string]bool {
 // FindMade gives the pictures at the top of dir that were not there in
 // before (MadeSnapshot), whose names name accepts, oldest first, at most
 // MaxMade, and how many more there were. Anything that is not a checked
-// picture is left out without a word. Each picture's bytes are read through
-// the handle that was checked (readMade), so a file or folder swapped for a
-// link after the check is never what is read (R-159).
+// picture is left out without a word. The folder is opened once (os.Root)
+// and every listing, check and read goes through that handle, so a file or
+// folder swapped for a link, or the folder swapped for another and back,
+// is never what is read (R-159, R-169).
 func FindMade(dir string, before map[string]bool, name *regexp.Regexp) (found []MadeFile, leftOut int) {
 	real, err := filepath.EvalSymlinks(dir)
 	if err != nil {
@@ -140,12 +141,26 @@ func FindMade(dir string, before map[string]bool, name *regexp.Regexp) (found []
 	if err != nil || !realInfo.IsDir() {
 		return nil, 0
 	}
-	entries, err := os.ReadDir(dir)
+	root, err := os.OpenRoot(real)
+	if err != nil {
+		return nil, 0
+	}
+	defer root.Close()
+	// The folder the handle holds is the one checked.
+	if ri, err := root.Stat("."); err != nil || !os.SameFile(ri, realInfo) {
+		return nil, 0
+	}
+	top, err := root.Open(".")
+	if err != nil {
+		return nil, 0
+	}
+	entries, err := top.ReadDir(-1)
+	top.Close()
 	if err != nil {
 		return nil, 0
 	}
 	type cand struct {
-		path string
+		name string
 		at   time.Time
 	}
 	var cands []cand
@@ -154,21 +169,20 @@ func FindMade(dir string, before map[string]bool, name *regexp.Regexp) (found []
 		if before[n] || !name.MatchString(n) || !e.Type().IsRegular() {
 			continue
 		}
-		p := filepath.Join(dir, n)
-		info, err := os.Lstat(p)
+		info, err := root.Lstat(n)
 		if err != nil || !info.Mode().IsRegular() || info.Size() == 0 || info.Size() > MaxMadeBytes {
 			continue
 		}
-		cands = append(cands, cand{p, info.ModTime()})
+		cands = append(cands, cand{n, info.ModTime()})
 	}
 	slices.SortStableFunc(cands, func(a, b cand) int {
 		if c := a.at.Compare(b.at); c != 0 {
 			return c
 		}
-		return strings.Compare(a.path, b.path)
+		return strings.Compare(a.name, b.name)
 	})
 	for _, c := range cands {
-		data, ok := readMade(c.path, real, realInfo)
+		data, ok := readMade(root, c.name)
 		if !ok {
 			continue
 		}
@@ -180,21 +194,21 @@ func FindMade(dir string, before map[string]bool, name *regexp.Regexp) (found []
 			leftOut++
 			continue
 		}
-		found = append(found, MadeFile{Path: c.path, Type: typ, Data: data})
+		found = append(found, MadeFile{Path: filepath.Join(dir, c.name), Type: typ, Data: data})
 	}
 	return found, leftOut
 }
 
-// readMade reads the file at path, at most MaxMadeBytes, only when the
-// handle it opened is the regular file the path names (not what a link
-// points at), it has no other name (a hard link of a file elsewhere), and
-// its folder is still the folder real, whose info is realInfo.
-func readMade(path, real string, realInfo os.FileInfo) ([]byte, bool) {
-	li, err := os.Lstat(path)
+// readMade reads the file name at the top of root, at most MaxMadeBytes,
+// only when the handle it opened is the regular file the name stands for
+// (not what a link points at) and it has no other name (a hard link of a
+// file elsewhere).
+func readMade(root *os.Root, name string) ([]byte, bool) {
+	li, err := root.Lstat(name)
 	if err != nil || !li.Mode().IsRegular() {
 		return nil, false
 	}
-	f, err := os.Open(path)
+	f, err := root.Open(name)
 	if err != nil {
 		return nil, false
 	}
@@ -204,13 +218,6 @@ func readMade(path, real string, realInfo os.FileInfo) ([]byte, bool) {
 		return nil, false
 	}
 	if n, ok := linkCount(f, fi); !ok || n != 1 {
-		return nil, false
-	}
-	// The folder the handle was opened in is still the one checked.
-	if di, err := os.Stat(filepath.Dir(path)); err != nil || !os.SameFile(di, realInfo) {
-		return nil, false
-	}
-	if rp, err := filepath.EvalSymlinks(path); err != nil || !strings.EqualFold(filepath.Dir(rp), real) {
 		return nil, false
 	}
 	data, err := io.ReadAll(io.LimitReader(f, MaxMadeBytes+1))

@@ -213,7 +213,8 @@ func (m *Manager) synthAfterLocked(c *comparison) {
 func (m *Manager) synthStartLocked(c *comparison) {
 	ready := 0
 	for _, a := range c.spec.Answers {
-		if a.Status == judge.AnswerReady && strings.TrimSpace(a.Text) != "" {
+		// An answer of pictures only counts too (R-166, R-168).
+		if a.Status == judge.AnswerReady && (strings.TrimSpace(a.Text) != "" || a.Pictures > 0) {
 			ready++
 		}
 	}

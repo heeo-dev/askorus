@@ -286,3 +286,22 @@ test('an answer of pictures only shows them, and says so where its text would be
   expect(await screen.findByText('It answered with pictures only.')).toBeTruthy();
   expect(await screen.findByRole('imagebutton', { name: 'Picture the AI made, 1 of 1. Opens it large.' })).toBeTruthy();
 });
+
+// R-170 (2호's review of 0.6.0, middle): pictures of two AIs that arrived
+// together for a conversation no longer on the screen each read the kept
+// conversation and wrote it back, and the second wrote over the first.
+test('pictures of two AIs that arrive together for a kept conversation are both kept', async () => {
+  agent.madePictures = { codex: [png], opencode: [png] };
+  const release = holdImages();
+  const { user } = await open({ off: ['claude'] });
+  await ask(user, 'Make a photo of a cat');
+  await screen.findByText('opencode says: Make a photo of a cat');
+  await waitFor(() => expect(mockMadeFiles.targets).toHaveLength(2));
+  const id = conversations.current()?.id as string;
+  await user.press(screen.getByRole('button', { name: 'New question' }));
+  release();
+  await waitFor(async () => {
+    const kept = await conversations.load(id);
+    expect(Object.keys(kept?.turns[0]?.made ?? {})).toHaveLength(2);
+  });
+});

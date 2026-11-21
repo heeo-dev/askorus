@@ -320,16 +320,28 @@ export default function Ask() {
   // Where a taken picture goes: the turn on the screen or in a conversation
   // still running in the background, else the kept conversation (it ended
   // in the background meanwhile, or another one is open now, R-164).
-  const keepMade = async (conv: string, id: string, patch: (t: Turn) => Partial<Turn>) => {
+  // Pictures of two AIs that arrive together for a kept conversation are
+  // written one after the other, so the second does not write over the
+  // first (R-170).
+  const keeping = useRef(new Map<string, Promise<void>>());
+  const keepMade = (conv: string, id: string, patch: (t: Turn) => Partial<Turn>): Promise<void> => {
     const inBg = [...bgs.current.values()].some((b) => b.head.id === conv && b.turns.some((x) => x.id === id));
     const here = head.current?.id === conv && turnsRef.current.some((x) => x.id === id);
     if (inBg || here) {
       deps.update(id, patch);
-      return;
+      return Promise.resolve();
     }
-    const c = await conversations.load(conv);
-    if (!c || conversations.isGone(conv)) return;
-    await conversations.save({ ...c, turns: c.turns.map((x) => (x.id === id ? { ...x, ...patch(x) } : x)) });
+    const next = (keeping.current.get(conv) ?? Promise.resolve()).then(async () => {
+      const c = await conversations.load(conv);
+      if (!c || conversations.isGone(conv)) return;
+      await conversations.save({ ...c, turns: c.turns.map((x) => (x.id === id ? { ...x, ...patch(x) } : x)) });
+    });
+    const kept = next.catch(() => undefined);
+    keeping.current.set(conv, kept);
+    void kept.then(() => {
+      if (keeping.current.get(conv) === kept) keeping.current.delete(conv);
+    });
+    return kept;
   };
   // 'Try again' on a picture that could not be taken: from the PC of this conversation only.
   const retryMade = useCallback(

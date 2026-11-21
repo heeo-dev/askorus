@@ -98,3 +98,30 @@ func TestIT29MadePictures(t *testing.T) {
 	}
 	r.waitIdle(c.ID)
 }
+
+// R-168 (2호's review of 0.6.0, middle): with one answer in words and one of
+// pictures only, the run had two answers but the combined answer counted the
+// words only and ended with need_two_answers.
+func TestIT29ACombinedAnswerWithAnAnswerOfPicturesOnly(t *testing.T) {
+	r := newRig(t, func(o *rigOptions) {
+		o.env = map[string]string{fakecli.EnvPictures: "1", fakecli.EnvAsk: "codex=empty"}
+	})
+	r.addDevice()
+	st := r.ask([]map[string]string{{"agent": "claude"}, {"agent": "codex"}},
+		map[string]any{"pictures": true, "compare": map[string]any{"synthesis": map[string]any{"agent": "claude", "pictureRow": true}}})
+	run := r.waitRun(st.ID)
+	for _, p := range run.Parts {
+		if p.Agent == "codex" && (p.Status != "done" || p.Answer != "" || len(p.Images) != 1) {
+			t.Fatalf("codex part = %+v", p)
+		}
+	}
+	c, _ := r.waitComparison(st.ComparisonID)
+	if s := synthOf(t, c); s.Status != compares.SynthDone {
+		t.Fatalf("synthesis %+v", s)
+	}
+	synths := calls(t, 0, kindSynth, "")
+	if len(synths) != 1 || !strings.Contains(synths[0].Prompt, `"text":"","pictures":1}`) {
+		t.Errorf("the writer did not get the answer of pictures only")
+	}
+	r.waitIdle(c.ID)
+}

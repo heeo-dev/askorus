@@ -340,7 +340,8 @@ export function compareState(turn: Turn): CompareState | null {
   const c = turn.compare;
   if (!c || c.start === 'noJudgeOff' || c.start === 'noJudgeNone') return null;
   if (!turn.run || turn.run.status === 'running') return { kind: 'answering' };
-  const ready = readyParts(turn).length;
+  // An answer of pictures only counts as one the moderator gets (R-166, R-168).
+  const ready = readyParts(turn).length + (turn.run?.parts ?? []).filter((p) => turn.agents.includes(p.agent) && p.status === 'done' && !p.answer?.trim() && p.images?.length).length;
   if (c.error) {
     if (c.error === 'network') return { kind: 'lost', action: c.key ? 'start' : 'poll' };
     if (c.error === 'comparison_not_found') return { kind: 'notFound' };

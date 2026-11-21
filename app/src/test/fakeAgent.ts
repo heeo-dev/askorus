@@ -183,6 +183,7 @@ export class FakeAgent {
   madePictures: Record<string, { type: string; bytes: number; width?: number; height?: number }[]> = {};
   madeLimit: Record<string, { until?: string }> = {};
   imageFails = 0;
+  private imageN = 0;
   /** The PC lets go of every photo before the next this many runs with photos arrive. */
   forgetUploads = 0;
   private runs = new Map<string, FakeRun>();
@@ -755,7 +756,7 @@ export class FakeAgent {
       // Made pictures (#14): an AI that makes them, asked with pictures and not turned off.
       const makes = this.makingOn && r.pictures && next.status === 'done' && !(r.noPictures ?? []).includes(next.agent);
       if (makes && this.madePictures[next.agent]?.length) {
-        next.images = this.madePictures[next.agent].map((im, i) => ({ id: `img_${String(this.n).padStart(16, '0')}${String(i).padStart(16, '0')}`, ...im }));
+        next.images = this.madePictures[next.agent].map((im) => ({ id: `img_${String(this.n).padStart(16, '0')}${String(++this.imageN).padStart(16, '0')}`, ...im }));
       }
       if (makes && this.madeLimit[next.agent]) next.pictureLimit = this.madeLimit[next.agent];
     }
