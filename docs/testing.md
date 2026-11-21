@@ -72,6 +72,7 @@ C6(2026-11-05, 사용자 결정)부터 에이전트는 판정하지 않고, C6d(
 | IT-26 | 새 모델 따라가기(#64, `models_it_test.go`, 가짜 CLI `ASKORUS_FAKECLI_NEWER`, 가짜 `codex debug models`): Codex 목록에 새 Sol이 있으면 info의 '깊게'가 `gpt-6.2-sol`, `ask.newer`가 `gpt-6.1-sol → gpt-6.2-sol`, 그 모델의 생각 수준 여섯, OpenCode는 그대로 → 저장해 둔 옛 Sol(직접 고르기 high)로 물으면 `-m gpt-6.2-sol`과 high로 묻고 답의 모델도 새 Sol → 사회자 모델로 옛 Sol을 고른 종합 답변도 새 Sol로 씀. 새 Sol을 Codex가 거절(`model_not_found`) → 같은 질문을 `gpt-6.1-sol`로 한 번 더 물어 답하고, 다음 info의 '깊게'는 `gpt-6.1-sol`, `ask.newer` 없음 | #64 |
 | IT-27 | 단계 밖 모델(#65, `extra_it_test.go`): info의 `ask.extra`에 Codex `gpt-6.2-astra`(heavy, 생각 수준 여섯)와 Claude `fable`(heavy, 다섯), 어느 단계도 그 모델을 쓰지 않음, OpenCode는 없음 → 직접 고른 Astra(low)로 물으면 `-m gpt-6.2-astra`와 low → 사회자 모델로 Fable을 고른 종합 답변은 `claude --model fable --effort medium` | #65 |
 | IT-28 | 그림(#14, R-154·R-155, `pictures_it_test.go`): 묻기 → AI 셋의 묻기 지시문이 안내 뒤에 그림 한 줄(`core.GuideDraw`)을 달고 stdin으로만 감(인자에는 없음) → 종합 요청에 `pictureRow: true`를 넣은 폰은 종합 지시문이 synth-v5.2(규칙 9)이고, 넣지 않은 폰은 synth-v5.1 그대로 → 종합 지시문에는 그림 한 줄이 없음 |
+| IT-29 | 만든 사진(#14, `made_it_test.go`): `pictures: true`인 묻기 → Codex만 사진 도구(`image_generation`만 켬)와 `GuideMake`, 나머지는 `GuideDraw` → 가짜 Codex가 자기 폴더에 만든 사진 2장이 Codex의 답 `images`에 실림 → 그 폰은 바이트 그대로 받고 다른 기기는 404 → 답에 PC 폴더 경로 없음 → 종합 지시문에 'MADE PICTURES' 줄과 `"pictures":2`만(사진·폴더 없음) |
 
 ### synth-eval (측정 도구, `agent/cmd/synth-eval`, 태그 `syntheval`, 마일스톤 C C-9)
 
@@ -108,6 +109,7 @@ C6d(#24)에서 판정에 기대던 것을 지웠다: `topics`·`label`·`differs
 | LT-18 | 남은 양(#20, `usage_live_test.go`, `test-live -Run LT18`): 실제 `codex app-server`(`account/rateLimits/read`)로 Codex 두 창(5시간·주간), 실제 `opencode api --standalone experimental.usage.limits`로 OpenCode Go 세 창. 남은 양 0~1, 초기화 시각이 앞으로 32일 안. 모델을 부르지 않아 사용량이 들지 않는다. 둘 다 CLI의 실험 기능이라 바뀌면 이 시험이 잡는다. OpenCode에 Go가 없으면 기록만. Claude(U2): Haiku로 한 번 묻고(stream-json) Info에 두 창과 `at`(API 키 로그인에는 없음). AI 1번 | 11-19 통과(test-live 전체와 함께: Codex 5시간 100%·주간 92% 남음 0.9초, Claude 5시간 92%·주간 58% 남음 묻기 3.7초, OpenCode Go 월간 16% 남음 1.9초) |
 | LT-19 | 새 모델 따라가기(#64, `models_live_test.go`, `test-live -Run LT19`): 실제 `codex debug models`·`opencode models --standalone`·`agy models`를 에이전트처럼 읽고, 모델이 바뀐 단계(없으면 빠르게)로 한 번 묻는다(한 번만 쓰는 묻기). 새 모델을 거절하면 정한 모델로 답하고 기록만. AI마다 쓸 수 없으면 건너뜀. AI 3번 | 11-20 통과(test-live 전체와 함께, Codex 0.171.0: '깊게'가 `gpt-6.2-sol`로 옮겨 그 모델로 답함, `ask.newer` `gpt-6.1-sol → gpt-6.2-sol`. OpenCode 2.2.7·agy 1.5.11은 목록에 새 모델이 없어 그대로) |
 | LT-20 | 단계 밖 모델(#65, `extra_live_test.go`, `test-live -Run LT20`): 실제 Codex의 Astra와 실제 Claude Code의 Fable로 low 생각 수준의 짧은 질문을 한 번씩(한 번만 쓰는 묻기, 직접 고르기처럼). 둘 다 사용량을 많이 써서 이 둘만. AI 2번 | 11-20 통과(test-live 전체와 함께: Astra는 `gpt-6.2-astra`로 5.2초, Fable은 `claude-fable-5-2`로 4.1초) |
+| LT-21 | 만든 사진(#14, `made_live_test.go`, `test-live -Run LT21`): 실제 Codex에 사진 도구를 켜고 빠르게 단계로 '사과 사진'을 물어 자기 폴더의 사진을 1장 이상 찾고(보통 파일, 8MB 이하), 답에 사용자 폴더 경로가 없음. 그림을 원하지 않는 질문에는 만들지 않음. Antigravity는 주간 사진 한도 때문에 `ASKORUS_LIVE_AGY_PICTURES=1`일 때만(한도가 차면 기록만). Codex 2번 | |
 
 ### ST (앱 화면, `app/src/test`)
 
