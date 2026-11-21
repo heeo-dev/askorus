@@ -39,6 +39,10 @@ type Answer struct {
 	// Text is the answer exactly as the AI gave it. It stays in the agent:
 	// the phone has it already.
 	Text string `json:"-"`
+	// Pictures is how many pictures the AI made with its image tool in the
+	// answer (#14, made pictures). Only the number goes to the writer of the
+	// combined answer, never a picture (decision 5).
+	Pictures int `json:"-"`
 }
 
 // Spec is the input of one comparison: the question, the answers and the

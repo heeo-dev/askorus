@@ -32,6 +32,7 @@ import (
 	"github.com/heeo-dev/askorus/agent/internal/devices"
 	"github.com/heeo-dev/askorus/agent/internal/fakecli"
 	"github.com/heeo-dev/askorus/agent/internal/logx"
+	"github.com/heeo-dev/askorus/agent/internal/made"
 	"github.com/heeo-dev/askorus/agent/internal/uploads"
 )
 
@@ -106,6 +107,7 @@ type rig struct {
 	token     string
 	device    string         // the device id: the owner of its runs and comparisons
 	photos    *uploads.Store // the photos of questions (#14), in root/uploads
+	made      *made.Store    // the copies of made pictures (#14), in root/made
 }
 
 // newRig starts the agent around the three fakes. mutate may change the
@@ -177,10 +179,15 @@ func (r *rig) start() {
 		r.t.Fatal(err)
 	}
 	r.photos = photos
+	copies, err := made.Open(filepath.Join(r.root, "made"))
+	if err != nil {
+		r.t.Fatal(err)
+	}
+	r.made = copies
 	r.server = api.New(apitest.Node(api.Options{
 		Version: "it", Hostname: "PC", Adapters: r.adapters, Devices: r.store,
 		Logger:    logx.New(r.logs, slog.LevelDebug),
-		AskFolder: r.askDir, Judge: r.o.judge, Refine: r.o.refine, Uploads: photos,
+		AskFolder: r.askDir, Judge: r.o.judge, Refine: r.o.refine, Uploads: photos, Made: copies,
 		JudgeMinVersions: map[string]string{
 			claude.Name: claude.JudgeMinVersion, codex.Name: codex.JudgeMinVersion, opencode.Name: opencode.JudgeMinVersion,
 			agy.Name: agy.JudgeMinVersion,
@@ -194,6 +201,7 @@ func (r *rig) stop() {
 		r.srv.Close()
 		r.server.Close()
 		r.photos.Close()
+		r.made.Close()
 		r.srv = nil
 	}
 }

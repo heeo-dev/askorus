@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 
 	"github.com/heeo-dev/askorus/agent/internal/core"
@@ -92,11 +93,18 @@ type SynthTask struct {
 // writer still adds nothing the answers do not say.
 const synthPhotos = "PHOTOS: The person sent %d photo(s) with the QUESTION; they are attached to this message. Use them only to understand the QUESTION and the answers, and add no fact that no answer gives.\n"
 
+// synthMade goes before the data when an AI made pictures with an image
+// tool (#14, decision 5 of 2026-11-21): the writer gets the number only.
+const synthMade = "MADE PICTURES: An answer with a \"pictures\" number is from an AI that also made that many pictures with its image tool. You do not see them. The app shows them to the person right under your answer, with the drawings and their AI's name. Say once which AI made pictures and how many, and say what they show only as far as that AI's own text says; never describe, judge or invent them otherwise.\n"
+
 // SynthAnswer is one answer: the name of the AI or app that wrote it, as
 // the writer must name it, and its text.
 type SynthAnswer struct {
 	AI   string
 	Text string
+	// Pictures the AI made with its image tool (#14): the answer's JSON says
+	// how many, and synthMade explains it. Zero leaves the prompt as before.
+	Pictures int
 }
 
 // Fixed text of synth-v5.1: the head, the data block's line names and the
@@ -181,7 +189,7 @@ func BuildSynthTask(s Spec, name func(answerID string) string) SynthTask {
 	}
 	for _, a := range ready {
 		// Without its extras (#4): they are no part of what the AI answered.
-		t.Answers = append(t.Answers, SynthAnswer{AI: name(a.ID), Text: promptClip(a.Text[:ExtrasStart(a.Text)], per)})
+		t.Answers = append(t.Answers, SynthAnswer{AI: name(a.ID), Text: promptClip(a.Text[:ExtrasStart(a.Text)], per), Pictures: a.Pictures})
 	}
 	return t
 }
@@ -263,6 +271,9 @@ func SynthPrompt(task SynthTask, nonce string) string {
 	if task.Photos > 0 {
 		fmt.Fprintf(&b, synthPhotos, task.Photos)
 	}
+	if slices.ContainsFunc(task.Answers, func(a SynthAnswer) bool { return a.Pictures > 0 }) {
+		b.WriteString(synthMade)
+	}
 	b.WriteString("<data-" + nonce + ">\n")
 	b.WriteString(synthQuestion)
 	promptQuote(&b, task.Question)
@@ -277,6 +288,9 @@ func SynthPrompt(task SynthTask, nonce string) string {
 		promptQuote(&b, a.AI)
 		b.WriteString(`,"text":`)
 		promptQuote(&b, a.Text)
+		if a.Pictures > 0 {
+			fmt.Fprintf(&b, `,"pictures":%d`, min(a.Pictures, 99))
+		}
 		b.WriteString("}\n")
 	}
 	b.WriteString("</data-" + nonce + ">\n")

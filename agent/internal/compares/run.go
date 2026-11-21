@@ -148,7 +148,11 @@ func (m *Manager) answers(c *comparison) (judge.Spec, *judge.Error) {
 		spec = judge.Spec{Question: rs.Question, Earlier: slices.Clone(rs.Earlier), Conversation: rs.Conversation}
 		for _, part := range run.Parts {
 			ready := part.Status == runs.Done && strings.TrimSpace(part.Answer) != ""
-			spec.Answers = append(spec.Answers, answer(part.Agent, part.Agent, judge.ViaPC, part.Model, m.family(part.Agent, part.Model), part.Answer, ready))
+			a := answer(part.Agent, part.Agent, judge.ViaPC, part.Model, m.family(part.Agent, part.Model), part.Answer, ready)
+			if ready {
+				a.Pictures = len(part.Images) + part.ImagesLeftOut // #14: the number only
+			}
+			spec.Answers = append(spec.Answers, a)
 		}
 		want = rs.Judges
 		if len(want) == 0 {

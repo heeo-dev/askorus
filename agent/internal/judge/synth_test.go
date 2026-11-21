@@ -483,3 +483,27 @@ func TestSynthLanguageRule(t *testing.T) {
 		}
 	}
 }
+
+// #14 G6: the writer of the combined answer gets the number of pictures an
+// AI made, never a picture, and the line that says what the number is; a
+// task without made pictures is as before.
+func TestSynthMadePictures(t *testing.T) {
+	task := SynthTask{Question: "고양이 사진 만들어줘", PictureRow: true, Answers: []SynthAnswer{{AI: "Claude", Text: "<svg/>"}, {AI: "Codex", Text: "만들었습니다.", Pictures: 2}}}
+	p := SynthPrompt(task, synthGoldenNonce)
+	if strings.Count(p, synthMade) != 1 || !strings.Contains(p, `{"ai":"Codex","text":"만들었습니다.","pictures":2}`) || strings.Count(p, `"pictures":`) != 1 {
+		t.Errorf("made pictures:\n%s", p)
+	}
+	if i, j := strings.Index(p, synthMade), strings.Index(p, "\n<data-"+synthGoldenNonce+">\n"); i < 0 || j < i {
+		t.Error("the made pictures line is not before the data")
+	}
+	task.Answers[1].Pictures = 0
+	if p := SynthPrompt(task, synthGoldenNonce); strings.Contains(p, "MADE PICTURES") || strings.Contains(p, `"pictures"`) {
+		t.Errorf("without made pictures:\n%s", p)
+	}
+	built := BuildSynthTask(Spec{Question: "q", Answers: []Answer{
+		{ID: "claude", Status: AnswerReady, Text: "a"}, {ID: "codex", Status: AnswerReady, Text: "b", Pictures: 3},
+	}}, func(id string) string { return id })
+	if built.Answers[1].Pictures != 3 || built.Answers[0].Pictures != 0 {
+		t.Errorf("built = %+v", built.Answers)
+	}
+}
