@@ -20,11 +20,23 @@ var featuresOff = []string{
 	"skill_mcp_dependency_install",
 }
 
+// pictureFeature is the one feature a question's own ask leaves on when it
+// may make pictures (#14, made pictures): codex's image tool, which saves
+// what it makes in its own folder (made.go). A one-off ask, a combined
+// answer and a question spec turn it off with the rest.
+const pictureFeature = "image_generation"
+
 // disableArgs returns "--disable", name for each of featuresOff, in list
 // order. It returns a new slice on every call.
-func disableArgs() []string {
+func disableArgs() []string { return askDisableArgs(false) }
+
+// askDisableArgs is disableArgs, without pictureFeature when pictures.
+func askDisableArgs(pictures bool) []string {
 	args := make([]string, 0, 2*len(featuresOff))
 	for _, f := range featuresOff {
+		if pictures && f == pictureFeature {
+			continue
+		}
 		args = append(args, "--disable", f)
 	}
 	return args

@@ -88,6 +88,9 @@ var threadRe = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]
 type Options struct {
 	Path  string                   // empty: codex.exe on PATH
 	Tiers map[string]core.AskModel // settings ask.tiers.codex
+	// Home is codex's own folder, where it saves the pictures it makes
+	// (#14). Empty: CODEX_HOME, else .codex in the user's home folder.
+	Home string
 	// SchemaDir holds the combined-answer schema file synth-schema-v1.json
 	// and the refine schema file refine-schema-v1.json, which codex reads
 	// for --output-schema. Empty: the agent folder,
@@ -128,6 +131,9 @@ type Adapter struct {
 	// agent folder.
 	schemaDir string
 
+	// home is Options.Home: "" finds codex's folder as codex does (made.go).
+	home string
+
 	// The combined-answer schema file (synth.go) in schemaDir, written once:
 	// synthMu guards synthReady, set once this process wrote the file or
 	// found it right so later calls only read and compare, and
@@ -142,7 +148,7 @@ type Adapter struct {
 
 // New finds codex. A missing codex is not an error: /v1/info reports it.
 func New(o Options) *Adapter {
-	a := &Adapter{tiers: o.Tiers, schemaDir: o.SchemaDir}
+	a := &Adapter{tiers: o.Tiers, schemaDir: o.SchemaDir, home: o.Home}
 	a.exe, a.exeErr = findExe(o.Path)
 	a.usage = &core.UsageCache{TTL: usageTTL, Read: a.readUsage}
 	a.follow = &core.Follower{Lines: lines}
@@ -290,7 +296,7 @@ func (a *Adapter) AskTiers() map[string]core.AskModel {
 // A one-off ask (a debate turn, 11-06) keeps no session file: --ephemeral
 // after --skip-git-repo-check, never with resume.
 func askArgs(model, effort, resume string, oneOff bool) []string {
-	return askImageArgs(model, effort, resume, oneOff, nil)
+	return askImageArgs(model, effort, resume, oneOff, nil, false)
 }
 
 // askImageArgs is askArgs for a question with photos (#14): "-i" and the
@@ -300,7 +306,11 @@ func askArgs(model, effort, resume string, oneOff bool) []string {
 // are. Without photos it is askArgs.
 //
 //	--search exec -s read-only [resume] --ignore-user-config --skip-git-repo-check [--ephemeral] -i P… --json -m M …
-func askImageArgs(model, effort, resume string, oneOff bool, images []string) []string {
+//
+// pictures leaves codex's image tool on (#14, made pictures): the one
+// feature image_generation is missing from the --disable list, which is
+// otherwise the same. Never with a one-off ask.
+func askImageArgs(model, effort, resume string, oneOff bool, images []string, pictures bool) []string {
 	args := []string{"--search", "exec", "-s", "read-only"}
 	if resume != "" {
 		args = append(args, "resume")
@@ -319,7 +329,7 @@ func askImageArgs(model, effort, resume string, oneOff bool, images []string) []
 	if resume != "" {
 		args = append(args, "-c", `sandbox_mode="read-only"`)
 	}
-	args = append(args, disableArgs()...)
+	args = append(args, askDisableArgs(pictures)...)
 	if resume != "" {
 		args = append(args, resume)
 	}
@@ -333,10 +343,13 @@ func askImageArgs(model, effort, resume string, oneOff bool, images []string) []
 // reads the model, the effort and the thread (second to last after
 // resume) and compares the whole list with askArgs of those values, so
 // every flag, its place and the order of the disabled features must match.
+// Of the two lists of disabled features it takes the whole one, and the one
+// without image_generation only outside a one-off ask (#14).
 func checkArgs(args []string) error {
 	model, effort, resume := "", "", ""
 	var images []string
 	oneOff := slices.Contains(args, "--ephemeral")
+	pictures := !slices.Contains(args, pictureFeature)
 	for i := 0; i+1 < len(args); i++ {
 		switch {
 		case args[i] == "-i":
@@ -358,7 +371,9 @@ func checkArgs(args []string) error {
 		return fmt.Errorf("codex ask: thread %q refused", resume)
 	case checkImagePaths(images) != nil:
 		return fmt.Errorf("codex ask: an image path was refused")
-	case !slices.Equal(args, askImageArgs(model, effort, resume, oneOff, images)):
+	case pictures && oneOff:
+		return fmt.Errorf("codex ask: a one-off ask makes no pictures")
+	case !slices.Equal(args, askImageArgs(model, effort, resume, oneOff, images, pictures)):
 		return fmt.Errorf("codex ask: arguments %q refused", args)
 	}
 	return nil
@@ -443,12 +458,17 @@ func (a *Adapter) ask(ctx context.Context, req core.AskRequest, model, effort st
 		return core.AskResult{}, core.Fail(core.ErrCodeNotFound, "")
 	case req.OneOff && req.Resume != "":
 		return core.AskResult{}, core.Fail(core.ErrCodeInternal, "a one-off ask never resumes")
+	case req.OneOff && req.Pictures:
+		return core.AskResult{}, core.Fail(core.ErrCodeInternal, "a one-off ask makes no pictures")
 	}
 	images, err := imagePaths(req.Images)
 	if err != nil {
 		return core.AskResult{}, core.Fail(core.ErrCodeInternal, "codex ask: a photo was refused")
 	}
-	args := askImageArgs(model, effort, req.Resume, req.OneOff, images)
+	// Made pictures (#14): the conversation's picture folder is noted
+	// before the ask; a new conversation has none yet.
+	pics := a.pictureFolder(req.Pictures, req.Resume)
+	args := askImageArgs(model, effort, req.Resume, req.OneOff, images, pics.on)
 	if err := checkArgs(args); err != nil {
 		return core.AskResult{}, err
 	}
@@ -465,6 +485,7 @@ func (a *Adapter) ask(ctx context.Context, req core.AskRequest, model, effort st
 	if req.OneOff {
 		out.SessionID = "" // --ephemeral kept nothing to carry on
 	}
+	pics.collect(&out)
 	if core.ErrorCode(err) == core.ErrCodeSignedOut {
 		a.forgetLogin() // the next info asks codex again
 	}

@@ -90,6 +90,7 @@ func codexAsk(c *Call) int {
 	}
 	codexEvent(map[string]any{"type": "item.completed", "item": codexItem("web_search", "item_1", map[string]any{"query": "q"})})
 	if mode != AskEmpty {
+		text += codexPictures(c, thread)
 		codexEvent(map[string]any{"type": "item.completed", "item": codexItem("agent_message", "item_2", map[string]any{"text": text})})
 	}
 	codexEvent(map[string]any{"type": "turn.completed", "usage": map[string]int{"input_tokens": 100, "cached_input_tokens": 80, "output_tokens": 9}})

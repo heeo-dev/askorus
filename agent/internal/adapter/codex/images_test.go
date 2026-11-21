@@ -58,8 +58,8 @@ func TestAskNamesPhotosWithDashI(t *testing.T) {
 		t.Fatalf("call = %+v\nwant args %q", cs, want)
 	}
 	// A follow-up and a one-off take them in the same place.
-	follow := askImageArgs("gpt-6-luna", "medium", testThread, false, []string{ims[0].Path})
-	oneOff := askImageArgs("gpt-6-luna", "medium", "", true, []string{ims[0].Path})
+	follow := askImageArgs("gpt-6-luna", "medium", testThread, false, []string{ims[0].Path}, false)
+	oneOff := askImageArgs("gpt-6-luna", "medium", "", true, []string{ims[0].Path}, false)
 	if i := slices.Index(follow, "-i"); follow[i-1] != "--skip-git-repo-check" || follow[i+2] != "--json" || follow[4] != "resume" {
 		t.Errorf("follow-up = %q", follow)
 	}
@@ -72,7 +72,7 @@ func TestAskNamesPhotosWithDashI(t *testing.T) {
 		}
 	}
 	// Without photos the command is the one it always was.
-	if !slices.Equal(askImageArgs("gpt-6-luna", "medium", "", false, nil), askArgs("gpt-6-luna", "medium", "", false)) {
+	if !slices.Equal(askImageArgs("gpt-6-luna", "medium", "", false, nil, false), askArgs("gpt-6-luna", "medium", "", false)) {
 		t.Error("an ask without photos changed")
 	}
 }
@@ -80,7 +80,7 @@ func TestAskNamesPhotosWithDashI(t *testing.T) {
 func TestCheckArgsTakesOnlyKeptPhotos(t *testing.T) {
 	ims := keptPhotos(t)
 	dir := filepath.Dir(ims[0].Path)
-	with := func(paths ...string) []string { return askImageArgs("gpt-6-luna", "medium", "", false, paths) }
+	with := func(paths ...string) []string { return askImageArgs("gpt-6-luna", "medium", "", false, paths, false) }
 	if err := checkArgs(with(ims[0].Path, ims[1].Path)); err != nil {
 		t.Fatalf("two kept photos: %v", err)
 	}
