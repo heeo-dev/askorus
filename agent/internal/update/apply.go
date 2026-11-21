@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -349,9 +350,19 @@ func removeStale(path string, alive func(int) bool) bool {
 	}
 	f.Close()
 	defer os.Remove(take)
-	if held := lockHolder(path); held > 0 && alive(held) {
+	b, err := os.ReadFile(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		// Gone already (another takeover removed it): nothing to remove, and
+		// removing now could take away a lock a new caller has just made
+		// (R-167: two updates held the lock at once).
+		return true
+	}
+	if held, _ := strconv.Atoi(strings.TrimSpace(string(b))); held > 0 && alive(held) {
 		return false // someone took it meanwhile
 	}
+	// The file is there and its process has ended. While it is there no new
+	// caller can make the lock, and only the holder of take removes it, so
+	// this removes the stale lock and nothing else.
 	os.Remove(path)
 	return true
 }
