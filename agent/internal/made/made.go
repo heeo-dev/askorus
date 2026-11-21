@@ -14,7 +14,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
-	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -23,12 +22,14 @@ import (
 	"time"
 
 	"github.com/heeo-dev/askorus/agent/internal/core"
+	"github.com/heeo-dev/askorus/agent/internal/runs"
 )
 
 const (
-	// KeepFor is how long a copy stays: as long as a finished run can be
-	// read (runs.KeepFor, decision 3).
-	KeepFor = 24 * time.Hour
+	// KeepFor is how long a copy stays: as long as its run can be read
+	// (decision 3). A run is kept runs.KeepFor after its last answer, which
+	// may come up to runs.PartLimit after this copy's (R-165).
+	KeepFor = runs.KeepFor + runs.PartLimit
 	// MaxTotalBytes bounds the folder; the oldest copies go first beyond it.
 	MaxTotalBytes = 200 << 20
 	sweepEvery    = 10 * time.Minute
@@ -41,6 +42,10 @@ var maxTotalBytes int64 = MaxTotalBytes
 // ErrGone: no such copy for that device and run (taken away, never there,
 // or the agent restarted).
 var ErrGone = errors.New("no such picture")
+
+// errNotKept: the copy was not kept, because its device was unpaired or the
+// store closed while it was being written (R-162).
+var errNotKept = errors.New("the picture is not kept")
 
 var idRe = regexp.MustCompile(`^img_[0-9a-f]{32}$`)
 
@@ -62,8 +67,12 @@ type Store struct {
 
 	mu    sync.Mutex
 	items map[string]*item
-	stop  chan struct{}
-	done  chan struct{}
+	// dropped are the devices unpaired while the agent runs, and closed is
+	// set by Close: a copy that comes after either is not kept (R-162).
+	dropped map[string]bool
+	closed  bool
+	stop    chan struct{}
+	done    chan struct{}
 }
 
 // Open makes the folder (for the user only), deletes what an earlier agent
@@ -76,7 +85,7 @@ func Open(dir string) (*Store, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
 	}
-	s := &Store{dir: dir, Now: time.Now, items: map[string]*item{}, stop: make(chan struct{}), done: make(chan struct{})}
+	s := &Store{dir: dir, Now: time.Now, items: map[string]*item{}, dropped: map[string]bool{}, stop: make(chan struct{}), done: make(chan struct{})}
 	s.clearFolder()
 	go s.sweepLoop()
 	return s, nil
@@ -105,8 +114,9 @@ func (s *Store) clearFolder() {
 	}
 }
 
-// Put copies the picture f an AI made into the store for owner's run and
-// gives what the part shows of it.
+// Put keeps a copy of the picture f an AI made (its bytes as FindMade read
+// them; the AI's file is not opened again, R-159) for owner's run and gives
+// what the part shows of it.
 func (s *Store) Put(owner, run string, f core.MadeFile) (core.MadePicture, error) {
 	if owner == "" || run == "" {
 		return core.MadePicture{}, errors.New("a picture needs an owner and a run")
@@ -115,17 +125,15 @@ func (s *Store) Put(owner, run string, f core.MadeFile) (core.MadePicture, error
 	if !ok {
 		return core.MadePicture{}, errors.New("not a picture type")
 	}
-	src, err := os.Open(f.Path)
-	if err != nil {
-		return core.MadePicture{}, err
-	}
-	defer src.Close()
-	data, err := io.ReadAll(io.LimitReader(src, core.MaxMadeBytes+1))
-	if err != nil {
-		return core.MadePicture{}, err
-	}
+	data := f.Data
 	if len(data) == 0 || len(data) > core.MaxMadeBytes || core.SniffImage(data) != f.Type {
 		return core.MadePicture{}, errors.New("not the picture that was checked")
+	}
+	s.mu.Lock()
+	refused := s.closed || s.dropped[owner]
+	s.mu.Unlock()
+	if refused {
+		return core.MadePicture{}, errNotKept
 	}
 	var raw [16]byte
 	if _, err := rand.Read(raw[:]); err != nil {
@@ -147,9 +155,14 @@ func (s *Store) Put(owner, run string, f core.MadeFile) (core.MadePicture, error
 	}
 	w, h := core.ImageSize(data)
 	s.mu.Lock()
+	defer s.mu.Unlock()
+	// Unpaired or closed while the file was written: it goes at once.
+	if s.closed || s.dropped[owner] {
+		_ = os.Remove(path)
+		return core.MadePicture{}, errNotKept
+	}
 	s.items[id] = &item{owner: owner, run: run, path: path, typ: f.Type, bytes: int64(len(data)), at: s.Now()}
 	s.trimLocked()
-	s.mu.Unlock()
 	return core.MadePicture{ID: id, Type: f.Type, Bytes: int64(len(data)), Width: w, Height: h}, nil
 }
 
@@ -167,10 +180,12 @@ func (s *Store) Get(owner, run, id string) (path, typ string, err error) {
 	return it.path, it.typ, nil
 }
 
-// DropOwner removes every copy of owner (an unpaired device).
+// DropOwner removes every copy of owner (an unpaired device), and keeps
+// none for it from now on (a run of it may still be answering).
 func (s *Store) DropOwner(owner string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.dropped[owner] = true
 	for id, it := range s.items {
 		if it.owner == owner {
 			s.removeLocked(id, it)
@@ -254,6 +269,7 @@ func (s *Store) Close() {
 	<-s.done
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.closed = true
 	for id, it := range s.items {
 		_ = os.Remove(it.path)
 		delete(s.items, id)

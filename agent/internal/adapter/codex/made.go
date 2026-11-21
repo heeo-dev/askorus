@@ -66,33 +66,39 @@ type pictureAsk struct {
 }
 
 // pictureFolder plans the pictures of an ask: on when the ask may make
-// pictures and codex's folder is known.
+// pictures and codex's folder is known. The folder is known for every ask,
+// so its place is taken out of every answer (R-161: asked where it saved a
+// picture, with pictures turned off since, codex named the whole path).
 func (a *Adapter) pictureFolder(want bool, resume string) pictureAsk {
 	root := a.pictureRoot()
-	if !want || root == "" {
+	if root == "" {
 		return pictureAsk{}
 	}
-	p := pictureAsk{on: true, root: root}
+	p := pictureAsk{on: want, root: root}
 	if resume != "" && threadRe.MatchString(resume) {
 		p.dir = filepath.Join(root, resume)
-		p.before = core.MadeSnapshot(p.dir)
+		if want {
+			p.before = core.MadeSnapshot(p.dir)
+		}
 	}
 	return p
 }
 
-// collect puts the pictures the ask made into out and takes the folder's
-// place out of the answer.
+// collect puts the pictures the ask made into out, when it may make them,
+// and takes the picture folder's place out of the answer in any case.
 func (p pictureAsk) collect(out *core.AskResult) {
-	if !p.on {
+	if p.root == "" {
 		return
 	}
 	dir := p.dir
-	if dir == "" {
-		if !threadRe.MatchString(out.SessionID) {
-			return
-		}
+	if dir == "" && threadRe.MatchString(out.SessionID) {
 		dir = filepath.Join(p.root, out.SessionID) // a new thread: nothing was there before
 	}
-	out.Made, out.MadeLeftOut = core.FindMade(dir, p.before, madeNameRe)
-	out.Answer = core.ScrubMadePaths(out.Answer, dir, out.Made)
+	if p.on && dir != "" {
+		out.Made, out.MadeLeftOut = core.FindMade(dir, p.before, madeNameRe)
+	}
+	if dir != "" {
+		out.Answer = core.ScrubMadePaths(out.Answer, dir, out.Made)
+	}
+	out.Answer = core.ScrubMadePaths(out.Answer, p.root, nil)
 }

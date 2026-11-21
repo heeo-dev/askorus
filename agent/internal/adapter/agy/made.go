@@ -187,19 +187,22 @@ type pictureAsk struct {
 	before  map[string]bool
 }
 
-// collectInto puts what the ask made into out and takes the folder's
-// place out of the answer.
+// collectInto puts what the ask made into out, when it may make pictures,
+// and takes the conversation folder's place out of the answer in any case
+// (R-161: stripFileLinks takes out links to files, not a plain path).
 func (a *Adapter) collectInto(p pictureAsk, out *core.AskResult) {
-	if !p.collect {
+	if a.brainDir == "" {
 		return
 	}
 	dir := p.dir
-	if dir == "" {
-		if !conversationRe.MatchString(out.SessionID) {
-			return
-		}
+	if dir == "" && conversationRe.MatchString(out.SessionID) {
 		dir = filepath.Join(a.brainDir, out.SessionID)
 	}
-	out.Made, out.MadeLeftOut = core.FindMade(dir, p.before, madeNameRe)
-	out.Answer = core.ScrubMadePaths(out.Answer, dir, out.Made)
+	if p.collect && dir != "" {
+		out.Made, out.MadeLeftOut = core.FindMade(dir, p.before, madeNameRe)
+	}
+	if dir != "" {
+		out.Answer = core.ScrubMadePaths(out.Answer, dir, out.Made)
+	}
+	out.Answer = core.ScrubMadePaths(out.Answer, a.brainDir, nil)
 }

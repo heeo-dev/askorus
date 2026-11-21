@@ -11,13 +11,15 @@ import { renderRouter, screen, waitFor } from 'expo-router/testing-library';
 
 import { AgentClient, baseUrl } from '@/api/client';
 import type { Run } from '@/api/types';
+import { conversations } from '@/ask/conversations';
 import { madeOf, madeWanted, takeMade } from '@/ask/made';
+import type { Turn } from '@/ask/thread';
 import { defaultAskPrefs, loadAskPrefs, saveAskPrefs, type AskPrefs } from '@/ask/prefs';
 import { reportMail } from '@/ask/report';
 import { ConnectionStore } from '@/connections/store';
 import { setLang } from '@/i18n';
 import { FakeAgent, HOST, PORT, TOKEN } from '@/test/fakeAgent';
-import { mockPhotoSave } from '@/test/photos';
+import { mockPhotoFiles, mockPhotoSave } from '@/test/photos';
 import { PictureRow, rowPictures, shownTiles } from '@/ui/PictureRow';
 
 type MadeFiles = { targets: string[]; bad: string[] };
@@ -206,4 +208,71 @@ test('in the row, the pictures an AI made come first and are no web views', asyn
 test('a report says how many pictures the answer had, and sends none', () => {
   const mail = reportMail({ ai: 'Codex', text: 'Here.', pictures: 2 }, { category: 'other', withText: false, version: '0.6.0', os: 'android' });
   expect(mail.body).toContain('Pictures it made: 2 (not attached)');
+});
+
+// The next picture request waits until the test lets it go.
+function holdImages() {
+  const real = agent.fetch;
+  let release: () => void = () => undefined;
+  const gate = new Promise<void>((r) => {
+    release = r;
+  });
+  globalThis.fetch = async (input, init) => {
+    if (String(input).includes('/images/')) await gate;
+    return real(input, init);
+  };
+  return () => release();
+}
+
+// R-163 (2호's review of G1-G6, middle): a conversation removed while its
+// pictures were being taken got its folder made again by the next picture,
+// with pictures in it that no conversation knew.
+test('a conversation removed while its pictures come takes no more, and its folder goes', async () => {
+  agent.madePictures = { codex: [png, png] };
+  const release = holdImages();
+  const { user } = await open();
+  await ask(user, 'Make two photos of a cat');
+  await screen.findByText('codex says: Make two photos of a cat');
+  await waitFor(() => expect(mockMadeFiles.targets).toHaveLength(1));
+  const id = conversations.current()?.id as string;
+  await conversations.remove(id);
+  release();
+  await waitFor(() => expect(mockPhotoFiles.conversations).toContain(id));
+  expect(mockMadeFiles.targets).toHaveLength(1);
+});
+
+// R-164 (2호's review, middle): a picture that arrived after its turn had
+// left the screen (its conversation ended in the background, or another one
+// was opened) was lost, and opening the conversation again never took it.
+test('a picture that comes after its conversation left the screen is kept with it', async () => {
+  const release = holdImages();
+  const { user } = await open();
+  await ask(user, 'Make a photo of a cat');
+  await screen.findByText('codex says: Make a photo of a cat');
+  await waitFor(() => expect(mockMadeFiles.targets).toHaveLength(1));
+  const id = conversations.current()?.id as string;
+  await user.press(screen.getByRole('button', { name: 'New question' }));
+  release();
+  await waitFor(async () => {
+    const kept = await conversations.load(id);
+    expect(Object.values(kept?.turns[0]?.made ?? {})).toEqual([madeUri]);
+  });
+});
+
+test('opening a conversation takes the pictures it has not taken yet', async () => {
+  const { user } = await open();
+  const conn = (await new ConnectionStore().list())[0];
+  const turn = {
+    id: 'turn-old',
+    question: 'Make a photo of a cat',
+    req: { mode: 'ask', prompt: 'Make a photo of a cat', agents: [{ agent: 'codex' }] },
+    agents: ['codex'],
+    run: { runId: 'run-old', mode: 'ask', status: 'done', startedAt: 'x', parts: [{ agent: 'codex', status: 'done', answer: 'Here.', images: [{ id: `img_${'d'.repeat(32)}`, ...png }] }] },
+  } as unknown as Turn;
+  await conversations.save({ id: 'conv-made', pcId: conn.id, startedAt: 1, title: 'Kept with a picture', turns: [turn] });
+  await user.press(await screen.findByRole('button', { name: 'Open menu' }));
+  await user.press(within(await screen.findByTestId('drawer')).getByRole('button', { name: 'Kept with a picture' }));
+  await waitFor(() => expect(agent.imageRequests).toEqual([`run-old/images/img_${'d'.repeat(32)}`]));
+  // The pretend PC no longer has it (a day old): it says so, with Try again.
+  expect(await screen.findByRole('button', { name: 'Picture 1 of 1 did not arrive. Try again' })).toBeTruthy();
 });

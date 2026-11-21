@@ -41,7 +41,7 @@ import { conversations, recentQuestions, useConversations } from '@/ask/conversa
 import { features } from '@/ask/features';
 import { type MadeShown, madeWanted, takeMade } from '@/ask/made';
 import { followNewer, isNewModel, modelLabel, pickOf, runsWith } from '@/ask/models';
-import { dropPending, dropPhotos, keepPhotos } from '@/ask/photoFiles';
+import { dropConversationPhotos, dropPending, dropPhotos, keepPhotos } from '@/ask/photoFiles';
 import { PhotoError, photosAvailable, pickPhotos, takePhoto } from '@/ask/photoPick';
 import { byPhotos, photoLimit, type TurnPhoto } from '@/ask/photos';
 import { aiStatus, askErrorText, metaLine, partViews, rowValue } from '@/ask/present';
@@ -296,14 +296,40 @@ export default function Ask() {
     for (const im of wanted) taking.current.add(im.id);
     const conv = conversation;
     void (async () => {
-      for (const im of wanted) {
+      for (const [i, im] of wanted.entries()) {
+        // A conversation removed meanwhile takes nothing more, and what came is
+        // deleted with its folder, which taking a picture made again (R-163).
+        if (conversations.isGone(conv)) {
+          for (const left of wanted.slice(i)) taking.current.delete(left.id);
+          dropConversationPhotos(conv);
+          return;
+        }
         const uri = await takeMade(client, conv, run.runId, im);
         taking.current.delete(im.id);
-        deps.update(id, (t) =>
+        if (conversations.isGone(conv)) {
+          for (const left of wanted.slice(i + 1)) taking.current.delete(left.id);
+          dropConversationPhotos(conv);
+          return;
+        }
+        await keepMade(conv, id, (t) =>
           uri ? { made: { ...t.made, [im.id]: uri }, madeFailed: t.madeFailed?.filter((x) => x !== im.id) } : { madeFailed: [...(t.madeFailed ?? []).filter((x) => x !== im.id), im.id] },
         );
       }
     })();
+  };
+  // Where a taken picture goes: the turn on the screen or in a conversation
+  // still running in the background, else the kept conversation (it ended
+  // in the background meanwhile, or another one is open now, R-164).
+  const keepMade = async (conv: string, id: string, patch: (t: Turn) => Partial<Turn>) => {
+    const inBg = [...bgs.current.values()].some((b) => b.head.id === conv && b.turns.some((x) => x.id === id));
+    const here = head.current?.id === conv && turnsRef.current.some((x) => x.id === id);
+    if (inBg || here) {
+      deps.update(id, patch);
+      return;
+    }
+    const c = await conversations.load(conv);
+    if (!c || conversations.isGone(conv)) return;
+    await conversations.save({ ...c, turns: c.turns.map((x) => (x.id === id ? { ...x, ...patch(x) } : x)) });
   };
   // 'Try again' on a picture that could not be taken: from the PC of this conversation only.
   const retryMade = useCallback(
@@ -530,6 +556,11 @@ export default function Ask() {
       }
       const p = await connect(store, c.pcId);
       if (!p || head.current?.id !== c.id) return;
+      // Pictures not taken yet (the app was closed, or their turn ended in the
+      // background): taken now from the PC that keeps them a day (R-164).
+      for (const turn of c.turns) {
+        if (turn.run && !running(turn) && madeWanted(turn.run, turn).length) takeMadeRef.current(p.client, turn.id, turn.run);
+      }
       for (const turn of c.turns) {
         // Kept while it waited (the app was closed): it goes once none runs in the background.
         if (turn.queued) {

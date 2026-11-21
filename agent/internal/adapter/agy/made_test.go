@@ -222,3 +222,18 @@ func TestMakesAndCheckArgs(t *testing.T) {
 		t.Error("the draw agent with reads allowed was taken")
 	}
 }
+
+// R-161 (2호's review, middle): the same for agy, whose stripFileLinks
+// takes out links to files but not a plain path.
+func TestAgyTakesThePlaceOutWithPicturesOff(t *testing.T) {
+	a, brain, folder := drawAgy(t, "0")
+	saved := filepath.Join(brain, "0f6c6a2e-1111-4222-8333-444455556666", "cat_1795218883827.jpg")
+	fakecli.SetAnswers(t, map[string]string{fakecli.RoleAgy: "Saved as " + saved + "."})
+	r, err := ask(t, a, core.AskRequest{Folder: folder})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(r.Answer, brain) || !strings.Contains(r.Answer, "pictures") {
+		t.Errorf("answer = %q", r.Answer)
+	}
+}

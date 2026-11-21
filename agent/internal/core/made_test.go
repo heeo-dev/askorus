@@ -165,3 +165,40 @@ func TestPicturePlan(t *testing.T) {
 		}
 	}
 }
+
+// R-159 (2호's review of G1-G6, middle): the bytes were read by opening the
+// path again after it was checked, so a file swapped for a link meanwhile
+// was read from wherever it pointed; a hard link of a file elsewhere passed
+// every check. Now the checked handle is what is read, and a file with a
+// second name is left out.
+func TestFindMadeLeavesOutAHardLinkAndReadsTheCheckedHandle(t *testing.T) {
+	dir, outside := t.TempDir(), t.TempDir()
+	secret := filepath.Join(outside, "secret.png")
+	writeAt(t, secret, madePNG, time.Now())
+	before := MadeSnapshot(dir)
+	if err := os.Link(secret, filepath.Join(dir, execName(1))); err != nil {
+		t.Skip("cannot make a hard link here:", err)
+	}
+	writeAt(t, filepath.Join(dir, execName(2)), madePNG, time.Now())
+	found, _ := FindMade(dir, before, codexName)
+	if len(found) != 1 || filepath.Base(found[0].Path) != execName(2) || !bytes.Equal(found[0].Data, madePNG) {
+		t.Errorf("found = %+v", found)
+	}
+}
+
+// R-160 (2호's review, middle): one letter whose lower case is longer or
+// shorter in bytes (the Kelvin sign) made ScrubMadePaths give the answer
+// back as it was, with the whole path in it.
+func TestScrubMadePathsWithALetterThatChangesLength(t *testing.T) {
+	dir := `C:\Users\someone\.codex\generated_images\019a`
+	files := []MadeFile{{Path: dir + `\exec-1.png`, Type: ImagePNG}}
+	in := "\u212a: saved to " + dir + `\exec-1.png` + " and C:\\USERS\\SOMEONE\\.CODEX\\GENERATED_IMAGES\\019A."
+	got := ScrubMadePaths(in, dir, files)
+	if strings.Contains(strings.ToLower(got), "someone") || !strings.Contains(got, "picture-1.png") || !strings.HasPrefix(got, "\u212a: ") {
+		t.Errorf("scrubbed = %q", got)
+	}
+	// A path written with the Kelvin sign for its k is the same path to Windows.
+	if got := replaceFold("a \u212aey b", "key", "K"); got != "a K b" {
+		t.Errorf("replaceFold = %q", got)
+	}
+}

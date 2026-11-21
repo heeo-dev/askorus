@@ -42,7 +42,7 @@ func (a *makerAdapter) Ask(ctx context.Context, req core.AskRequest) (core.AskRe
 		if err := os.WriteFile(p, madePNGBytes, 0o600); err != nil {
 			return res, err
 		}
-		files = append(files, core.MadeFile{Path: p, Type: core.ImagePNG})
+		files = append(files, core.MadeFile{Path: p, Type: core.ImagePNG, Data: madePNGBytes})
 	}
 	res.Made = files
 	res.Answer = core.ScrubMadePaths("Here it is: "+filepath.Join(a.dir, "exec-a.png"), a.dir, files)

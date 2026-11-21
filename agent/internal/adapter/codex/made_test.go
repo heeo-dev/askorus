@@ -165,3 +165,21 @@ func TestMakesWhileCodexIsThereAndSignedIn(t *testing.T) {
 		t.Error("a relative home was taken")
 	}
 }
+
+// R-161 (2호's review of G1-G6, middle): with pictures turned off for a
+// conversation that made pictures, a follow-up asked where they were saved
+// brought the whole path, with the user folder in it: the place was taken
+// out only when the ask collected pictures.
+func TestAnAskWithPicturesOffStillTakesThePlaceOut(t *testing.T) {
+	home := pictureHome(t, "0")
+	a, _, folder := judgeAdapter(t)
+	saved := filepath.Join(home, "generated_images", testThread, "exec-00000000-0000-4000-8000-000000000000.png")
+	fakecli.SetAnswers(t, map[string]string{fakecli.RoleCodex: "It is at " + saved + " (folder " + filepath.Join(home, "generated_images") + ")."})
+	res, err := a.Ask(context.Background(), core.AskRequest{Folder: folder, Prompt: "어디에 저장했어?", Tier: core.TierQuick, Resume: testThread})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(res.Answer, home) || !strings.Contains(res.Answer, "pictures") || len(res.Made) != 0 {
+		t.Errorf("answer = %q, made %+v", res.Answer, res.Made)
+	}
+}

@@ -21,6 +21,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 )
 
 const (
@@ -34,10 +36,12 @@ const (
 var MadeTypes = []string{ImagePNG, ImageJPEG, ImageWebP}
 
 // MadeFile is one picture an AI made, in the AI's own folder, found and
-// checked by FindMade.
+// checked by FindMade: its path (for ScrubMadePaths), its type and its
+// bytes, read through the one handle that was checked (R-159).
 type MadeFile struct {
 	Path string
 	Type string
+	Data []byte
 }
 
 // MadePicture is one made picture as a run's part tells the phone: the id
@@ -124,10 +128,16 @@ func MadeSnapshot(dir string) map[string]bool {
 // FindMade gives the pictures at the top of dir that were not there in
 // before (MadeSnapshot), whose names name accepts, oldest first, at most
 // MaxMade, and how many more there were. Anything that is not a checked
-// picture is left out without a word.
+// picture is left out without a word. Each picture's bytes are read through
+// the handle that was checked (readMade), so a file or folder swapped for a
+// link after the check is never what is read (R-159).
 func FindMade(dir string, before map[string]bool, name *regexp.Regexp) (found []MadeFile, leftOut int) {
 	real, err := filepath.EvalSymlinks(dir)
 	if err != nil {
+		return nil, 0
+	}
+	realInfo, err := os.Stat(real)
+	if err != nil || !realInfo.IsDir() {
 		return nil, 0
 	}
 	entries, err := os.ReadDir(dir)
@@ -135,8 +145,8 @@ func FindMade(dir string, before map[string]bool, name *regexp.Regexp) (found []
 		return nil, 0
 	}
 	type cand struct {
-		f  MadeFile
-		at time.Time
+		path string
+		at   time.Time
 	}
 	var cands []cand
 	for _, e := range entries {
@@ -149,40 +159,65 @@ func FindMade(dir string, before map[string]bool, name *regexp.Regexp) (found []
 		if err != nil || !info.Mode().IsRegular() || info.Size() == 0 || info.Size() > MaxMadeBytes {
 			continue
 		}
-		// Its real place, so a link swapped in after the listing is caught.
-		rp, err := filepath.EvalSymlinks(p)
-		if err != nil || !strings.EqualFold(filepath.Dir(rp), real) {
-			continue
-		}
-		typ := sniffFile(p)
-		if typ == "" {
-			continue
-		}
-		cands = append(cands, cand{MadeFile{Path: p, Type: typ}, info.ModTime()})
+		cands = append(cands, cand{p, info.ModTime()})
 	}
 	slices.SortStableFunc(cands, func(a, b cand) int {
 		if c := a.at.Compare(b.at); c != 0 {
 			return c
 		}
-		return strings.Compare(a.f.Path, b.f.Path)
+		return strings.Compare(a.path, b.path)
 	})
-	for i, c := range cands {
-		if i < MaxMade {
-			found = append(found, c.f)
+	for _, c := range cands {
+		data, ok := readMade(c.path, real, realInfo)
+		if !ok {
+			continue
 		}
+		typ := SniffImage(data)
+		if typ == "" {
+			continue
+		}
+		if len(found) == MaxMade {
+			leftOut++
+			continue
+		}
+		found = append(found, MadeFile{Path: c.path, Type: typ, Data: data})
 	}
-	return found, max(0, len(cands)-MaxMade)
+	return found, leftOut
 }
 
-func sniffFile(p string) string {
-	f, err := os.Open(p)
+// readMade reads the file at path, at most MaxMadeBytes, only when the
+// handle it opened is the regular file the path names (not what a link
+// points at), it has no other name (a hard link of a file elsewhere), and
+// its folder is still the folder real, whose info is realInfo.
+func readMade(path, real string, realInfo os.FileInfo) ([]byte, bool) {
+	li, err := os.Lstat(path)
+	if err != nil || !li.Mode().IsRegular() {
+		return nil, false
+	}
+	f, err := os.Open(path)
 	if err != nil {
-		return ""
+		return nil, false
 	}
 	defer f.Close()
-	head := make([]byte, 16)
-	n, _ := io.ReadFull(f, head)
-	return SniffImage(head[:n])
+	fi, err := f.Stat()
+	if err != nil || !fi.Mode().IsRegular() || !os.SameFile(li, fi) || fi.Size() == 0 || fi.Size() > MaxMadeBytes {
+		return nil, false
+	}
+	if n, ok := linkCount(f, fi); !ok || n != 1 {
+		return nil, false
+	}
+	// The folder the handle was opened in is still the one checked.
+	if di, err := os.Stat(filepath.Dir(path)); err != nil || !os.SameFile(di, realInfo) {
+		return nil, false
+	}
+	if rp, err := filepath.EvalSymlinks(path); err != nil || !strings.EqualFold(filepath.Dir(rp), real) {
+		return nil, false
+	}
+	data, err := io.ReadAll(io.LimitReader(f, MaxMadeBytes+1))
+	if err != nil || len(data) == 0 || len(data) > MaxMadeBytes {
+		return nil, false
+	}
+	return data, true
 }
 
 // SniffImage names the image type of data by its first bytes, or "".
@@ -270,31 +305,59 @@ func itoa(n int) string {
 }
 
 // replaceFold replaces old in s, ignoring case and the kind of slash, the
-// way Windows and macOS read a path.
+// way Windows and macOS read a path. It compares rune by rune, so a letter
+// whose lower case is longer or shorter in bytes (the Kelvin sign) neither
+// stops it nor shifts what it replaces (R-160).
 func replaceFold(s, old, repl string) string {
 	if old == "" {
 		return s
 	}
-	norm := func(r rune) rune {
-		if r == '\\' {
-			return '/'
-		}
-		return r
-	}
-	ls := strings.ToLower(strings.Map(norm, s))
-	lo := strings.ToLower(strings.Map(norm, old))
-	if len(ls) != len(s) || len(lo) != len(old) {
-		return s // a letter changed length when lowered: leave it as it is
-	}
 	var b strings.Builder
-	for i := 0; ; {
-		j := strings.Index(ls[i:], lo)
-		if j < 0 {
-			b.WriteString(s[i:])
-			return b.String()
+	last := 0
+	for i := 0; i < len(s); {
+		if end, ok := matchFold(s, i, old); ok {
+			b.WriteString(s[last:i])
+			b.WriteString(repl)
+			i, last = end, end
+			continue
 		}
-		b.WriteString(s[i : i+j])
-		b.WriteString(repl)
-		i += j + len(lo)
+		_, size := utf8.DecodeRuneInString(s[i:])
+		i += size
 	}
+	b.WriteString(s[last:])
+	return b.String()
+}
+
+// matchFold reports whether old is at s[i:], in either case and kind of
+// slash, and where in s it ends.
+func matchFold(s string, i int, old string) (int, bool) {
+	for _, want := range old {
+		if i >= len(s) {
+			return 0, false
+		}
+		got, size := utf8.DecodeRuneInString(s[i:])
+		if !sameRune(got, want) {
+			return 0, false
+		}
+		i += size
+	}
+	return i, true
+}
+
+func sameRune(a, b rune) bool {
+	if a == '\\' {
+		a = '/'
+	}
+	if b == '\\' {
+		b = '/'
+	}
+	if a == b {
+		return true
+	}
+	for r := unicode.SimpleFold(a); r != a; r = unicode.SimpleFold(r) {
+		if r == b {
+			return true
+		}
+	}
+	return false
 }

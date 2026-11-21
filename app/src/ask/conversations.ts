@@ -52,6 +52,8 @@ export const conversations = {
       // Unreadable: this run starts with an empty history.
     }
   },
+  /** isGone reports whether the conversation was removed in this run (#14: a picture taken meanwhile goes with it). */
+  isGone: (id: string): boolean => gone.has(id),
   /** load reads a whole conversation, or undefined when it is gone. */
   load: (id: string): Promise<Conversation | undefined> => loadConversation(id, kv),
   /** save keeps a conversation (new, or replacing the one with its id); newest first, at most maxConversations. */
