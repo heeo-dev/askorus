@@ -174,13 +174,13 @@ export class FakeAgent {
   /** POST /v1/uploads answers this error instead (for example 429 upload_limit). */
   uploadError: { status: number; code: string } | null = null;
   /**
-   * Made pictures (#14): off until enableMaking(). made holds, by AI, the
+   * Made pictures (#14): off until enableMaking(). madePictures holds, by AI, the
    * pictures its answer to a run with pictures brings (ids made per run);
    * madeLimit the picture limit its answer reports; imageFails how many
    * picture requests fail first; images the pictures the phone took.
    */
   makingOn = false;
-  made: Record<string, { type: string; bytes: number; width?: number; height?: number }[]> = {};
+  madePictures: Record<string, { type: string; bytes: number; width?: number; height?: number }[]> = {};
   madeLimit: Record<string, { until?: string }> = {};
   imageFails = 0;
   /** The PC lets go of every photo before the next this many runs with photos arrive. */
@@ -754,8 +754,8 @@ export class FakeAgent {
       Object.assign(next, typeof reply === 'object' ? { status: 'failed', error: reply } : { status: 'done', answer: reply ?? `${next.agent} says: ${next.prompt}` });
       // Made pictures (#14): an AI that makes them, asked with pictures and not turned off.
       const makes = this.makingOn && r.pictures && next.status === 'done' && !(r.noPictures ?? []).includes(next.agent);
-      if (makes && this.made[next.agent]?.length) {
-        next.images = this.made[next.agent].map((im, i) => ({ id: `img_${String(this.n).padStart(16, '0')}${String(i).padStart(16, '0')}`, ...im }));
+      if (makes && this.madePictures[next.agent]?.length) {
+        next.images = this.madePictures[next.agent].map((im, i) => ({ id: `img_${String(this.n).padStart(16, '0')}${String(i).padStart(16, '0')}`, ...im }));
       }
       if (makes && this.madeLimit[next.agent]) next.pictureLimit = this.madeLimit[next.agent];
     }

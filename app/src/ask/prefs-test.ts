@@ -6,7 +6,7 @@ const memory = () => {
   return { mem, kv };
 };
 
-const defaults = { tier: 'standard', off: [], models: {}, efforts: {}, pc: '', synth: true, synthAgent: 'claude', synthModels: {}, refine: false, debateNoticed: false, carryRecord: true, recordNoticed: false };
+const defaults = { tier: 'standard', off: [], models: {}, efforts: {}, pc: '', synth: true, synthAgent: 'claude', synthModels: {}, refine: false, debateNoticed: false, carryRecord: true, recordNoticed: false, noPictures: [] };
 
 test('ask prefs survive a round trip, the combined answer off included', async () => {
   const { kv } = memory();

@@ -33,7 +33,7 @@ beforeEach(() => {
   agent = new FakeAgent();
   agent.enableAsk();
   agent.enableMaking();
-  agent.made = { codex: [png] };
+  agent.madePictures = { codex: [png] };
   globalThis.fetch = agent.fetch;
   mockMadeFiles.targets = [];
   mockMadeFiles.bad = [];
@@ -126,7 +126,7 @@ test('a PC whose AIs make no pictures gets no picture fields', async () => {
 });
 
 test("the AI's picture limit is said under its answer", async () => {
-  agent.made = {};
+  agent.madePictures = {};
   agent.madeLimit = { codex: { until: '2026-11-24T16:26:01Z' } };
   const { user } = await open();
   await ask(user, 'Make a photo of a cat');
