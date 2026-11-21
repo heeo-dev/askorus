@@ -11,6 +11,7 @@ const checkKey: Record<string, MessageKey> = {
   phone_offline: 'reach.check.phone',
   pc_unreachable: 'reach.check.pc',
   not_own_pc: 'reach.check.not_own',
+  pc_not_found: 'reach.check.not_found',
 };
 
 /**
@@ -32,9 +33,9 @@ export async function diagnose(client: AgentClient): Promise<Check[]> {
     info = await client.info();
   } catch (e) {
     const c = cause(e);
-    if (c === 'phone_offline' || c === 'pc_unreachable' || c === 'not_own_pc') {
+    if (c === 'phone_offline' || c === 'pc_unreachable' || c === 'not_own_pc' || c === 'pc_not_found') {
       return [
-        { ok: false, text: t(c === 'not_own_pc' ? 'reach.not_own_pc' : 'reach.offline') },
+        { ok: false, text: t(c === 'not_own_pc' ? 'reach.not_own_pc' : c === 'pc_not_found' ? 'reach.pc_not_found' : 'reach.offline') },
         ...causesToCheck(c).map((x) => ({ ok: false, text: t(checkKey[x]) })),
       ];
     }

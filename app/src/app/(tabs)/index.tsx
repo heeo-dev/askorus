@@ -51,7 +51,7 @@ import { buildRecord, concluding, moderatorAnswers } from '@/ask/record';
 import { askers, carry, followCompare, followDebate, followDefault, type FollowDeps, followRun, lastSessions, newTurn, running, stopTurns, type Turn } from '@/ask/thread';
 import { pcDetail, pcLabel } from '@/connections/label';
 import { connect } from '@/connections/open';
-import { type Cause, cause } from '@/connections/reach';
+import { type Cause, cause, waitHelps } from '@/connections/reach';
 import { type Connection, ConnectionStore } from '@/connections/store';
 import { errorText, has, t } from '@/i18n';
 import { AgentUpdate } from '@/ui/AgentUpdate';
@@ -84,6 +84,9 @@ const store = new ConnectionStore();
 
 type PC = { conn: Connection; client: AgentClient };
 type Load = { state: 'loading' } | { state: 'ok'; info: Info } | { state: 'error'; cause: Cause; text: string };
+
+/** How often the Ask screen asks a PC again while it shows why it cannot (#68); tests make it shorter. */
+export const reachRetry = { ms: 15000 };
 type Head = { id: string; pcId: string; startedAt: number; title: string };
 
 const nothing = () => undefined;
@@ -239,6 +242,24 @@ export default function Ask() {
     });
     return () => sub.remove();
   }, [loadInfo]);
+  // While the error box shows and the app is in front, the PC is asked again
+  // now and then, quietly: a moment's trouble (the tailnet's list coming late
+  // after an update, a network change) passes without a press (#68). Not a
+  // PC that dropped this phone or another account: waiting does not fix those.
+  const retrying = load.state === 'error' && waitHelps(load.cause);
+  useEffect(() => {
+    if (!retrying) return;
+    let busy = false;
+    const id = setInterval(() => {
+      const p = pcRef.current;
+      if (busy || !p || AppState.currentState === 'background' || AppState.currentState === 'inactive') return;
+      busy = true;
+      loadInfo(p, true).finally(() => {
+        busy = false;
+      });
+    }, reachRetry.ms);
+    return () => clearInterval(id);
+  }, [retrying, loadInfo]);
 
   // Opening a conversation moved the app to that conversation's PC (#53): the
   // PC line says so for a few seconds. The picker opens from the same line.

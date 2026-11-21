@@ -57,13 +57,13 @@ test('the phone is not signed in to Tailscale: says so and offers the sign-in', 
   await waitFor(() => expect(screen.getByText('Fix the login bug')).toBeTruthy(), { timeout: 4000 });
 });
 
-// The PC's name is not a device of the phone's Tailscale account (the PC's
-// agent signed out, or signed in as someone else): the app's node refuses
-// to send, and the screen says what to look at on the PC.
+// The PC is a device of the tailnet but not of the phone's own account (a
+// device shared in, or the PC's agent signed in as someone else): the app's
+// node refuses to send, and the screen says what to look at on the PC.
 test('the PC is not in this Tailscale account: nothing is sent, and it says what to check', async () => {
   await pairedPC();
   const real = jest.requireMock('@/tailnet/native').nativeTailnet();
-  jest.spyOn(real, 'fetch').mockRejectedValue(Object.assign(new Error('no device of your Tailscale network has that name'), { code: 'tailnet_unknown_host' }));
+  jest.spyOn(real, 'fetch').mockRejectedValue(Object.assign(new Error('that device is not one of your own Tailscale account'), { code: 'tailnet_not_own' }));
   await renderRouter(routes, { initialUrl: '/pcs' });
   expect(await screen.findAllByText('This PC is not in your Tailscale account')).toHaveLength(2);
   expect(screen.getByText(/signed in with the same Tailscale account as this app \(on the PC: askorus-agent status\)/)).toBeTruthy();
@@ -72,6 +72,22 @@ test('the PC is not in this Tailscale account: nothing is sent, and it says what
   // the wrong account is found out here.
   expect(screen.getByText('me@example.com')).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Sign out or switch account' })).toBeTruthy();
+});
+
+// #69 (11-21): right after the app was updated, its node had not got the
+// tailnet's list yet, and the screen said the PC was not in the account,
+// which reads as someone else's PC. A name not in the list says so.
+test('a PC the tailnet has not found yet says so, without calling it another account', async () => {
+  await pairedPC();
+  const real = jest.requireMock('@/tailnet/native').nativeTailnet();
+  jest.spyOn(real, 'fetch').mockRejectedValue(Object.assign(new Error('no device of your Tailscale network has that name'), { code: 'tailnet_unknown_host' }));
+  await renderRouter(routes, { initialUrl: '/pcs' });
+  expect(await screen.findAllByText('Tailscale has not found this PC yet')).toHaveLength(2);
+  expect(screen.getByText(/^Check that the PC is on and its agent is running and signed in to Tailscale/)).toBeTruthy();
+  expect(screen.queryByText('This PC is not in your Tailscale account')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Sign out or switch account' })).toBeNull();
+  expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy();
+  expect(agent.calls).toHaveLength(0);
 });
 
 test('cannot reach the PC: lists what to check, phone first, and retry works', async () => {

@@ -23,6 +23,7 @@ const title: Record<Cause, MessageKey> = {
   wrong_account: 'reach.wrong_account',
   tailnet_login: 'reach.tailnet_login',
   not_own_pc: 'reach.not_own_pc',
+  pc_not_found: 'reach.pc_not_found',
   phone_offline: 'reach.offline',
   pc_unreachable: 'reach.offline',
   other: 'reach.other',
@@ -32,6 +33,7 @@ const check: Partial<Record<Cause, MessageKey>> = {
   phone_offline: 'reach.check.phone',
   pc_unreachable: 'reach.check.pc',
   not_own_pc: 'reach.check.not_own',
+  pc_not_found: 'reach.check.not_found',
   wrong_account: 'reach.check.account',
 };
 

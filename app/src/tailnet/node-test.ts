@@ -129,7 +129,7 @@ test("the node's refusals reach the screens as their cause", async () => {
   fetch.mockRejectedValueOnce(refusal('tailnet_not_own'));
   expect(cause(await client.info().catch((x) => x))).toBe('not_own_pc');
   fetch.mockRejectedValueOnce(refusal('tailnet_unknown_host'));
-  expect(cause(await client.info().catch((x) => x))).toBe('not_own_pc');
+  expect(cause(await client.info().catch((x) => x))).toBe('pc_not_found');
   fetch.mockRejectedValueOnce(refusal('tailnet_login'));
   expect(cause(await client.info().catch((x) => x))).toBe('tailnet_login');
   // Anything else is the network's: the phone's side when it fails at once.

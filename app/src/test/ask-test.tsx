@@ -16,6 +16,8 @@ import { defaultAskPrefs, loadAskPrefs, saveAskPrefs, type AskPrefs } from '@/as
 import { ConnectionStore } from '@/connections/store';
 import { setLang, t } from '@/i18n';
 import { FakeAgent, HOST, PORT, TOKEN } from '@/test/fakeAgent';
+import { reachRetry } from '@/app/(tabs)/index';
+import { waitHelps } from '@/connections/reach';
 import { pickPC } from '@/ui/shell/pcs';
 
 let agent: FakeAgent;
@@ -705,4 +707,28 @@ test('in Korean the screen reads in Korean', async () => {
   expect(screen.getByRole('button', { name: 'Codex에게 보내기' })).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Codex에게만 묻기 취소' })).toBeTruthy();
   expect(screen.getByRole('button', { name: '새 질문' })).toBeTruthy();
+});
+
+// #68 (11-21): the error box stayed until a press, even after the trouble
+// had passed (the tailnet's list came late after an update). While it shows,
+// the screen asks the PC again by itself, quietly.
+test('while it cannot reach the PC the Ask screen asks again by itself, and gets in once the PC answers', async () => {
+  const keep = reachRetry.ms;
+  reachRetry.ms = 50;
+  try {
+    agent.reach = 'offline';
+    await open();
+    expect(await screen.findByText("Can't reach the PC")).toBeTruthy();
+    agent.reach = 'ok';
+    expect(await screen.findByLabelText('Ask a question', {}, { timeout: 4000 })).toBeTruthy();
+    expect(screen.queryByText("Can't reach the PC")).toBeNull();
+  } finally {
+    reachRetry.ms = keep;
+  }
+});
+
+test('only a trouble that waiting may fix is asked again by itself', () => {
+  expect((['phone_offline', 'pc_unreachable', 'not_own_pc', 'pc_not_found', 'tailnet_login', 'other'] as const).every(waitHelps)).toBe(true);
+  expect(waitHelps('unpaired')).toBe(false);
+  expect(waitHelps('wrong_account')).toBe(false);
 });

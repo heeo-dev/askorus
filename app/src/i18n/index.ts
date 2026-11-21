@@ -56,7 +56,8 @@ export function errorText(e: unknown): string {
     const why = (e.cause as { code?: unknown } | null | undefined)?.code;
     if (why === 'tailnet_login') return t('error.tailnet_login');
     if (why === 'tailnet_off') return t('tailnet.unavailable');
-    if (why === 'tailnet_not_own' || why === 'tailnet_unknown_host') return t('error.tailnet_not_own');
+    if (why === 'tailnet_not_own') return t('error.tailnet_not_own');
+    if (why === 'tailnet_unknown_host') return t('error.tailnet_unknown_host');
     return t('error.network');
   }
   if (e instanceof AgentError) {
