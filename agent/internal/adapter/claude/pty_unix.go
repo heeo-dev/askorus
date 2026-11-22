@@ -38,7 +38,12 @@ func startPTY(exe, dir string, args []string) (serverProcess, error) {
 	}
 	defer slave.Close()
 	// The size the Windows side gives its pseudo console.
-	_ = unix.IoctlSetWinsize(int(master.Fd()), unix.TIOCSWINSZ, &unix.Winsize{Row: 40, Col: 120})
+	// Through SyscallConn, not Fd, which would make the master blocking (R-174).
+	if rc, err := master.SyscallConn(); err == nil {
+		_ = rc.Control(func(fd uintptr) {
+			_ = unix.IoctlSetWinsize(int(fd), unix.TIOCSWINSZ, &unix.Winsize{Row: 40, Col: 120})
+		})
+	}
 
 	cmd := exec.Command(exe, args...)
 	cmd.Dir = dir

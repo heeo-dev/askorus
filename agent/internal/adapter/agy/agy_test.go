@@ -240,7 +240,23 @@ func fakeAgy(t *testing.T) (*Adapter, string) {
 	t.Helper()
 	exe := fakecli.Use(t, fakecli.RoleAgy)
 	// agy's own config folder: empty (no hooks, plugins or agents of the person's).
-	return New(Options{Path: exe, ConfigDir: t.TempDir(), BrainDir: t.TempDir()}), t.TempDir()
+	return New(Options{Path: exe, ConfigDir: t.TempDir(), BrainDir: t.TempDir()}), realTemp(t)
+}
+
+// realTemp is a temporary ask folder by its real path, as config.AskFolder
+// gives one: on macOS the temporary folder is behind a link (/var is
+// /private/var), and the pretend agy records the folder it ran in without it.
+func realTemp(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	if runtime.GOOS == "windows" {
+		return dir // left as it is, as config does
+	}
+	real, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return real
 }
 
 func ask(t *testing.T, a *Adapter, req core.AskRequest) (core.AskResult, error) {

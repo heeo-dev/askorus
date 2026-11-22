@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -48,6 +49,11 @@ func TestPathListWithIntoEmpty(t *testing.T) {
 }
 
 func TestLooksTemporary(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		// On macOS TestMain's home is a temporary folder (R-129), and then
+		// every folder in it would be temporary.
+		t.Setenv("HOME", "/home-of-the-test/someone")
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		t.Skip(err)

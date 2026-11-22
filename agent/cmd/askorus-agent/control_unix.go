@@ -147,13 +147,18 @@ func startDetached(exe string, args []string, dir, logFile string) (int, error) 
 
 func controlSupported() bool { return true }
 
-// processRunning reports whether pid is still running.
+// processRunning reports whether pid is still running. A process that
+// ended and only waits for its parent to collect it (a zombie) does not
+// (R-175).
 func processRunning(pid int) bool {
 	if pid <= 0 {
 		return false
 	}
 	err := syscall.Kill(pid, 0)
-	return err == nil || errors.Is(err, syscall.EPERM)
+	if err == nil {
+		return !isZombie(pid)
+	}
+	return errors.Is(err, syscall.EPERM)
 }
 
 func holdConsole() (restore func()) { return func() {} } // QuickEdit is a Windows console thing (#37)

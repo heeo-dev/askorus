@@ -9,9 +9,11 @@ package main
 //     SHA-256, and that it says its version
 //  3. swap: put it in place, keeping this one as askorus-agent.prev
 //  4. hand over: start the new program as `update-finish`, then stop the
-//     running agent. The new program waits for the old one to end, starts
-//     the agent, and checks it comes up within a minute; when it does not,
-//     it puts the old program back and starts that instead.
+//     running agent. The new program first leaves the agent's systemd
+//     service (#71). It waits for the old one to end, and ends one that
+//     does not within a minute (macOS, Linux). It starts the agent and
+//     checks it comes up within a minute; when it does not, it puts the old
+//     program back and starts that instead.
 //
 // Only a release build at the install path updates itself, and only while
 // updates are on (on by default; askorus-agent update off). The phone's
@@ -48,6 +50,11 @@ var (
 	updatePID    = processRunning
 	updateUp     = func(port int) bool { return agentRunning(port) }
 	updateStop   = signalStop
+
+	updateLeave       = leaveService // out of the agent's service (R-177)
+	updateInService   = inService
+	updateStopService = stopService
+	updateEndStuck    = endStuck // an old agent that does not stop (R-178)
 	// updateReady: the agent started as pid is listening on its Tailscale
 	// node; serve writes its pid file only then (R-134). The stop event or
 	// lock that updateUp sees comes before Tailscale starts.
@@ -363,16 +370,27 @@ func updateFinishCmd(dir string, args []string) error {
 	record := func(state, reason string) error {
 		return update.WriteProgress(dir, update.Progress{From: from, To: to, State: state, Reason: reason, At: updateNow()})
 	}
+	// Out of the old agent's service first, or systemd ends this program
+	// with it (R-177). Without that nothing is taken over: the old agent
+	// goes on and puts its program back.
+	if err := updateLeave(); err != nil {
+		return err
+	}
+	// Looked at while the old agent still runs.
+	service := oldPID > 0 && updateInService(oldPID)
 	// Say at once that this program runs: only then does the old agent end (R-135).
 	if err := record(update.ProgressFinishing, ""); err != nil {
 		return err
 	}
 	// The old agent ends first: two would fight for the PC's Tailscale node.
-	if oldPID > 0 && !waitFor(func() bool { return !updatePID(oldPID) }, updateWaitOld) {
+	if oldPID > 0 && !waitFor(func() bool { return !updatePID(oldPID) }, updateWaitOld) && !updateEndStuck(exe, oldPID) {
 		if err := update.Restore(exe, prev, runtime.GOOS); err != nil {
 			return record(update.ProgressFailed, "the old agent did not stop, and putting it back failed: "+err.Error())
 		}
 		return record(update.ProgressRolledBack, "the old agent did not stop")
+	}
+	if service {
+		updateStopService() // or systemd may start a second agent next to the new one
 	}
 	if !start {
 		return record(update.ProgressDone, "")

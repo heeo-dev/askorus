@@ -17,7 +17,10 @@ import (
 // the name of the side the program gets. macOS grants, unlocks and names
 // the other side through three requests on the first.
 func openPTY() (*os.File, string, error) {
-	m, err := os.OpenFile("/dev/ptmx", os.O_RDWR|syscall.O_NOCTTY, 0)
+	// Never File.Fd() on the master: it makes the file blocking, and then
+	// Close does not end a Read that waits (R-174). The requests go to the
+	// descriptor before os.NewFile takes it, non-blocking.
+	fd, err := syscall.Open("/dev/ptmx", syscall.O_RDWR|syscall.O_NOCTTY|syscall.O_CLOEXEC, 0)
 	if err != nil {
 		return nil, "", err
 	}
@@ -30,17 +33,21 @@ func openPTY() (*os.File, string, error) {
 		{syscall.TIOCPTYUNLK, 0},
 		{syscall.TIOCPTYGNAME, uintptr(unsafe.Pointer(&name[0]))},
 	} {
-		if _, _, errno := syscall.Syscall(syscall.SYS_IOCTL, m.Fd(), step.req, step.arg); errno != 0 {
-			m.Close()
+		if _, _, errno := syscall.Syscall(syscall.SYS_IOCTL, uintptr(fd), step.req, step.arg); errno != 0 {
+			syscall.Close(fd)
 			return nil, "", errno
 		}
 	}
 	end := bytes.IndexByte(name, 0)
 	if end <= 0 {
-		m.Close()
+		syscall.Close(fd)
 		return nil, "", errors.New("the pseudo terminal has no name")
 	}
-	return m, string(name[:end]), nil
+	if err := syscall.SetNonblock(fd, true); err != nil {
+		syscall.Close(fd)
+		return nil, "", err
+	}
+	return os.NewFile(uintptr(fd), "/dev/ptmx"), string(name[:end]), nil
 }
 
 // psColumns asks ps for two number columns of every process (or one).

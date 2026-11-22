@@ -1,0 +1,190 @@
+//go:build linux || darwin
+
+package main
+
+// Only for scripts/test-unix.sh, which lays this file over cmd/askorus-agent
+// with `go build -overlay`. It is never part of the agent: release.ps1
+// builds without an overlay and nothing imports scripts/testdata.
+//
+// It gives an update's test what the Go tests fake in one process: a
+// release signed by a throwaway key and read from a folder, and the phone's
+// button as a file. The update's own steps are the agent's, so systemd and
+// launchd see what they see in a real update (R-177, R-178).
+//
+// Files in <agent folder>/test-update:
+//   root.pub, release files   the release (made by `test-release`)
+//   press                     the phone's button: the version it saw
+//   hang                      the agent does not stop when it is asked to
+//   crash-<version>           that version ends just after it came up
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"os"
+	"path"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"time"
+
+	"github.com/heeo-dev/askorus/agent/internal/api"
+	"github.com/heeo-dev/askorus/agent/internal/config"
+	"github.com/heeo-dev/askorus/agent/internal/devices"
+	"github.com/heeo-dev/askorus/agent/internal/update"
+)
+
+type testReleaseFiles struct{ dir string }
+
+func (f testReleaseFiles) RoundTrip(r *http.Request) (*http.Response, error) {
+	res := &http.Response{Request: r, Header: http.Header{}, Proto: "HTTP/1.1", ProtoMajor: 1, ProtoMinor: 1}
+	file, err := os.Open(filepath.Join(f.dir, path.Base(r.URL.Path)))
+	if err != nil {
+		res.StatusCode, res.Status, res.Body = 404, "404 Not Found", http.NoBody
+		return res, nil
+	}
+	res.StatusCode, res.Status, res.Body = 200, "200 OK", file
+	return res, nil
+}
+
+type testWork struct{}
+
+func (testWork) Busy() api.UpdateBusy           { return api.UpdateBusy{} }
+func (testWork) Hold(bool)                      {}
+func (testWork) WaitIdle(context.Context) error { return nil }
+
+// makeTestRelease: test-release <folder> <version> <program>.
+func makeTestRelease(dir, v, program string) error {
+	b, err := os.ReadFile(program)
+	if err != nil {
+		return err
+	}
+	root, rootSec, err := update.NewKey()
+	if err != nil {
+		return err
+	}
+	pub, sec, err := update.NewKey()
+	if err != nil {
+		return err
+	}
+	now := time.Now().UTC()
+	sum := sha256.Sum256(b)
+	name := update.ProgramName(runtime.GOOS, runtime.GOARCH)
+	key, err := json.Marshal(update.KeyCert{Kind: update.KindKey, Key: pub.Base64(), Seq: 1, Issued: now})
+	if err != nil {
+		return err
+	}
+	rel, err := json.Marshal(update.Manifest{Kind: update.KindRelease, Product: update.Product, Version: v,
+		Published: now.Add(-time.Hour), Expires: now.Add(24 * time.Hour),
+		Programs: []update.Program{{OS: runtime.GOOS, Arch: runtime.GOARCH, Name: name, Size: int64(len(b)), SHA256: hex.EncodeToString(sum[:])}}})
+	if err != nil {
+		return err
+	}
+	keySig, err := update.Sign(rootSec, key, update.KeyTrusted(1))
+	if err != nil {
+		return err
+	}
+	relSig, err := update.Sign(sec, rel, update.ReleaseTrusted(v))
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	for n, d := range map[string][]byte{name: b, "root.pub": []byte(root.Base64()), update.KeyFile: key,
+		update.KeySigFile: keySig, update.ReleaseFile: rel, update.ReleaseSigFile: relSig} {
+		if err := os.WriteFile(filepath.Join(dir, n), d, 0o700); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func init() {
+	if len(os.Args) == 5 && os.Args[1] == "test-release" {
+		if err := makeTestRelease(os.Args[2], os.Args[3], os.Args[4]); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
+	dir := os.Getenv("ASKORUS_AGENT_DIR")
+	if dir == "" || os.Getenv(noNodeEnv) != "1" {
+		return // not inside the test
+	}
+	files := filepath.Join(dir, "test-update")
+	updateSource = func() update.Source {
+		s := update.NewSource(version)
+		s.Transport = testReleaseFiles{files}
+		return s
+	}
+	updateRoots = func() ([]update.PublicKey, error) {
+		b, err := os.ReadFile(filepath.Join(files, "root.pub"))
+		if err != nil {
+			return nil, err
+		}
+		k, err := update.ParsePublicKey(string(b))
+		if err != nil {
+			return nil, err
+		}
+		return []update.PublicKey{k}, nil
+	}
+	// The install place, <home>/.local/bin: a service has the real home.
+	updateHome = func() (string, error) {
+		exe, err := os.Executable()
+		if err != nil {
+			return "", err
+		}
+		return filepath.Dir(filepath.Dir(filepath.Dir(exe))), nil
+	}
+	if len(os.Args) < 2 || os.Args[1] != "serve" {
+		return
+	}
+	if _, err := os.Stat(filepath.Join(files, "crash-"+version)); err == nil {
+		go func() {
+			time.Sleep(2500 * time.Millisecond)
+			os.Exit(5)
+		}()
+	}
+	go pressButton(dir, files)
+}
+
+// pressButton runs the phone's updater when the press file appears.
+func pressButton(dir, files string) {
+	press := filepath.Join(files, "press")
+	for {
+		time.Sleep(300 * time.Millisecond)
+		b, err := os.ReadFile(press)
+		if err != nil || readPID(dir) != os.Getpid() {
+			continue
+		}
+		os.Remove(press)
+		cfg, err := config.Load(dir)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "test update:", err)
+			continue
+		}
+		store, err := devices.Open(dir)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "test update:", err)
+			continue
+		}
+		_, d, err := store.Add(fmt.Sprint("test phone ", time.Now().UnixNano()))
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "test update:", err)
+			continue
+		}
+		u := newPhoneUpdater(dir, store, func() {
+			if _, err := os.Stat(filepath.Join(files, "hang")); err == nil {
+				return // asked to stop, and it does not
+			}
+			_ = signalStop(cfg.Port)
+		})
+		if err := u.Start(d.ID, strings.TrimSpace(string(b)), testWork{}); err != nil {
+			fmt.Fprintln(os.Stderr, "test update:", err)
+		}
+	}
+}

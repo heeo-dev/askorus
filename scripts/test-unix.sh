@@ -10,9 +10,14 @@
 # the agent gets a port of its own: a real agent on this machine is never
 # touched. Two parts ask the real system and are off unless asked for:
 #   ASKORUS_TEST_LAUNCHD=1   macOS: load the launch agent's file into
-#                            launchd and see the agent come up
+#                            launchd, see the agent come up, and update it
+#                            as the phone's button does (#71)
 #   ASKORUS_TEST_SYSTEMD=1   Linux: turn the systemd user unit on in the
-#                            real home folder, start it, and remove it
+#                            real home folder, start it, update it as the
+#                            phone's button does (#71), and remove it
+# The update's test builds lay scripts/testdata/update-seams.go.txt over the
+# agent (a throwaway signing key, releases from a folder). One of its cases
+# waits the minute an old agent is given to stop.
 # Exit code 0 only if all pass.
 #   bash scripts/test-unix.sh [-keep]
 set -uo pipefail
@@ -57,7 +62,8 @@ printf '{"port": %d}\n' "$port" > "$ASKORUS_AGENT_DIR/agent.json"
 # computer either, so whether it runs is what its own status says.
 export ASKORUS_TEST_NO_TAILNET=1
 # No pipe here either: status goes on to ask the system about the logon start.
-running() { case "$("$exe" status 2>/dev/null)" in running*) return 0 ;; esac; return 1; }
+uexe="$exe" # the agent of the update's test, once that has one
+running() { case "$("$uexe" status 2>/dev/null)" in running*) return 0 ;; esac; return 1; }
 
 echo '== start, status, shutdown'
 out="$("$exe" status 2>&1)"; has "$out" '^not running'; check 'status: not running at first' $? "$out"
@@ -157,11 +163,138 @@ else
   out="$("$exe" autostart status 2>&1)"; has "$out" '^off'; check 'autostart status: off' $? "$out"
 fi
 
+# An update as the phone's button makes it, of an agent that the system's
+# service manager started (#71, R-175 to R-178).
+update_under_service() {
+  echo "== an update from the phone, of an agent that $1 started (#71)"
+  local up="$work/up" home="$work/uphome" v code out
+  uexe="$home/.local/bin/askorus-agent"
+  files="$ASKORUS_AGENT_DIR/test-update"
+  mkdir -p "$up" "$home/.local/bin"
+  printf '{"Replace":{"%s":"%s"}}\n' "$root/agent/cmd/askorus-agent/zz_update_seams_test_build.go" "$root/scripts/testdata/update-seams.go.txt" > "$up/overlay.json"
+  code=0
+  for v in 9.0.1 9.0.2 9.0.3; do
+    (cd "$root/agent" && CGO_ENABLED=0 HOME="$real_home" XDG_CACHE_HOME= XDG_CONFIG_HOME= go build -trimpath -overlay "$up/overlay.json" -tags ts_omit_peerapiserver,ts_omit_c2n,ts_omit_logtail -ldflags "-X main.version=$v" -o "$up/$v" ./cmd/askorus-agent) || code=1
+  done
+  check 'the test releases build' "$code"
+  [ "$code" = 0 ] || return
+  cp "$up/9.0.1" "$uexe"
+  out="$(service_on 2>&1)"; check "$1 takes the test agent" $? "$out"
+
+  echo '   -- it updates'
+  service_start
+  svc_waits_running; check 'the agent runs' $?
+  press 9.0.2
+  [ "$(update_state)" = done ]; check 'the update ends as done' $? "$(update_detail)"
+  svc running; check 'the new agent runs' $? "$(update_detail)"
+  [ "$(svc "$uexe" version)" = 'askorus-agent 9.0.2' ]; check 'it is the new version' $?
+  stays_stopped
+
+  echo '   -- the old one does not stop: it is ended after a minute'
+  cp "$up/9.0.1" "$up/old" && mv "$up/old" "$uexe"
+  service_start
+  svc_waits_running; check 'the agent runs' $?
+  mkdir -p "$files"
+  : > "$files/hang"
+  press 9.0.2
+  [ "$(update_state)" = done ]; check 'the update ends as done' $? "$(update_detail)"
+  svc running; check 'the new agent runs' $? "$(update_detail)"
+  rm -f "$files/hang"
+  stays_stopped
+
+  echo '   -- the new one dies just after it came up: back to the old one'
+  cp "$up/9.0.2" "$up/old" && mv "$up/old" "$uexe"
+  service_start
+  svc_waits_running; check 'the agent runs' $?
+  mkdir -p "$files"
+  : > "$files/crash-9.0.3"
+  press 9.0.3
+  [ "$(update_state)" = rolled-back ]; check 'the update is rolled back' $? "$(update_detail)"
+  svc_waits_running; check 'the old agent runs again' $? "$(update_detail)"
+  [ "$(svc "$uexe" version)" = 'askorus-agent 9.0.2' ]; check 'it is the old version' $?
+  rm -f "$files/crash-9.0.3"
+  stays_stopped
+
+  if [ "$1" = systemd ]; then
+    echo '   -- the service next to an agent that start ran (R-176)'
+    svc "$uexe" start > /dev/null 2>&1
+    service_start
+    sleep 7
+    [ "$(svc systemctl --user show askorus-agent.service -p NRestarts)" = NRestarts=0 ]; check 'systemd does not start it again and again' $?
+    stays_stopped
+  fi
+  service_off
+}
+
+update_state() { sed -n 's/.*"state": *"\([^"]*\)".*/\1/p' "$ASKORUS_AGENT_DIR/update-progress.json" 2>/dev/null; }
+update_detail() { cat "$ASKORUS_AGENT_DIR/update-progress.json" 2>/dev/null; tail -n 5 "$ASKORUS_AGENT_DIR/logs/update.out" 2>/dev/null; }
+# press <version>: the phone's button, and the wait for the update's end.
+press() {
+  "$work/up/$1" test-release "$files" "$1" "$work/up/$1"
+  rm -f "$ASKORUS_AGENT_DIR/update.json" "$ASKORUS_AGENT_DIR/update-progress.json"
+  printf '%s' "$1" > "$files/press"
+  for _ in $(seq 1 160); do
+    case "$(update_state)" in done | rolled-back | failed | not-taken) break ;; esac
+    sleep 1
+  done
+}
+svc_waits_running() {
+  for _ in $(seq 1 30); do
+    svc running && [ -s "$ASKORUS_AGENT_DIR/agent.pid" ] && return 0
+    sleep 0.5
+  done
+  return 1
+}
+stays_stopped() {
+  local out
+  out="$(svc "$uexe" shutdown 2>&1)"; has "$out" 'the agent stopped'; check 'shutdown stops it' $? "$out"
+  sleep 7 # the unit's RestartSec is 5
+  ! svc running; check 'and nothing starts it again' $?
+}
+
+if [ "$os" = darwin ] && [ "${ASKORUS_TEST_LAUNCHD:-}" = 1 ]; then
+  svc() { mac "$@"; }
+  service_on() {
+    "$uexe" autostart on || return 1
+    # bootout of the test above may still be under way
+    for _ in 1 2 3 4 5 6 7 8 9 10; do
+      launchctl bootstrap "$domain" "$plist" && return 0
+      sleep 1
+    done
+    return 1
+  }
+  service_start() { launchctl kickstart "$domain/app.askorus.agent" > /dev/null 2>&1; }
+  service_off() {
+    launchctl bootout "$domain/app.askorus.agent" > /dev/null 2>&1
+    "$uexe" autostart off > /dev/null 2>&1
+  }
+  if launchctl print "$domain/app.askorus.agent" > /dev/null 2>&1; then
+    note 'launchd still has an agent of that name: left alone, the update part is skipped'
+  else
+    update_under_service launchd
+  fi
+elif [ "$os" = linux ] && [ "${ASKORUS_TEST_SYSTEMD:-}" = 1 ] && HOME="$real_home" XDG_CONFIG_HOME= systemctl --user show-environment > /dev/null 2>&1; then
+  svc() { HOME="$real_home" XDG_CONFIG_HOME= XDG_CACHE_HOME= "$@"; }
+  service_on() { svc "$uexe" autostart on; }
+  service_start() { svc systemctl --user start askorus-agent.service > /dev/null 2>&1; }
+  service_off() {
+    svc "$uexe" autostart off > /dev/null 2>&1
+    svc systemctl --user stop askorus-agent.service > /dev/null 2>&1
+    svc systemctl --user reset-failed askorus-agent.service > /dev/null 2>&1
+  }
+  if [ -e "$real_home/.config/systemd/user/askorus-agent.service" ]; then
+    note 'this user already has the unit: left alone, the update part is skipped'
+  else
+    update_under_service systemd
+  fi
+fi
+
 echo '== check runs and names this system'"'"'s way to start'
 out="$("$exe" check 2>&1)"
 has "$out" 'normal user rights' && has "$out" 'askorus-agent start'; check 'check lists what is missing, with start' $? "$(printf '%s' "$out" | head -n 12)"
 ! has "$out" 'only supported on Windows'; check 'nothing says Windows only' $? "$out"
 
+uexe="$exe"
 "$exe" shutdown > /dev/null 2>&1
 if [ "$keep" = 1 ]; then echo "kept: $work"; else rm -rf "$work"; fi
 if [ "$fails" = 0 ]; then echo 'ALL PASSED'; else echo "FAILED: $fails"; exit 1; fi

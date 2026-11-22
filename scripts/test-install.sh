@@ -2,7 +2,8 @@
 # Tests scripts/install.sh on macOS and Linux (#52), as test-install.ps1
 # tests install.ps1: a new install, one through a pipe (as `curl | sh` runs
 # it), a damaged download, a release without this system's file, a refused
-# address, an update while the agent runs and one while it does not.
+# address, an update while the agent runs, one while it does not, and one
+# of an agent that does not stop (R-178).
 # Nothing of a real install is touched: the install folder, the agent
 # folder (ASKORUS_AGENT_DIR, with a port of its own), the home folder and
 # the temporary folder are all inside one temp folder, and setup is not run
@@ -123,6 +124,33 @@ install "$work/rel1" "$dir"
 [ "$("$exe" version 2>/dev/null)" = 'askorus-agent 0.0.1-test' ]; check 'the other version is in place' $?
 ! running "$exe"; check 'does not start it' $?
 [ "$(left)" = 0 ]; check 'no temp folder is left' $?
+
+echo '== an update of an agent that does not stop (R-178)'
+# A second agent, installed elsewhere, which the update must leave alone.
+mkdir -p "$work/second/bin" "$work/second/agent"
+cp "$work/rel1/$asset" "$work/second/bin/askorus-agent"
+chmod 755 "$work/second/bin/askorus-agent"
+printf '{"port": %d}\n' "$((port + 1000))" > "$work/second/agent/agent.json"
+second() { ASKORUS_AGENT_DIR="$work/second/agent" "$work/second/bin/askorus-agent" "$@"; }
+second start > /dev/null 2>&1
+"$exe" start > /dev/null 2>&1
+running "$exe"; check 'the test agent runs' $? ''
+pid="$(cat "$ASKORUS_AGENT_DIR/agent.pid" 2>/dev/null)"
+second_pid="$(cat "$work/second/agent/agent.pid" 2>/dev/null)"
+if [ -n "$pid" ] && kill -STOP "$pid"; then
+  install "$work/rel2" "$dir" # about 30 seconds: shutdown waits that long first
+  check 'exit code 0' "$code" "$out"
+  has "$out" 'still running after 30 s' && has "$out" 'ending it'; check 'it did not stop, and was ended' $? "$out"
+  [ "$("$exe" version 2>/dev/null)" = 'askorus-agent 0.0.2-test' ]; check 'the new agent is in place' $? "$out"
+  running "$exe" && [ "$(cat "$ASKORUS_AGENT_DIR/agent.pid" 2>/dev/null)" != "$pid" ]; check 'a new agent runs' $? "$out"
+  ! kill -0 "$pid" 2>/dev/null; check 'the stuck one is gone' $?
+  [ -n "$second_pid" ] && kill -0 "$second_pid" 2>/dev/null; check 'the agent installed elsewhere still runs' $?
+  kill -CONT "$pid" 2>/dev/null
+else
+  check 'the test agent can be paused' 1
+fi
+"$exe" shutdown > /dev/null 2>&1
+second shutdown > /dev/null 2>&1
 
 export PATH="$real_path"
 if [ "$keep" = 1 ]; then echo "kept: $work"; else rm -rf "$work"; fi

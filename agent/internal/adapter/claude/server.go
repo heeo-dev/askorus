@@ -46,6 +46,17 @@ const (
 	keepLines      = 12
 )
 
+// Waits that keep a folder server's stop from waiting for ever (R-174).
+var (
+	// screenEndWait: for the screen's end once the server has ended. A child
+	// it left may hold the terminal.
+	screenEndWait = 2 * time.Second
+	// killedWait: for a server that was killed.
+	killedWait = 3 * time.Second
+	// startingPoll: while a stop waits for a server that is just starting.
+	startingPoll = 50 * time.Millisecond
+)
+
 var serverBackoff = []time.Duration{2 * time.Second, 10 * time.Second, 30 * time.Second, time.Minute, 5 * time.Minute}
 
 var (
@@ -269,7 +280,12 @@ func (ss *servers) runOnce(s *server) error {
 	}()
 	err = p.Wait()
 	p.Close() // ends the output stream
-	<-read
+	t := time.NewTimer(screenEndWait)
+	defer t.Stop()
+	select {
+	case <-read:
+	case <-t.C:
+	}
 	s.mu.Lock()
 	s.proc = nil
 	s.mu.Unlock()
@@ -384,25 +400,44 @@ func (ss *servers) stopServer(s *server) {
 	default:
 		close(s.stop)
 	}
-	s.mu.Lock()
-	p := s.proc
-	s.mu.Unlock()
-	if p != nil {
+	if p := s.awaitProcess(); p != nil {
 		_ = p.Interrupt()
 		select {
 		case <-s.done:
 		case <-time.After(serverStopWait):
 			_ = p.Kill()
-			<-s.done
+			select {
+			case <-s.done:
+			case <-time.After(killedWait):
+			}
 		}
-	} else {
-		<-s.done
 	}
 	ss.mu.Lock()
 	if ss.byFolder[folderKey(s.folder)] == s {
 		delete(ss.byFolder, folderKey(s.folder))
 	}
 	ss.mu.Unlock()
+}
+
+// awaitProcess is the server's process to stop, or nil once there is none
+// to stop. A stop can come while the process is being started: it is then
+// waited for, so that it is stopped too and not waited on for ever.
+func (s *server) awaitProcess() serverProcess {
+	deadline := time.Now().Add(serverStopWait)
+	for {
+		select {
+		case <-s.done:
+			return nil
+		default:
+		}
+		s.mu.Lock()
+		p := s.proc
+		s.mu.Unlock()
+		if p != nil || time.Now().After(deadline) {
+			return p
+		}
+		time.Sleep(startingPoll)
+	}
 }
 
 // ServerStatus reports one folder ("off" when not served).

@@ -14,19 +14,22 @@ import (
 // openPTY opens a new pseudo terminal and returns its controlling side and
 // the name of the side the program gets.
 func openPTY() (*os.File, string, error) {
-	m, err := os.OpenFile("/dev/ptmx", os.O_RDWR|syscall.O_NOCTTY, 0)
+	// Never File.Fd() on the master: it makes the file blocking, and then
+	// Close does not end a Read that waits (R-174). The requests go to the
+	// descriptor before os.NewFile takes it, non-blocking.
+	fd, err := unix.Open("/dev/ptmx", unix.O_RDWR|syscall.O_NOCTTY|unix.O_CLOEXEC|unix.O_NONBLOCK, 0)
 	if err != nil {
 		return nil, "", err
 	}
-	n, err := unix.IoctlGetInt(int(m.Fd()), unix.TIOCGPTN)
+	n, err := unix.IoctlGetInt(fd, unix.TIOCGPTN)
 	if err == nil {
-		err = unix.IoctlSetPointerInt(int(m.Fd()), unix.TIOCSPTLCK, 0) // unlock
+		err = unix.IoctlSetPointerInt(fd, unix.TIOCSPTLCK, 0) // unlock
 	}
 	if err != nil {
-		m.Close()
+		unix.Close(fd)
 		return nil, "", err
 	}
-	return m, "/dev/pts/" + strconv.Itoa(n), nil
+	return os.NewFile(uintptr(fd), "/dev/ptmx"), "/dev/pts/" + strconv.Itoa(n), nil
 }
 
 // processParents maps every process id to its parent's: the sessions a

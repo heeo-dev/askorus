@@ -42,7 +42,7 @@ import (
 )
 
 // version is set at release time with -ldflags "-X main.version=...".
-var version = "0.6.2-dev"
+var version = "0.6.3-dev"
 
 const usage = `Askorus PC agent (not an official Anthropic product)
 Askorus PC 에이전트 (Anthropic의 공식 제품이 아닙니다)
@@ -351,6 +351,12 @@ func serve(dir string, args []string) error {
 		}
 	}
 	if agentRunning(cfg.Port) {
+		if startedByService() {
+			// An error would have systemd start it again every 5 seconds, until
+			// one of them comes up right after a shutdown (R-176).
+			say(os.Stderr, m("an agent already runs; the service has nothing to do", "에이전트가 이미 돌고 있어 서비스가 할 일이 없습니다"))
+			return nil
+		}
 		return fail("an agent already runs with port %d; stop it first: askorus-agent shutdown",
 			"포트 %d로 에이전트가 이미 돌고 있습니다. 먼저 끄세요: askorus-agent shutdown", cfg.Port)
 	}
@@ -368,6 +374,16 @@ func serve(dir string, args []string) error {
 	// to take over (#35, update_phone.go).
 	handedOver := make(chan struct{})
 	var handOverOnce sync.Once
+	// However a stop goes, the process ends (R-174). Registered before the
+	// node and the stores, so that their Close is inside the limit too.
+	bound := &stopBound{limit: stopLimit, end: func(code int) {
+		logger.Error("stopping took too long; ending now")
+		os.Remove(filepath.Join(dir, pidFile))
+		os.Remove(filepath.Join(dir, nodeFile))
+		os.Exit(code)
+	}}
+	defer bound.finish()
+	bound.beginWhenAsked(ctx, stopReq, handedOver)
 	settleProgress(dir)
 
 	// The agent's own device on the person's Tailscale network (#57): the
@@ -491,6 +507,7 @@ func serve(dir string, args []string) error {
 	case err := <-errc:
 		if !errors.Is(err, http.ErrServerClosed) {
 			serveErr = err
+			bound.begin(1)
 		}
 	case <-ctx.Done():
 	case <-stopReq:
@@ -498,10 +515,9 @@ func serve(dir string, args []string) error {
 	case <-handedOver:
 		logger.Info("stopping for an update")
 	}
-	shutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
 	logger.Info("stopping")
-	err = srv.Shutdown(shutdown)
+	bound.begin(0)
+	stopHTTP(srv, requestsWait, logger)
 	apiSrv.Close()                       // ends asks still running, with their AI processes
 	core.StopUsageReads(3 * time.Second) // and the usage reads (R-147)
 	// Folder servers end with the agent; Ctrl+C lets each clean up.
@@ -511,10 +527,7 @@ func serve(dir string, args []string) error {
 		say(os.Stderr, m("stopping %d folder servers…", "폴더 서버 %d개를 멈추는 중…", n))
 		adapter.StopAllServers()
 	}
-	if serveErr != nil {
-		return serveErr
-	}
-	return err
+	return serveErr
 }
 
 // Log file sizes (R-87): agent.log rolls over to agent.log.1 at logMax, so

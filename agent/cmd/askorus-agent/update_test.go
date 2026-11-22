@@ -90,8 +90,10 @@ func newUpdatePC(t *testing.T) *updatePC {
 
 	saved := []any{version, updateSource, updateRoots, updateExe, updateHome, updateLaunch, updatePID, updateUp, updateStop, updateWaitOld, updateWaitNew, updateSettle, updatePoll, update.Says}
 	savedReady, savedKill, savedHandshake := updateReady, killProcess, updateHandshake
+	savedLeave, savedIn, savedStopService, savedEnd := updateLeave, updateInService, updateStopService, updateEndStuck
 	t.Cleanup(func() {
 		updateReady, killProcess, updateHandshake = savedReady, savedKill, savedHandshake
+		updateLeave, updateInService, updateStopService, updateEndStuck = savedLeave, savedIn, savedStopService, savedEnd
 		version = saved[0].(string)
 		updateSource, updateRoots = saved[1].(func() update.Source), saved[2].(func() ([]update.PublicKey, error))
 		updateExe, updateHome = saved[3].(func() (string, error)), saved[4].(func() (string, error))
@@ -113,6 +115,11 @@ func newUpdatePC(t *testing.T) *updatePC {
 	}
 	updateWaitOld, updateWaitNew, updateSettle, updatePoll = 2*time.Second, 300*time.Millisecond, 50*time.Millisecond, 5*time.Millisecond
 	updateHandshake = time.Second
+	// The pids here are pretend ones: no real process or service is looked at or ended.
+	updateLeave = func() error { return nil }
+	updateInService = func(int) bool { return false }
+	updateStopService = func() {}
+	updateEndStuck = func(string, int) bool { return false }
 	updateReady = func(_ string, pid int) bool { p.mu.Lock(); defer p.mu.Unlock(); return p.ready[pid] }
 	killProcess = func(pid int) { p.mu.Lock(); p.killed = append(p.killed, pid); p.alive[pid] = false; p.mu.Unlock() }
 	updatePID = func(pid int) bool { p.mu.Lock(); defer p.mu.Unlock(); return p.alive[pid] }

@@ -25,7 +25,7 @@ func drawAgy(t *testing.T, pictures string) (*Adapter, string, string) {
 	brain := t.TempDir()
 	t.Setenv(fakecli.EnvAgyBrain, brain)
 	t.Setenv(fakecli.EnvPictures, pictures)
-	return New(Options{Path: exe, ConfigDir: t.TempDir(), BrainDir: brain}), brain, t.TempDir()
+	return New(Options{Path: exe, ConfigDir: t.TempDir(), BrainDir: brain}), brain, realTemp(t)
 }
 
 func TestAskWithPicturesRunsTheDrawAgent(t *testing.T) {

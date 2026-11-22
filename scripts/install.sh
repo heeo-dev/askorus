@@ -8,7 +8,9 @@
 # against the release's SHA256SUMS.txt, puts it in ~/.local/bin and runs
 # `askorus-agent setup`, which walks through the rest. Run again later, it
 # updates: it stops a running agent, keeps the old program as
-# askorus-agent.prev and starts the new one.
+# askorus-agent.prev and starts the new one. An agent that does not stop
+# (0.2.0 to 0.6.2 could hang, #70) is ended: only `serve` run from the
+# program in the install folder, nothing else.
 #
 # It needs no administrator rights and must not be run with sudo: the agent
 # runs as you, with your AI sign-ins. It changes nothing outside the install
@@ -111,7 +113,7 @@ main() {
   esac
   if [ "$running" = 1 ]; then
     say 'stopping the agent to update it'
-    "$exe" shutdown >/dev/null || die 'The agent did not stop, so nothing was changed; run "askorus-agent shutdown" and then this again.'
+    "$exe" shutdown >/dev/null || end_stuck "$exe" || die 'The agent did not stop, so nothing was changed; run "askorus-agent shutdown" and then this again.'
   fi
   prev="$dir/askorus-agent.prev"
   if ! { rm -f "$prev" && mv "$exe" "$prev"; }; then
@@ -141,6 +143,52 @@ main() {
   # An agent from before 0.3.0 had no Tailscale inside: the PC was never signed in.
   if "$exe" status 2>/dev/null | grep -q 'not signed in to Tailscale'; then
     say 'this version has Tailscale built in: run "askorus-agent login" once, then pair the phone again in the app (tap this PC)'
+  fi
+}
+
+# end_stuck <exe>: the agent was asked to stop and did not (#70). It ends
+# the serve that runs from this very program, and first stops the systemd
+# unit when that serve is in it, or systemd would start it again.
+end_stuck() {
+  stuck="$(serve_pids "$1")"
+  if [ -n "$stuck" ]; then
+    say 'the agent did not stop: ending it'
+    for p in $stuck; do
+      if grep -qE '/askorus-agent\.service(/|$)' "/proc/$p/cgroup" 2>/dev/null; then
+        systemctl --user stop --no-block askorus-agent.service >/dev/null 2>&1 || true
+        break
+      fi
+    done
+    for p in $stuck; do
+      kill -9 "$p" 2>/dev/null || true
+    done
+  fi
+  tries=0
+  while [ "$tries" -lt 25 ]; do
+    case "$("$1" status 2>/dev/null | head -n 1)" in
+      running*) ;;
+      *) return 0 ;;
+    esac
+    tries=$((tries + 1))
+    sleep 0.2
+  done
+  return 1
+}
+
+# serve_pids <exe>: this user's processes that run `serve` from exe.
+serve_pids() {
+  if [ -d /proc/self ]; then
+    for d in /proc/[0-9]*; do
+      runs="$(readlink "$d/exe" 2>/dev/null)" || continue
+      case "$runs" in
+        "$1" | "$1 (deleted)" | "$1.prev" | "$1.prev (deleted)") ;;
+        *) continue ;;
+      esac
+      [ "$(tr '\000' '\n' 2>/dev/null <"$d/cmdline" | sed -n 2p)" = serve ] || continue
+      echo "${d#/proc/}"
+    done
+  else
+    ps -x -ww -o pid= -o command= | WANT="$1 serve" awk '{ p = $1; sub(/^[ \t]*[0-9]+[ \t]+/, ""); if ($0 == ENVIRON["WANT"] || index($0, ENVIRON["WANT"] " ") == 1) print p }'
   fi
 }
 
