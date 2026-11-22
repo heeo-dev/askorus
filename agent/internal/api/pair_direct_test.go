@@ -307,16 +307,28 @@ func TestPairDirectAskLimitHoldsUnderManyRequests(t *testing.T) {
 	e.pairer.Confirm = func(context.Context, pairing.Question) (bool, bool) { asked.Add(1); return false, true }
 	body := `{"deviceName":"Galaxy S23","match":"47"}`
 	var wg sync.WaitGroup
-	stop := time.Now().Add(400 * time.Millisecond)
+	stop := make(chan struct{})
 	for i := 0; i < 16; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for time.Now().Before(stop) {
-				e.serve(fromPhone("POST", "/v1/pair", body, nil))
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+					e.serve(fromPhone("POST", "/v1/pair", body, nil))
+				}
 			}
 		}()
 	}
+	// Up to the limit first, however slow the machine (a macOS runner got two
+	// asks into 400 ms, 2026-11-22), then 400 ms more in which none may follow.
+	for reach := time.Now().Add(10 * time.Second); asked.Load() < maxAskFails && time.Now().Before(reach); {
+		time.Sleep(5 * time.Millisecond)
+	}
+	time.Sleep(400 * time.Millisecond)
+	close(stop)
 	wg.Wait()
 	// Let the last request end.
 	for deadline := time.Now().Add(3 * time.Second); len(e.pairer.Pending()) != 0 && time.Now().Before(deadline); {
