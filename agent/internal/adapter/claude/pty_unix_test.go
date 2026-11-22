@@ -6,6 +6,7 @@ import (
 	"bufio"
 	"os"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -149,5 +150,70 @@ func TestPTYExitCodeAndKill(t *testing.T) {
 	}
 	if elevated, known := processElevated(os.Getpid()); !known || elevated != (os.Geteuid() == 0) {
 		t.Errorf("processElevated(self) = %v, %v", elevated, known)
+	}
+}
+
+// R-174 (#70): closing the terminal ends a read that waits on it, although
+// someone still holds the program's side. A folder server's child that
+// outlived it did, and the agent then never stopped.
+func TestPTYCloseEndsAWaitingRead(t *testing.T) {
+	master, name, err := openPTY()
+	if err != nil {
+		t.Fatal(err)
+	}
+	holder, err := os.OpenFile(name, os.O_RDWR|syscall.O_NOCTTY, 0)
+	if err != nil {
+		master.Close()
+		t.Fatal(err)
+	}
+	defer holder.Close()
+	read := make(chan struct{})
+	go func() {
+		defer close(read)
+		_, _ = ptyReader{master}.Read(make([]byte, 64))
+	}()
+	time.Sleep(300 * time.Millisecond) // the read waits: nothing was written
+	master.Close()
+	select {
+	case <-read:
+	case <-time.After(3 * time.Second):
+		holder.Write([]byte("end\n")) // lets the stuck read go
+		t.Fatal("Close did not end the waiting Read")
+	}
+}
+
+// The same through startPTY, which sets the terminal's size on the master.
+func TestPTYCloseEndsTheOutputOfARunningProgram(t *testing.T) {
+	p, err := startPTY("/bin/sh", t.TempDir(), []string{"-c", "echo started; exec sleep 30"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	readUntil(t, p, "started")
+	read := make(chan struct{})
+	go func() {
+		defer close(read)
+		_, _ = p.Output().Read(make([]byte, 64))
+	}()
+	time.Sleep(300 * time.Millisecond)
+	closed := make(chan struct{})
+	go func() {
+		defer close(closed)
+		p.Close()
+	}()
+	var stuck bool
+	select {
+	case <-read:
+	case <-time.After(3 * time.Second):
+		stuck = true
+	}
+	p.Kill()
+	waitEnd(t, p)
+	select {
+	case <-closed:
+	case <-time.After(5 * time.Second):
+		t.Error("Close never returned")
+	}
+	if stuck {
+		t.Fatal("Close did not end the output while the program runs")
 	}
 }

@@ -4,6 +4,7 @@ package main
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -121,5 +122,23 @@ func TestStartDetachedRunsOnItsOwnAndLogs(t *testing.T) {
 func TestSelfCommand(t *testing.T) {
 	if got := selfCommand("/home/a b/askorus-agent", "serve", "-port"); got != `"/home/a b/askorus-agent" serve -port` {
 		t.Errorf("selfCommand = %s", got)
+	}
+}
+
+// R-175 (#70): a process that ended and waits for its parent to collect it
+// (a zombie) runs no more. shutdown said "still running after 30 s" of one,
+// and an update took a new agent that had died for one that is up.
+func TestAnEndedProcessNotCollectedYetDoesNotRun(t *testing.T) {
+	cmd := exec.Command("/bin/sh", "-c", "exit 0")
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer cmd.Wait() // collected only after the test looked
+	deadline := time.Now().Add(5 * time.Second)
+	for processRunning(cmd.Process.Pid) {
+		if time.Now().After(deadline) {
+			t.Fatalf("pid %d ended, but counts as running", cmd.Process.Pid)
+		}
+		time.Sleep(50 * time.Millisecond)
 	}
 }
