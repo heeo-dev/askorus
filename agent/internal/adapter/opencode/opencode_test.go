@@ -160,7 +160,11 @@ func fakeAdapter(t *testing.T, tiers map[string]core.AskModel) (*Adapter, string
 	t.Setenv("ASKORUS_FAKE_MODE", "")
 	folder := filepath.Join(dir, "ask")
 	os.MkdirAll(folder, 0o700)
-	return New(Options{Path: exe, Tiers: tiers}), filepath.Join(dir, "args.jsonl"), folder
+	a := New(Options{Path: exe, Tiers: tiers})
+	// Info reads the usage in the background with the fake, which writes
+	// into dir: it must be over before dir is removed.
+	t.Cleanup(func() { a.usage.Wait(context.Background()) })
+	return a, filepath.Join(dir, "args.jsonl"), folder
 }
 
 func calls(t *testing.T, file string) []fakeCall {
