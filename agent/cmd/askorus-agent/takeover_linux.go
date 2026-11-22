@@ -80,20 +80,29 @@ func leaveService() error {
 	if err != nil {
 		return err
 	}
-	return syscall.Exec(run, scopeArgs(exe, os.Args[1:]), append(os.Environ(), scopedEnv+"=1"))
+	return syscall.Exec(run, scopeArgs(exe, os.Args[1:], func() bool { return canTurnOffExpansion(run) }), append(os.Environ(), scopedEnv+"=1"))
 }
 
 // scopeArgs are systemd-run's arguments. Newer systemd-run (258) replaces
 // ${NAME} in a scope's command, so with a "$" in it that is turned off
-// (R-181). The option came with 254: an older one refuses it, and then
-// nothing is taken over.
-func scopeArgs(exe string, args []string) []string {
+// (R-181). The option came with 254: an older one refuses it, so it is
+// given only where systemd-run knows it (R-182).
+func scopeArgs(exe string, args []string, canTurnOff func() bool) []string {
 	out := []string{"systemd-run", "--user", "--scope", "--quiet", "--collect"}
 	command := append([]string{exe}, args...)
-	if slices.ContainsFunc(command, func(s string) bool { return strings.Contains(s, "$") }) {
+	if slices.ContainsFunc(command, func(s string) bool { return strings.Contains(s, "$") }) && canTurnOff() {
 		out = append(out, "--expand-environment=no")
 	}
 	return append(append(out, "--"), command...)
+}
+
+// canTurnOffExpansion asks systemd-run's help. It runs before the takeover
+// is recorded, which the old agent waits 15 seconds for, so it is brief.
+func canTurnOffExpansion(run string) bool {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, run, "--help").Output()
+	return err == nil && strings.Contains(string(out), "--expand-environment")
 }
 
 // stopService stops the unit the old agent ran in, so systemd does not

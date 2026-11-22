@@ -142,3 +142,33 @@ func TestEndProcessDoesNotWaitForAStuckLog(t *testing.T) {
 		t.Error("the limit and the tidying are not inside shutdown's 30 seconds")
 	}
 }
+
+// R-182: the log is closed inside the limit, so a close that hangs is
+// ended too, and one that returns ends the limit.
+func TestStopLimitCoversClosingTheLog(t *testing.T) {
+	ended := make(chan int, 2)
+	stuck := make(chan struct{})
+	b := &stopBound{limit: 30 * time.Millisecond, end: func(code int) { ended <- code }}
+	b.begin(0)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		b.finishAfter(func() { <-stuck })
+	}()
+	select {
+	case <-ended:
+	case <-time.After(5 * time.Second):
+		t.Error("a log that does not close was outside the limit")
+	}
+	close(stuck)
+	<-done
+
+	b = &stopBound{limit: 100 * time.Millisecond, end: func(code int) { ended <- code }}
+	b.begin(0)
+	b.finishAfter(func() {})
+	select {
+	case <-ended:
+		t.Error("a stop that finished was ended")
+	case <-time.After(250 * time.Millisecond):
+	}
+}

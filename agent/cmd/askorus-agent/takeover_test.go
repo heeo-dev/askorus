@@ -147,3 +147,34 @@ func TestUpdateWaitsUntilTheServiceLetsTheLockGo(t *testing.T) {
 	}
 	<-p.done
 }
+
+// R-182 (2ho's re-check): while something still holds the port's lock the
+// new agent is not started, and the program is not put back under what
+// runs: that is the unit's restarted serve, of the new program.
+func TestUpdateDoesNotGoBackUnderAnAgentTheServiceRestarted(t *testing.T) {
+	p := newUpdatePC(t)
+	p.running()
+	updateStop = func(int) error {
+		p.mu.Lock()
+		defer p.mu.Unlock()
+		p.alive[111] = false // ended, and the restarted serve holds the lock
+		return nil
+	}
+	updateInService = func(int) bool { return true }
+	updateStopService = func() error { return errors.New("no bus") }
+	launch := updateLaunch
+	updateLaunch = func(exe string, args []string, dir, log string) (int, error) {
+		if args[0] == "serve" {
+			t.Error("a second agent was started on a held lock")
+		}
+		return launch(exe, args, dir, log)
+	}
+	if _, err := p.run("now"); err == nil {
+		t.Fatal("now said it worked")
+	}
+	<-p.done
+	pr, _ := update.ReadProgress(p.dir)
+	if p.program() != "agent 0.5.1" || pr.State != update.ProgressFailed || !strings.Contains(pr.Reason, "still holds") {
+		t.Fatalf("program %q, progress %+v", p.program(), pr)
+	}
+}

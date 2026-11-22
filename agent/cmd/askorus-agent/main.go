@@ -367,7 +367,6 @@ func serve(dir string, args []string) error {
 	if err != nil {
 		return err
 	}
-	defer closeLog()
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
@@ -385,7 +384,7 @@ func serve(dir string, args []string) error {
 			logger.Error("stopping took too long; ending now")
 		}, os.Exit)
 	}}
-	defer bound.finish()
+	defer bound.finishAfter(func() { closeLog() })
 	bound.beginWhenAsked(ctx, stopReq, handedOver)
 	settleProgress(dir)
 

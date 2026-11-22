@@ -42,6 +42,13 @@ func (b *stopBound) begin(code int) {
 }
 
 // finish takes the clock away: serve is done.
+// finishAfter runs last, and only then is the stop's limit over (R-182:
+// closing the log came after it and could hang for ever).
+func (b *stopBound) finishAfter(last func()) {
+	defer b.finish()
+	last()
+}
+
 func (b *stopBound) finish() {
 	b.mu.Lock()
 	defer b.mu.Unlock()

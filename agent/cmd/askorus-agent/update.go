@@ -54,10 +54,10 @@ var (
 	updateLeave       = leaveService // out of the agent's service (R-177)
 	updateInService   = inService
 	updateStopService = stopService
-	updateEndStuck    = endStuck // an old agent that does not stop (R-178)
-	updateWaitFree    = 10 * time.Second
+	updateEndStuck    = endStuck         // an old agent that does not stop (R-178)
+	updateWaitFree    = 30 * time.Second // over stopLimit: a restarted serve may be ending
 	// updateWaitTakeover bounds what update-finish may add for both.
-	updateWaitTakeover = 25 * time.Second
+	updateWaitTakeover = 55 * time.Second
 	// updateReady: the agent started as pid is listening on its Tailscale
 	// node; serve writes its pid file only then (R-134). The stop event or
 	// lock that updateUp sees comes before Tailscale starts.
@@ -227,7 +227,7 @@ func updateNowCmd(dir string, cfg config.Config, out io.Writer) error {
 		// sees it gone and takes over.
 		_ = updateStop(cfg.Port)
 	}
-	p, ok := waitProgress(dir, f.Latest, started, updateWaitOld+updateWaitTakeover+updateWaitNew+updateSettle+15*time.Second)
+	p, ok := waitProgress(dir, f.Latest, started, updateWaitOld+updateWaitTakeover+2*(updateWaitNew+updateSettle)+15*time.Second)
 	if !ok {
 		return fail("the update did not finish in time; see %s and run askorus-agent update status", "업데이트가 제때 끝나지 않았습니다. %s를 보고 askorus-agent update status를 실행하세요", filepath.Join(dir, "logs", "update.out"))
 	}
@@ -396,10 +396,22 @@ func updateFinishCmd(dir string, args []string) error {
 		// Or systemd may start a second agent next to the new one, when the
 		// old one ended with an error. It only queues the stop, so the new
 		// agent waits until nothing holds the port's lock (R-181).
-		if err := updateStopService(); err != nil {
-			fmt.Fprintln(os.Stderr, err)
+		stopErr := updateStopService()
+		if stopErr != nil {
+			fmt.Fprintln(os.Stderr, stopErr)
 		}
-		waitFor(func() bool { return !updateUp(cfg.Port) }, updateWaitFree)
+		if !waitFor(func() bool { return !updateUp(cfg.Port) }, updateWaitFree) {
+			// What holds it is the unit's restarted serve, and that runs the
+			// program at exe: the new one. Going back would put the old file
+			// under it and start nothing (R-182). With the lock free a failed
+			// stop does no harm: the unit's serve finds the new agent running
+			// and ends with code 0 (R-176).
+			reason := "the agent's systemd service still holds the port's lock"
+			if stopErr != nil {
+				reason += ": " + stopErr.Error()
+			}
+			return record(update.ProgressFailed, reason)
+		}
 	}
 	if !start {
 		return record(update.ProgressDone, "")
