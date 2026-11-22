@@ -106,9 +106,9 @@ Setup goes step by step: it puts the agent on your PATH, checks the AI programs,
 
 On macOS and Linux the same commands work as on Windows. A few things differ by system:
 
-- **Linux:** starting at logon is a systemd user unit; on a machine nobody logs on to, `loginctl enable-linger` makes it start at boot. The window that asks about a phone needs `zenity` or `kdialog` and a screen; without them, pair with `askorus-agent pair` open.
+- **Linux:** starting at logon is a systemd user unit (updating from the phone then needs `systemd-run`, which comes with systemd); on a machine nobody logs on to, `loginctl enable-linger` makes it start at boot. The window that asks about a phone needs `zenity` or `kdialog` and a screen; without them, pair with `askorus-agent pair` open.
 - **macOS:** starting at logon is a launch agent in `~/Library/LaunchAgents`; it takes effect at your next logon, and `askorus-agent start` starts the agent now. Run the install line and `askorus-agent start` in Terminal on the Mac's own screen, not over SSH: Claude Code keeps its sign-in in the keychain, and an agent started over SSH cannot read it, so Claude shows as not signed in (`start` warns about it).
-- The macOS agent is tested by automated checks on a Mac in the cloud (the Go tests, the install script, and start, stop and logon start under launchd), and it has been used with Claude Code and Codex on a person's Mac. Starting at logon has not been tried on a real Mac yet. If something does not work there, please [open an issue](https://github.com/heeo-dev/askorus/issues).
+- The macOS agent is tested by automated checks on a Mac in the cloud (the Go tests, the install script, and start, stop, logon start and update under launchd), and it has been used with Claude Code and Codex on a person's Mac. Starting at logon has not been tried on a real Mac yet. If something does not work there, please [open an issue](https://github.com/heeo-dev/askorus/issues).
 
 <details>
 <summary>Read the script before you run it</summary>
@@ -201,6 +201,7 @@ Run `askorus-agent check` on the PC first. It lists what is missing, each line w
 - **The phone says nothing on the PC can allow it, or no window shows on the PC.** The small window needs a screen. On Linux it also needs `zenity` or `kdialog`, and a server or an SSH session has none. Run `askorus-agent pair` on the PC and tap the PC again: while it runs, the phone is taken without a question. A phone that is already paired can allow it too.
 - **A phone I do not know was paired, or the number in the terminal is not the one on my phone.** `askorus-agent devices` lists the paired phones and `askorus-agent devices revoke <id or name>` disconnects one.
 - **It worked for months and then stopped.** A Tailscale sign-in ends after about 180 days by default. `askorus-agent check` warns two weeks ahead, and Settings > Tailscale in the app shows the date. Sign in again (`askorus-agent login` on the PC, Settings > Tailscale in the app), or turn key expiry off for the devices in the Tailscale admin console. Pairing stays.
+- **On Linux or a Mac, the agent does not stop ("still running after 30 s"), or it was off after an update from the phone.** Agents from 0.2.0 to 0.6.2 can hang when they stop, and on Linux an agent that systemd started could stay off after such an update. Both are fixed in 0.6.3. Run the install line again: it ends an agent that does not stop (only `serve` of the installed agent) and updates it. If the agent was off, start it afterwards with `askorus-agent start`.
 - **On a Mac, Claude says it is not signed in, but `claude` works in Terminal.** The agent was started over SSH (for example, the install line was run over SSH). Claude Code keeps its sign-in in the keychain, which a program started over SSH cannot read, even after SSH ends. Signing in again does not help: on the Mac itself, open Terminal and run `askorus-agent shutdown`, then `askorus-agent start`.
 - **A new Claude Code session does not start.** Claude Code asks once per folder whether you trust it: on the PC, run `claude` in that folder once and accept.
 - **Keeping a folder open stays at "starting" or fails.** Remote Control has to be turned on once in Claude Code: on the PC, run `claude remote-control`, answer `y`, then stop it with Ctrl+C.
@@ -227,9 +228,9 @@ It shows what it will undo and asks first: it signs the PC out of Tailscale, sto
 
 ## Install the Android app
 
-The app is not on Google Play yet. Until it is, a preview APK comes with each release.
+The app is not on Google Play yet. Until it is, a preview APK comes with each release. When a release changes only the agent, its APK is the previous one, with that version in its name.
 
-1. On the phone, open the [latest release](https://github.com/heeo-dev/askorus/releases/latest) and download `askorus-android-<version>.apk`.
+1. On the phone, open the [latest release](https://github.com/heeo-dev/askorus/releases/latest) and download the `askorus-android-<version>.apk` there.
 2. Open the downloaded file. Android asks whether your browser may install apps: allow it for this install. Play Protect may offer to scan the app first, as it does for any app from outside a store.
 3. Open Askorus and pair it with your PC: sign in to Tailscale when the app asks (the same account as on the PC), then tap your PC in the list and tap Pair. The phone shows two digits. The PC asks once whether to allow the phone, in a small window on its screen that shows the same two digits: allow it only if they match. The phone then shows "Paired" with the digits until you tap Done. (While `askorus-agent pair` or `setup` is waiting in a terminal, the phone is taken without a question.)
 

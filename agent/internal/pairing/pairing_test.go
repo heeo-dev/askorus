@@ -143,7 +143,9 @@ func TestPairTimeout(t *testing.T) {
 // A token the phone never fetched does not leave a device behind.
 func TestUncollectedTokenIsRevoked(t *testing.T) {
 	p, dir := newPairer(t)
-	p.CollectTTL = 50 * time.Millisecond
+	// Long enough to see the device before it goes: at 50 ms a slow runner
+	// looked only after it had gone (macOS, 2026-11-22, 0.36 s in).
+	p.CollectTTL = time.Second
 	code, w, _ := Open(dir, time.Now())
 	answer(t, dir, w.ID, true)
 	id, _ := p.Start(code, "phone", Origin{})
@@ -157,6 +159,7 @@ func TestUncollectedTokenIsRevoked(t *testing.T) {
 	if list, _ := p.Devices.List(); len(list) != 1 {
 		t.Fatalf("device not added: %d", len(list))
 	}
+	deadline = time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
 		if list, _ := p.Devices.List(); len(list) == 0 {
 			break

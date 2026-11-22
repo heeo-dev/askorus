@@ -106,9 +106,9 @@ setup은 차례로 안내합니다. 에이전트를 PATH에 넣고, AI 프로그
 
 macOS와 Linux에서도 명령은 Windows와 같습니다. 운영체제마다 다른 점은 이렇습니다.
 
-- **Linux:** 로그인할 때 켜기는 systemd 사용자 단위입니다. 아무도 로그인하지 않는 컴퓨터에서는 `loginctl enable-linger`를 해 두면 부팅할 때 켜집니다. 폰을 허용할지 묻는 창은 `zenity`나 `kdialog`와 화면이 있어야 뜹니다. 없으면 `askorus-agent pair`를 열어 두고 짝을 맺으세요.
+- **Linux:** 로그인할 때 켜기는 systemd 사용자 단위입니다(이때 폰에서 업데이트하려면 systemd에 들어 있는 `systemd-run`이 있어야 합니다). 아무도 로그인하지 않는 컴퓨터에서는 `loginctl enable-linger`를 해 두면 부팅할 때 켜집니다. 폰을 허용할지 묻는 창은 `zenity`나 `kdialog`와 화면이 있어야 뜹니다. 없으면 `askorus-agent pair`를 열어 두고 짝을 맺으세요.
 - **macOS:** 로그인할 때 켜기는 `~/Library/LaunchAgents`의 LaunchAgent입니다. 다음 로그인부터 적용되고, 지금 바로 켜려면 `askorus-agent start`를 실행합니다. 설치 줄과 `askorus-agent start`는 SSH가 아니라 Mac 화면에서 연 터미널에서 실행하세요. Claude Code는 로그인을 키체인에 두는데, SSH에서 켠 에이전트는 그것을 읽지 못해 Claude가 로그인 안 됨으로 보입니다(`start`가 경고합니다).
-- macOS용 에이전트는 클라우드의 Mac에서 자동 점검(Go 테스트, 설치 스크립트, launchd 아래에서 켜기·끄기·로그인할 때 켜기)으로 확인했고, 사람의 Mac에서 Claude Code와 Codex로 써 봤습니다. 실제 Mac에서 로그인할 때 켜기는 아직 써 보지 못했습니다. 안 되는 것이 있으면 [이슈로 알려 주세요](https://github.com/heeo-dev/askorus/issues).
+- macOS용 에이전트는 클라우드의 Mac에서 자동 점검(Go 테스트, 설치 스크립트, launchd 아래에서 켜기·끄기·로그인할 때 켜기·업데이트)으로 확인했고, 사람의 Mac에서 Claude Code와 Codex로 써 봤습니다. 실제 Mac에서 로그인할 때 켜기는 아직 써 보지 못했습니다. 안 되는 것이 있으면 [이슈로 알려 주세요](https://github.com/heeo-dev/askorus/issues).
 
 <details>
 <summary>실행하기 전에 스크립트 읽어 보기</summary>
@@ -201,6 +201,7 @@ PC의 Claude Code나 Codex에 내 운영체제에 맞는 글을 붙여 넣으세
 - **폰에 '지금 PC에서 허용해 줄 수 있는 곳이 없습니다'라고 나오거나, PC에 창이 뜨지 않습니다.** 작은 창은 화면이 있어야 뜹니다. Linux에서는 `zenity`나 `kdialog`도 있어야 하고, 서버나 SSH 접속에는 뜨지 않습니다. PC에서 `askorus-agent pair`를 실행한 뒤 앱에서 PC를 다시 누르세요. 실행해 둔 동안에는 묻지 않고 바로 받습니다. 이미 짝 맺은 폰에서 허용해도 됩니다.
 - **모르는 폰이 짝 맺어졌거나, 터미널의 숫자가 내 폰의 숫자와 다릅니다.** `askorus-agent devices`가 짝 맺은 폰을 보여 주고, `askorus-agent devices revoke <id나 이름>`으로 끊습니다.
 - **몇 달 잘 되다가 갑자기 안 됩니다.** Tailscale 로그인은 기본으로 약 180일 뒤 끝납니다. `askorus-agent check`가 2주 전부터 알리고, 앱의 설정 > Tailscale에 끝나는 날짜가 보입니다. 다시 로그인하거나(PC는 `askorus-agent login`, 앱은 설정 > Tailscale), Tailscale 관리 화면에서 기기의 키 만료를 끄세요. 짝 맺기는 그대로 남습니다.
+- **Linux나 Mac에서 에이전트가 멈추지 않거나('30초가 지나도 에이전트가 돌고 있습니다'), 폰에서 업데이트한 뒤 꺼져 있습니다.** 0.2.0~0.6.2의 에이전트는 끌 때 멈춰 버릴 수 있고, Linux에서 systemd가 켠 에이전트는 그렇게 업데이트하면 꺼진 채 남을 수 있었습니다. 둘 다 0.6.3에서 고쳤습니다. 설치 줄을 다시 실행하세요. 멈추지 않는 에이전트(설치된 에이전트의 `serve`만)를 끝내고 업데이트합니다. 에이전트가 꺼져 있었다면 그 뒤에 `askorus-agent start`로 켜세요.
 - **Mac에서 Claude가 로그인되어 있지 않다고 하는데, 터미널에서는 `claude`가 잘 됩니다.** 에이전트를 SSH에서 켠 경우입니다(SSH에서 설치 줄을 실행한 경우 등). Claude Code는 로그인을 키체인에 두는데, SSH에서 켠 프로그램은 SSH를 끊은 뒤에도 그것을 읽지 못합니다. 다시 로그인해도 고쳐지지 않습니다. Mac 화면에서 터미널을 열고 `askorus-agent shutdown`, `askorus-agent start`를 차례로 실행하세요.
 - **새 Claude Code 세션이 시작되지 않습니다.** Claude Code는 폴더마다 한 번 신뢰할지 묻습니다. PC에서 그 폴더로 가서 `claude`를 한 번 실행하고 허용하세요.
 - **폴더 열어 두기가 '켜는 중'에 머물거나 실패합니다.** Claude Code에서 Remote Control을 한 번 켜야 합니다. PC에서 `claude remote-control`을 실행해 `y`로 답하고 Ctrl+C로 끄세요.
@@ -227,9 +228,9 @@ askorus-agent uninstall
 
 ## 안드로이드 앱 설치
 
-앱은 아직 Google Play에 없습니다. 그때까지는 릴리스마다 미리보기 APK를 같이 올립니다.
+앱은 아직 Google Play에 없습니다. 그때까지는 릴리스마다 미리보기 APK를 같이 올립니다. 에이전트만 바뀐 릴리스에는 앞 버전의 APK가 그 버전 이름 그대로 올라갑니다.
 
-1. 폰에서 [최신 릴리스](https://github.com/heeo-dev/askorus/releases/latest)를 열고 `askorus-android-<버전>.apk`를 받습니다.
+1. 폰에서 [최신 릴리스](https://github.com/heeo-dev/askorus/releases/latest)를 열고 거기 있는 `askorus-android-<버전>.apk`를 받습니다.
 2. 받은 파일을 엽니다. 안드로이드가 브라우저에서 앱을 설치해도 되는지 물으면 이번 설치에 허용합니다. Play 프로텍트가 앱을 먼저 검사하겠다고 물을 수 있습니다. 스토어 밖에서 받은 앱이면 늘 묻는 것입니다.
 3. Askorus를 열고 PC와 짝을 맺습니다. 앱이 안내하면 Tailscale에 로그인하고(PC와 같은 계정), 목록에 뜬 내 PC를 누르고 '짝 맺기'를 누릅니다. 폰에 두 자리 숫자가 보입니다. PC 화면에 작은 창이 떠서 이 폰을 허용할지 한 번 묻고 같은 숫자를 보여 줍니다. 숫자가 같을 때만 허용하세요. 그다음 폰에는 '짝을 맺었습니다'와 숫자가 '확인'을 누를 때까지 보입니다. (터미널에서 `askorus-agent pair`나 `setup`이 기다리는 동안에는 묻지 않고 바로 받습니다.)
 
