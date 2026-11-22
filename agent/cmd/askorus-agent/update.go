@@ -55,6 +55,9 @@ var (
 	updateInService   = inService
 	updateStopService = stopService
 	updateEndStuck    = endStuck // an old agent that does not stop (R-178)
+	updateWaitFree    = 10 * time.Second
+	// updateWaitTakeover bounds what update-finish may add for both.
+	updateWaitTakeover = 25 * time.Second
 	// updateReady: the agent started as pid is listening on its Tailscale
 	// node; serve writes its pid file only then (R-134). The stop event or
 	// lock that updateUp sees comes before Tailscale starts.
@@ -224,7 +227,7 @@ func updateNowCmd(dir string, cfg config.Config, out io.Writer) error {
 		// sees it gone and takes over.
 		_ = updateStop(cfg.Port)
 	}
-	p, ok := waitProgress(dir, f.Latest, started, updateWaitOld+updateWaitNew+updateSettle+15*time.Second)
+	p, ok := waitProgress(dir, f.Latest, started, updateWaitOld+updateWaitTakeover+updateWaitNew+updateSettle+15*time.Second)
 	if !ok {
 		return fail("the update did not finish in time; see %s and run askorus-agent update status", "업데이트가 제때 끝나지 않았습니다. %s를 보고 askorus-agent update status를 실행하세요", filepath.Join(dir, "logs", "update.out"))
 	}
@@ -383,14 +386,20 @@ func updateFinishCmd(dir string, args []string) error {
 		return err
 	}
 	// The old agent ends first: two would fight for the PC's Tailscale node.
-	if oldPID > 0 && !waitFor(func() bool { return !updatePID(oldPID) }, updateWaitOld) && !updateEndStuck(exe, oldPID) {
+	if oldPID > 0 && !waitFor(func() bool { return !updatePID(oldPID) }, updateWaitOld) && !updateEndStuck(exe, oldPID, service) {
 		if err := update.Restore(exe, prev, runtime.GOOS); err != nil {
 			return record(update.ProgressFailed, "the old agent did not stop, and putting it back failed: "+err.Error())
 		}
 		return record(update.ProgressRolledBack, "the old agent did not stop")
 	}
 	if service {
-		updateStopService() // or systemd may start a second agent next to the new one
+		// Or systemd may start a second agent next to the new one, when the
+		// old one ended with an error. It only queues the stop, so the new
+		// agent waits until nothing holds the port's lock (R-181).
+		if err := updateStopService(); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+		}
+		waitFor(func() bool { return !updateUp(cfg.Port) }, updateWaitFree)
 	}
 	if !start {
 		return record(update.ProgressDone, "")

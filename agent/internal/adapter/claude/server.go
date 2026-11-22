@@ -93,6 +93,7 @@ type server struct {
 	mu        sync.Mutex
 	st        core.ServeStatus
 	proc      serverProcess
+	run       int // which run's screen counts (R-180)
 	untrusted bool
 	noConsent bool // Claude Code asked whether to turn Remote Control on
 	lines     []string
@@ -265,6 +266,9 @@ func (ss *servers) runOnce(s *server) error {
 	if err := checkArgs(args); err != nil {
 		return err
 	}
+	if stopAsked(s.stop) {
+		return nil
+	}
 	p, err := ss.start(exe, s.folder, args)
 	if err != nil {
 		return err
@@ -272,11 +276,19 @@ func (ss *servers) runOnce(s *server) error {
 	s.mu.Lock()
 	s.proc = p
 	s.lines = nil
+	s.run++
+	run := s.run
 	s.mu.Unlock()
+	ended := make(chan struct{})
+	defer close(ended)
+	// The stop may have come, and given up waiting, while this was starting.
+	if stopAsked(s.stop) {
+		go stopLate(p, ended)
+	}
 	read := make(chan struct{})
 	go func() {
 		defer close(read)
-		s.readScreen(p.Output())
+		s.readScreen(p.Output(), run)
 	}()
 	err = p.Wait()
 	p.Close() // ends the output stream
@@ -285,6 +297,11 @@ func (ss *servers) runOnce(s *server) error {
 	select {
 	case <-read:
 	case <-t.C:
+		// The reader is left behind: what it still reads is no longer this
+		// server's screen.
+		s.mu.Lock()
+		s.run++
+		s.mu.Unlock()
 	}
 	s.mu.Lock()
 	s.proc = nil
@@ -292,9 +309,28 @@ func (ss *servers) runOnce(s *server) error {
 	return err
 }
 
+func stopAsked(stop <-chan struct{}) bool {
+	select {
+	case <-stop:
+		return true
+	default:
+		return false
+	}
+}
+
+// stopLate stops a server that started after its stop was asked for (R-180).
+func stopLate(p serverProcess, ended <-chan struct{}) {
+	_ = p.Interrupt()
+	select {
+	case <-ended:
+	case <-time.After(serverStopWait):
+		_ = p.Kill()
+	}
+}
+
 // readScreen picks the few facts the agent needs out of the server's
 // screen and drops the rest.
-func (s *server) readScreen(r io.Reader) {
+func (s *server) readScreen(r io.Reader, run int) {
 	br := bufio.NewReaderSize(r, 32<<10)
 	buf := make([]byte, 8<<10)
 	pending := ""
@@ -307,7 +343,7 @@ func (s *server) readScreen(r io.Reader) {
 				if i < 0 {
 					break
 				}
-				s.screenLine(strings.TrimSpace(pending[:i]))
+				s.screenLine(strings.TrimSpace(pending[:i]), run)
 				pending = pending[i+1:]
 			}
 			if len(pending) > 4096 {
@@ -315,25 +351,28 @@ func (s *server) readScreen(r io.Reader) {
 			}
 			// A prompt waits for an answer on the same line.
 			if p := strings.TrimSpace(pending); trustPromptRe.MatchString(p) || consentPromptRe.MatchString(p) {
-				s.screenLine(p)
+				s.screenLine(p, run)
 				pending = ""
 			}
 		}
 		if err != nil {
 			if pending != "" {
-				s.screenLine(strings.TrimSpace(pending))
+				s.screenLine(strings.TrimSpace(pending), run)
 			}
 			return
 		}
 	}
 }
 
-func (s *server) screenLine(line string) {
+func (s *server) screenLine(line string, run int) {
 	if line == "" {
 		return
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if run != s.run {
+		return // the screen of a run that is over (R-180)
+	}
 	if len(s.lines) == 0 || s.lines[len(s.lines)-1] != line {
 		s.lines = append(s.lines, line)
 		if len(s.lines) > keepLines {

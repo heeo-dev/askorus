@@ -11,7 +11,7 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"os"
 	"os/exec"
 	"slices"
@@ -19,6 +19,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"golang.org/x/sys/unix"
 
 	"github.com/heeo-dev/askorus/agent/internal/update"
 )
@@ -78,19 +80,32 @@ func leaveService() error {
 	if err != nil {
 		return err
 	}
-	args := append([]string{"systemd-run", "--user", "--scope", "--quiet", "--collect", "--", exe}, os.Args[1:]...)
-	return syscall.Exec(run, args, append(os.Environ(), scopedEnv+"=1"))
+	return syscall.Exec(run, scopeArgs(exe, os.Args[1:]), append(os.Environ(), scopedEnv+"=1"))
+}
+
+// scopeArgs are systemd-run's arguments. Newer systemd-run (258) replaces
+// ${NAME} in a scope's command, so with a "$" in it that is turned off
+// (R-181). The option came with 254: an older one refuses it, and then
+// nothing is taken over.
+func scopeArgs(exe string, args []string) []string {
+	out := []string{"systemd-run", "--user", "--scope", "--quiet", "--collect"}
+	command := append([]string{exe}, args...)
+	if slices.ContainsFunc(command, func(s string) bool { return strings.Contains(s, "$") }) {
+		out = append(out, "--expand-environment=no")
+	}
+	return append(append(out, "--"), command...)
 }
 
 // stopService stops the unit the old agent ran in, so systemd does not
 // start a second agent when the old one ended with an error or was ended.
-func stopService() {
+func stopService() error {
 	ctx, cancel := context.WithTimeout(context.Background(), serviceStopWait)
 	defer cancel()
 	out, err := exec.CommandContext(ctx, "systemctl", "--user", "stop", "--no-block", unitName).CombinedOutput()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "systemctl --user stop %s: %s\n", unitName, unitErrLine(string(out), err))
+		return fail("systemctl --user stop %s did not work (%s)", "systemctl --user stop %s이 되지 않았습니다 (%s)", unitName, unitErrLine(string(out), err))
 	}
+	return nil
 }
 
 // installedServe reports whether pid is a serve of the program installed
@@ -112,12 +127,69 @@ func installedServe(exe string, pid int) bool {
 	return len(args) > 1 && args[1] == "serve"
 }
 
-func isZombie(pid int) bool {
+// procStat is the state letter and the start time (field 22) of a process.
+func procStat(pid int) (state byte, started string, ok bool) {
 	b, err := os.ReadFile(procFile(pid, "stat"))
 	if err != nil {
-		return false
+		return 0, "", false
 	}
 	// "<pid> (<name>) <state> ...": the name may hold brackets and spaces.
 	i := strings.LastIndexByte(string(b), ')')
-	return i >= 0 && i+2 < len(b) && b[i+2] == 'Z'
+	if i < 0 {
+		return 0, "", false
+	}
+	f := strings.Fields(string(b[i+1:]))
+	if len(f) < 20 {
+		return 0, "", false
+	}
+	return f[0][0], f[19], true
+}
+
+func isZombie(pid int) bool {
+	state, _, ok := procStat(pid)
+	return ok && state == 'Z'
+}
+
+// heldProcessID is a process held for a signal: by a pidfd, or by its
+// start time where the kernel has no pidfd (before 5.3).
+type heldProcessID struct {
+	pid, fd int
+	started string
+}
+
+func holdProcess(pid int) (*heldProcessID, error) {
+	fd, err := unix.PidfdOpen(pid, 0)
+	if errors.Is(err, unix.ESRCH) {
+		return nil, err
+	}
+	if err != nil {
+		fd = -1
+	}
+	_, started, ok := procStat(pid)
+	if !ok {
+		if fd >= 0 {
+			unix.Close(fd)
+		}
+		return nil, unix.ESRCH
+	}
+	return &heldProcessID{pid: pid, fd: fd, started: started}, nil
+}
+
+func (h *heldProcessID) kill() error {
+	if h.fd >= 0 {
+		err := unix.PidfdSendSignal(h.fd, unix.SIGKILL, nil, 0)
+		if !errors.Is(err, unix.ENOSYS) {
+			return err
+		}
+	}
+	if _, started, ok := procStat(h.pid); !ok || started != h.started {
+		return unix.ESRCH // it ended, and the pid may be someone else's
+	}
+	return unix.Kill(h.pid, unix.SIGKILL)
+}
+
+func (h *heldProcessID) release() {
+	if h.fd >= 0 {
+		unix.Close(h.fd)
+	}
 }

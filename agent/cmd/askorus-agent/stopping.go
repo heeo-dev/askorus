@@ -64,6 +64,27 @@ func (b *stopBound) beginWhenAsked(ctx context.Context, stop, handedOver <-chan 
 	}()
 }
 
+// tidyWait is how long endProcess waits for the tidying.
+const tidyWait = time.Second
+
+// endProcess ends the process after tidy, and without it when tidy does
+// not return (R-181): a log whose reader is stuck, a file system that does
+// not answer.
+func endProcess(code int, tidy func(), exit func(int)) {
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		tidy()
+	}()
+	t := time.NewTimer(tidyWait)
+	defer t.Stop()
+	select {
+	case <-done:
+	case <-t.C:
+	}
+	exit(code)
+}
+
 // stopHTTP lets requests in flight finish for wait and cuts off the rest.
 // A request that is cut off is no failure of the stop.
 func stopHTTP(srv *http.Server, wait time.Duration, logger *slog.Logger) {

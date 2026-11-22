@@ -3,6 +3,7 @@
 package main
 
 import (
+	"errors"
 	"io"
 	"os"
 	"os/exec"
@@ -91,7 +92,7 @@ func TestEndStuckEndsOnlyTheInstalledServe(t *testing.T) {
 				defer os.Remove(exe + ".prev")
 			}
 			time.Sleep(200 * time.Millisecond)
-			if got := endStuck(exe, cmd.Process.Pid); got != c.ended {
+			if got := endStuck(exe, cmd.Process.Pid, false); got != c.ended {
 				t.Errorf("endStuck = %v, want %v", got, c.ended)
 			}
 			if running := processRunning(cmd.Process.Pid); running == c.ended {
@@ -101,8 +102,52 @@ func TestEndStuckEndsOnlyTheInstalledServe(t *testing.T) {
 	}
 
 	for _, pid := range []int{-1, 0, 1, os.Getpid()} {
-		if endStuck(exe, pid) {
+		if endStuck(exe, pid, false) {
 			t.Errorf("endStuck(%d) = true", pid)
 		}
+	}
+}
+
+// R-181: when the unit cannot be stopped nothing is ended, or systemd
+// would start it again next to the new agent.
+func TestEndStuckLeavesAnAgentWhoseServiceCannotBeStopped(t *testing.T) {
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	exe := filepath.Join(root, "askorus-agent")
+	copyOfTests(t, exe)
+	cmd := exec.Command(exe, "serve")
+	cmd.Env = append(os.Environ(), pretendAgentEnv+"=1")
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer cmd.Wait()
+	defer cmd.Process.Kill()
+	saved := updateStopService
+	t.Cleanup(func() { updateStopService = saved })
+	updateStopService = func() error { return errors.New("no bus") }
+	time.Sleep(200 * time.Millisecond)
+	if endStuck(exe, cmd.Process.Pid, true) || !processRunning(cmd.Process.Pid) {
+		t.Error("the agent was ended")
+	}
+}
+
+// R-179: a held process that ended is never signalled again by its pid.
+func TestHeldProcessThatEndedIsNotSignalled(t *testing.T) {
+	cmd := exec.Command("/bin/sh", "-c", "sleep 30")
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	h, err := holdProcess(cmd.Process.Pid)
+	if err != nil {
+		cmd.Process.Kill()
+		t.Fatal(err)
+	}
+	defer h.release()
+	cmd.Process.Kill()
+	cmd.Wait() // collected: from now the pid may be another process's
+	if err := h.kill(); err == nil {
+		t.Error("a signal went out to a pid whose process had ended")
 	}
 }

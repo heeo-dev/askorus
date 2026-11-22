@@ -4,6 +4,7 @@ package main
 
 import (
 	"os"
+	"slices"
 	"testing"
 )
 
@@ -37,5 +38,20 @@ func TestLeaveServiceTakesItsMarkAway(t *testing.T) {
 	}
 	if v, ok := os.LookupEnv(scopedEnv); ok {
 		t.Errorf("%s=%q is left", scopedEnv, v)
+	}
+}
+
+// R-181: a "$" in the path is never replaced by systemd-run.
+func TestScopeArgs(t *testing.T) {
+	args := []string{updateFinishArg, "123", "0.6.2", "0.6.3", "1"}
+	plain := scopeArgs("/home/a b/.local/bin/askorus-agent", args)
+	want := append([]string{"systemd-run", "--user", "--scope", "--quiet", "--collect", "--", "/home/a b/.local/bin/askorus-agent"}, args...)
+	if !slices.Equal(plain, want) {
+		t.Errorf("scopeArgs = %q", plain)
+	}
+	odd := scopeArgs("/home/${USER}/askorus-agent", args)
+	i, j := slices.Index(odd, "--expand-environment=no"), slices.Index(odd, "--")
+	if i < 0 || i > j || odd[j+1] != "/home/${USER}/askorus-agent" {
+		t.Errorf("scopeArgs with a $ = %q", odd)
 	}
 }

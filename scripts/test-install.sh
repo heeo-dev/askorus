@@ -133,6 +133,12 @@ chmod 755 "$work/second/bin/askorus-agent"
 printf '{"port": %d}\n' "$((port + 1000))" > "$work/second/agent/agent.json"
 second() { ASKORUS_AGENT_DIR="$work/second/agent" "$work/second/bin/askorus-agent" "$@"; }
 second start > /dev/null 2>&1
+# And a third that runs from the very same program, with settings and a port
+# of its own (R-179: that one was ended too).
+mkdir -p "$work/third"
+printf '{"port": %d}\n' "$((port + 2000))" > "$work/third/agent.json"
+ASKORUS_AGENT_DIR="$work/third" "$exe" start > /dev/null 2>&1
+third_pid="$(cat "$work/third/agent.pid" 2>/dev/null)"
 "$exe" start > /dev/null 2>&1
 running "$exe"; check 'the test agent runs' $? ''
 pid="$(cat "$ASKORUS_AGENT_DIR/agent.pid" 2>/dev/null)"
@@ -145,12 +151,14 @@ if [ -n "$pid" ] && kill -STOP "$pid"; then
   running "$exe" && [ "$(cat "$ASKORUS_AGENT_DIR/agent.pid" 2>/dev/null)" != "$pid" ]; check 'a new agent runs' $? "$out"
   ! kill -0 "$pid" 2>/dev/null; check 'the stuck one is gone' $?
   [ -n "$second_pid" ] && kill -0 "$second_pid" 2>/dev/null; check 'the agent installed elsewhere still runs' $?
+  [ -n "$third_pid" ] && kill -0 "$third_pid" 2>/dev/null; check 'the agent of other settings from the same program still runs' $?
   kill -CONT "$pid" 2>/dev/null
 else
   check 'the test agent can be paused' 1
 fi
 "$exe" shutdown > /dev/null 2>&1
 second shutdown > /dev/null 2>&1
+ASKORUS_AGENT_DIR="$work/third" "$exe" shutdown > /dev/null 2>&1
 
 export PATH="$real_path"
 if [ "$keep" = 1 ]; then echo "kept: $work"; else rm -rf "$work"; fi

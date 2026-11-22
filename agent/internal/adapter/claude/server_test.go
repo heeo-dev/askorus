@@ -239,7 +239,7 @@ func TestReadScreen(t *testing.T) {
 		"    Capacity: 1/2 · New sessions will be created in the current directory\r\n" +
 		"    \x1b]8;;https://claude.ai/code/session_01FakeServeProtoSession00?from=cli\x1b\\asksemble-serve-proto\x1b]8;;\x1b\\\r\n"
 	s := &server{st: core.ServeStatus{State: core.ServeStarting}}
-	s.readScreen(strings.NewReader(screen))
+	s.readScreen(strings.NewReader(screen), 0)
 	if s.st.State != core.ServeRunning || s.st.EnvironmentID != "env_01SisCPLgc4jz4sYqJQU9Yxs" || s.st.Sessions != 1 || s.st.Capacity != 2 {
 		t.Errorf("status = %+v", s.st)
 	}
@@ -288,9 +288,9 @@ func TestServerSessionsAreMarked(t *testing.T) {
 func TestTrustPromptRecognised(t *testing.T) {
 	p := newMemProc(true)
 	s := &server{st: core.ServeStatus{State: core.ServeStarting}, proc: p}
-	s.readScreen(strings.NewReader("Remote Control starts Claude Code sessions in this folder, driven from your other devices:\r\n" +
-		"Quick safety check: is this a project you created or one you trust? Sessions started here can read\r\n" +
-		`Trust C:\work\new? [y/N] ` + "\r\n"))
+	s.readScreen(strings.NewReader("Remote Control starts Claude Code sessions in this folder, driven from your other devices:\r\n"+
+		"Quick safety check: is this a project you created or one you trust? Sessions started here can read\r\n"+
+		`Trust C:\work\new? [y/N] `+"\r\n"), 0)
 	if !s.untrusted {
 		t.Error("trust prompt not recognised")
 	}

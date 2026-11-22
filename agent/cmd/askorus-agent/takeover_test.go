@@ -4,7 +4,9 @@ import (
 	"errors"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/heeo-dev/askorus/agent/internal/update"
 )
@@ -23,23 +25,24 @@ func TestUpdateEndsAnOldAgentThatDoesNotStop(t *testing.T) {
 		}
 		return pid == 111
 	}
-	updateEndStuck = func(exe string, pid int) bool {
+	updateEndStuck = func(exe string, pid int, service bool) bool {
 		order = append(order, "end")
-		if exe != p.exe || pid != 111 {
-			t.Errorf("endStuck(%q, %d)", exe, pid)
+		if exe != p.exe || pid != 111 || !service {
+			t.Errorf("endStuck(%q, %d, %v)", exe, pid, service)
 		}
 		p.mu.Lock()
 		defer p.mu.Unlock()
 		p.alive[pid], p.up = false, false
 		return true
 	}
-	updateStopService = func() {
+	updateStopService = func() error {
 		order = append(order, "service")
 		p.mu.Lock()
 		defer p.mu.Unlock()
 		if len(p.launches) != 1 {
 			t.Errorf("the service was stopped after the new agent started: %q", p.launches)
 		}
+		return nil
 	}
 	out, err := p.run("now")
 	if err != nil {
@@ -61,8 +64,8 @@ func TestUpdateGoesBackWhenTheOldAgentCannotBeEnded(t *testing.T) {
 	p.running()
 	updateStop = func(int) error { return nil }
 	updateInService = func(int) bool { return true }
-	updateEndStuck = func(string, int) bool { return false }
-	updateStopService = func() { t.Error("the service of an agent that goes on was stopped") }
+	updateEndStuck = func(string, int, bool) bool { return false }
+	updateStopService = func() error { t.Error("the service of an agent that goes on was stopped"); return nil }
 	if _, err := p.run("now"); err == nil {
 		t.Fatal("now took the update")
 	}
@@ -100,8 +103,45 @@ func TestUpdateThatCannotLeaveTheServiceChangesNothing(t *testing.T) {
 func TestUpdateLeavesAnAgentThatStopsAlone(t *testing.T) {
 	p := newUpdatePC(t)
 	p.running()
-	updateEndStuck = func(string, int) bool { t.Error("an agent that stops was ended"); return false }
-	updateStopService = func() { t.Error("a service was stopped where there is none") }
+	updateEndStuck = func(string, int, bool) bool { t.Error("an agent that stops was ended"); return false }
+	updateStopService = func() error { t.Error("a service was stopped where there is none"); return nil }
+	if out, err := p.run("now"); err != nil {
+		t.Fatalf("now: %v\n%s", err, out)
+	}
+	<-p.done
+}
+
+// R-181: the unit's stop is only queued, so the new agent waits until the
+// port's lock is free. Started before that it would say "already runs" and
+// the update would go back.
+func TestUpdateWaitsUntilTheServiceLetsTheLockGo(t *testing.T) {
+	p := newUpdatePC(t)
+	p.running()
+	updateWaitFree = 2 * time.Second
+	updateStop = func(int) error {
+		p.mu.Lock()
+		defer p.mu.Unlock()
+		p.alive[111] = false // ended; the unit's restarted serve holds the lock
+		return nil
+	}
+	updateInService = func(int) bool { return true }
+	var freed atomic.Bool
+	updateStopService = func() error {
+		time.AfterFunc(200*time.Millisecond, func() {
+			p.mu.Lock()
+			p.up = false
+			p.mu.Unlock()
+			freed.Store(true)
+		})
+		return nil
+	}
+	launch := updateLaunch
+	updateLaunch = func(exe string, args []string, dir, log string) (int, error) {
+		if args[0] == "serve" && !freed.Load() {
+			t.Error("the new agent was started while the lock was held")
+		}
+		return launch(exe, args, dir, log)
+	}
 	if out, err := p.run("now"); err != nil {
 		t.Fatalf("now: %v\n%s", err, out)
 	}

@@ -138,3 +138,45 @@ func TestServerStopWhileStarting(t *testing.T) {
 		t.Error("the server that was starting was not stopped")
 	}
 }
+
+// R-180 (the 0.6.3 review): a server whose start outlasts the stop's wait
+// is stopped as soon as it has started.
+func TestServerThatStartsAfterTheStopIsStopped(t *testing.T) {
+	if testing.Short() {
+		t.Skip("waits out serverStopWait")
+	}
+	p := newHeldProcess(true, true)
+	defer p.release()
+	starting := make(chan struct{})
+	ss := serversOf(func(string, string, []string) (serverProcess, error) {
+		close(starting)
+		time.Sleep(serverStopWait + time.Second)
+		return p, nil
+	})
+	if err := ss.StartServer(t.TempDir(), core.ServeOptions{Spawn: "same-dir", Capacity: 1}); err != nil {
+		t.Fatal(err)
+	}
+	<-starting
+	stopsWithin(t, ss, serverStopWait+2*time.Second)
+	for deadline := time.Now().Add(3 * time.Second); !p.wasInterrupted(); time.Sleep(20 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatal("the server that started after the stop runs on")
+		}
+	}
+}
+
+// R-180: what is still read from the screen of a run that is over changes
+// nothing: not the next server's trust, and no Ctrl+C reaches that server.
+func TestScreenOfAnEarlierRunChangesNothing(t *testing.T) {
+	next := newHeldProcess(false, true)
+	defer next.release()
+	s := &server{run: 2, proc: next}
+	s.screenLine("Trust /some/folder? [y/N]", 1)
+	if s.untrusted || len(s.lines) != 0 || next.wasInterrupted() {
+		t.Errorf("an earlier run's line was taken: untrusted=%v lines=%q", s.untrusted, s.lines)
+	}
+	s.screenLine("Trust /some/folder? [y/N]", 2)
+	if !s.untrusted {
+		t.Error("this run's line was not taken")
+	}
+}

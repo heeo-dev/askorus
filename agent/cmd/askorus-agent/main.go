@@ -209,6 +209,8 @@ func run(args []string, in io.Reader, out io.Writer) error {
 		return updateCmd(dir, args[1:], out)
 	case updateFinishArg:
 		return updateFinishCmd(dir, args[1:])
+	case "end-stuck": // install.sh's (R-178), not a command for people
+		return endStuckCmd(dir, args[1:], out)
 	}
 	return fail("unknown command %q (try: askorus-agent help)", "모르는 명령 %q입니다 (askorus-agent help로 확인하세요)", args[0])
 }
@@ -377,10 +379,11 @@ func serve(dir string, args []string) error {
 	// However a stop goes, the process ends (R-174). Registered before the
 	// node and the stores, so that their Close is inside the limit too.
 	bound := &stopBound{limit: stopLimit, end: func(code int) {
-		logger.Error("stopping took too long; ending now")
-		os.Remove(filepath.Join(dir, pidFile))
-		os.Remove(filepath.Join(dir, nodeFile))
-		os.Exit(code)
+		endProcess(code, func() {
+			os.Remove(filepath.Join(dir, pidFile))
+			os.Remove(filepath.Join(dir, nodeFile))
+			logger.Error("stopping took too long; ending now")
+		}, os.Exit)
 	}}
 	defer bound.finish()
 	bound.beginWhenAsked(ctx, stopReq, handedOver)

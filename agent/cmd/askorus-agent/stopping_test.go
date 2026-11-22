@@ -127,3 +127,18 @@ func TestStartedByService(t *testing.T) {
 		}
 	}
 }
+
+// R-181: the limit holds although tidying up (the log, the files) hangs.
+func TestEndProcessDoesNotWaitForAStuckLog(t *testing.T) {
+	stuck := make(chan struct{})
+	defer close(stuck)
+	exited := make(chan int, 1)
+	began := time.Now()
+	endProcess(1, func() { <-stuck }, func(code int) { exited <- code })
+	if code := <-exited; code != 1 || time.Since(began) > tidyWait+time.Second {
+		t.Errorf("exit code %d after %v", code, time.Since(began))
+	}
+	if stopLimit+tidyWait >= 30*time.Second {
+		t.Error("the limit and the tidying are not inside shutdown's 30 seconds")
+	}
+}

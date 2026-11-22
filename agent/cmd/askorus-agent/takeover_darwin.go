@@ -18,7 +18,32 @@ import (
 
 func leaveService() error { return nil }
 func inService(int) bool  { return false }
-func stopService()        {}
+func stopService() error  { return nil }
+
+// heldProcessID is a process held for a signal by its start time: macOS
+// has no pidfd.
+type heldProcessID struct {
+	pid     int
+	started unix.Timeval
+}
+
+func holdProcess(pid int) (*heldProcessID, error) {
+	k, err := unix.SysctlKinfoProc("kern.proc.pid", pid)
+	if err != nil {
+		return nil, err
+	}
+	return &heldProcessID{pid: pid, started: k.Proc.P_starttime}, nil
+}
+
+func (h *heldProcessID) kill() error {
+	k, err := unix.SysctlKinfoProc("kern.proc.pid", h.pid)
+	if err != nil || k.Proc.P_starttime != h.started {
+		return unix.ESRCH // it ended, and the pid may be someone else's
+	}
+	return unix.Kill(h.pid, unix.SIGKILL)
+}
+
+func (h *heldProcessID) release() {}
 
 // szomb is SZOMB of <sys/proc.h>.
 const szomb = 5
