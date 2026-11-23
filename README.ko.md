@@ -145,8 +145,7 @@ PC의 Claude Code나 Codex에 내 운영체제에 맞는 글을 붙여 넣으세
    irm https://github.com/heeo-dev/askorus/releases/latest/download/install.ps1 -OutFile install.ps1
    ASKORUS_로 시작하는 환경 변수가 이미 있으면 먼저 알려 줘.
 2. 내가 좋다고 하면, 다시 받지 말고 1에서 읽은 바로 그 파일을 관리자 권한이 아닌 보통 PowerShell에서 setup 단계 없이 실행해 줘:
-   $env:ASKORUS_NO_SETUP='1'; powershell -ExecutionPolicy Bypass -File .\install.ps1
-   끝나면 ASKORUS_NO_SETUP을 원래대로 되돌려 줘(없었으면 지우기).
+   powershell -ExecutionPolicy Bypass -File .\install.ps1 -NoSetup
 3. 그다음 명령은 모두 설치된 파일의 전체 경로로 실행해 줘:
    & "$env:LOCALAPPDATA\Programs\Askorus\askorus-agent.exe" <명령>
    "path on", "check" 순서로 실행하고, [X]와 [!] 줄마다 무슨 뜻인지와 내가 할 일을 쉬운 말로, [i] 줄 중 내가 직접 할 일(Remote Control 동의, 폴더 신뢰)도 알려 줘.

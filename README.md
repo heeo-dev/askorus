@@ -145,8 +145,7 @@ Help me install the Askorus PC agent (https://github.com/heeo-dev/askorus) on th
    irm https://github.com/heeo-dev/askorus/releases/latest/download/install.ps1 -OutFile install.ps1
    If any environment variable starting with ASKORUS_ is already set, tell me first.
 2. When I say yes, run that very file you read (do not download it again) in a normal PowerShell (not as administrator), without its setup step:
-   $env:ASKORUS_NO_SETUP='1'; powershell -ExecutionPolicy Bypass -File .\install.ps1
-   Afterwards, put ASKORUS_NO_SETUP back as it was (remove it if it was not set).
+   powershell -ExecutionPolicy Bypass -File .\install.ps1 -NoSetup
 3. From here on, run every command with the full path of the installed file:
    & "$env:LOCALAPPDATA\Programs\Askorus\askorus-agent.exe" <command>
    Run "path on", then "check". Explain each [X] and [!] line in plain words with what I should do, and the [i] lines that are mine to do (Remote Control consent, trusting a folder).

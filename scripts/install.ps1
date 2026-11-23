@@ -21,12 +21,16 @@
 # Optional settings, as environment variables:
 #   ASKORUS_VERSION        a release such as 0.2.0 instead of the latest
 #   ASKORUS_INSTALL_DIR    another folder instead of %LOCALAPPDATA%\Programs\Askorus
-#   ASKORUS_NO_SETUP=1     only install or update, do not run setup
+#   ASKORUS_NO_SETUP=1     only install or update, do not run setup (as -NoSetup)
 #   ASKORUS_DOWNLOAD_BASE  where the release files are (an https address or a folder; for tests)
+# Run from a file it also takes -NoSetup, which an environment variable lost
+# on the way through another shell cannot turn off (#48):
+#   powershell -ExecutionPolicy Bypass -File .\install.ps1 -NoSetup
 #
 # The file is ASCII only, because `irm | iex` in Windows PowerShell 5.1 can garble
 # other letters. The agent itself speaks Korean and English. Through iex a failure
 # sets $LASTEXITCODE to 1; with -File it is the exit code.
+param([switch]$NoSetup)
 
 & {
     Set-StrictMode -Version 2
@@ -34,6 +38,7 @@
     $ProgressPreference = 'SilentlyContinue' # the progress bar makes downloads in 5.1 very slow
     $fromFile = [bool]$PSCommandPath         # run with -File (exit codes work) or through iex
     $asset = 'askorus-agent-windows-amd64.exe'
+    $skipSetup = $NoSetup -or $env:ASKORUS_NO_SETUP -eq '1'
 
     function Say([string]$text) { Write-Host "askorus: $text" }
 
@@ -72,9 +77,16 @@
             [Net.ServicePointManager]::SecurityProtocol = $tls -bor [Net.SecurityProtocolType]::Tls12
         }
 
+        # Only a version goes into the address (#48), the way release.ps1 names
+        # them: ASCII digits, one line (\A, \z; \d and $ would let more in).
+        if ($env:ASKORUS_VERSION -and $env:ASKORUS_VERSION -cnotmatch '\Av?[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?\z') {
+            throw "ASKORUS_VERSION must be a version such as 0.6.3, not '$($env:ASKORUS_VERSION)'; nothing was installed."
+        }
         $base = $env:ASKORUS_DOWNLOAD_BASE
         $from = "$base (ASKORUS_DOWNLOAD_BASE)"
-        if (-not $base) {
+        if ($base) {
+            Write-Host "askorus: ASKORUS_DOWNLOAD_BASE is set: the files come from $base, not from the GitHub release, and are checked only against the SHA256SUMS.txt there. Use it only for tests." -ForegroundColor Yellow
+        } else {
             $base = 'https://github.com/heeo-dev/askorus/releases/latest/download'
             if ($env:ASKORUS_VERSION) { $base = 'https://github.com/heeo-dev/askorus/releases/download/v' + $env:ASKORUS_VERSION.TrimStart('v') }
             $from = $base
@@ -115,7 +127,7 @@
             Move-Item -LiteralPath $new -Destination $exe
             $new = $null
             Say "installed $said in $dir"
-            if ($env:ASKORUS_NO_SETUP -eq '1') {
+            if ($skipSetup) {
                 Say "next, run: & '$exe' setup"
                 return
             }
@@ -158,7 +170,7 @@
             if ($LASTEXITCODE -ne 0) { throw 'The new agent did not start (see above); the old one is askorus-agent.prev.exe in the same folder.' }
         }
         # A setup that finished set the logon entry; without it, setup stopped early.
-        if ($env:ASKORUS_NO_SETUP -ne '1' -and @(& $exe autostart status)[0] -eq 'off') {
+        if (-not $skipSetup -and @(& $exe autostart status)[0] -eq 'off') {
             Say 'setup did not finish before; running it again'
             Invoke-Setup $exe
         }

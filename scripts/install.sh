@@ -30,6 +30,10 @@ set -eu
 
 say() { printf 'askorus: %s\n' "$*"; }
 die() { printf 'askorus: %s\n' "$*" >&2; exit 1; }
+version_ok() {
+  case "$1" in *[!0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.-]*) return 1 ;; esac
+  printf '%s\n' "$1" | LC_ALL=C grep -Eqx 'v?[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?'
+}
 
 main() {
   tmp=''
@@ -52,9 +56,17 @@ main() {
   fi
   asset="askorus-agent-$os-$arch"
 
+  # Only a version goes into the address (#48), the way release.ps1 names
+  # them: the letters spelled out (no locale ranges) and no line end, which
+  # grep alone would let through on another line.
+  if [ -n "${ASKORUS_VERSION:-}" ] && ! version_ok "$ASKORUS_VERSION"; then
+    die "ASKORUS_VERSION must be a version such as 0.6.3, not '$ASKORUS_VERSION'; nothing was installed."
+  fi
   base="${ASKORUS_DOWNLOAD_BASE:-}"
   from="$base (ASKORUS_DOWNLOAD_BASE)"
-  if [ -z "$base" ]; then
+  if [ -n "$base" ]; then
+    say "ASKORUS_DOWNLOAD_BASE is set: the files come from $base, not from the GitHub release, and are checked only against the SHA256SUMS.txt there. Use it only for tests."
+  else
     base='https://github.com/heeo-dev/askorus/releases/latest/download'
     if [ -n "${ASKORUS_VERSION:-}" ]; then
       base="https://github.com/heeo-dev/askorus/releases/download/v${ASKORUS_VERSION#v}"

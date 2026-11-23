@@ -77,6 +77,7 @@ check 'exit code 0' "$code" "$out"
 [ ! -e "$dir/askorus-agent.new" ]; check 'no askorus-agent.new is left' $?
 [ "$("$exe" version 2>/dev/null)" = 'askorus-agent 0.0.1-test' ]; check 'it is the released version' $? "$out"
 has "$out" 'the SHA-256 matches' && has "$out" 'installed askorus-agent 0\.0\.1-test' && has "$out" 'setup'; check 'it says what it did and what is next' $? "$out"
+has "$out" 'ASKORUS_DOWNLOAD_BASE is set: the files come from'; check 'it says the files do not come from the GitHub release (#48)' $? "$out"
 [ "$(left)" = 0 ]; check 'no temp folder is left' $?
 
 echo '== through a pipe, as curl | sh runs it'
@@ -105,6 +106,14 @@ install "$work/nowhere" "$work/otherdir"
 echo '== an address that is not https'
 install 'http://example.invalid/releases' "$work/httpdir"
 [ "$code" = 1 ] && has "$out" 'https address or a folder'; check 'refused' $? "$out"
+
+echo '== a version that is not one (#48)'
+# The last three: a second line, a line end, and Arabic-Indic digits (UTF-8 bytes).
+for v in '0.2.0/../../x' '0.6.3 x' 'latest' '0.6.3-' "$(printf '0.6.3\nx')" "$(printf '0.6.3\r')" "$(printf '\331\240.\331\246.\331\243')"; do
+  out="$(ASKORUS_VERSION="$v" ASKORUS_INSTALL_DIR="$work/verdir" sh "$root/scripts/install.sh" 2>&1)"; code=$?
+  [ "$code" = 1 ] && has "$out" 'must be a version such as' && ! has "$out" 'downloading' && [ ! -e "$work/verdir/askorus-agent" ]
+  check "refused before anything is fetched: '$(printf '%s' "$v" | od -An -c | tr -s ' ')'" $? "$out"
+done
 
 echo '== an update while the agent runs'
 out="$("$exe" start 2>&1)"
