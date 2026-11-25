@@ -341,7 +341,14 @@ func (a *Adapter) Ask(ctx context.Context, req core.AskRequest) (core.AskResult,
 	res, err := proc.Run(ctx, proc.Cmd{Exe: a.runner.Path(), Dir: req.Folder, Args: args, Stdin: stdin})
 	switch {
 	case errors.Is(err, proc.ErrTimeout):
-		return core.AskResult{}, core.Fail(core.ErrCodeAskTimeout, "")
+		// The conversation stays, so a follow-up carries on from what claude
+		// found so far instead of starting over (R-186: a killed ask resumed
+		// in the same conversation and answered, 2026-11-25).
+		out := core.AskResult{}
+		if !req.OneOff {
+			out.SessionID = startedSession(res.Stdout)
+		}
+		return out, core.Fail(core.ErrCodeAskTimeout, "")
 	case errors.Is(err, fs.ErrNotExist), errors.Is(err, proc.ErrScript):
 		return core.AskResult{}, core.Fail(core.ErrCodeAgentUnavailable, "claude was not found")
 	case err != nil:
@@ -357,6 +364,29 @@ func (a *Adapter) Ask(ctx context.Context, req core.AskRequest) (core.AskResult,
 		err = a.withSignInHint(err)
 	}
 	return out, err
+}
+
+// startedSession is the conversation id of the init event at the start of
+// an ask's event stream, "" when there is none or it is no UUID.
+func startedSession(stdout []byte) string {
+	for _, line := range bytes.Split(stdout, []byte("\n")) {
+		line = bytes.TrimSpace(line)
+		var ev struct {
+			Type      string `json:"type"`
+			Subtype   string `json:"subtype"`
+			SessionID string `json:"session_id"`
+		}
+		if len(line) == 0 || line[0] != '{' || json.Unmarshal(line, &ev) != nil {
+			continue
+		}
+		if ev.Type == "system" && ev.Subtype == "init" {
+			if ValidUUID(ev.SessionID) {
+				return ev.SessionID
+			}
+			return ""
+		}
+	}
+	return ""
 }
 
 func parseAskOutput(res proc.Result, asked string) (core.AskResult, error) {

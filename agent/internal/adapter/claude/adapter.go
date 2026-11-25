@@ -5,6 +5,7 @@ package claude
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -63,20 +64,20 @@ type Adapter struct {
 	runnerErr   error
 	transcripts *Transcripts
 
-	mu      sync.Mutex
-	version string
-	verErr  error
-	verAt   time.Time
+	// claude --version, kept versionTTL and read again in the background
+	// (core.Kept, R-187).
+	verOnce sync.Once
+	ver     *core.Kept[versionRead]
 
 	// The usage the last call's stream reported (#20, usage.go).
 	usageMu sync.Mutex
 	usage   []core.UsageGroup
 	usageAt time.Time
 
-	// The sign-in state (#60, login.go). loginCheck is nil outside tests.
-	loginMu    sync.Mutex
-	login      loginState
-	loginAt    time.Time
+	// The sign-in state (#60, login.go), kept loginTTL and checked again in
+	// the background (R-187). loginCheck is nil outside tests.
+	loginOnce  sync.Once
+	login      *core.Kept[loginState]
 	loginCheck func(context.Context) loginState
 	// outsideScreen: the agent runs outside the Mac's screen session (#62).
 	outsideScreen func() bool
@@ -218,17 +219,35 @@ func (a *Adapter) Info(ctx context.Context) core.AdapterInfo {
 	return info
 }
 
+// versionRead is one claude --version.
+type versionRead struct {
+	version string
+	err     error
+}
+
+// cachedVersion returns claude's version, at most versionTTL old or being
+// read again in the background (R-187: a slow claude --version, up to its
+// own limit, held up /v1/info whenever the kept one had aged). The read is
+// not the phone's request's: a request that goes away is not kept as a
+// broken claude.
 func (a *Adapter) cachedVersion(ctx context.Context) (string, error) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	if !a.verAt.IsZero() && time.Since(a.verAt) < versionTTL {
-		return a.version, a.verErr
+	a.verOnce.Do(func() {
+		a.ver = &core.Kept[versionRead]{TTL: versionTTL, Read: func(ctx context.Context) versionRead {
+			if a.runner == nil {
+				return versionRead{err: ErrNotFound}
+			}
+			v, err := a.runner.Version(ctx)
+			return versionRead{v, err}
+		}}
+	})
+	r, ok := a.ver.Get(ctx)
+	switch {
+	case !ok:
+		return "", errors.New("claude's version is not known yet")
+	case r.err == nil && r.version == "":
+		return "", errors.New("claude --version: no version number")
 	}
-	// Not cancelled with the phone's request: that would be cached as a
-	// broken claude for versionTTL (and asks check it). Run has its own limit.
-	a.version, a.verErr = a.runner.Version(context.WithoutCancel(ctx))
-	a.verAt = time.Now()
-	return a.version, a.verErr
+	return r.version, r.err
 }
 
 // ListSessions merges the transcripts with the live process list. Both are

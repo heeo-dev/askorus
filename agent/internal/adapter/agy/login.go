@@ -150,11 +150,17 @@ func (a *Adapter) startLogin() chan struct{} {
 	if !core.GoRead(func(ctx context.Context) {
 		st := check(ctx)
 		a.loginMu.Lock()
-		a.login, a.checked, a.loginDone = st, true, nil
-		// A check that began before forgetLogin may say what the failed ask
-		// just disproved: kept, but not as fresh, so the next call checks again.
-		if gen == a.loginGen {
-			a.loginAt = time.Now()
+		a.loginDone = nil
+		// A check the agent ended (StopUsageReads, EndUsageReads) says
+		// nothing of agy and changes nothing.
+		if ctx.Err() == nil {
+			a.login, a.checked = st, true
+			// A check that began before forgetLogin may say what the failed
+			// ask just disproved: kept, but not as fresh, so the next call
+			// checks again.
+			if gen == a.loginGen {
+				a.loginAt = time.Now()
+			}
 		}
 		a.loginMu.Unlock()
 		close(done)

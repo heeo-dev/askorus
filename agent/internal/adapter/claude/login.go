@@ -76,28 +76,34 @@ func (a *Adapter) runLoginCheck(ctx context.Context) loginState {
 	return parseAuthStatus(res.Stdout)
 }
 
-// cachedLogin returns the sign-in state, at most loginTTL old. The phone's
-// request may go away; its cancel must not be kept as a failed check.
-func (a *Adapter) cachedLogin(ctx context.Context) loginState {
-	a.loginMu.Lock()
-	defer a.loginMu.Unlock()
-	if !a.loginAt.IsZero() && time.Since(a.loginAt) < loginTTL {
-		return a.login
-	}
-	check := a.runLoginCheck
-	if a.loginCheck != nil {
-		check = a.loginCheck
-	}
-	a.login = check(context.WithoutCancel(ctx))
-	a.loginAt = time.Now()
+// kept is the sign-in state's core.Kept, made on first use. The check runs
+// in the background, never under the phone's request: one that goes away is
+// not kept as a failed check.
+func (a *Adapter) kept() *core.Kept[loginState] {
+	a.loginOnce.Do(func() {
+		a.login = &core.Kept[loginState]{TTL: loginTTL, Read: func(ctx context.Context) loginState {
+			if a.loginCheck != nil {
+				return a.loginCheck(ctx)
+			}
+			return a.runLoginCheck(ctx)
+		}}
+	})
 	return a.login
 }
 
-// forgetLogin drops the kept state, after an ask failed for the sign-in.
+// cachedLogin returns the sign-in state: at most loginTTL old, or an older
+// one while it is checked again in the background (R-187). Only the first
+// check, and the one after forgetLogin, are waited for. Unknown when ctx
+// ends first.
+func (a *Adapter) cachedLogin(ctx context.Context) loginState {
+	st, _ := a.kept().Get(ctx)
+	return st
+}
+
+// forgetLogin drops the kept state, after an ask failed for the sign-in:
+// the next info waits for a new check.
 func (a *Adapter) forgetLogin() {
-	a.loginMu.Lock()
-	a.loginAt = time.Time{}
-	a.loginMu.Unlock()
+	a.kept().Forget()
 }
 
 // loginNotices adds the sign-in notices to info. A sign-in whose end has

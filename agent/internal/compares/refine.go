@@ -60,6 +60,10 @@ func (m *Manager) Refine(ctx context.Context, s RefineSpec) (out Refined) {
 		out.Ms = time.Since(start).Milliseconds()
 		m.log.Info("refine ended", "moderator", out.Agent, "status", out.Status, "code", errCode(out.Error), "ms", out.Ms)
 	}()
+	// The limit covers finding the moderator too, whose Info may run its
+	// AI program (2호's review, 2026-11-25): the AIs wait for this.
+	ctx, cancel := context.WithTimeout(ctx, refineLimit)
+	defer cancel()
 	w, ok := pickWriter(m.Writers(ctx, core.TierQuick), synthInput{spec: SynthSpec{Agent: s.Agent}, allowed: s.Asked})
 	if !ok {
 		out.Error = synthFailure(core.ErrCodeNoJudge, "")
@@ -70,8 +74,6 @@ func (m *Manager) Refine(ctx context.Context, s RefineSpec) (out Refined) {
 		out.Error = synthFailure(core.ErrCodeInternal, "")
 		return out
 	}
-	ctx, cancel := context.WithTimeout(ctx, refineLimit)
-	defer cancel()
 	task := judge.RefineTask{Question: s.Question, Earlier: s.Earlier}
 	var refs []string
 	defer func() {

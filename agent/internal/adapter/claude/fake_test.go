@@ -31,6 +31,7 @@ import (
 //	ASKORUS_FAKE_RM_BUSY    file: while it exists, rm fails once (and deletes it)
 //	ASKORUS_FAKE_EXIT       exit code
 //	ASKORUS_FAKE_SLEEP      duration to sleep first
+//	ASKORUS_FAKE_INIT       session id of an init event printed before the sleep
 //
 // Combined answers and refining (synth_test.go, refine_test.go) use the
 // shared fake of internal/fakecli instead,
@@ -65,6 +66,11 @@ func fakeClaude(args []string) int {
 			f.Write(append(b, '\n'))
 			f.Close()
 		}
+	}
+	if id := os.Getenv("ASKORUS_FAKE_INIT"); id != "" {
+		// The event stream's first line, before the sleep: an ask that runs
+		// out of time has named its conversation already.
+		fmt.Printf("{\"type\":\"system\",\"subtype\":\"init\",\"session_id\":%q}\n", id)
 	}
 	if d, err := time.ParseDuration(os.Getenv("ASKORUS_FAKE_SLEEP")); err == nil {
 		time.Sleep(d)

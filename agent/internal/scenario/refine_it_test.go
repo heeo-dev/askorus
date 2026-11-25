@@ -10,11 +10,13 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/heeo-dev/askorus/agent/internal/compares"
 	"github.com/heeo-dev/askorus/agent/internal/core"
 	"github.com/heeo-dev/askorus/agent/internal/fakecli"
 	"github.com/heeo-dev/askorus/agent/internal/judge"
+	"github.com/heeo-dev/askorus/agent/internal/runs"
 )
 
 // templateMark starts the answer template in a Korean question.
@@ -103,6 +105,35 @@ func TestRefineThatFailsAsksTheQuestionAsWritten(t *testing.T) {
 	for _, p := range run.Parts {
 		if p.Status != "done" {
 			t.Errorf("%s: %s", p.Agent, p.Status)
+		}
+	}
+}
+
+// R-186 (2호's 0.6.4 review): a refine that takes longer than the parts
+// wait for it (runs.PrepareLimit) leaves each AI asking the question as
+// written, once, in its own time.
+func TestRefineTooSlowAsksTheQuestionAsWritten(t *testing.T) {
+	old := runs.PrepareLimit
+	runs.PrepareLimit = 300 * time.Millisecond
+	t.Cleanup(func() { runs.PrepareLimit = old })
+	r := newRig(t, refineOn)
+	r.addDevice()
+	t.Setenv(fakecli.EnvSynth, "claude="+fakecli.SynthSlow)
+	t.Setenv(fakecli.EnvSleep, "3s")
+	st := r.ask(nil, map[string]any{"refine": map[string]any{"agent": "claude"}})
+	run := r.waitRun(st.ID)
+	for _, p := range run.Parts {
+		if p.Status != "done" {
+			t.Errorf("%s: %s %+v", p.Agent, p.Status, p.Error)
+		}
+	}
+	asks := callsOfKind(t, kindAsk)
+	if len(asks) != len(run.Parts) {
+		t.Fatalf("%d asks for %d parts", len(asks), len(run.Parts))
+	}
+	for _, a := range asks {
+		if strings.Contains(a.Prompt, templateMark) || !strings.Contains(a.Prompt, question) {
+			t.Errorf("%s was not asked the question as written", a.Role)
 		}
 	}
 }

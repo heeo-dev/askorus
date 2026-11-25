@@ -228,6 +228,45 @@ func TestAskTimeout(t *testing.T) {
 	}
 }
 
+// R-186 (2026-11-25): an ask that ran out of time keeps its conversation,
+// so a follow-up carries on from what claude found (a killed live ask
+// resumed in the same conversation and answered); a one-off keeps none.
+func TestAskTimeoutKeepsTheConversation(t *testing.T) {
+	a, _, folder := newAskAdapter(t, nil)
+	id := "0b6f2a8e-1111-4222-8333-444455556666"
+	t.Setenv("ASKORUS_FAKE_INIT", id)
+	t.Setenv("ASKORUS_FAKE_SLEEP", "20s")
+	for _, oneOff := range []bool{false, true} {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		res, err := a.Ask(ctx, core.AskRequest{Folder: folder, Prompt: "q", Tier: core.TierStandard, OneOff: oneOff})
+		cancel()
+		want := id
+		if oneOff {
+			want = ""
+		}
+		if core.ErrorCode(err) != core.ErrCodeAskTimeout || res.SessionID != want {
+			t.Errorf("one-off %v: session %q err %v, want %q and %s", oneOff, res.SessionID, err, want, core.ErrCodeAskTimeout)
+		}
+	}
+}
+
+func TestStartedSession(t *testing.T) {
+	id := "0b6f2a8e-1111-4222-8333-444455556666"
+	cases := map[string]string{
+		`{"type":"system","subtype":"init","session_id":"` + id + `"}` + "\n" + `{"type":"assistant"}`:                       id,
+		`{"type":"system","subtype":"hook_started"}` + "\n" + `{"type":"system","subtype":"init","session_id":"` + id + `"}`: id,
+		`{"type":"system","subtype":"init","session_id":"../x"}`:                                                             "",
+		`{"type":"assistant","session_id":"` + id + `"}`:                                                                     "",
+		"not json\n": "",
+		"":           "",
+	}
+	for in, want := range cases {
+		if got := startedSession([]byte(in)); got != want {
+			t.Errorf("startedSession(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
 func TestCheckAskArgs(t *testing.T) {
 	good := askArgs("sonnet", "medium", "", false)
 	if err := checkAskArgs(good); err != nil {

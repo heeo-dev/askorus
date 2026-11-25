@@ -42,6 +42,10 @@ const (
 	maxRuns = 100
 )
 
+// PrepareLimit caps a part's Prepare (the refine wait: refining itself is
+// bounded by core.RefineTimeout). A variable so a test need not wait.
+var PrepareLimit = time.Minute
+
 // ErrTooMany is returned when MaxRunning runs are still running.
 var ErrTooMany = errors.New("too many runs at once")
 
@@ -132,6 +136,11 @@ type Task struct {
 	// OneOff: the ask keeps no conversation (a question to the moderator,
 	// #25), so its part never names a session to carry on.
 	OneOff bool
+	// Prepare, when set, runs before Ask and outside PartLimit, for at most
+	// PrepareLimit: the wait for the refined question (milestone C), which
+	// used to eat into the AI's own three minutes (R-186). Its error fails
+	// the part.
+	Prepare func(ctx context.Context) error
 }
 
 // Manager keeps runs in memory. Runs do not survive an agent restart.
@@ -238,10 +247,23 @@ func (m *Manager) runPart(r *Run, i int, t Task) {
 	if limit == 0 {
 		limit = PartLimit
 	}
-	ctx, cancel := context.WithTimeout(context.WithValue(m.base, runKey{}, r.ID), limit)
-	defer cancel()
+	base := context.WithValue(m.base, runKey{}, r.ID)
 	start := m.now()
-	res, err := safeAsk(ctx, t.Ask)
+	var err error
+	if t.Prepare != nil {
+		// Before the AI's own time starts (R-186).
+		pctx, pcancel := context.WithTimeout(base, PrepareLimit)
+		err = safePrepare(pctx, t.Prepare)
+		pcancel()
+	}
+	var res core.AskResult
+	timedOut := false
+	if err == nil {
+		ctx, cancel := context.WithTimeout(base, limit)
+		res, err = safeAsk(ctx, t.Ask)
+		timedOut = ctx.Err() == context.DeadlineExceeded
+		cancel()
+	}
 	p := Part{Agent: t.Agent, Ms: m.now().Sub(start).Milliseconds()}
 	switch {
 	// An answer of pictures only is an answer (R-166: Codex made a picture
@@ -251,8 +273,13 @@ func (m *Manager) runPart(r *Run, i int, t Task) {
 	case err == nil:
 		p.Status, p.Answer, p.Model = Done, res.Answer, res.Model
 		p.InputTokens, p.OutputTokens = res.InputTokens, res.OutputTokens
-	case ctx.Err() == context.DeadlineExceeded:
+	case timedOut:
 		p.Status, p.Error = Failed, &Error{Code: core.ErrCodeAskTimeout}
+		// What the adapter saw of it stays (agy: the server was busy).
+		var ae *core.ActionError
+		if errors.As(err, &ae) && ae.Code == core.ErrCodeAskTimeout {
+			p.Error.Hint = ae.Hint
+		}
 	default:
 		p.Status, p.Error = Failed, partError(err)
 	}
@@ -320,6 +347,15 @@ func safeAsk(ctx context.Context, ask func(context.Context) (core.AskResult, err
 		}
 	}()
 	return ask(ctx)
+}
+
+func safePrepare(ctx context.Context, prepare func(context.Context) error) (err error) {
+	defer func() {
+		if v := recover(); v != nil {
+			err = errors.New("internal error")
+		}
+	}()
+	return prepare(ctx)
 }
 
 func partError(err error) *Error {

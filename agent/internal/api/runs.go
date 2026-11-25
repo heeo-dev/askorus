@@ -465,16 +465,30 @@ func (s *Server) startRun(w http.ResponseWriter, r *http.Request) {
 		if mod != nil {
 			session = ""
 		}
-		tasks[i] = runs.Task{Agent: t.Agent, Session: session, OneOff: mod != nil, Ask: func(ctx context.Context) (core.AskResult, error) {
-			if _, sees := asker.(core.ImageSeer); len(areq.Images) > 0 && !sees {
-				return core.AskResult{}, core.Fail(core.ErrCodeNoImages, "")
-			}
-			if refiner != nil {
-				q, err := refiner.Question(ctx)
-				if err != nil {
-					return core.AskResult{}, err
+		_, sees := asker.(core.ImageSeer)
+		noImages := len(areq.Images) > 0 && !sees
+		var prepare func(ctx context.Context) error
+		if refiner != nil {
+			// The refined question is waited for before the AI's own time
+			// starts (R-186). A wait that runs out (runs.PrepareLimit) asks
+			// the question as written, as when refining fails.
+			prepare = func(ctx context.Context) error {
+				if noImages {
+					return core.Fail(core.ErrCodeNoImages, "")
 				}
-				areq.Prompt = judge.AskWithConversation(q, conv, fresh, guide)
+				q, err := refiner.Question(ctx)
+				switch {
+				case err == nil:
+					areq.Prompt = judge.AskWithConversation(q, conv, fresh, guide)
+				case ctx.Err() == nil:
+					return err
+				}
+				return nil
+			}
+		}
+		tasks[i] = runs.Task{Agent: t.Agent, Session: session, OneOff: mod != nil, Prepare: prepare, Ask: func(ctx context.Context) (core.AskResult, error) {
+			if noImages {
+				return core.AskResult{}, core.Fail(core.ErrCodeNoImages, "")
 			}
 			res, err := asker.Ask(ctx, areq)
 			if len(res.Made) > 0 {
