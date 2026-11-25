@@ -3,7 +3,7 @@
     "name": "Askorus",
     "slug": "askorus",
     "owner": "heeodev",
-    "version": "0.6.2",
+    "version": "0.6.5",
     "scheme": "askorus",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
