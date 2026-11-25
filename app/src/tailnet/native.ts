@@ -18,19 +18,25 @@ export type NativeTailnet = {
   peer(host: string): Promise<string>;
   /** The other devices of the person's own account, as JSON (#58). */
   peers(): Promise<string>;
-  fetch(method: string, url: string, headers: string, body: string, timeoutMs: number): Promise<NativeFetchResult>;
+  /** id names the request for cancel (#76). */
+  fetch(id: string, method: string, url: string, headers: string, body: string, timeoutMs: number): Promise<NativeFetchResult>;
   /**
    * fetch with a file of the app's own as the body (#14: a photo that goes
    * with a question). path is a file:// address in the app's cache or files.
    * A build from before it has none.
    */
-  sendFile?(method: string, url: string, headers: string, path: string, timeoutMs: number): Promise<NativeFetchResult>;
+  sendFile?(id: string, method: string, url: string, headers: string, path: string, timeoutMs: number): Promise<NativeFetchResult>;
   /**
    * fetch whose 2xx answer goes into path, a new file of the app's own (#14:
    * a picture an AI made); body is then empty. A build from before has none.
    */
-  fetchFile?(method: string, url: string, headers: string, path: string, timeoutMs: number): Promise<NativeFetchResult>;
+  fetchFile?(id: string, method: string, url: string, headers: string, path: string, timeoutMs: number): Promise<NativeFetchResult>;
   recentLog(): Promise<string>;
+  /**
+   * Ends the request with that id when it still runs: the app gave up on it
+   * (#76). A build from before has none.
+   */
+  cancel?(id: string): Promise<void>;
 };
 
 let cached: NativeTailnet | null | undefined;

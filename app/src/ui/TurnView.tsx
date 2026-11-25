@@ -18,7 +18,7 @@ import { plainNames } from '@/ask/aiNames';
 import { answered, compareErrorText, compareState, synthBy, synthErrorText, synthState } from '@/ask/compare';
 import { answeredAgents, blockTitle, cardPreview, metaLine, type PartView, partViews, steps, synthExpected } from '@/ask/present';
 import type { TurnPhoto } from '@/ask/photos';
-import type { Turn } from '@/ask/thread';
+import { running, type Turn } from '@/ask/thread';
 import { t } from '@/i18n';
 
 import { AICardStrip } from './AICardStrip';
@@ -33,6 +33,7 @@ import { themed, useTheme } from './theme';
 import { RecordLine } from './Record';
 import { RefineLine } from './Refine';
 import { ThreadBubble } from './ThreadBubble';
+import { useNow } from './useNow';
 
 export type Note = { text: string; error?: boolean };
 
@@ -68,7 +69,7 @@ export function TurnView({
 }: {
   turn: Turn;
   info: Info | null;
-  /** The phone's clock when drawn (the polls redraw it). */
+  /** The phone's clock when drawn; while the turn runs it keeps its own (useNow, #73). */
   now: number;
   /** The AI the next follow-up goes to alone (shown on its card), or null. */
   only: string | null;
@@ -78,6 +79,8 @@ export function TurnView({
   recent?: boolean;
 }) {
   const s = styles(useTheme());
+  // The waiting seconds move by themselves while the AIs answer (#73).
+  const clock = useNow(running(turn) && !turn.queued, now);
   // Waiting for the conversation left running before it (#23): not sent yet.
   if (turn.queued) {
     return (
@@ -90,7 +93,7 @@ export function TurnView({
     );
   }
   const st = compareState(turn);
-  const views = partViews(turn, now, info);
+  const views = partViews(turn, clock, info);
   const lost = turn.error ? (
     <View style={s.lost}>
       <Text style={s.error}>{turn.error}</Text>

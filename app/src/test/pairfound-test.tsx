@@ -265,6 +265,37 @@ describe('a paired phone answers', () => {
     await waitFor(() => expect(agent.pairPolls).toBeGreaterThan(0));
   });
 
+  // #75 (2026-11-25): the looks went on every few seconds while the PC did
+  // not answer, and those that piled up came all at once when it answered
+  // again. Failures in a row space them out, up to one a minute (here, with
+  // a look every 30 ms, one in 12 turns), and an answer brings them back.
+  test('while the PC does not answer it is asked less often, and as before once it does', async () => {
+    // Turn by turn, so each look ends before the next turn (as with 5 s).
+    const turns = async (n: number) => {
+      for (let i = 0; i < n; i++) {
+        await act(async () => {
+          jest.advanceTimersByTime(30);
+        });
+      }
+    };
+    await renderRouter(routes, { initialUrl: '/pcs' });
+    await screen.findByText('Fix the login bug');
+    let before = agent.pairPolls;
+    await turns(10);
+    expect(agent.pairPolls - before).toBeGreaterThanOrEqual(8); // a look every turn
+    agent.reach = 'offline';
+    before = agent.pairPolls;
+    await turns(40);
+    const offline = agent.pairPolls - before;
+    expect(offline).toBeGreaterThan(2);
+    expect(offline).toBeLessThanOrEqual(8); // turns 1, 3, 7, 15, 27, 39
+    agent.reach = 'ok';
+    await turns(13); // the longest skip, then a look that answers
+    before = agent.pairPolls;
+    await turns(10);
+    expect(agent.pairPolls - before).toBeGreaterThanOrEqual(8);
+  });
+
   test('an agent from before this has no list: it is asked once and left alone', async () => {
     const real = agent.fetch;
     let asks = 0;

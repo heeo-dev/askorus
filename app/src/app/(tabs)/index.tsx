@@ -79,6 +79,7 @@ import { publishInfo, refreshPCUsage } from '@/ui/shell/pcUsage';
 import { themed, type Theme, useTheme } from '@/ui/theme';
 import { TierSheet } from '@/ui/TierSheet';
 import { type Note, type TurnActions, TurnView } from '@/ui/TurnView';
+import { useNow } from '@/ui/useNow';
 
 const store = new ConnectionStore();
 
@@ -219,7 +220,10 @@ export default function Ask() {
   const loadInfo = useCallback(async (p: PC, quiet = false) => {
     if (!quiet) setLoad({ state: 'loading' });
     try {
-      const info = await p.client.info();
+      // Always a fresh answer (a PC just picked, a retry, an agent update),
+      // sharing only a request on its way (#74: the top bar and 내 PC, opened
+      // at the same moment, take this one).
+      const info = await p.client.info(undefined, { fresh: true });
       rememberOS(p.conn.id, info.os).catch(() => undefined);
       publishInfo(p.conn.id, info); // the top bar's usage button reads it too (#20)
       if (pcRef.current === p) setLoad({ state: 'ok', info });
@@ -936,6 +940,8 @@ export default function Ask() {
   // ---- The sheets ----
 
   const sheetTurn = sheet && 'turn' in sheet ? (turns.find((x) => x.id === sheet.turn) ?? null) : null;
+  // A sheet on a turn that still runs counts its seconds by itself (#73).
+  const sheetNow = useNow(!!sheetTurn && running(sheetTurn), now);
   // What an AI answers with now: its own pick, else the tier's model and effort.
   const asker = (agent: string) => list.find((a) => a.agent === agent);
   // A pick saved before the PC moved to a newer model of its line shows as the newer one (#64).
@@ -1048,7 +1054,7 @@ export default function Ask() {
     };
   }));
 
-  const resultViews = sheet?.kind === 'ais' && sheetTurn ? partViews(sheetTurn, now, info) : [];
+  const resultViews = sheet?.kind === 'ais' && sheetTurn ? partViews(sheetTurn, sheetNow, info) : [];
   const resultRows: AISheetRow[] = resultViews.map((p) => ({
     agent: p.agent,
     name: p.name,
@@ -1057,9 +1063,9 @@ export default function Ask() {
     onPress: () => setSheet({ kind: 'answer', turn: sheetTurn?.id ?? '', agent: p.agent }),
     accessibilityValue: rowValue(p),
   }));
-  const collecting = sheetTurn && running(sheetTurn) && sheetTurn.at !== undefined ? Math.max(0, Math.round((now - sheetTurn.at) / 1000)) : null;
+  const collecting = sheetTurn && running(sheetTurn) && sheetTurn.at !== undefined ? Math.max(0, Math.round((sheetNow - sheetTurn.at) / 1000)) : null;
 
-  const answerView = sheet?.kind === 'answer' && sheetTurn ? (partViews(sheetTurn, now, info).find((p) => p.agent === sheet.agent) ?? null) : null;
+  const answerView = sheet?.kind === 'answer' && sheetTurn ? (partViews(sheetTurn, sheetNow, info).find((p) => p.agent === sheet.agent) ?? null) : null;
   const answerKey = answerView && sheetTurn ? `${sheetTurn.id}/${answerView.agent}` : '';
 
   // The current PC in words that tell it from the others, and its line when there is more than one (#53).

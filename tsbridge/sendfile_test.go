@@ -94,10 +94,10 @@ func TestSendFileOpensOnlyWhatItMaySend(t *testing.T) {
 	}
 
 	// Nothing is sent before the node is started, and the file check comes first.
-	if _, err := SendFile("POST", "http://askorus-pc.tail0.ts.net:8790/v1/uploads", "", photo, 1000); errorCode(err) != CodeNotStarted {
+	if _, err := SendFile("", "POST", "http://askorus-pc.tail0.ts.net:8790/v1/uploads", "", photo, 1000); errorCode(err) != CodeNotStarted {
 		t.Errorf("not started: %v", err)
 	}
-	if _, err := SendFile("POST", "http://askorus-pc.tail0.ts.net:8790/v1/uploads", "", key, 1000); errorCode(err) != CodeBadRequest {
+	if _, err := SendFile("", "POST", "http://askorus-pc.tail0.ts.net:8790/v1/uploads", "", key, 1000); errorCode(err) != CodeBadRequest {
 		t.Errorf("the node's key, not started: %v", err)
 	}
 }

@@ -9,7 +9,7 @@
 // (newTurn), so 다시 비교 later sends the same. followRun and
 // followCompare follow the PC and patch the turn; the screen only draws.
 
-import { type AgentClient, AgentError, CancelledError } from '@/api/client';
+import { type AgentClient, AgentError, CancelledError, sameRun } from '@/api/client';
 import type { Comparison, Debate, Info, RequestContext, Run, RunCompare, RunModerator, RunPart, RunRequest, RunTarget, SynthesisRequest, Tier } from '@/api/types';
 
 import {
@@ -327,9 +327,14 @@ export async function followRun(client: AgentClient, turn: Turn, deps: FollowDep
   // A follow that was replaced or stopped patches nothing more.
   let last = turn.run;
   const put = (run: Run) => {
+    // The same look again (the run waitRun ends with, a run picked up again
+    // as it is kept) changes neither the screen nor the stored conversation
+    // (#73); its pictures are still taken when some were not yet (2호's
+    // review: a run picked up again after the app was closed mid-download).
+    const same = !!last && sameRun(last, run);
     last = run;
     if (ctl.signal.aborted) return;
-    deps.update(turn.id, (t) => ({ run, compare: withRun(t.compare, run) }));
+    if (!same) deps.update(turn.id, (t) => ({ run, compare: withRun(t.compare, run) }));
     if (run.parts.some((p) => p.images?.length)) deps.takeMade?.(client, turn.id, run);
   };
   deps.update(turn.id, () => ({ error: undefined }));

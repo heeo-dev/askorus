@@ -112,6 +112,10 @@ type Run struct {
 	// Refine is the question's refining (질문 정제, milestone C): set when
 	// the run asked for it, running until the moderator's spec is in.
 	Refine *Refine `json:"refine,omitempty"`
+	// Rev goes up by one whenever the run changes (a part ends, refining
+	// moves on), from 1: a phone that has seen it asks with it and gets a
+	// short answer while nothing changed (#73).
+	Rev int `json:"rev"`
 
 	owner, key string
 	left       int // parts still running
@@ -227,7 +231,7 @@ func (m *Manager) start(sp Spec) (run Run, ended bool, err error) {
 	_, _ = rand.Read(raw)
 	r := &Run{
 		ID: hex.EncodeToString(raw), Mode: sp.Mode, Tier: sp.Tier, Status: Running, StartedAt: m.now().UTC(),
-		Parts: make([]Part, len(tasks)), owner: owner, key: key, left: len(tasks),
+		Parts: make([]Part, len(tasks)), owner: owner, key: key, left: len(tasks), Rev: 1,
 	}
 	for i, t := range tasks {
 		r.Parts[i] = Part{Agent: t.Agent, Status: Running}
@@ -296,6 +300,7 @@ func (m *Manager) runPart(r *Run, i int, t Task) {
 		delete(m.inUse, t.Session)
 	}
 	r.Parts[i] = p
+	r.Rev++
 	r.left--
 	if r.left == 0 {
 		r.finish(m.now())
@@ -408,6 +413,7 @@ func (m *Manager) SetRefine(owner, id string, rf Refine) {
 			c.Spec = &spec
 		}
 		r.Refine = &c
+		r.Rev++
 	}
 }
 

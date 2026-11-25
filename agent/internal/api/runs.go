@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"unicode/utf8"
@@ -552,7 +553,25 @@ func (s *Server) getRun(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, CodeRunNotFound, "no such run (finished more than a day ago, or the agent restarted)")
 		return
 	}
+	// A phone that has seen this rev of a running run gets a short answer
+	// instead of every answer again (#73: asked every second while the AIs
+	// answer). An app from before sends no rev and gets the whole run.
+	if rev, err := strconv.Atoi(r.URL.Query().Get("rev")); err == nil && rev == run.Rev && run.Status == runs.Running {
+		markQuiet(r) // nothing new: counted, not logged (#75)
+		writeJSON(w, http.StatusOK, RunUnchanged{RunID: run.ID, Status: run.Status, Rev: run.Rev, Unchanged: true, PollAfterMs: runPollMs})
+		return
+	}
 	writeJSON(w, http.StatusOK, s.runStatus(owner, run))
+}
+
+// RunUnchanged is GET /v1/runs/{runId}?rev=N while the run is running and
+// still at rev N: nothing of it changed since the phone's last look.
+type RunUnchanged struct {
+	RunID       string     `json:"runId"`
+	Status      runs.State `json:"status"`
+	Rev         int        `json:"rev"`
+	Unchanged   bool       `json:"unchanged"`
+	PollAfterMs int        `json:"pollAfterMs"`
 }
 
 // runStatus is run as the phone gets it, with its comparison's id.

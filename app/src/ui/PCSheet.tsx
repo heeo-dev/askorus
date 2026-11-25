@@ -72,7 +72,9 @@ export function PCSheet({
     connect(store, connId)
       .then(async (pc) => {
         if (!pc) return;
-        const info = await pc.client.info();
+        // A sheet the person opened to look at the PC: a fresh answer, sharing
+        // only a request on its way (#74).
+        const info = await pc.client.info(undefined, { fresh: true });
         if (live && info.update) setUpdater(pc.client);
       })
       .catch(() => undefined); // the connection check says why

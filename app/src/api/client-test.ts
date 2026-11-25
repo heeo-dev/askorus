@@ -1,5 +1,6 @@
 import { AgentClient, AgentError, CancelledError, NetworkError, baseUrl, comparisonPolling, normalizeCode } from './client';
 import { agentBase, forgetRefused, tokenRefused } from './refused';
+import type { Run } from './types';
 
 type Call = { url: string; method: string; headers: Record<string, string>; body?: unknown };
 
@@ -216,7 +217,8 @@ test('a dropped ask is sent again with the same clientRunId, then followed to th
   const seen: string[] = [];
   const done = await c.waitRun(started, { onUpdate: (r) => seen.push(r.status) });
   expect(done.parts[0].answer).toBe('서울');
-  expect(seen).toEqual(['running', 'done']);
+  // The look that showed what the start already did is not handed on (#73).
+  expect(seen).toEqual(['done']);
   expect(f.calls.map((x) => `${x.method} ${x.url.replace(base, '')}`)).toEqual([
     'POST /v1/runs',
     'POST /v1/runs',
@@ -225,6 +227,132 @@ test('a dropped ask is sent again with the same clientRunId, then followed to th
     'GET /v1/runs/r1',
   ]);
   expect((f.calls[1].body as { clientRunId: string }).clientRunId).toBe('k1');
+});
+
+// #73: the run was handed on every second, the same each time, and the
+// screen and the stored conversation were renewed for it. A PC from 0.6.5
+// gives the run a rev and answers ?rev=N short while it is still at N.
+test('a run is asked with its rev, and only a change is handed on', async () => {
+  const at = (rev: number, status: string, parts: unknown[]) => ({ ...run(status, parts), rev });
+  const f = fakeFetch([
+    json(200, { runId: 'r1', status: 'running', rev: 1, unchanged: true, pollAfterMs: 1 }),
+    json(200, { runId: 'r1', status: 'running', rev: 1, unchanged: true, pollAfterMs: 1 }),
+    json(200, at(2, 'running', [{ agent: 'claude', status: 'done', answer: 'a' }, { agent: 'codex', status: 'running' }])),
+    json(200, { runId: 'r1', status: 'running', rev: 2, unchanged: true, pollAfterMs: 1 }),
+    json(200, { ...at(3, 'done', [{ agent: 'claude', status: 'done', answer: 'a' }, { agent: 'codex', status: 'done', answer: 'b' }]), pollAfterMs: undefined }),
+  ]);
+  const c = new AgentClient(base, { fetch: f.fn, sleep: noSleep });
+  const seen: number[] = [];
+  const done = await c.waitRun(at(1, 'running', [{ agent: 'claude', status: 'running' }, { agent: 'codex', status: 'running' }]) as Run, {
+    onUpdate: (r) => seen.push(r.rev ?? 0),
+  });
+  expect(done.status).toBe('done');
+  expect(done.parts[1].answer).toBe('b');
+  expect(seen).toEqual([2, 3]);
+  expect(f.calls.map((x) => x.url.replace(base, ''))).toEqual([
+    '/v1/runs/r1?rev=1',
+    '/v1/runs/r1?rev=1',
+    '/v1/runs/r1?rev=1',
+    '/v1/runs/r1?rev=2',
+    '/v1/runs/r1?rev=2',
+  ]);
+
+  // A PC from before gives no rev: the same content twice is handed on once.
+  const old = fakeFetch([
+    json(200, run('running', [{ agent: 'claude', status: 'running' }])),
+    json(200, run('running', [{ agent: 'claude', status: 'running' }])),
+    json(200, { ...run('done', [{ agent: 'claude', status: 'done', answer: 'a' }]), pollAfterMs: undefined }),
+  ]);
+  const seenOld: string[] = [];
+  await new AgentClient(base, { fetch: old.fn, sleep: noSleep }).waitRun(run('running', [{ agent: 'claude', status: 'running' }]) as Run, {
+    onUpdate: (r) => seenOld.push(r.status),
+  });
+  expect(seenOld).toEqual(['done']);
+  expect(old.calls.every((x) => !x.url.includes('rev='))).toBe(true);
+});
+
+// #74: opening the app sent the same /v1/info two to five times at once.
+// One request at a time per PC and token is shared, an answer is used again
+// for a few seconds, and a change sent to the PC or fresh asks again.
+test('info is shared: one request for callers at once, again after a change or when fresh', async () => {
+  const info = (v: string) => json(200, { name: 'askorus-agent', version: v, apiVersion: 1, hostname: 'pc', os: 'windows', agents: [], capabilities: [] });
+  let clock = 0;
+  const f = fakeFetch([info('1'), info('2'), json(200, {}), info('3'), dropped(), info('4')]);
+  const c = new AgentClient(base, { token: 'tok', fetch: f.fn, sleep: noSleep, now: () => clock });
+  const [a, b] = await Promise.all([c.info(), c.withToken('tok').info()]);
+  expect([a.version, b.version]).toEqual(['1', '1']);
+  expect(f.calls).toHaveLength(1);
+  clock = 2000;
+  expect((await c.info()).version).toBe('1'); // used again
+  expect((await c.info(undefined, { fresh: true })).version).toBe('2');
+  await c.request('POST', 'update'); // a change: the answer is not used again
+  expect((await c.info()).version).toBe('3');
+  clock = 10_000;
+  await expect(c.info()).rejects.toBeInstanceOf(NetworkError); // a failure is not kept
+  expect((await c.info()).version).toBe('4');
+  expect(f.calls.map((x) => `${x.method} ${x.url.replace(base, '')}`)).toEqual([
+    'GET /v1/info',
+    'GET /v1/info',
+    'POST /v1/update',
+    'GET /v1/info',
+    'GET /v1/info',
+    'GET /v1/info',
+  ]);
+
+  // One caller giving up ends only its own wait.
+  let answer: (r: Response) => void = () => undefined;
+  const slow = fakeFetch([() => new Promise<Response>((r) => (answer = r)) as unknown as Response]);
+  const s = new AgentClient(base, { fetch: slow.fn, sleep: noSleep });
+  const ctl = new AbortController();
+  const gaveUp = s.info(ctl.signal);
+  const waits = s.info();
+  ctl.abort();
+  await expect(gaveUp).rejects.toBeInstanceOf(CancelledError);
+  answer(new Response(JSON.stringify({ name: 'askorus-agent', version: '9', apiVersion: 1, hostname: 'pc', os: 'windows', agents: [], capabilities: [] }), { status: 200 }));
+  expect((await waits).version).toBe('9');
+  expect(slow.calls).toHaveLength(1);
+});
+
+// #74, 2호's review: an info that left before a change was sent may show
+// the PC from before it; it is neither kept nor shared after the change.
+test('an info on its way when a change is sent is not kept or shared after it', async () => {
+  const body = (v: string) => JSON.stringify({ name: 'askorus-agent', version: v, apiVersion: 1, hostname: 'pc', os: 'windows', agents: [], capabilities: [] });
+  let answer: (r: Response) => void = () => undefined;
+  const f = fakeFetch([
+    () => new Promise<Response>((r) => (answer = r)) as unknown as Response, // the info before the change
+    json(200, {}), // the change
+    () => new Response(body('new'), { status: 200 }), // the info after it
+  ]);
+  const c = new AgentClient(base, { fetch: f.fn, sleep: noSleep, now: () => 0 });
+  const before = c.info();
+  await Promise.resolve();
+  await c.request('POST', 'agents/agy/off');
+  const after = c.info(); // does not wait for the one from before
+  answer(new Response(body('old'), { status: 200 }));
+  expect((await before).version).toBe('old');
+  expect((await after).version).toBe('new');
+  expect((await c.info()).version).toBe('new'); // the kept one is the new one
+  expect(f.calls).toHaveLength(3);
+});
+
+// #76: dropped requests are asked again 30 times at most, and for at most a
+// minute from the first of them: each could take the request's 15 s limit,
+// and 30 of them lasted about 8 minutes.
+test('dropped requests while waiting stop after a minute, not only after 30 tries', async () => {
+  let clock = 0;
+  const slow = fakeFetch(
+    Array.from({ length: 31 }, () => () => {
+      clock += 15_000; // each one ran into the 15 s limit
+      return new TypeError('Network request failed');
+    }),
+  );
+  const c = new AgentClient(base, { fetch: slow.fn, sleep: noSleep, now: () => clock });
+  await expect(c.waitRun(run('running', []) as Run)).rejects.toBeInstanceOf(NetworkError);
+  expect(slow.calls.length).toBeLessThanOrEqual(6);
+
+  // Fast drops still get their 30 tries.
+  const fast = fakeFetch([...Array.from({ length: 30 }, dropped), json(200, { ...run('done', []), pollAfterMs: undefined })]);
+  expect((await new AgentClient(base, { fetch: fast.fn, sleep: noSleep, now: () => 0 }).waitRun(run('running', []) as Run)).status).toBe('done');
 });
 
 test('an ask without a clientRunId is not sent twice, and agent errors keep their code', async () => {

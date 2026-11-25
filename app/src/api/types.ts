@@ -424,6 +424,13 @@ export type Run = {
   compareError?: CodeError;
   /** The question's refining, when the run asked for it (milestone C). */
   refine?: Refine;
+  /** Goes up whenever the run changes (#73, agents from 0.6.5); absent from older agents. */
+  rev?: number;
+  /**
+   * The short answer to GET /v1/runs/{id}?rev=N while the run is still at
+   * rev N: only runId, status, rev and pollAfterMs come with it (#73).
+   */
+  unchanged?: boolean;
 };
 
 // Answer comparison (P2-3): GET /v1/comparisons/{id}. Since C6 (#19,

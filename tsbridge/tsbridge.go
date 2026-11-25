@@ -627,17 +627,87 @@ func targetOf(u *url.URL, p peerInfo) (string, error) {
 	return t.String(), nil
 }
 
+// The requests on their way by the app's id (#76): the app gives up on a
+// request after its own time limit (15 s for most), and the request went on
+// here until its native limit (90 s) and was thrown away. Cancel ends it.
+var (
+	runningMu sync.Mutex
+	running   = map[string]context.CancelFunc{}
+	// early holds the ids Cancel got before their request began (the app
+	// gave up while its call was still on the way here, 2호's review), when.
+	early = map[string]time.Time{}
+)
+
+// maxRequestID bounds an id; a longer one, or "", is not kept. An early
+// cancel is kept earlyFor, and at most maxEarly of them.
+const (
+	maxRequestID = 64
+	earlyFor     = 2 * time.Minute
+	maxEarly     = 256
+)
+
+// track keeps cancel under id while a request runs, and returns what
+// forgets it again. A request whose cancel came first is ended at once.
+func track(id string, cancel context.CancelFunc) func() {
+	if id == "" || len(id) > maxRequestID {
+		return func() {}
+	}
+	runningMu.Lock()
+	if at, ok := early[id]; ok {
+		delete(early, id)
+		if time.Since(at) < earlyFor {
+			runningMu.Unlock()
+			cancel()
+			return func() {}
+		}
+	}
+	running[id] = cancel
+	runningMu.Unlock()
+	return func() {
+		runningMu.Lock()
+		delete(running, id)
+		runningMu.Unlock()
+	}
+}
+
+// Cancel ends the request with that id when it still runs: the app gave up
+// on it. An id that is not running is nothing.
+func Cancel(id string) {
+	if id == "" || len(id) > maxRequestID {
+		return
+	}
+	runningMu.Lock()
+	cancel := running[id]
+	if cancel == nil {
+		// Not begun yet: kept for a while, so the request ends as it begins.
+		now := time.Now()
+		for k, at := range early {
+			if now.Sub(at) >= earlyFor {
+				delete(early, k)
+			}
+		}
+		if len(early) >= maxEarly {
+			clear(early)
+		}
+		early[id] = now
+	}
+	runningMu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+}
+
 // Fetch sends one HTTP request through the node and waits for the whole
-// answer. headers is a JSON object of strings; body may be empty. The
-// address must be a device of the person's own Tailscale account, reached
-// by plain http: the tailnet already encrypts between the two devices and
-// knows who is on the other end.
-func Fetch(method, rawURL, headers, body string, timeoutMs int) (*Response, error) {
+// answer. id is the app's name for it, for Cancel ("": none). headers is a
+// JSON object of strings; body may be empty. The address must be a device
+// of the person's own Tailscale account, reached by plain http: the tailnet
+// already encrypts between the two devices and knows who is on the other end.
+func Fetch(id, method, rawURL, headers, body string, timeoutMs int) (*Response, error) {
 	var rd io.Reader
 	if body != "" {
 		rd = strings.NewReader(body)
 	}
-	return send(method, rawURL, headers, rd, -1, timeoutMs)
+	return send(id, method, rawURL, headers, rd, -1, timeoutMs)
 }
 
 // maxSendFile bounds the file SendFile sends: a photo for a question, which
@@ -649,13 +719,13 @@ const maxSendFile = 8 << 20
 // of at most maxSendFile bytes and never one of the node's own (its key).
 // Everything Fetch checks about the address holds here too: the file goes
 // to a device of the person's own Tailscale account or nowhere.
-func SendFile(method, rawURL, headers, path string, timeoutMs int) (*Response, error) {
+func SendFile(id, method, rawURL, headers, path string, timeoutMs int) (*Response, error) {
 	f, size, err := openOwnFile(path)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
-	return send(method, rawURL, headers, f, size, timeoutMs)
+	return send(id, method, rawURL, headers, f, size, timeoutMs)
 }
 
 // openOwnFile opens the file SendFile may send and gives its size.
@@ -714,11 +784,11 @@ const maxSaveFile = 16 << 20
 // maxSaveFile is not kept (what was written is deleted). Any other status
 // writes no file, and Body holds the answer as Fetch's does. Everything
 // Fetch checks about the address holds here too.
-func FetchFile(method, rawURL, headers, path string, timeoutMs int) (*Response, error) {
+func FetchFile(id, method, rawURL, headers, path string, timeoutMs int) (*Response, error) {
 	if err := checkNewFile(path); err != nil {
 		return nil, err
 	}
-	return sendTo(method, rawURL, headers, nil, -1, timeoutMs, path)
+	return sendTo(id, method, rawURL, headers, nil, -1, timeoutMs, path)
 }
 
 // checkNewFile accepts the path FetchFile may write: absolute and clean, no
@@ -770,13 +840,13 @@ func saveBody(body io.Reader, path string) error {
 
 // send is one request through the node: Fetch's and SendFile's. size is the
 // body's length when it is known (a file), else -1.
-func send(method, rawURL, headers string, body io.Reader, size int64, timeoutMs int) (*Response, error) {
-	return sendTo(method, rawURL, headers, body, size, timeoutMs, "")
+func send(id, method, rawURL, headers string, body io.Reader, size int64, timeoutMs int) (*Response, error) {
+	return sendTo(id, method, rawURL, headers, body, size, timeoutMs, "")
 }
 
 // sendTo is send, and with save a 2xx answer goes into that new file
 // (FetchFile).
-func sendTo(method, rawURL, headers string, body io.Reader, size int64, timeoutMs int, save string) (*Response, error) {
+func sendTo(id, method, rawURL, headers string, body io.Reader, size int64, timeoutMs int, save string) (*Response, error) {
 	mu.Lock()
 	c, hc, since := lc, httpc, started
 	mu.Unlock()
@@ -788,6 +858,7 @@ func sendTo(method, rawURL, headers string, body io.Reader, size int64, timeoutM
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutMs)*time.Millisecond)
 	defer cancel()
+	defer track(id, cancel)()
 
 	u, err := url.Parse(rawURL)
 	if err != nil || u.Hostname() == "" || u.User != nil {

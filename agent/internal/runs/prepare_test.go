@@ -50,6 +50,29 @@ func TestPrepareIsOutsideThePartLimit(t *testing.T) {
 	}
 }
 
+// #73 (2호's review): refining that moves on, and a part that ends, each
+// raise the run's rev, so the phone's short "unchanged" never hides them.
+func TestRefineAndPartsRaiseTheRev(t *testing.T) {
+	m := NewManager()
+	gate := make(chan struct{})
+	r, _ := m.Start(Spec{Owner: "phone", Mode: core.ModeAsk, Tasks: []Task{
+		{Agent: "a", Ask: func(context.Context) (core.AskResult, error) { <-gate; return core.AskResult{Answer: "x"}, nil }},
+	}})
+	if r.Rev != 1 {
+		t.Fatalf("a new run's rev = %d, want 1", r.Rev)
+	}
+	m.SetRefine("phone", r.ID, Refine{Status: "running"})
+	m.SetRefine("other", r.ID, Refine{Status: "done"}) // not the owner's: nothing changes
+	refined, _ := m.Get("phone", r.ID)
+	if refined.Rev != 2 {
+		t.Errorf("rev after refining moved on = %d, want 2", refined.Rev)
+	}
+	close(gate)
+	if done := wait(t, m, "phone", r.ID); done.Rev != 3 {
+		t.Errorf("rev after the part ended = %d, want 3", done.Rev)
+	}
+}
+
 // R-186: a part that ran out of time keeps the conversation the adapter
 // named (Claude carries on from it) and what the adapter saw of the time
 // running out (agy: the server was busy).

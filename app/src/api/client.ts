@@ -85,6 +85,8 @@ export type ClientOptions = {
   fetchFile?: FetchFile;
   sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
   timeoutMs?: number;
+  /** The clock of the retry bound (tests set it); Date.now by default. */
+  now?: () => number;
 };
 
 export type WaitOptions = {
@@ -93,9 +95,62 @@ export type WaitOptions = {
   onPending?: () => void;
 };
 
-// A dropped connection while waiting is asked again this many times in a
-// row before giving up (about half a minute at one poll a second).
+// A dropped connection while waiting is asked again, at most this many
+// times in a row (about half a minute at one poll a second), and not once
+// missForMs have passed since the first of them (the last try may run on
+// to its own limit, so about a minute): a miss that ran into the request's
+// own 15 s limit each time made 30 of them last about 8 minutes (#76).
 const maxMisses = 30;
+const missForMs = 60_000;
+
+// The shared /v1/info of each PC and token (#74), apart for each fetch (a
+// test's fake has its own). An answer is used again this long.
+type SharedInfo = { info?: Info; at: number; running?: Promise<Info>; gen: number };
+let sharedInfos = new WeakMap<object, Map<string, SharedInfo>>();
+const infoShareMs = 3000;
+
+/** For tests: forgets every shared info. */
+export function resetSharedInfo() {
+  sharedInfos = new WeakMap();
+}
+
+/** waitWithSignal waits for p, or rejects with CancelledError once signal aborts. */
+function waitWithSignal<T>(p: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return p;
+  if (signal.aborted) return Promise.reject(new CancelledError());
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(new CancelledError());
+    signal.addEventListener('abort', onAbort, { once: true });
+    p.then(resolve, reject).finally(() => signal.removeEventListener('abort', onAbort));
+  });
+}
+
+/**
+ * sameRun reports whether two looks at a run show the same: the same rev
+ * when the PC gives one (#73), else the same content (an older PC).
+ */
+export function sameRun(a: Run, b: Run): boolean {
+  if (a.rev && b.rev) return a.rev === b.rev && a.status === b.status;
+  const { pollAfterMs: _a, ...x } = a;
+  const { pollAfterMs: _b, ...y } = b;
+  return JSON.stringify(x) === JSON.stringify(y);
+}
+
+/** Misses counts the dropped requests in a row of one wait. */
+class Misses {
+  private n = 0;
+  private since = 0;
+  constructor(private readonly now: () => number) {}
+  /** again reports, after a dropped request, whether to ask once more. */
+  again(): boolean {
+    if (this.n === 0) this.since = this.now();
+    this.n++;
+    return this.n <= maxMisses && this.now() - this.since < missForMs;
+  }
+  reset() {
+    this.n = 0;
+  }
+}
 
 // Plain http, inside the tailnet only: Tailscale already encrypts between
 // the phone's node and the PC's and knows who is on each end, so the PC
@@ -139,6 +194,7 @@ export class AgentClient {
   private readonly fetchFileFn: FetchFile;
   private readonly sleep: (ms: number, signal?: AbortSignal) => Promise<void>;
   private readonly timeoutMs: number;
+  private readonly now: () => number;
 
   constructor(
     readonly base: string,
@@ -150,14 +206,36 @@ export class AgentClient {
     this.fetchFileFn = opts.fetchFile ?? tailnetFetchFile;
     this.sleep = opts.sleep ?? defaultSleep;
     this.timeoutMs = opts.timeoutMs ?? 15000;
+    this.now = opts.now ?? Date.now;
   }
 
   /** A client for the same agent with a device token. */
   withToken(token: string): AgentClient {
-    return new AgentClient(this.base, { token, fetch: this.fetchFn, sendFile: this.sendFileFn, fetchFile: this.fetchFileFn, sleep: this.sleep, timeoutMs: this.timeoutMs });
+    return new AgentClient(this.base, { token, fetch: this.fetchFn, sendFile: this.sendFileFn, fetchFile: this.fetchFileFn, sleep: this.sleep, timeoutMs: this.timeoutMs, now: this.now });
   }
 
   async request<T>(method: string, path: string, body?: unknown, signal?: AbortSignal, timeoutMs = this.timeoutMs): Promise<T> {
+    if (method === 'GET') return this.send<T>(method, path, body, signal, timeoutMs);
+    // A change sent to the PC (an AI turned off, a setting, an update) may
+    // change its info (#74): the shared one is forgotten before it goes and
+    // again once it is answered, so an info asked meanwhile, which may show
+    // the PC from before, is neither kept nor shared (2호's review).
+    this.forgetInfo();
+    try {
+      return await this.send<T>(method, path, body, signal, timeoutMs);
+    } finally {
+      this.forgetInfo();
+    }
+  }
+
+  private forgetInfo() {
+    const e = this.sharedInfo();
+    e.info = undefined;
+    e.running = undefined;
+    e.gen++;
+  }
+
+  private async send<T>(method: string, path: string, body: unknown, signal: AbortSignal | undefined, timeoutMs: number): Promise<T> {
     // A token this agent refused stays refused: nothing more is sent with it (R-115).
     if (this.token && tokenRefused(this.base, this.token)) throw new AgentError('unauthorized', 401);
     const headers: Record<string, string> = { Accept: 'application/json' };
@@ -248,8 +326,50 @@ export class AgentClient {
     return this.request<null>('DELETE', `uploads/${encodeURIComponent(id)}`);
   }
 
-  info(signal?: AbortSignal) {
-    return this.request<Info>('GET', 'info', undefined, signal);
+  /**
+   * The PC's info, one request at a time per PC and token (#74: opening the
+   * app sent the same /v1/info two to five times at once, from the screens
+   * and the top bar). A request on its way is shared, and an answer is used
+   * again for infoShareMs; fresh skips that answer (after an agent update,
+   * a retry, the diagnosis) but still shares a request on its way. The
+   * shared request has no caller's signal: one caller's cancel ends only
+   * its own wait.
+   */
+  info(signal?: AbortSignal, o: { fresh?: boolean } = {}): Promise<Info> {
+    const e = this.sharedInfo();
+    if (!o.fresh && e.info && this.now() - e.at < infoShareMs) return Promise.resolve(e.info);
+    if (!e.running) {
+      const gen = e.gen;
+      const p: Promise<Info> = this.request<Info>('GET', 'info')
+        .then((info) => {
+          // Not kept when a change was sent meanwhile (forgetInfo).
+          if (e.gen === gen) {
+            e.info = info;
+            e.at = this.now();
+          }
+          return info;
+        })
+        .finally(() => {
+          if (e.running === p) e.running = undefined;
+        });
+      e.running = p;
+    }
+    return waitWithSignal(e.running, signal);
+  }
+
+  private sharedInfo(): SharedInfo {
+    let byClient = sharedInfos.get(this.fetchFn);
+    if (!byClient) {
+      byClient = new Map();
+      sharedInfos.set(this.fetchFn, byClient);
+    }
+    const key = `${this.base}\n${this.token ?? ''}`;
+    let e = byClient.get(key);
+    if (!e) {
+      e = { at: 0, gen: 0 };
+      byClient.set(key, e);
+    }
+    return e;
   }
 
   sessions(filter: SessionFilter = {}, signal?: AbortSignal) {
@@ -316,28 +436,43 @@ export class AgentClient {
     }
   }
 
-  run(runId: string, signal?: AbortSignal) {
-    return this.request<Run>('GET', `runs/${encodeURIComponent(runId)}`, undefined, signal);
+  /**
+   * One run. With rev (the run's rev the phone has), a PC from #73 on
+   * answers a running run that is still at it with a short
+   * {unchanged: true}; an older PC always answers the whole run.
+   */
+  run(runId: string, signal?: AbortSignal, rev?: number) {
+    const q = rev ? `?rev=${rev}` : '';
+    return this.request<Run>('GET', `runs/${encodeURIComponent(runId)}${q}`, undefined, signal);
   }
 
   /**
    * Asks for a run until every AI has answered, handing each new state to
    * onUpdate so answers show as they come. Dropped requests are retried
-   * like waitJob.
+   * like waitJob. A state like the last one is not handed on (#73: it was,
+   * every second, and the screen and the stored conversation were renewed
+   * each time).
    */
   async waitRun(started: Run, wait: WaitOptions & { onUpdate?: (r: Run) => void } = {}): Promise<Run> {
     let cur = started;
-    let misses = 0;
+    const misses = new Misses(this.now);
     while (cur.status === 'running') {
       await this.sleep(cur.pollAfterMs || 1000, wait.signal);
+      let next: Run;
       try {
-        cur = await this.run(started.runId, wait.signal);
+        next = await this.run(started.runId, wait.signal, cur.rev);
       } catch (e) {
-        if (e instanceof NetworkError && misses++ < maxMisses) continue;
+        if (e instanceof NetworkError && misses.again()) continue;
         throw e;
       }
-      misses = 0;
-      wait.onUpdate?.(cur);
+      misses.reset();
+      if (next.unchanged) {
+        cur = { ...cur, pollAfterMs: next.pollAfterMs ?? cur.pollAfterMs };
+        continue;
+      }
+      const changed = !sameRun(cur, next);
+      cur = next;
+      if (changed) wait.onUpdate?.(cur);
     }
     return cur;
   }
@@ -355,17 +490,17 @@ export class AgentClient {
    * errors (404) and cancelling end it.
    */
   async waitComparison(id: string, wait: WaitOptions & { onUpdate?: (c: Comparison) => void } = {}): Promise<Comparison> {
-    let misses = 0;
+    const misses = new Misses(this.now);
     for (;;) {
       let cur: Comparison;
       try {
         cur = await this.comparison(id, wait.signal);
       } catch (e) {
-        if (!(e instanceof NetworkError) || misses++ >= maxMisses) throw e;
+        if (!(e instanceof NetworkError) || !misses.again()) throw e;
         await this.sleep(1000, wait.signal);
         continue;
       }
-      misses = 0;
+      misses.reset();
       wait.onUpdate?.(cur);
       if (!comparisonPolling(cur)) return cur;
       await this.sleep(cur.pollAfterMs || 1000, wait.signal);
@@ -425,17 +560,17 @@ export class AgentClient {
    * look to onUpdate; dropped requests are retried like waitComparison.
    */
   async waitDebate(id: string, wait: WaitOptions & { onUpdate?: (d: Debate) => void } = {}): Promise<Debate> {
-    let misses = 0;
+    const misses = new Misses(this.now);
     for (;;) {
       let cur: Debate;
       try {
         cur = await this.debate(id, wait.signal);
       } catch (e) {
-        if (!(e instanceof NetworkError) || misses++ >= maxMisses) throw e;
+        if (!(e instanceof NetworkError) || !misses.again()) throw e;
         await this.sleep(1000, wait.signal);
         continue;
       }
-      misses = 0;
+      misses.reset();
       wait.onUpdate?.(cur);
       if (!cur.pollAfterMs) return cur;
       await this.sleep(cur.pollAfterMs, wait.signal);
@@ -480,17 +615,17 @@ export class AgentClient {
    */
   async waitJob(started: Pick<JobStarted, 'jobId' | 'pollAfterMs'>, wait: WaitOptions = {}): Promise<OpenResult> {
     let every = started.pollAfterMs || 1000;
-    let misses = 0;
+    const misses = new Misses(this.now);
     for (;;) {
       await this.sleep(every, wait.signal);
       let st: Job;
       try {
         st = await this.job(started.jobId, wait.signal);
       } catch (e) {
-        if (e instanceof NetworkError && misses++ < maxMisses) continue;
+        if (e instanceof NetworkError && misses.again()) continue;
         throw e;
       }
-      misses = 0;
+      misses.reset();
       if (st.status === 'done' && st.result) return st.result;
       if (st.status === 'failed') {
         throw new AgentError(st.error?.code || 'launch_failed', 200, st.error?.message);
@@ -538,17 +673,17 @@ export class AgentClient {
 
   async waitPair(started: Pick<PairStarted, 'requestId' | 'pollAfterMs'>, wait: WaitOptions = {}): Promise<Paired> {
     let every = started.pollAfterMs || 1000;
-    let misses = 0;
+    const misses = new Misses(this.now);
     for (;;) {
       await this.sleep(every, wait.signal);
       let st: PairStatus;
       try {
         st = await this.request<PairStatus>('POST', 'pair/status', { requestId: started.requestId }, wait.signal);
       } catch (e) {
-        if (e instanceof NetworkError && misses++ < maxMisses) continue;
+        if (e instanceof NetworkError && misses.again()) continue;
         throw e;
       }
-      misses = 0;
+      misses.reset();
       if (st.status === 'approved' && st.token && st.deviceId) {
         return { token: st.token, deviceId: st.deviceId, deviceName: st.deviceName ?? deviceNameFallback, apiVersion: st.apiVersion };
       }

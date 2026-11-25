@@ -72,7 +72,7 @@ func main() {
 		headers = `{"Accept":"application/json","Authorization":"Bearer ` + *token + `"}`
 	}
 	for i := 0; i < 3; i++ {
-		res, err := tsbridge.Fetch("GET", *target, headers, "", 20000)
+		res, err := tsbridge.Fetch("", "GET", *target, headers, "", 20000)
 		if err != nil {
 			fmt.Println("fetch:", err)
 			continue

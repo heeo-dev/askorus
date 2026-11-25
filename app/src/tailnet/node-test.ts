@@ -104,14 +104,14 @@ test('a request goes through the node as it is, and its answer comes back', asyn
   const fetch = jest.spyOn(native(), 'fetch');
   const info = await new AgentClient(baseUrl(HOST, PORT), { token: TOKEN }).info();
   expect(info.version).toBe('0.1.0');
-  expect(fetch).toHaveBeenCalledWith('GET', `http://${HOST}:${PORT}/v1/info`, JSON.stringify({ Accept: 'application/json', Authorization: `Bearer ${TOKEN}` }), '', expect.any(Number));
+  expect(fetch).toHaveBeenCalledWith(expect.any(String), 'GET', `http://${HOST}:${PORT}/v1/info`, JSON.stringify({ Accept: 'application/json', Authorization: `Bearer ${TOKEN}` }), '', expect.any(Number));
   expect(agent.calls[0]).toMatchObject({ method: 'GET', path: '/v1/info', auth: `Bearer ${TOKEN}` });
 
   // A body is sent as text; an error status is the agent's error.
   fetch.mockResolvedValueOnce({ status: 403, headers: '{"Content-Type":"application/json"}', body: '{"error":{"code":"wrong_account","message":"x"}}' });
   const e = await new AgentClient(baseUrl(HOST, PORT), { token: TOKEN }).startRun({ mode: 'ask', prompt: 'hi', agents: ['claude'] } as never).catch((x) => x);
   expect(e).toMatchObject({ name: 'AgentError', code: 'wrong_account', status: 403 });
-  expect(JSON.parse(fetch.mock.calls[1][3] as string)).toMatchObject({ prompt: 'hi' });
+  expect(JSON.parse(fetch.mock.calls[1][4] as string)).toMatchObject({ prompt: 'hi' });
 
   const res = await tailnetFetch(`http://${HOST}:${PORT}/v1/info`, { headers: { Authorization: `Bearer ${TOKEN}` } });
   expect(res.ok).toBe(true);
@@ -186,6 +186,7 @@ test('a file goes through the node with its headers, and its answer comes back',
   const up = await new AgentClient(baseUrl(HOST, PORT), { token: TOKEN }).uploadPhoto('file:///data/user/0/app.askorus/files/photos/c1/a.jpg');
   expect(up.id).toMatch(/^up_[0-9a-f]{32}$/);
   expect(sendFile).toHaveBeenCalledWith(
+    expect.any(String),
     'POST',
     `http://${HOST}:${PORT}/v1/uploads`,
     JSON.stringify({ Accept: 'application/json', 'Content-Type': 'application/octet-stream', Authorization: `Bearer ${TOKEN}` }),
@@ -202,10 +203,54 @@ test('a file goes through the node with its headers, and its answer comes back',
   expect(e.cause).toMatchObject({ code: 'tailnet_bad_request' });
 
   sendFile.mockImplementation(() => new Promise(() => undefined)); // never answers
+  const sent = sendFile.mock.calls.length;
   const ctl = new AbortController();
   const pending = tailnetSendFile(`http://${HOST}:${PORT}/v1/uploads`, { file: 'file:///x.jpg', signal: ctl.signal });
   ctl.abort();
   await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+  // #76: given up at once, the file is not sent at all.
+  expect(sendFile).toHaveBeenCalledTimes(sent);
+
+  // Given up while the file is on its way: the native request is ended by its id.
+  const later = new AbortController();
+  const onWay = tailnetSendFile(`http://${HOST}:${PORT}/v1/uploads`, { file: 'file:///x.jpg', signal: later.signal });
+  for (let i = 0; i < 100 && sendFile.mock.calls.length === sent; i++) await Promise.resolve();
+  later.abort();
+  await expect(onWay).rejects.toMatchObject({ name: 'AbortError' });
+  const id = sendFile.mock.calls[sendFile.mock.calls.length - 1][0];
+  expect(mockTailnet.calls).toContain(`cancel ${id}`);
+});
+
+// #76 (2026-11-25): the app gave up on a request after its own 15 s, and the
+// native request ran on to its 90 s. Each request has its own id, and giving
+// up ends the native one by it; one that answered is not ended.
+test('a request the app gave up on is ended in the node by its id', async () => {
+  const { tailnetFetch } = jest.requireActual('./node') as typeof import('./node');
+  const fetch = jest.spyOn(native(), 'fetch');
+  fetch.mockImplementationOnce(() => new Promise(() => undefined)); // never answers
+  const ctl = new AbortController();
+  const pending = tailnetFetch(`http://${HOST}:${PORT}/v1/info`, { method: 'GET', headers: {}, signal: ctl.signal });
+  for (let i = 0; i < 100 && fetch.mock.calls.length === 0; i++) await Promise.resolve(); // until it is in the node
+  expect(fetch).toHaveBeenCalledTimes(1);
+  ctl.abort();
+  await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+  const first = fetch.mock.calls[0][0];
+  const cancels = () => mockTailnet.calls.filter((c) => c.startsWith('cancel '));
+  expect(cancels()).toEqual([`cancel ${first}`]);
+
+  agent.enableAsk();
+  await tailnetFetch(`http://${HOST}:${PORT}/v1/info`, { method: 'GET', headers: {} });
+  const second = fetch.mock.calls[1][0];
+  expect(second).not.toBe(first);
+  expect(cancels()).toEqual([`cancel ${first}`]);
+
+  // 2호's review: given up at once, while the node was being checked, the
+  // native request is not begun at all.
+  const now = new AbortController();
+  const atOnce = tailnetFetch(`http://${HOST}:${PORT}/v1/info`, { method: 'GET', headers: {}, signal: now.signal });
+  now.abort();
+  await expect(atOnce).rejects.toMatchObject({ name: 'AbortError' });
+  expect(fetch).toHaveBeenCalledTimes(2);
 });
 
 test('no file is sent before the person signed in, or by a build from before photos', async () => {
@@ -233,6 +278,7 @@ test("a made picture comes through the node into the app's file, and the PC's re
   const file = 'file:///data/user/0/app.askorus/files/photos/c1/made-img_aa.png';
   const e = await client.runImage('run-1', `img_${'a'.repeat(32)}`, file).catch((x) => x);
   expect(fetchFile).toHaveBeenCalledWith(
+    expect.any(String),
     'GET',
     `http://${HOST}:${PORT}/v1/runs/run-1/images/img_${'a'.repeat(32)}`,
     JSON.stringify({ Accept: 'application/json', Authorization: `Bearer ${TOKEN}` }),

@@ -7,6 +7,7 @@
 import { conversations } from '@/ask/conversations';
 import { setLang } from '@/i18n';
 import { resetAgentUpdate } from '@/api/agentUpdate';
+import { resetSharedInfo } from '@/api/client';
 import { resetRefused } from '@/api/refused';
 import { resetTailnet } from '@/tailnet/node';
 import { resetMockPhotos } from './photos';
@@ -79,23 +80,25 @@ jest.mock('@/tailnet/native', () => {
       return JSON.stringify(state.peers[host] ?? { known: true, sameUser: true, online: true });
     },
     peers: async () => JSON.stringify(state.devices),
-    fetch: async (method: string, url: string, headers: string, body: string) => {
+    fetch: async (_id: string, method: string, url: string, headers: string, body: string) => {
       const res = await globalThis.fetch(url, { method, headers: JSON.parse(headers), body: body || undefined });
       return { status: res.status, headers: '{}', body: await res.text() };
     },
     // A photo (#14): the pretend PC gets the file's address in place of its bytes.
-    sendFile: async (method: string, url: string, headers: string, path: string) => {
+    sendFile: async (_id: string, method: string, url: string, headers: string, path: string) => {
       state.calls.push(`sendFile ${path}`);
       const res = await globalThis.fetch(url, { method, headers: JSON.parse(headers), body: JSON.stringify({ file: path }) });
       return { status: res.status, headers: '{}', body: await res.text() };
     },
     // A made picture (#14): the pretend PC's answer, and the address it went to.
-    fetchFile: async (method: string, url: string, headers: string, path: string) => {
+    fetchFile: async (_id: string, method: string, url: string, headers: string, path: string) => {
       state.calls.push(`fetchFile ${path}`);
       const res = await globalThis.fetch(url, { method, headers: JSON.parse(headers) });
       return { status: res.status, headers: '{}', body: res.ok ? '' : await res.text() };
     },
     recentLog: async () => '',
+    // A request the app gave up on (#76).
+    cancel: async (id: string) => void state.calls.push(`cancel ${id}`),
   };
   return { __esModule: true, nativeTailnet: () => (state.available ? mod : null), mockTailnetState: state };
 });
@@ -247,4 +250,5 @@ beforeEach(() => {
   resetPCStatus();
   resetPCUsage();
   resetAgentUpdate();
+  resetSharedInfo();
 });

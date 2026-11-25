@@ -52,8 +52,31 @@ export function PairRequests() {
 
   useEffect(() => {
     let live = true;
+    // One look at a time, and fewer while the PC does not answer (#75: a
+    // PC that answered late, or came back from an update, got the looks
+    // that piled up all at once). After the n-th failure in a row, 2^n - 1
+    // turns are skipped, up to a look a minute.
+    let busy = false;
+    let fails = 0;
+    let skip = 0;
     const look = async () => {
-      if (!live || AppState.currentState === 'background') return;
+      if (!live || busy || AppState.currentState === 'background') return;
+      if (skip > 0) {
+        skip--;
+        return;
+      }
+      busy = true;
+      try {
+        await lookOnce();
+        fails = 0;
+      } catch {
+        fails++;
+        skip = Math.min(2 ** fails - 1, 11);
+      } finally {
+        busy = false;
+      }
+    };
+    const lookOnce = async () => {
       let pcId = '';
       let key = '';
       try {
@@ -80,8 +103,12 @@ export function PairRequests() {
       } catch (e) {
         // An agent from before #58 has no list, and a refused token stays
         // refused. Anything else (not signed in, the PC is off, too many
-        // attempts) is asked again later.
-        if (key && e instanceof AgentError && [401, 404, 405].includes(e.status)) without.add(key);
+        // attempts) is asked again later, less often while it lasts.
+        if (key && e instanceof AgentError && [401, 404, 405].includes(e.status)) {
+          without.add(key);
+          return;
+        }
+        throw e;
       }
     };
     const timer = setInterval(look, pairAsk.everyMs);

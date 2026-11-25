@@ -284,8 +284,17 @@ export async function ownDevices(): Promise<OwnDevice[]> {
 }
 
 // A request the client gave up on (its own timeout, or the person leaving)
-// rejects at once; the native call ends on its own a little later.
+// rejects at once, and the native call is ended by its id (#76); a build
+// without cancel ends it on its own a little later.
 const nativeTimeoutMs = 90_000;
+
+// Each request to the native side gets an id, so a request the app gave up
+// on is ended there too (#76: it ran on to its own limit and was thrown away).
+let requestSeq = 0;
+function requestId(): string {
+  requestSeq = (requestSeq + 1) % 1_000_000_000;
+  return `r${Date.now().toString(36)}-${requestSeq}`;
+}
 
 function aborted(): Error {
   const e = new Error('Aborted');
@@ -312,14 +321,20 @@ export const tailnetFetch: typeof fetch = async (input, init) => {
   }
   const body = typeof init?.body === 'string' ? init.body : '';
 
+  const id = requestId();
   let onAbort: (() => void) | undefined;
   const gaveUp = new Promise<never>((_, reject) => {
-    onAbort = () => reject(aborted());
+    onAbort = () => {
+      native.cancel?.(id).catch(() => undefined);
+      reject(aborted());
+    };
     signal?.addEventListener('abort', onAbort, { once: true });
   });
   try {
     await Promise.race([start(native), gaveUp]);
-    const res = await Promise.race([native.fetch(init?.method ?? 'GET', String(input), JSON.stringify(headers), body, nativeTimeoutMs), gaveUp]);
+    // Given up while the node started: no native request is begun at all (2호's review).
+    if (signal?.aborted) throw aborted();
+    const res = await Promise.race([native.fetch(id, init?.method ?? 'GET', String(input), JSON.stringify(headers), body, nativeTimeoutMs), gaveUp]);
     return answer(res.status, res.body, res.headers);
   } catch (e) {
     if ((e as Error)?.name === 'AbortError') throw e;
@@ -350,14 +365,20 @@ export async function tailnetSendFile(
   const headers: Record<string, string> = {};
   for (const [key, value] of Object.entries(init.headers ?? {})) if (typeof value === 'string') headers[key] = value;
 
+  const id = requestId();
   let onAbort: (() => void) | undefined;
   const gaveUp = new Promise<never>((_, reject) => {
-    onAbort = () => reject(aborted());
+    onAbort = () => {
+      native.cancel?.(id).catch(() => undefined);
+      reject(aborted());
+    };
     signal?.addEventListener('abort', onAbort, { once: true });
   });
   try {
     await Promise.race([start(native), gaveUp]);
-    const res = await Promise.race([native.sendFile(init.method ?? 'POST', url, JSON.stringify(headers), init.file, sendFileTimeoutMs), gaveUp]);
+    // Given up while the node started: no native request is begun at all (2호's review).
+    if (signal?.aborted) throw aborted();
+    const res = await Promise.race([native.sendFile(id, init.method ?? 'POST', url, JSON.stringify(headers), init.file, sendFileTimeoutMs), gaveUp]);
     return answer(res.status, res.body, res.headers);
   } catch (e) {
     if ((e as Error)?.name === 'AbortError') throw e;
@@ -390,14 +411,20 @@ export async function tailnetFetchFile(
   const headers: Record<string, string> = {};
   for (const [key, value] of Object.entries(init.headers ?? {})) if (typeof value === 'string') headers[key] = value;
 
+  const id = requestId();
   let onAbort: (() => void) | undefined;
   const gaveUp = new Promise<never>((_, reject) => {
-    onAbort = () => reject(aborted());
+    onAbort = () => {
+      native.cancel?.(id).catch(() => undefined);
+      reject(aborted());
+    };
     signal?.addEventListener('abort', onAbort, { once: true });
   });
   try {
     await Promise.race([start(native), gaveUp]);
-    const res = await Promise.race([native.fetchFile('GET', url, JSON.stringify(headers), init.file, fetchFileTimeoutMs), gaveUp]);
+    // Given up while the node started: no native request is begun at all (2호's review).
+    if (signal?.aborted) throw aborted();
+    const res = await Promise.race([native.fetchFile(id, 'GET', url, JSON.stringify(headers), init.file, fetchFileTimeoutMs), gaveUp]);
     return answer(res.status, res.body, res.headers);
   } catch (e) {
     if ((e as Error)?.name === 'AbortError') throw e;

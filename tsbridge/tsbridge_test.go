@@ -170,7 +170,7 @@ func TestAwaitPeerWaitsForTheListAfterStart(t *testing.T) {
 
 // Fetch refuses before it sends anything: no node, a bad address, https.
 func TestFetchRefusals(t *testing.T) {
-	if _, err := Fetch("GET", "http://askorus-pc.tail0.ts.net:8790/v1/info", "", "", 1000); errorCode(err) != CodeNotStarted {
+	if _, err := Fetch("", "GET", "http://askorus-pc.tail0.ts.net:8790/v1/info", "", "", 1000); errorCode(err) != CodeNotStarted {
 		t.Errorf("not started: %v", err)
 	}
 	if _, err := Peer("askorus-pc.tail0.ts.net"); errorCode(err) != CodeNotStarted {

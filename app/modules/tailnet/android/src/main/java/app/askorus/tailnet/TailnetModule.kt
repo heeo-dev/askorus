@@ -133,9 +133,11 @@ class TailnetModule : Module() {
     // The other devices of the person's own account, as JSON (#58).
     AsyncFunction("peers") Coroutine { -> call { Tsbridge.peers() } }
 
-    AsyncFunction("fetch") Coroutine { method: String, url: String, headers: String, body: String, timeoutMs: Int ->
+    // id is the app's name for the request: cancel(id) ends it when the app
+    // gave up on it (#76), instead of letting it run to its own limit.
+    AsyncFunction("fetch") Coroutine { id: String, method: String, url: String, headers: String, body: String, timeoutMs: Int ->
       call {
-        val r = Tsbridge.fetch(method, url, headers, body, timeoutMs.toLong())
+        val r = Tsbridge.fetch(id, method, url, headers, body, timeoutMs.toLong())
         mapOf("status" to r.status.toInt(), "headers" to r.headers, "body" to r.body)
       }
     }
@@ -145,13 +147,13 @@ class TailnetModule : Module() {
     // is sent, never one of the node's own folder (its key is there); the
     // library checks that again, and sends it only to a device of the
     // person's own Tailscale account.
-    AsyncFunction("sendFile") Coroutine { method: String, url: String, headers: String, path: String, timeoutMs: Int ->
+    AsyncFunction("sendFile") Coroutine { id: String, method: String, url: String, headers: String, path: String, timeoutMs: Int ->
       val context = appContext.reactContext?.applicationContext
         ?: throw TailnetException("tailnet_off", "the app is not ready", null)
       call {
         val file = ownFile(context, path)
           ?: throw TailnetException("tailnet_bad_request", "not a file of the app's own", null)
-        val r = Tsbridge.sendFile(method, url, headers, file.path, timeoutMs.toLong())
+        val r = Tsbridge.sendFile(id, method, url, headers, file.path, timeoutMs.toLong())
         mapOf("status" to r.status.toInt(), "headers" to r.headers, "body" to r.body)
       }
     }
@@ -162,18 +164,22 @@ class TailnetModule : Module() {
     // node's own folder; the library checks that again, writes over
     // nothing, keeps at most 16 MiB, and fetches only from a device of the
     // person's own Tailscale account.
-    AsyncFunction("fetchFile") Coroutine { method: String, url: String, headers: String, path: String, timeoutMs: Int ->
+    AsyncFunction("fetchFile") Coroutine { id: String, method: String, url: String, headers: String, path: String, timeoutMs: Int ->
       val context = appContext.reactContext?.applicationContext
         ?: throw TailnetException("tailnet_off", "the app is not ready", null)
       call {
         val file = newOwnFile(context, path)
           ?: throw TailnetException("tailnet_bad_request", "not a new file of the app's own", null)
-        val r = Tsbridge.fetchFile(method, url, headers, file.path, timeoutMs.toLong())
+        val r = Tsbridge.fetchFile(id, method, url, headers, file.path, timeoutMs.toLong())
         mapOf("status" to r.status.toInt(), "headers" to r.headers, "body" to r.body)
       }
     }
 
     AsyncFunction("recentLog") Coroutine { -> call { Tsbridge.recentLog() } }
+
+    // Ends the request with that id when it still runs (#76). It does not
+    // wait for anything, and an id that is not running is nothing.
+    AsyncFunction("cancel") Coroutine { id: String -> call { Tsbridge.cancel(id) } }
 
     // Back in front after sleep or another app: the network may have
     // changed while the process was frozen.

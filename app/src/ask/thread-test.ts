@@ -263,6 +263,30 @@ test('a run with a comparison is followed until its combined answer is written',
   expect(h.deps.follows.size).toBe(0);
 });
 
+// #73: a run picked up again as it is kept, then the same look while the
+// other AIs answer, renew neither the turn nor the stored conversation; a
+// part's pictures are still taken (2호's review: the app was closed before
+// they came, and the conversation was opened again).
+test('the same run again changes nothing, but its pictures are still taken', async () => {
+  const withPic = { ...answers[0], images: [{ id: `img_${'a'.repeat(32)}`, type: 'image/png', bytes: 10 }] };
+  const kept = runAt('running', [withPic, { agent: 'codex', status: 'running' }]);
+  const pc = script({
+    'GET runs/r1': [
+      [200, kept],
+      [200, kept],
+      [200, runAt('done', [withPic, answers[1]], { pollAfterMs: undefined })],
+    ],
+  });
+  const h = harness({ ...ask(), run: kept });
+  const taken: string[] = [];
+  h.deps.takeMade = (_c, _id, run) => void taken.push(run.status);
+  await followRun(pc.client, h.now(), h.deps, 'r1');
+  // Only the change was handed to the screen (besides clearing the error).
+  expect(h.seen.filter((t) => t.run).map((t) => t.run?.status)).toEqual(['running', 'done']);
+  expect(taken.length).toBeGreaterThanOrEqual(2);
+  expect(taken[0]).toBe('running'); // the look that was the same as kept
+});
+
 test('a run the PC made no comparison of offers 비교하기, and a run error stays words', async () => {
   const pc = script({
     'POST runs': [[202, runAt('done', answers, { pollAfterMs: undefined })]],

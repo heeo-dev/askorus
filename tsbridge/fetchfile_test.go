@@ -99,7 +99,7 @@ func TestFetchFileNeedsTheNode(t *testing.T) {
 		t.Skip("a node is running")
 	}
 	path := filepath.Join(t.TempDir(), "img.png")
-	if _, err := FetchFile("GET", "http://pc.example.ts.net:8790/v1/runs/r/images/i", "{}", path, 1000); errorCode(err) != CodeNotStarted {
+	if _, err := FetchFile("", "GET", "http://pc.example.ts.net:8790/v1/runs/r/images/i", "{}", path, 1000); errorCode(err) != CodeNotStarted {
 		t.Errorf("without a node: %v", err)
 	}
 	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {

@@ -183,6 +183,9 @@ func (s *Server) pairRequests(w http.ResponseWriter, r *http.Request) {
 			resp.Requests = append(resp.Requests, PairQuestion{ID: q.ID, DeviceName: q.DeviceName, Match: q.Match, At: q.At})
 		}
 	}
+	if len(resp.Requests) == 0 {
+		markQuiet(r) // nothing waiting: counted, not logged (#75)
+	}
 	writeJSON(w, http.StatusOK, resp)
 }
 

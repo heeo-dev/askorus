@@ -30,7 +30,7 @@ const apiVersion = 1;
 export async function diagnose(client: AgentClient): Promise<Check[]> {
   let info;
   try {
-    info = await client.info();
+    info = await client.info(undefined, { fresh: true });
   } catch (e) {
     const c = cause(e);
     if (c === 'phone_offline' || c === 'pc_unreachable' || c === 'not_own_pc' || c === 'pc_not_found') {

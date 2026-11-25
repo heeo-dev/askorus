@@ -55,7 +55,7 @@ export async function refreshPCUsage(o: { force?: boolean } = {}): Promise<void>
   if (running) return running;
   const e0 = epoch;
   const p = pc.client
-    .info()
+    .info(undefined, { fresh: o.force })
     .then((info) => {
       if (epoch === e0) put({ pcId: id, info, at: Date.now() });
     })

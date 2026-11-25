@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/heeo-dev/askorus/agent/internal/compares"
@@ -148,6 +149,8 @@ type Server struct {
 	// refusal that fills the limit and the check that would have seen it.
 	asks  *limiter
 	askMu sync.Mutex
+	// quiet counts the looks left out of the log (#75).
+	quiet atomic.Int64
 	jobs  *jobs.Manager
 	runs  *runs.Manager
 	// gate decides which AIs write combined answers; /v1/info and the
@@ -267,8 +270,24 @@ func (s *Server) Handler() http.Handler {
 type reqInfoKey struct{}
 
 // reqInfo collects what the request log line needs. Never add tokens,
-// queries or bodies here.
-type reqInfo struct{ device string }
+// queries or bodies here. quiet: a look that found nothing new (a pairing
+// look with no request waiting, a run not changed since the phone's rev),
+// counted instead of written (#75).
+type reqInfo struct {
+	device string
+	quiet  bool
+}
+
+// markQuiet marks r as a look that found nothing new.
+func markQuiet(r *http.Request) {
+	if info, _ := r.Context().Value(reqInfoKey{}).(*reqInfo); info != nil {
+		info.quiet = true
+	}
+}
+
+// quietEvery: one line counts this many quiet looks (an hour of pairing
+// looks from one phone at one every 5 s).
+const quietEvery = 720
 
 // maxLogPath is how much of a request path the log keeps (R-87). The
 // agent's own paths are far shorter.
@@ -280,6 +299,14 @@ func (s *Server) logRequests(next http.Handler) http.Handler {
 		info := &reqInfo{}
 		rw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(rw, r.WithContext(context.WithValue(r.Context(), reqInfoKey{}, info)))
+		if s.o.Logger != nil && info.quiet && rw.status == http.StatusOK {
+			// The phones look every few seconds; those that find nothing new
+			// filled most of the log (#75: 3.9 MB in three days).
+			if n := s.quiet.Add(1); n%quietEvery == 0 {
+				s.o.Logger.Info("quiet requests", "count", quietEvery)
+			}
+			return
+		}
 		if s.o.Logger != nil {
 			s.o.Logger.Info("request",
 				"method", r.Method,
