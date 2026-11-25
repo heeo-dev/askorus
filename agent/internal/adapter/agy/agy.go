@@ -124,11 +124,16 @@ type Adapter struct {
 	verErr  error
 	verAt   time.Time
 
-	// The sign-in state and usage (login.go). loginCheck is nil outside
-	// tests.
+	// The sign-in state and usage (login.go), checked in the background.
+	// loginAt is when the kept state counts from (zero: check again),
+	// checked whether any check ended yet, loginDone set while one runs,
+	// loginGen counts forgetLogin calls. loginCheck is nil outside tests.
 	loginMu    sync.Mutex
 	login      loginState
 	loginAt    time.Time
+	checked    bool
+	loginDone  chan struct{}
+	loginGen   int
 	loginCheck func(context.Context) loginState
 
 	// configDir is agy's config folder (Options.ConfigDir); safe is

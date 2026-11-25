@@ -249,12 +249,14 @@ const runPollMs = 1000
 func (s *Server) askersFor(w http.ResponseWriter, ctx context.Context, targets []RunTarget) ([]RunTarget, []core.Asker, bool) {
 	can := map[string]core.Asker{}
 	var all []RunTarget
-	for _, a := range s.o.Adapters {
+	// Asked at the same time, as /v1/info does (compares.InfosOf).
+	infos := compares.InfosOf(ctx, s.o.Adapters)
+	for i, a := range s.o.Adapters {
 		asker, ok := a.(core.Asker)
 		if !ok {
 			continue
 		}
-		info := a.Info(ctx)
+		info := infos[i]
 		if info.Available && slices.Contains(info.Capabilities, core.CapAsk) {
 			can[a.Agent()] = asker
 			all = append(all, RunTarget{Agent: a.Agent()})

@@ -82,6 +82,22 @@ func (r *reads) begin() bool {
 	return true
 }
 
+// GoRead runs read in the background under the usage reads' context, so
+// StopUsageReads and EndUsageReads end it and wait for it like the
+// caches' own reads. It reports false, and runs nothing, once the reads
+// are stopped (the agent is stopping).
+func GoRead(read func(ctx context.Context)) bool {
+	r := usageReads.Load()
+	if !r.begin() {
+		return false
+	}
+	go func() {
+		defer r.wg.Done()
+		read(r.ctx)
+	}()
+	return true
+}
+
 // Get returns the kept usage, and starts a read when it is missing or old.
 func (c *UsageCache) Get() []UsageGroup {
 	c.mu.Lock()

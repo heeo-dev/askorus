@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/heeo-dev/askorus/agent/internal/core"
 	"github.com/heeo-dev/askorus/agent/internal/fakecli"
@@ -435,6 +436,133 @@ func TestInfoAndUsage(t *testing.T) {
 	missing := New(Options{Path: filepath.Join(t.TempDir(), "none.exe")})
 	if info := missing.Info(context.Background()); info.Available || !slices.Equal(info.Notices, []string{NoticeNotFound}) {
 		t.Errorf("missing info = %+v", info)
+	}
+}
+
+// blockedCheck is a sign-in check that answers st once release is closed.
+func blockedCheck(st loginState) (check func(context.Context) loginState, release func()) {
+	ch := make(chan struct{})
+	return func(ctx context.Context) loginState {
+		select {
+		case <-ch:
+		case <-ctx.Done():
+		}
+		return st
+	}, func() { close(ch) }
+}
+
+var (
+	gemini60 = loginState{known: true, signedIn: true, groups: []UsageGroup{{Name: "Gemini Models", Left: 0.6, Window: core.WindowWeek}}}
+	gemini30 = loginState{known: true, signedIn: true, groups: []UsageGroup{{Name: "Gemini Models", Left: 0.3, Window: core.WindowWeek}}}
+)
+
+// waitChecked waits until no check runs.
+func waitChecked(t *testing.T, a *Adapter) {
+	t.Helper()
+	for range 400 {
+		a.loginMu.Lock()
+		running := a.loginDone != nil
+		a.loginMu.Unlock()
+		if !running {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatal("the check never ended")
+}
+
+// R-185 (2026-11-25): /usage took 17 to 25 seconds on a real PC, and every
+// /v1/info waited for it once the kept state was 5 minutes old, so the
+// phone's first request after a pause ran past its 15 s limit. An old state
+// is now given at once while a new check runs; the next Info has the new one.
+func TestInfoGivesAnOldUsageAtOnce(t *testing.T) {
+	a, _ := fakeAgy(t)
+	a.loginCheck = func(context.Context) loginState { return gemini60 }
+	if info := a.Info(context.Background()); len(info.Usage) != 1 || info.Usage[0].Left != 0.6 {
+		t.Fatalf("first info usage = %+v", info.Usage)
+	}
+	check, release := blockedCheck(gemini30)
+	a.loginMu.Lock()
+	a.loginCheck = check
+	a.loginAt = time.Now().Add(-usageTTL - time.Second)
+	a.loginMu.Unlock()
+
+	start := time.Now()
+	info := a.Info(context.Background())
+	if d := time.Since(start); d > time.Second {
+		t.Errorf("info waited %v for the check", d)
+	}
+	if len(info.Usage) != 1 || info.Usage[0].Left != 0.6 {
+		t.Errorf("info during the check = %+v, want the kept usage", info.Usage)
+	}
+	// A second call while the check runs starts no other check.
+	a.loginMu.Lock()
+	running := a.loginDone
+	a.loginMu.Unlock()
+	a.Info(context.Background())
+	a.loginMu.Lock()
+	again := a.loginDone
+	a.loginMu.Unlock()
+	if running == nil || again != running {
+		t.Error("a second check started while one ran")
+	}
+	release()
+	waitChecked(t, a)
+	if info := a.Info(context.Background()); len(info.Usage) != 1 || info.Usage[0].Left != 0.3 {
+		t.Errorf("info after the check = %+v", info.Usage)
+	}
+}
+
+// R-185: while nothing was ever checked (right after the agent started),
+// Info waits for the check at most firstWait.
+func TestFirstInfoWaitsAtMostFirstWait(t *testing.T) {
+	old := firstWait
+	firstWait = 100 * time.Millisecond
+	t.Cleanup(func() { firstWait = old })
+	a, _ := fakeAgy(t)
+	check, release := blockedCheck(gemini60)
+	a.loginCheck = check
+	start := time.Now()
+	info := a.Info(context.Background())
+	if d := time.Since(start); d < firstWait || d > 3*time.Second {
+		t.Errorf("first info took %v, want about %v", d, firstWait)
+	}
+	if !info.Available || info.Usage != nil || len(info.Notices) != 0 {
+		t.Errorf("first info before the check = %+v", info)
+	}
+	release()
+	waitChecked(t, a)
+	if info := a.Info(context.Background()); len(info.Usage) != 1 {
+		t.Errorf("info after the check = %+v", info.Usage)
+	}
+}
+
+// R-185: a check that was running when an ask failed for the sign-in or
+// the limit (forgetLogin) may say what the ask just disproved: its state is
+// kept but not as fresh, and the time a limit ends comes from the check
+// after it.
+func TestForgetDuringACheck(t *testing.T) {
+	a, _ := fakeAgy(t)
+	check, release := blockedCheck(gemini60)
+	a.loginCheck = check
+	a.loginMu.Lock()
+	a.checked = true // not the first: keptLogin does not wait
+	a.loginMu.Unlock()
+	a.keptLogin(context.Background())
+	a.forgetLogin()
+	limited := loginState{known: true, signedIn: true, groups: []UsageGroup{{Name: "Gemini Models", Left: 0, ResetAt: fakecli.AgyResetTime, Limited: true}}}
+	a.loginMu.Lock()
+	a.loginCheck = func(context.Context) loginState { return limited }
+	a.loginMu.Unlock()
+	release()
+	if got := a.resetAt(context.Background()); got != fakecli.AgyResetTime {
+		t.Errorf("reset at = %q, want the second check's", got)
+	}
+	a.loginMu.Lock()
+	fresh := a.fresh()
+	a.loginMu.Unlock()
+	if !fresh {
+		t.Error("the second check's state is not fresh")
 	}
 }
 

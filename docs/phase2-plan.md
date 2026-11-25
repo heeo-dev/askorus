@@ -1611,6 +1611,7 @@ Askorus는 사용자 자신의 PC가 있어야 동작한다. 그래서 PC가 없
 - 종합: `--json-schema` + 에이전트 `tools: [finish]`면 `result.structured_output`에 `{"answer": …}`(30초). `tools: []`이면 `finish` 도구가 없어 4턴 100초를 돌고 구조화 출력이 없다.
 - 서버 용량 부족(503)이 잦다(17번 중 4번). 첫 시도가 실패하고 다시 해서 답이 와도 `status: ERROR`, exit 0이고 약 25초 늦다. 끝내 실패하면 stderr에 `AGY_ERROR: {short_error, status, error_code, retryable, error_id}`.
 - `agy -p /usage --output-format json`은 대화를 만들지 않고 할당량도 쓰지 않는다(5초). 묶음별 이번 주 남은 비율과 초기화 시각(Gemini, Claude·GPT).
+  - 2026-11-25: 실제 PC에서 17~25초 걸릴 때가 있었고, `/v1/info`와 질문 시작이 5분마다 그것을 기다려 쉬었다가 연 폰의 첫 요청이 15초를 넘겼다('PC에 닿지 않습니다'). 그래서 `/usage`는 뒤에서 묻고, 5분이 지난 상태는 바로 준 뒤 새로 묻는다. 에이전트를 켠 뒤 아직 아무것도 모를 때만 최대 2초 기다린다. 묻기가 로그인이나 한도로 실패하면 바로 다시 묻고, 한도가 풀리는 시각은 그 결과를 기다린다. `/v1/info`와 질문 시작은 AI 넷의 Info를 동시에 묻는다(R-185).
 - 남는 것: 실행마다 `~/.gemini/antigravity-cli/conversations/<id>.db`(SQLite, 약 380KB)와 `brain/<id>/`. 조사 때 만든 대화가 약 27개 남아 있다.
 - 로그인 안 됨과 이번 주 한도는 시험하지 못했다(로그아웃은 사용자 몫). Windows에서는 로그인을 자격 증명 관리자에 둔다(변경 기록).
 

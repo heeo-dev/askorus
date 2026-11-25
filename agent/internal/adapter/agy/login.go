@@ -33,6 +33,14 @@ const (
 	usageTimeout = 20 * time.Second
 )
 
+// firstWait is how long Info waits for the first check after the agent
+// started, while nothing is known yet. Later checks never hold Info up: a
+// check took 17 to 25 seconds on a real PC (2026-11-25), and every
+// /v1/info and question waited for it once its state was older than
+// usageTTL, so the phone's first request after a pause ran past its time
+// limit ("PC에 닿지 않습니다"). A variable so a test need not wait.
+var firstWait = 2 * time.Second
+
 // UsageGroup is core's.
 type UsageGroup = core.UsageGroup
 
@@ -125,33 +133,113 @@ func (a *Adapter) runUsageCheck(ctx context.Context) loginState {
 	return readUsage(res)
 }
 
-// cachedLogin returns the sign-in state, at most usageTTL old.
-func (a *Adapter) cachedLogin(ctx context.Context) loginState {
-	a.loginMu.Lock()
-	defer a.loginMu.Unlock()
-	if !a.loginAt.IsZero() && time.Since(a.loginAt) < usageTTL {
-		return a.login
+// startLogin starts a check in the background unless one runs, and
+// returns the channel that is closed when it ends (at once when the agent
+// is stopping and no check can start). The caller holds loginMu. The
+// check runs under the usage reads' context, so stopping the agent ends it.
+func (a *Adapter) startLogin() chan struct{} {
+	if a.loginDone != nil {
+		return a.loginDone
 	}
+	done := make(chan struct{})
 	check := a.runUsageCheck
 	if a.loginCheck != nil {
 		check = a.loginCheck
 	}
-	a.login = check(context.WithoutCancel(ctx))
-	a.loginAt = time.Now()
+	gen := a.loginGen
+	if !core.GoRead(func(ctx context.Context) {
+		st := check(ctx)
+		a.loginMu.Lock()
+		a.login, a.checked, a.loginDone = st, true, nil
+		// A check that began before forgetLogin may say what the failed ask
+		// just disproved: kept, but not as fresh, so the next call checks again.
+		if gen == a.loginGen {
+			a.loginAt = time.Now()
+		}
+		a.loginMu.Unlock()
+		close(done)
+	}) {
+		close(done)
+		return done
+	}
+	a.loginDone = done
+	return done
+}
+
+// fresh reports whether the kept state is younger than usageTTL. The
+// caller holds loginMu.
+func (a *Adapter) fresh() bool {
+	return !a.loginAt.IsZero() && time.Since(a.loginAt) < usageTTL
+}
+
+// keptLogin returns the kept sign-in state at once and starts a new check
+// when it is older than usageTTL; the next call has it. Only while nothing
+// was ever checked does it wait for the check, at most firstWait.
+func (a *Adapter) keptLogin(ctx context.Context) loginState {
+	a.loginMu.Lock()
+	if a.fresh() {
+		defer a.loginMu.Unlock()
+		return a.login
+	}
+	done, first := a.startLogin(), !a.checked
+	st := a.login
+	a.loginMu.Unlock()
+	if !first {
+		return st
+	}
+	t := time.NewTimer(firstWait)
+	defer t.Stop()
+	select {
+	case <-done:
+	case <-t.C:
+	case <-ctx.Done():
+	}
+	a.loginMu.Lock()
+	defer a.loginMu.Unlock()
 	return a.login
 }
 
-// forgetLogin drops the kept state, after an ask failed for the sign-in
-// or the usage limit.
+// cachedLogin returns a sign-in state at most usageTTL old, waiting for a
+// check when needed, or until ctx ends (then what is kept). For an ask
+// that failed for the usage limit, which wants the time it ends.
+func (a *Adapter) cachedLogin(ctx context.Context) loginState {
+	// Twice at most: a check that was running when forgetLogin came ends
+	// without counting as fresh, and the one after it is the answer.
+	for range 2 {
+		a.loginMu.Lock()
+		if a.fresh() {
+			defer a.loginMu.Unlock()
+			return a.login
+		}
+		done := a.startLogin()
+		a.loginMu.Unlock()
+		select {
+		case <-done:
+		case <-ctx.Done():
+			a.loginMu.Lock()
+			defer a.loginMu.Unlock()
+			return a.login
+		}
+	}
+	a.loginMu.Lock()
+	defer a.loginMu.Unlock()
+	return a.login
+}
+
+// forgetLogin drops the kept state's freshness, after an ask failed for
+// the sign-in or the usage limit, and starts a new check at once, so the
+// next /v1/info is likely to have it. The state itself stays until then.
 func (a *Adapter) forgetLogin() {
 	a.loginMu.Lock()
 	a.loginAt = time.Time{}
+	a.loginGen++
+	a.startLogin()
 	a.loginMu.Unlock()
 }
 
 // loginNotices adds the sign-in notice, or the usage when agy is signed in.
 func (a *Adapter) loginNotices(ctx context.Context, info *core.AdapterInfo) {
-	st := a.cachedLogin(ctx)
+	st := a.keptLogin(ctx)
 	switch {
 	case st.known && !st.signedIn:
 		info.Notices = append(info.Notices, NoticeSignedOut)

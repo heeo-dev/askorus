@@ -4,6 +4,7 @@ import (
 	"context"
 	"path/filepath"
 	"slices"
+	"sync"
 
 	"github.com/heeo-dev/askorus/agent/internal/config"
 	"github.com/heeo-dev/askorus/agent/internal/core"
@@ -129,6 +130,33 @@ func (g Gate) Writer(a core.Adapter, info core.AdapterInfo, tier string) (Writer
 	return w, ""
 }
 
+// InfosOf asks every adapter for its Info at the same time and returns
+// them in the adapters' order. An Info may run its AI program for the
+// version or the sign-in when what it keeps is old; one after another the
+// four AIs' checks added up on the phone's first request after a pause
+// (2026-11-25). A panic in an Info goes on in the caller, as when the
+// Infos were asked in it.
+func InfosOf(ctx context.Context, adapters []core.Adapter) []core.AdapterInfo {
+	infos := make([]core.AdapterInfo, len(adapters))
+	panics := make([]any, len(adapters))
+	var wg sync.WaitGroup
+	for i, a := range adapters {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			defer func() { panics[i] = recover() }()
+			infos[i] = a.Info(ctx)
+		}()
+	}
+	wg.Wait()
+	for _, p := range panics {
+		if p != nil {
+			panic(p)
+		}
+	}
+	return infos
+}
+
 // Announce returns every adapter's Info, in the adapters' order, as
 // /v1/info and the CLI's info show it, and the engines of the AIs that
 // pass the gate (Gate.Engine). An AI with the capability ask gets its ask
@@ -142,8 +170,8 @@ func (g Gate) Writer(a core.Adapter, info core.AdapterInfo, tier string) (Writer
 func Announce(ctx context.Context, adapters []core.Adapter, g Gate) ([]core.AdapterInfo, []Engine) {
 	infos := make([]core.AdapterInfo, 0, len(adapters))
 	engines := []Engine{}
-	for _, a := range adapters {
-		info := a.Info(ctx)
+	for i, info := range InfosOf(ctx, adapters) {
+		a := adapters[i]
 		if asker, ok := a.(core.Asker); ok && slices.Contains(info.Capabilities, core.CapAsk) {
 			info.Ask = &core.AskInfo{Tiers: asker.AskTiers()}
 			if l, ok := a.(core.EffortLister); ok {
